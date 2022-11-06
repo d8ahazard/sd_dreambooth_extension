@@ -24,7 +24,7 @@ from basicsr.utils.download_util import load_file_from_url
 import modules.sd_models
 from modules import paths, shared
 from dreambooth.dreambooth import get_db_models
-from dreambooth.train_config import TrainConfig
+from dreambooth.db_config import DreamboothConfig
 
 try:
     from omegaconf import OmegaConf
@@ -770,7 +770,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
     shared.state.job_count = 8
     # Set up our base directory for the model and sanitize our file name
     new_model_name = "".join(x for x in new_model_name if x.isalnum())
-    config = TrainConfig().create_new(new_model_name, scheduler_type, checkpoint_path, 0)
+    config = DreamboothConfig().create_new(new_model_name, scheduler_type, checkpoint_path, 0)
     new_model_dir = create_output_dir(new_model_name, config)
     # Create folder for the 'extracted' diffusion model.
     out_dir = os.path.join(new_model_dir, "working")

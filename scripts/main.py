@@ -1,4 +1,5 @@
 import gradio as gr
+
 from dreambooth import conversion, dreambooth
 from dreambooth.dreambooth import get_db_models
 
@@ -14,7 +15,7 @@ def on_ui_tabs():
             with gr.Column(scale=6):
                 with gr.Row():
                     with gr.Column(scale=80):
-                        db_model_name = gr.Dropdown(label='Model', choices=sorted(get_db_models()))
+                        db_pretrained_model_name_or_path = gr.Dropdown(label='Model', choices=sorted(get_db_models()))
             with gr.Column(scale=1, elem_id="roll_col"):
                 db_load_params = gr.Button(label='Load Training Params', value=paste_symbol)
 
@@ -27,20 +28,20 @@ def on_ui_tabs():
             with gr.Column(variant="panel"):
                 with gr.Tab("Training"):
                     with gr.Accordion(open=True, label="Settings"):
-                        db_initialization_text = gr.Textbox(label="Initialization text", value="*")
-                        db_classification_text = gr.Textbox(label="Classification text", value="*")
-                        db_learn_rate = gr.Number(label='Learning rate', value=5e-6)
-                        db_dataset_directory = gr.Textbox(label='Dataset directory',
+                        db_concepts_list = gr.Textbox(label="Concepts List (Overrides instance/class settings below)", placeholder="Path to JSON file with concepts to train.")
+                        db_instance_prompt = gr.Textbox(label="Instance prompt", value="*")
+                        db_class_prompt = gr.Textbox(label="Class prompt", value="*")
+                        db_instance_data_dir = gr.Textbox(label='Dataset directory',
                                                           placeholder="Path to directory with input images")
-                        db_classification_directory = gr.Textbox(label='Classification dataset directory (optional).',
+                        db_class_data_dir = gr.Textbox(label='Classification dataset directory (optional).',
                                                                  placeholder="Path to directory with classification images")
                         db_num_class_images = gr.Number(
                             label='Total number of classification images to use. Set to 0 to disable.', value=0,
                             precision=0)
-                        db_steps = gr.Number(label='Training steps', value=1000, precision=0)
-                        db_batch_size = gr.Number(label="Batch Size", precision=1, value=1)
-                        db_class_batch_size = gr.Number(label="Class Batch Size", precision=1, value=1)
-                        db_seed = gr.Number(label="Seed", precision=1, value=-1)
+                        db_max_train_steps = gr.Number(label='Training steps', value=1000, precision=0)
+                        db_train_batch_size = gr.Number(label="Batch Size", precision=1, value=1)
+                        db_sample_batch_size = gr.Number(label="Class Batch Size", precision=1, value=1)
+                        db_learning_rate = gr.Number(label='Learning rate', value=5e-6)
                         db_resolution = gr.Number(label="Resolution", precision=1, value=512)
                         db_save_embedding_every = gr.Number(
                             label='Save a checkpoint every N steps, 0 to disable', value=500,
@@ -48,17 +49,24 @@ def on_ui_tabs():
                         db_save_preview_every = gr.Number(
                             label='Generate a preview image every N steps, 0 to disable', value=500,
                             precision=0)
+                        db_save_sample_prompt = gr.Textbox(label="Preview image prompt", placeholder="Leave blank to use instance prompt.")
+                        db_save_sample_negative_prompt = gr.Textbox(label="Preview image negative prompt", placeholder="Leave blank to use instance prompt.")
+                        db_n_save_sample = gr.Number(label="Number of samples to generate", value=1)
+                        db_save_guidance_scale = gr.Number(label="Sample guidance scale", value=7.5, max=12, min=1, precision=2)
+                        db_save_infer_steps = gr.Number(label="Sample steps", value=40, min=10, max=200)
+
                     with gr.Accordion(open=False, label="Advanced"):
                         with gr.Row():
                             with gr.Column():
                                 db_use_cpu = gr.Checkbox(label="Use CPU Only (SLOW)", value=False)
+                                db_not_cache_latents = gr.Checkbox(label="Don't cache latents", value=True)
                                 db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
-                                db_use_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
+                                db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                 db_center_crop = gr.Checkbox(label="Center Crop", value=False)
-                                db_grad_check = gr.Checkbox(label="Gradient Checkpointing", value=True)
+                                db_gradient_checkpointing = gr.Checkbox(label="Gradient Checkpointing", value=True)
                                 db_scale_lr = gr.Checkbox(label="Scale Learning Rate", value=False)
                                 db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no", choices=["no", "fp16", "bf16"])
-                                db_scheduler = gr.Dropdown(label="Scheduler", value="constant",
+                                db_lr_scheduler = gr.Dropdown(label="Scheduler", value="constant",
                                                                  choices=["linear", "cosine", "cosine_with_restarts", "polynomial", "constant", "constant_with_warmup"])
                                 db_prior_loss_weight = gr.Number(label="Prior Loss Weight", precision=1, value=1)
                                 db_num_train_epochs = gr.Number(label="# Training Epochs", precision=1, value=1)
@@ -67,8 +75,8 @@ def on_ui_tabs():
                                 db_adam_weight_decay = gr.Number(label="Adam Weight Decay", precision=3, value=0.01)
                                 db_adam_epsilon = gr.Number(label="Adam Epsilon", precision=8, value=0.00000001)
                                 db_max_grad_norm = gr.Number(label="Max Grad Norms", value=1.0, precision=1)
-                                db_grad_acc_steps = gr.Number(label="Grad Accumulation Steps", precision=1, value=1)
-                                db_warmup_steps = gr.Number(label="Warmup Steps", precision=1, value=0)
+                                db_gradient_accumulation_steps = gr.Number(label="Grad Accumulation Steps", precision=1, value=1)
+                                db_lr_warmup_steps = gr.Number(label="Warmup Steps", precision=1, value=0)
                     with gr.Row():
                         with gr.Column(scale=2):
                             gr.HTML(value="")
@@ -120,7 +128,7 @@ def on_ui_tabs():
                 diff_type
             ],
             outputs=[
-                db_model_name,
+                db_pretrained_model_name_or_path,
                 db_output,
                 db_outcome,
             ]
@@ -146,37 +154,42 @@ def on_ui_tabs():
             fn=wrap_gradio_gpu_call(dreambooth.start_training, extra_outputs=[gr.update()]),
             _js="start_training_dreambooth",
             inputs=[
-                db_model_name,
-                db_initialization_text,
-                db_classification_text,
-                db_learn_rate,
-                db_dataset_directory,
-                db_classification_directory,
-                db_steps,
-                db_save_preview_every,
-                db_save_embedding_every,
+                db_pretrained_model_name_or_path,
+                db_instance_data_dir,
+                db_class_data_dir,
+                db_instance_prompt,
+                db_class_prompt,
+                db_save_sample_prompt,
+                db_save_sample_negative_prompt,
+                db_n_save_sample,
+                db_save_guidance_scale,
+                db_save_infer_steps,
                 db_num_class_images,
-                db_use_cpu,
-                db_train_text_encoder,
-                db_use_adam,
-                db_center_crop,
-                db_grad_check,
-                db_scale_lr,
-                db_mixed_precision,
-                db_scheduler,
                 db_resolution,
-                db_prior_loss_weight,
+                db_center_crop,
+                db_train_text_encoder,
+                db_train_batch_size,
+                db_sample_batch_size,
                 db_num_train_epochs,
+                db_max_train_steps,
+                db_gradient_accumulation_steps,
+                db_gradient_checkpointing,
+                db_learning_rate,
+                db_scale_lr,
+                db_lr_scheduler,
+                db_lr_warmup_steps,
+                db_use_8bit_adam,
                 db_adam_beta1,
                 db_adam_beta2,
                 db_adam_weight_decay,
                 db_adam_epsilon,
                 db_max_grad_norm,
-                db_batch_size,
-                db_class_batch_size,
-                db_seed,
-                db_grad_acc_steps,
-                db_warmup_steps
+                db_save_preview_every,
+                db_save_embedding_every,
+                db_mixed_precision,
+                db_not_cache_latents,
+                db_concepts_list,
+                db_use_cpu
             ],
             outputs=[
                 db_output,
@@ -187,24 +200,23 @@ def on_ui_tabs():
         db_load_params.click(
             fn=dreambooth.load_params,
             inputs=[
-                db_model_name,
-                db_initialization_text,
-                db_classification_text,
-                db_learn_rate,
-                db_dataset_directory,
-                db_classification_directory,
-                db_steps,
+                db_pretrained_model_name_or_path,
+                db_class_prompt,
+                db_learning_rate,
+                db_instance_data_dir,
+                db_class_data_dir,
+                db_max_train_steps,
                 db_save_preview_every,
                 db_save_embedding_every,
                 db_num_class_images,
                 db_use_cpu,
                 db_train_text_encoder,
-                db_use_adam,
+                db_use_8bit_adam,
                 db_center_crop,
-                db_grad_check,
+                db_gradient_checkpointing,
                 db_scale_lr,
                 db_mixed_precision,
-                db_scheduler,
+                db_lr_scheduler,
                 db_resolution,
                 db_prior_loss_weight,
                 db_num_train_epochs,
@@ -213,43 +225,48 @@ def on_ui_tabs():
                 db_adam_weight_decay,
                 db_adam_epsilon,
                 db_max_grad_norm,
-                db_batch_size,
-                db_class_batch_size,
-                db_seed,
-                db_grad_acc_steps,
-                db_warmup_steps
+                db_train_batch_size,
+                db_sample_batch_size,
+                db_gradient_accumulation_steps,
+                db_lr_warmup_steps
             ],
             outputs=[
-                db_initialization_text,
-                db_classification_text,
-                db_learn_rate,
-                db_dataset_directory,
-                db_classification_directory,
-                db_steps,
-                db_save_preview_every,
-                db_save_embedding_every,
+                db_pretrained_model_name_or_path,
+                db_instance_data_dir,
+                db_class_data_dir,
+                db_instance_prompt,
+                db_class_prompt,
+                db_save_sample_prompt,
+                db_save_sample_negative_prompt,
+                db_n_save_sample,
+                db_save_guidance_scale,
+                db_save_infer_steps,
                 db_num_class_images,
-                db_use_cpu,
-                db_train_text_encoder,
-                db_use_adam,
-                db_center_crop,
-                db_grad_check,
-                db_scale_lr,
-                db_mixed_precision,
-                db_scheduler,
                 db_resolution,
-                db_prior_loss_weight,
+                db_center_crop,
+                db_train_text_encoder,
+                db_train_batch_size,
+                db_sample_batch_size,
                 db_num_train_epochs,
+                db_max_train_steps,
+                db_gradient_accumulation_steps,
+                db_gradient_checkpointing,
+                db_learning_rate,
+                db_scale_lr,
+                db_lr_scheduler,
+                db_lr_warmup_steps,
+                db_use_8bit_adam,
                 db_adam_beta1,
                 db_adam_beta2,
                 db_adam_weight_decay,
                 db_adam_epsilon,
                 db_max_grad_norm,
-                db_batch_size,
-                db_class_batch_size,
-                db_seed,
-                db_grad_acc_steps,
-                db_warmup_steps
+                db_save_preview_every,
+                db_save_embedding_every,
+                db_mixed_precision,
+                db_not_cache_latents,
+                db_concepts_list,
+                db_use_cpu
             ]
         )
 

@@ -1,0 +1,8 @@
+[
+    {
+        "instance_prompt":      "photo of zwx dog",
+        "class_prompt":         "photo of a dog",
+        "instance_data_dir":    "../../../data/alvan",
+        "class_data_dir":       "../../../data/dog"
+    }
+]
