@@ -446,7 +446,8 @@ def main(args):
     if args.concepts_list is not None and args.concepts_list != "":
         is_json = False
         try:
-            json.load(args.concepts_list)
+            print(f"Trying to parse: {args.concepts_list}")
+            json.loads(args.concepts_list)
             is_json = True
             concepts_loaded = True
         except:
@@ -837,9 +838,11 @@ def main(args):
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
                         printm("Pipeline cleared...")
+
             shared.state.textinfo = f"Training, step {global_step}/{args.max_train_steps} current, {lifetime_step}/{args.max_train_steps + args.total_steps} lifetime"
 
             if training_complete:
+                print("Training complete??")
                 if shared.state.interrupted:
                     state = "cancelled"
                 else:
