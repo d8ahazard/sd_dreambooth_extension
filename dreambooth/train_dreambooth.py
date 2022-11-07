@@ -442,7 +442,26 @@ def main(args):
         shared.state.textinfo = msg
         args.train_text_encoder = False
 
-    if args.concepts_list is None or args.concepts_list == "":
+    concepts_loaded = False
+    if args.concepts_list is not None and args.concepts_list != "":
+        is_json = False
+        try:
+            json.load(args.concepts_list)
+            is_json = True
+            concepts_loaded = True
+        except:
+            print("Unable to load concepts as JSON, trying as file.")
+            pass
+        if not is_json:
+            try:
+                if os.path.exists(args.concepts_list):
+                    with open(args.concepts_list, "r") as f:
+                        args.concepts_list = json.load(f)
+                        concepts_loaded = True
+            except:
+                pass
+
+    if not concepts_loaded:
         args.concepts_list = [
             {
                 "instance_prompt": args.instance_prompt,
@@ -451,9 +470,6 @@ def main(args):
                 "class_data_dir": args.class_data_dir
             }
         ]
-    else:
-        with open(args.concepts_list, "r") as f:
-            args.concepts_list = json.load(f)
 
     if args.with_prior_preservation:
         pipeline = None
