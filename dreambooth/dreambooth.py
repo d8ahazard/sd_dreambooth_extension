@@ -6,8 +6,6 @@ import torch
 import torch.utils.checkpoint
 from huggingface_hub import HfFolder, whoami
 
-import dreambooth.train_dreambooth
-import dreambooth.db_config
 from dreambooth.db_config import DreamboothConfig
 from dreambooth.train_dreambooth import main
 from modules import paths, sd_hijack, shared
@@ -207,6 +205,9 @@ def start_training(pretrained_model_name_or_path,
     torch.cuda.empty_cache()
     gc.collect()
     printm("VRAM cleared.", True)
+    if pretrained_model_name_or_path == "" or pretrained_model_name_or_path is None:
+        print("Invalid model name.")
+        return "Create or select a model first.", ""
     config = DreamboothConfig().from_file(pretrained_model_name_or_path)
 
     if config is None:

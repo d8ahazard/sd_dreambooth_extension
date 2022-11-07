@@ -103,7 +103,8 @@ class DreamboothConfig(dict):
                 "mixed_precision": mixed_precision,
                 "not_cache_latents": not_cache_latents,
                 "concepts_list": concepts_list,
-                "use_cpu": use_cpu}
+                "use_cpu": use_cpu,
+                "prior_loss_weight": 1}
         for key in data:
             self.__dict__[key] = data[key]
         return self.__dict__
