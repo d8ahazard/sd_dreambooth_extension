@@ -1,4 +1,4 @@
-# From shivamshiaro's repo, with "minimal" modification to hopefully allow for smoother updating?
+# From shivam shiaro's repo, with "minimal" modification to hopefully allow for smoother updating?
 import argparse
 import gc
 import hashlib
@@ -793,8 +793,7 @@ def main(args):
                         if args.train_text_encoder:
                             text_enc_model = accelerator.unwrap_model(text_encoder)
                         else:
-                            text_enc_model = CLIPTextModel.from_pretrained(args.model_name,
-                                                                           subfolder="text_encoder")
+                            text_enc_model = CLIPTextModel.from_pretrained(os.path.join(args.working_dir, "text_encoder"))
 
                         scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
                                                   clip_sample=False, set_alpha_to_one=False)
