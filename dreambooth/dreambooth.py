@@ -112,7 +112,6 @@ def load_params(pretrained_model_name_or_path,
                      "save_guidance_scale",
                      "save_infer_steps",
                      "num_class_images",
-                     "output_dir",
                      "resolution",
                      "center_crop",
                      "train_text_encoder",
@@ -136,7 +135,6 @@ def load_params(pretrained_model_name_or_path,
                      "save_embedding_every",
                      "mixed_precision",
                      "not_cache_latents",
-                     "local_rank",
                      "concepts_list",
                      "use_cpu"]
 
@@ -144,9 +142,6 @@ def load_params(pretrained_model_name_or_path,
     values = []
     for target in target_values:
         values.append(data[target])
-
-    else:
-        print(f"Unable to load config for {pretrained_model_name_or_path}")
     return values
 
 
