@@ -808,7 +808,7 @@ def main(args):
                             revision=lifetime_step
                         )
 
-                        pipeline = pipeline.to("cuda")
+                        pipeline = pipeline.to(accelerator.device)
                         with autocast("cuda"):
                             # pipeline.text_encoder.resize_token_embeddings(49408)
                             printm("Loaded pipeline for preview...")
