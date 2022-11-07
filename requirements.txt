@@ -10,3 +10,5 @@ basicsr
 pillow
 tqdm
 diffusers==0.6.0
+bitsandbytes==0.35.0
+albumentations
