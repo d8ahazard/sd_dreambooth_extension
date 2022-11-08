@@ -58,7 +58,9 @@ class DreamboothConfig(dict):
                 mixed_precision,
                 not_cache_latents,
                 concepts_list,
-                use_cpu):
+                use_cpu,
+                pad_tokens,
+                hflip):
 
         pretrained_model_name_or_path = images.sanitize_filename_part(pretrained_model_name_or_path, True)
         models_path = paths.models_path
@@ -104,6 +106,8 @@ class DreamboothConfig(dict):
                 "not_cache_latents": not_cache_latents,
                 "concepts_list": concepts_list,
                 "use_cpu": use_cpu,
+                "pad_tokens": pad_tokens,
+                "hflip": hflip,
                 "prior_loss_weight": 1}
         for key in data:
             self.__dict__[key] = data[key]

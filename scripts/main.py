@@ -97,6 +97,8 @@ def on_ui_tabs():
                                 db_gradient_accumulation_steps = gr.Number(label="Grad Accumulation Steps", precision=1,
                                                                            value=1)
                                 db_lr_warmup_steps = gr.Number(label="Warmup Steps", precision=1, value=0)
+                                db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
+                                db_hflip = gr.Checkbox(label="Apply horizontal Flip", value=True)
                     with gr.Row():
                         with gr.Column(scale=2):
                             gr.HTML(value="")
@@ -162,7 +164,9 @@ def on_ui_tabs():
                 db_mixed_precision,
                 db_not_cache_latents,
                 db_concepts_list,
-                db_use_cpu
+                db_use_cpu,
+                db_pad_tokens,
+                db_hflip
             ],
             outputs=[
                 db_output,
@@ -208,7 +212,9 @@ def on_ui_tabs():
                 db_mixed_precision,
                 db_not_cache_latents,
                 db_concepts_list,
-                db_use_cpu
+                db_use_cpu,
+                db_pad_tokens,
+                db_hflip
             ],
             outputs=[
                 db_instance_data_dir,
@@ -245,7 +251,9 @@ def on_ui_tabs():
                 db_mixed_precision,
                 db_not_cache_latents,
                 db_concepts_list,
-                db_use_cpu
+                db_use_cpu,
+                db_pad_tokens,
+                db_hflip
             ]
         )
 

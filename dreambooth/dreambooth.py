@@ -62,7 +62,9 @@ def load_params(pretrained_model_name_or_path,
                 mixed_precision,
                 not_cache_latents,
                 concepts_list,
-                use_cpu):
+                use_cpu,
+                pad_tokens,
+                hflip):
     tc = DreamboothConfig()
 
     tc.from_ui(pretrained_model_name_or_path,
@@ -100,7 +102,9 @@ def load_params(pretrained_model_name_or_path,
                mixed_precision,
                not_cache_latents,
                concepts_list,
-               use_cpu)
+               use_cpu,
+               pad_tokens,
+               hflip)
 
     target_values = ["instance_data_dir",
                      "class_data_dir",
@@ -136,7 +140,9 @@ def load_params(pretrained_model_name_or_path,
                      "mixed_precision",
                      "not_cache_latents",
                      "concepts_list",
-                     "use_cpu"]
+                     "use_cpu",
+                     "pad_tokens",
+                     "hflip"]
 
     data = tc.from_file(pretrained_model_name_or_path)
     values = []
