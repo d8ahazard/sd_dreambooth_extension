@@ -8,7 +8,7 @@ from huggingface_hub import HfFolder, whoami
 
 from dreambooth.db_config import DreamboothConfig
 from dreambooth.train_dreambooth import main
-from modules import paths, sd_hijack, shared
+from modules import paths, shared
 
 mem_record = {}
 
@@ -195,7 +195,6 @@ def start_training(pretrained_model_name_or_path,
                    use_cpu
                    ):
     print("Starting Dreambooth training...")
-    sd_hijack.undo_optimizations()
     shared.sd_model.to('cpu')
     torch.cuda.empty_cache()
     gc.collect()
@@ -265,7 +264,6 @@ def start_training(pretrained_model_name_or_path,
     print(f'Memory output: {mem_record}')
     shared.sd_model.to(shared.device)
     print("Re-applying optimizations...")
-    sd_hijack.apply_optimizations()
     res = f"Training {'interrupted' if shared.state.interrupted else 'finished'}. " \
           f"Total lifetime steps: {total_steps} \n"
     print(f"Returning result: {res}")
