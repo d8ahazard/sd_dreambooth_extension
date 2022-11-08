@@ -12,6 +12,12 @@ To install, simply go to the "Extensions" tab in the SD Web UI, select the "Avai
 ![image](https://user-images.githubusercontent.com/1633844/200368737-7fe322de-00d6-4b28-a321-5e09f072d397.png)
 
 
+*For 8bit adam to run properly, it may be necessary to install the CU116 version of torch and torchvision, which can be accomplished below:*
+
+Edit your webui-user.bat file, add this line after 'set COMMANDLINE_ARGS=':
+
+`set TORCH_COMMAND="pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url https://download.pytorch.org/whl/cu116"`
+
 Once installed, restart the SD-WebUI *entirely*, not just the UI. This will ensure all the necessary requirements are installed.
 
 
