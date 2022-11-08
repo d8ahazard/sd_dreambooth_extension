@@ -148,6 +148,12 @@ def parse_args(input_args=None):
         help="The number of inference steps for save sample.",
     )
     parser.add_argument(
+        "--pad_tokens",
+        default=False,
+        action="store_true",
+        help="Flag to pad tokens to length 77.",
+    )
+    parser.add_argument(
         "--with_prior_preservation",
         default=False,
         action="store_true",
@@ -270,8 +276,8 @@ def parse_args(input_args=None):
             "and an Nvidia Ampere GPU."
         ),
     )
-    parser.add_argument("--not_cache_latents", action="store_true",
-                        help="Do not precompute and cache latents from VAE.")
+    parser.add_argument("--not_cache_latents", action="store_true", help="Do not precompute and cache latents from VAE.")
+    parser.add_argument("--hflip", action="store_true", help="Apply horizontal flip data augmentation.")
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
     parser.add_argument(
         "--concepts_list",
@@ -299,30 +305,31 @@ class DreamBoothDataset(Dataset):
     """
 
     def __init__(
-            self,
-            concepts_list,
-            tokenizer,
-            with_prior_preservation=True,
-            size=512,
-            center_crop=False,
-            num_class_images=None,
+        self,
+        concepts_list,
+        tokenizer,
+        with_prior_preservation=True,
+        size=512,
+        center_crop=False,
+        num_class_images=None,
+        pad_tokens=False,
+        hflip=False
     ):
         self.size = size
         self.center_crop = center_crop
         self.tokenizer = tokenizer
         self.with_prior_preservation = with_prior_preservation
+        self.pad_tokens = pad_tokens
 
         self.instance_images_path = []
         self.class_images_path = []
 
         for concept in concepts_list:
-            inst_img_path = [(x, concept["instance_prompt"]) for x in Path(concept["instance_data_dir"]).iterdir() if
-                             x.is_file()]
+            inst_img_path = [(x, concept["instance_prompt"]) for x in Path(concept["instance_data_dir"]).iterdir() if x.is_file()]
             self.instance_images_path.extend(inst_img_path)
 
             if with_prior_preservation:
-                class_img_path = [(x, concept["class_prompt"]) for x in Path(concept["class_data_dir"]).iterdir() if
-                                  x.is_file()]
+                class_img_path = [(x, concept["class_prompt"]) for x in Path(concept["class_data_dir"]).iterdir() if x.is_file()]
                 self.class_images_path.extend(class_img_path[:num_class_images])
 
         random.shuffle(self.instance_images_path)
@@ -332,6 +339,7 @@ class DreamBoothDataset(Dataset):
 
         self.image_transforms = transforms.Compose(
             [
+                transforms.RandomHorizontalFlip(0.5 * hflip),
                 transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
                 transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
                 transforms.ToTensor(),
@@ -351,7 +359,7 @@ class DreamBoothDataset(Dataset):
         example["instance_images"] = self.image_transforms(instance_image)
         example["instance_prompt_ids"] = self.tokenizer(
             instance_prompt,
-            padding="max_length",
+            padding="max_length" if self.pad_tokens else "do_not_pad",
             truncation=True,
             max_length=self.tokenizer.model_max_length,
         ).input_ids
@@ -364,7 +372,7 @@ class DreamBoothDataset(Dataset):
             example["class_images"] = self.image_transforms(class_image)
             example["class_prompt_ids"] = self.tokenizer(
                 class_prompt,
-                padding="max_length",
+                padding="max_length" if self.pad_tokens else "do_not_pad",
                 truncation=True,
                 max_length=self.tokenizer.model_max_length,
             ).input_ids
@@ -583,6 +591,8 @@ def main(args):
         size=args.resolution,
         center_crop=args.center_crop,
         num_class_images=args.num_class_images,
+        pad_tokens=args.pad_tokens,
+        hflip=args.hflip
     )
 
     def collate_fn(examples):
@@ -600,8 +610,7 @@ def main(args):
 
         input_ids = tokenizer.pad(
             {"input_ids": input_ids},
-            padding="max_length",
-            max_length=tokenizer.model_max_length,
+            padding=True,
             return_tensors="pt",
         ).input_ids
 
@@ -799,18 +808,26 @@ def main(args):
                         if args.train_text_encoder:
                             text_enc_model = accelerator.unwrap_model(text_encoder)
                         else:
-                            text_enc_model = CLIPTextModel.from_pretrained(os.path.join(args.working_dir, "text_encoder"))
-
+                            text_enc_model = CLIPTextModel.from_pretrained(args.working_dir,
+                                                                           subfolder="text_encoder",
+                                                                           revision=lifetime_step)
+                        scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
+                                                  clip_sample=False, set_alpha_to_one=False)
                         pipeline = StableDiffusionPipeline.from_pretrained(
                             args.working_dir,
-                            unet=accelerator.unwrap_model(unet),
-                            text_encoder=text_enc_model,
+                            unet=accelerator.unwrap_model(unet).to(torch.float16),
+                            text_encoder=text_enc_model.to(torch.float16),
                             vae=AutoencoderKL.from_pretrained(
-                                os.path.join(args.working_dir, "vae"),
-                                revision=lifetime_step),
-                            revision=lifetime_step
+                                args.working_dir,
+                                subfolder="vae",
+                                revision=lifetime_step,
+                            ),
+                            safety_checker=None,
+                            scheduler=scheduler,
+                            torch_dtype=torch.float16,
+                            revision=args.revision,
                         )
-
+                        
                         pipeline = pipeline.to(accelerator.device)
                         with autocast("cuda"):
                             # pipeline.text_encoder.resize_token_embeddings(49408)
