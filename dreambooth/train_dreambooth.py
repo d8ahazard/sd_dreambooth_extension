@@ -826,12 +826,19 @@ def main(args):
                             if save_img:
                                 shared.state.textinfo = "Generating preview..."
                                 pipeline.safety_checker = dumb_safety
-                                prompt = args.instance_prompt
-                                last_saved_image = os.path.join(args.output_dir, "logging",
-                                                                f'{args.instance_prompt}_{lifetime_step}.png')
-                                image = pipeline(prompt, num_inference_steps=60, guidance_scale=7.5).images[0]
-                                shared.state.current_image = image
-                                image.save(last_saved_image)
+                                image_path = os.path.join(args.output_dir, "logging",
+                                                                f'{args.save_sample_prompt}_{lifetime_step}.png')
+                                g_cuda = torch.Generator(device=accelerator.device).manual_seed(args.seed)
+                                with torch.inference_mode():
+                                    image = pipeline(
+                                        args.save_sample_prompt,
+                                        negative_prompt=args.save_sample_negative_prompt,
+                                        guidance_scale=args.save_guidance_scale,
+                                        num_inference_steps=args.save_infer_steps,
+                                        generator=g_cuda
+                                    ).images[0]
+                                    shared.state.current_image = image
+                                    image.save(image_path)
                         del pipeline
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
