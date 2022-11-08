@@ -464,11 +464,12 @@ def main(args):
         random.seed()
         args.seed = int(random.random())
     set_seed(args.seed)
+
     if args.concepts_list is not None and args.concepts_list != "":
         is_json = False
         try:
             print(f"Trying to parse: {args.concepts_list}")
-            json.load(args.concepts_list)
+            json.loads(args.concepts_list)
             is_json = True
             concepts_loaded = True
         except Exception as e:
@@ -483,6 +484,7 @@ def main(args):
                 print(f"Loaded concepts from {args.concepts_list}")
             except:
                 pass
+
     if args.class_data_dir is None or args.class_data_dir == "":
         args.class_data_dir = os.path.join(args.output_dir, "classifiers")
 
@@ -556,6 +558,7 @@ def main(args):
     )
     printm("Loaded model.")
     vae.requires_grad_(False)
+
     if not args.train_text_encoder:
         text_encoder.requires_grad_(False)
 
@@ -572,6 +575,7 @@ def main(args):
     # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
     use_adam = False
     optimizer_class = torch.optim.AdamW
+
     if args.use_8bit_adam:
         try:
             import bitsandbytes as bnb
@@ -720,9 +724,59 @@ def main(args):
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
     logger.info(f"  Total optimization steps = {args.max_train_steps}")
-    print(f"  Total target lifetime optimization steps = {args.max_train_steps + args.total_steps}")
-    printm(stats)
 
+    def save_weights(step, save_model, save_img):
+        # Create the pipeline using using the trained modules and save it.
+        if accelerator.is_main_process:
+            if args.train_text_encoder:
+                text_enc_model = accelerator.unwrap_model(text_encoder)
+            else:
+                text_enc_model = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="text_encoder")
+            scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", clip_sample=False, set_alpha_to_one=False)
+            pipeline = StableDiffusionPipeline.from_pretrained(
+                args.working_dir,
+                unet=accelerator.unwrap_model(unet),
+                text_encoder=text_enc_model,
+                vae=AutoencoderKL.from_pretrained(
+                    args.working_dir,
+                    subfolder="vae"
+                ),
+                safety_checker=None,
+                scheduler=scheduler,
+                torch_dtype=torch.float16,
+            )
+            pipeline = pipeline.to("cuda")
+            with autocast("cuda"):
+                if save_model:
+                    try:
+                        pipeline.save_pretrained(args.working_dir)
+                        save_checkpoint(args.model_name, lifetime_step,
+                                        args.mixed_precision == "fp16")
+                    except Exception as e:
+                        print(f"Exception saving checkpoint/model: {e}")
+                        traceback.print_exception(*sys.exc_info())
+                        pass
+                save_dir = args.output_dir
+                if args.save_sample_prompt is not None and save_img:
+                    try:
+                        pipeline.set_progress_bar_config(disable=True)
+                        sample_dir = os.path.join(save_dir, "logging")
+                        os.makedirs(sample_dir, exist_ok=True)
+                        images = pipeline(
+                            args.save_sample_prompt,
+                            negative_prompt=args.save_sample_negative_prompt,
+                            guidance_scale=args.save_guidance_scale,
+                            num_inference_steps=args.save_infer_steps,
+                        ).images
+                        images[0].save(os.path.join(sample_dir, f"{args.save_sample_prompt}{step}.png"))
+                    except Exception as e:
+                        print(f"Exception with the stupid image again: {e}")
+                    del pipeline
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                print(f"[*] Weights saved at {save_dir}")
+                unet.to(torch.float32)
+                text_enc_model.to(torch.float32)
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
@@ -732,6 +786,7 @@ def main(args):
     shared.state.job_no = global_step
     shared.state.textinfo = f"Training step: {global_step}/{args.max_train_steps}"
     loss_avg = AverageMeter()
+    training_complete = False
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
     for epoch in range(args.num_train_epochs):
         unet.train()
@@ -788,6 +843,13 @@ def main(args):
                     loss = F.mse_loss(noise_pred.float(), noise.float(), reduction="mean")
 
                 accelerator.backward(loss)
+                # if accelerator.sync_gradients:
+                #     params_to_clip = (
+                #         itertools.chain(unet.parameters(), text_encoder.parameters())
+                #         if args.train_text_encoder
+                #         else unet.parameters()
+                #     )
+                #     accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
@@ -798,6 +860,15 @@ def main(args):
                 progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=global_step)
 
+            if global_step > 0:
+                save_img = not global_step % args.save_preview_every
+                save_model = not global_step % args.save_embedding_every
+                if training_complete:
+                    save_img = True
+                    save_model = True
+                if save_img or save_model:
+                    save_weights(lifetime_step, save_model, save_img)
+
             progress_bar.update(1)
             global_step += 1
             lifetime_step += 1
@@ -805,80 +876,8 @@ def main(args):
 
             training_complete = global_step >= args.max_train_steps or shared.state.interrupted
 
-            if args.save_embedding_every or args.save_preview_every or training_complete:
-                save_ckpt = args.save_embedding_every and global_step and not global_step % args.save_embedding_every
-                save_img = args.save_preview_every and global_step and not global_step % args.save_preview_every
-                if not args.save_preview_every:
-                    save_img = False
-                if training_complete:
-                    save_ckpt = True
-                if save_ckpt or save_img or training_complete:
-                    if accelerator.is_main_process:
-                        if args.train_text_encoder:
-                            text_enc_model = accelerator.unwrap_model(text_encoder)
-                        else:
-                            text_enc_model = CLIPTextModel.from_pretrained(args.working_dir,
-                                                                           subfolder="text_encoder",
-                                                                           revision=lifetime_step)
-                        scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
-                                                  clip_sample=False, set_alpha_to_one=False)
-                        pipeline = StableDiffusionPipeline.from_pretrained(
-                            args.working_dir,
-                            unet=accelerator.unwrap_model(unet).to(torch.float16),
-                            text_encoder=text_enc_model.to(torch.float16),
-                            vae=AutoencoderKL.from_pretrained(
-                                args.working_dir,
-                                subfolder="vae",
-                                revision=lifetime_step,
-                            ),
-                            safety_checker=None,
-                            scheduler=scheduler,
-                            torch_dtype=torch.float16,
-                            revision=lifetime_step,
-                        )
-                        
-                        pipeline = pipeline.to(accelerator.device)
-                        with autocast("cuda"):
-                            # pipeline.text_encoder.resize_token_embeddings(49408)
-                            printm("Loaded pipeline for preview...")
-                            if save_ckpt:
-                                shared.state.textinfo = "Saving checkpoint..."
-                                print(f"Saving model at step {lifetime_step}.")
-
-                                try:
-                                    pipeline.save_pretrained(args.working_dir)
-                                    save_checkpoint(args.model_name, lifetime_step,
-                                                    args.mixed_precision == "fp16")
-                                except Exception as e:
-                                    print(f"Exception saving checkpoint/model: {e}")
-                                    traceback.print_exception(*sys.exc_info())
-                                    pass
-
-                            if save_img:
-                                try:
-                                    shared.state.textinfo = "Generating preview..."
-                                    pipeline.safety_checker = dumb_safety
-                                    image_path = os.path.join(args.output_dir, "logging",
-                                                                    f'{args.save_sample_prompt}_{lifetime_step}.png')
-                                    g_cuda = torch.Generator(device=accelerator.device).manual_seed(args.seed)
-                                    with torch.inference_mode():
-                                        image = pipeline(
-                                            args.save_sample_prompt,
-                                            negative_prompt=args.save_sample_negative_prompt,
-                                            guidance_scale=args.save_guidance_scale,
-                                            num_inference_steps=args.save_infer_steps,
-                                            generator=g_cuda
-                                        ).images[0]
-                                        shared.state.current_image = image
-                                        image.save(image_path)
-                                except Exception as e:
-                                    print(f"Exception saving preview: {e}")
-                        del pipeline
-                        if torch.cuda.is_available():
-                            torch.cuda.empty_cache()
-                        printm("Pipeline cleared...")
-
             shared.state.textinfo = f"Training, step {global_step}/{args.max_train_steps} current, {lifetime_step}/{args.max_train_steps + args.total_steps} lifetime"
+
 
             if training_complete:
                 print("Training complete??")
@@ -889,6 +888,8 @@ def main(args):
 
                 shared.state.textinfo = f"Training {state} {global_step}/{args.max_train_steps}, {lifetime_step}" \
                                         f" total."
+
+            
                 break
         training_complete = global_step >= args.max_train_steps or shared.state.interrupted
         accelerator.wait_for_everyone()

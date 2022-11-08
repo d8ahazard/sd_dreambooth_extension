@@ -42,8 +42,8 @@ def on_ui_tabs():
                     with gr.Accordion(open=True, label="Settings"):
                         db_concepts_list = gr.Textbox(label="Concepts List (Overrides instance/class settings below)",
                                                       placeholder="Path to JSON file with concepts to train.")
-                        db_instance_prompt = gr.Textbox(label="Instance prompt", value="*")
-                        db_class_prompt = gr.Textbox(label="Class prompt", value="*")
+                        db_instance_prompt = gr.Textbox(label="Instance prompt", value="")
+                        db_class_prompt = gr.Textbox(label="Class prompt", value="")
                         db_instance_data_dir = gr.Textbox(label='Dataset directory',
                                                           placeholder="Path to directory with input images")
                         db_class_data_dir = gr.Textbox(label='Classification dataset directory (optional).',
@@ -64,8 +64,7 @@ def on_ui_tabs():
                             precision=0)
                         db_save_sample_prompt = gr.Textbox(label="Preview image prompt",
                                                            placeholder="Leave blank to use instance prompt.")
-                        db_save_sample_negative_prompt = gr.Textbox(label="Preview image negative prompt",
-                                                                    placeholder="Leave blank to use instance prompt.")
+                        db_save_sample_negative_prompt = gr.Textbox(label="Preview image negative prompt")
                         db_n_save_sample = gr.Number(label="Number of samples to generate", value=1)
                         db_save_guidance_scale = gr.Number(label="Sample guidance scale", value=7.5, max=12, min=1,
                                                            precision=2)

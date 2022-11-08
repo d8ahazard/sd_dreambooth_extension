@@ -143,6 +143,5 @@ class DreamboothConfig(dict):
         """
         model_path = paths.models_path
         config_file = os.path.join(model_path, "dreambooth", self.__dict__["model_name"], "db_config.json")
-        config = json.dumps(self.__dict__)
         with open(config_file, "w") as outfile:
-            outfile.write(config)
+            json.dump(self.__dict__, outfile)
