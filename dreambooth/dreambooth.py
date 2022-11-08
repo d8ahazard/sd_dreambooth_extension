@@ -198,7 +198,9 @@ def start_training(pretrained_model_name_or_path,
                    mixed_precision,
                    not_cache_latents,
                    concepts_list,
-                   use_cpu
+                   use_cpu,
+                   pad_tokens,
+                   hflip
                    ):
     print("Starting Dreambooth training...")
     shared.sd_model.to('cpu')
@@ -250,7 +252,9 @@ def start_training(pretrained_model_name_or_path,
                    mixed_precision,
                    not_cache_latents,
                    concepts_list,
-                   use_cpu)
+                   use_cpu,
+                   pad_tokens,
+                   hflip)
     config.save()
     if not os.path.exists(config.working_dir):
         print("Invalid training data dir!")
