@@ -8,6 +8,6 @@ torch
 basicsr
 pillow
 tqdm
-diffusers==0.7.2
+git+https://github.com/ShivamShrirao/diffusers.git#egg=diffusers
 bitsandbytes==0.35.0
 albumentations

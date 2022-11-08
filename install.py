@@ -9,6 +9,7 @@ name = "Dreambooth"
 reqs = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
 python = sys.executable
 run(f'{python} -m pip install -r "{reqs}"', desc=f"Installing Requirements for {name}", errdesc=f"Couldn't install {name} requirements.")
+
 if os.name == "nt":
     python = sys.executable
     bnb_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bitsandbytes_windows")

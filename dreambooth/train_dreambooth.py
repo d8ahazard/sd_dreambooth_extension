@@ -456,7 +456,7 @@ def main(args):
         args.train_text_encoder = False
 
     concepts_loaded = False
-    if args.seed is not None:
+    if args.seed is None:
         set_seed(args.seed)
     if args.concepts_list is not None and args.concepts_list != "":
         is_json = False
