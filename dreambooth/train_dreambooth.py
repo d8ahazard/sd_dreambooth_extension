@@ -19,6 +19,7 @@ import torch.utils.checkpoint
 from PIL import Image
 from accelerate import Accelerator
 from accelerate.logging import get_logger
+from accelerate.utils import set_seed
 from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, StableDiffusionPipeline, UNet2DConditionModel
 from diffusers.optimization import get_scheduler
 from huggingface_hub import HfFolder, whoami
@@ -447,6 +448,8 @@ def main(args):
         args.train_text_encoder = False
 
     concepts_loaded = False
+    if args.seed is not None:
+        set_seed(args.seed)
     if args.concepts_list is not None and args.concepts_list != "":
         is_json = False
         try:
