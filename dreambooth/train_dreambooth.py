@@ -476,7 +476,8 @@ def main(args):
                         concepts_loaded = True
             except:
                 pass
-
+    if args.class_data_dir is None or args.class_data_dir == "":
+        args.class_data_dir = os.path.join(args.output_dir, "classifiers")
     if not concepts_loaded:
         args.concepts_list = [
             {
