@@ -108,7 +108,8 @@ class DreamboothConfig(dict):
                 "use_cpu": use_cpu,
                 "pad_tokens": pad_tokens,
                 "hflip": hflip,
-                "prior_loss_weight": 1}
+                "prior_loss_weight": 1,
+                "seed": None}
         for key in data:
             self.__dict__[key] = data[key]
         return self.__dict__
