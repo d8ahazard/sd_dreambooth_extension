@@ -67,7 +67,7 @@ may help with lower-VRAM GPUs.
 
 *Sample guidance scale* - Like CFG Scale in Txt2Image/Img2Img, used for generating preview.
 
-*Sample steps* - Same as sample guidance scale, but the number of steps to run to generate preview.
+*Sample steps* - Same as sample guidance scale, but the number of steps to run to generate preview. According to (this guide)[https://github.com/nitrosocke/dreambooth-training-guide], you should train for appx 100 steps per sample image. So, if you have 40 instance/sample images, you would train for 4k steps. This is, of course, a rough approximation, and other values will have an effect on final output fidelity.
 
 
 ### Advanced Settings
@@ -89,6 +89,12 @@ may help with lower-VRAM GPUs.
 *Mixed Precision* - Set to 'fp16' to save VRAM at the cost of speed.
 
 *Everything after 'Mixed Precision'* - Adjust at your own risk. Performance/quality benefits from changing these remain to be tested.
+
+The next two were added after I wrote the above bit, so just ignore me being a big liar.
+
+*Pad Tokens* - Pads the text tokens to a longer length for some reason. 
+
+*Apply Horizontal Flip* - "Apply horizontal flip augmentation". Flips images horizontally at random, which can potentially offer better editability?
 
 
 ### Continuing Training
