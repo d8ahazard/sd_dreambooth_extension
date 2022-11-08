@@ -783,8 +783,8 @@ def main(args):
             training_complete = global_step >= args.max_train_steps or shared.state.interrupted
 
             if args.save_embedding_every or args.save_preview_every or training_complete:
-                save_ckpt = not global_step % args.save_embedding_every and global_step != 0
-                save_img = not global_step % args.save_preview_every and global_step != 0
+                save_ckpt = global_step != 0 and not global_step % args.save_embedding_every
+                save_img = global_step != 0 and not global_step % args.save_preview_every
                 if not args.save_preview_every:
                     save_img = False
                 if training_complete:
