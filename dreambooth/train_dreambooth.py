@@ -706,10 +706,8 @@ def main(args):
     shared.state.job_count = args.max_train_steps
     shared.state.job_no = global_step
     shared.state.textinfo = f"Training step: {global_step}/{args.max_train_steps}"
-    first_step = True
     loss_avg = AverageMeter()
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
-    training_complete = False
     for epoch in range(args.num_train_epochs):
         unet.train()
         if args.train_text_encoder and text_encoder is not None:
