@@ -474,10 +474,12 @@ def main(args):
                     with open(args.concepts_list, "r") as f:
                         args.concepts_list = json.load(f)
                         concepts_loaded = True
+                print(f"Loaded concepts from {args.concepts_list}")
             except:
                 pass
     if args.class_data_dir is None or args.class_data_dir == "":
         args.class_data_dir = os.path.join(args.output_dir, "classifiers")
+
     if not concepts_loaded:
         args.concepts_list = [
             {
@@ -826,7 +828,7 @@ def main(args):
                             safety_checker=None,
                             scheduler=scheduler,
                             torch_dtype=torch.float16,
-                            revision=args.revision,
+                            revision=lifetime_step,
                         )
                         
                         pipeline = pipeline.to(accelerator.device)
