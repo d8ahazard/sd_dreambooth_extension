@@ -295,6 +295,10 @@ def parse_args(input_args=None):
     if env_local_rank != -1 and env_local_rank != args.local_rank:
         args.local_rank = env_local_rank
 
+    if args.save_sample_prompt == "" or args.save_sample_prompt is None:
+        args.save_sample_prompt = args.instance_prompt
+    if args.save_sample_negative_prompt is None:
+        args.save_sample_negative_prompt = ""
     return args
 
 
@@ -457,7 +461,9 @@ def main(args):
 
     concepts_loaded = False
     if args.seed is None:
-        set_seed(args.seed)
+        random.seed()
+        args.seed = int(random.random())
+    set_seed(args.seed)
     if args.concepts_list is not None and args.concepts_list != "":
         is_json = False
         try:
@@ -837,7 +843,7 @@ def main(args):
                             printm("Loaded pipeline for preview...")
                             if save_ckpt:
                                 shared.state.textinfo = "Saving checkpoint..."
-                                print(f"Saving checkpoint at step {lifetime_step}.")
+                                print(f"Saving model at step {lifetime_step}.")
 
                                 try:
                                     pipeline.save_pretrained(args.working_dir)
@@ -849,21 +855,24 @@ def main(args):
                                     pass
 
                             if save_img:
-                                shared.state.textinfo = "Generating preview..."
-                                pipeline.safety_checker = dumb_safety
-                                image_path = os.path.join(args.output_dir, "logging",
-                                                                f'{args.save_sample_prompt}_{lifetime_step}.png')
-                                g_cuda = torch.Generator(device=accelerator.device).manual_seed(args.seed)
-                                with torch.inference_mode():
-                                    image = pipeline(
-                                        args.save_sample_prompt,
-                                        negative_prompt=args.save_sample_negative_prompt,
-                                        guidance_scale=args.save_guidance_scale,
-                                        num_inference_steps=args.save_infer_steps,
-                                        generator=g_cuda
-                                    ).images[0]
-                                    shared.state.current_image = image
-                                    image.save(image_path)
+                                try:
+                                    shared.state.textinfo = "Generating preview..."
+                                    pipeline.safety_checker = dumb_safety
+                                    image_path = os.path.join(args.output_dir, "logging",
+                                                                    f'{args.save_sample_prompt}_{lifetime_step}.png')
+                                    g_cuda = torch.Generator(device=accelerator.device).manual_seed(args.seed)
+                                    with torch.inference_mode():
+                                        image = pipeline(
+                                            args.save_sample_prompt,
+                                            negative_prompt=args.save_sample_negative_prompt,
+                                            guidance_scale=args.save_guidance_scale,
+                                            num_inference_steps=args.save_infer_steps,
+                                            generator=g_cuda
+                                        ).images[0]
+                                        shared.state.current_image = image
+                                        image.save(image_path)
+                                except Exception as e:
+                                    print(f"Exception saving preview: {e}")
                         del pipeline
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
