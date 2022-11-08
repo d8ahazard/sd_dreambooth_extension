@@ -7,7 +7,9 @@ from modules.paths import script_path
 
 reqs = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
 run_pip(f"install -r {reqs}", "requirements for Dreambooth")
-
+python = sys.executable
+torch_cmd = "pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url https://download.pytorch.org/whl/cu116"
+run(f'"{python}" -m {torch_cmd}', "Installing torch and torchvision", "Couldn't install torch")
 if os.name == "nt":
     python = sys.executable
     bnb_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bitsandbytes_windows")
