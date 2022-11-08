@@ -447,11 +447,11 @@ def main(args):
         is_json = False
         try:
             print(f"Trying to parse: {args.concepts_list}")
-            json.loads(args.concepts_list)
+            json.load(args.concepts_list)
             is_json = True
             concepts_loaded = True
-        except:
-            print("Unable to load concepts as JSON, trying as file.")
+        except Exception as e:
+            print(f"Unable to load concepts as JSON, trying as file: {e}")
             pass
         if not is_json:
             try:
@@ -709,6 +709,7 @@ def main(args):
     first_step = True
     loss_avg = AverageMeter()
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
+    training_complete = False
     for epoch in range(args.num_train_epochs):
         unet.train()
         if args.train_text_encoder and text_encoder is not None:
@@ -795,8 +796,6 @@ def main(args):
                         else:
                             text_enc_model = CLIPTextModel.from_pretrained(os.path.join(args.working_dir, "text_encoder"))
 
-                        scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
-                                                  clip_sample=False, set_alpha_to_one=False)
                         pipeline = StableDiffusionPipeline.from_pretrained(
                             args.working_dir,
                             unet=accelerator.unwrap_model(unet),
@@ -846,11 +845,14 @@ def main(args):
                     state = "cancelled"
                 else:
                     state = "complete"
+
                 shared.state.textinfo = f"Training {state} {global_step}/{args.max_train_steps}, {lifetime_step}" \
                                         f" total."
                 break
-
+        training_complete = global_step >= args.max_train_steps or shared.state.interrupted
         accelerator.wait_for_everyone()
+        if training_complete:
+            break
 
     try:
         printm("CLEANUP: ")
