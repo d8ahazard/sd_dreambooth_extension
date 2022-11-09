@@ -465,6 +465,17 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
+def encode_hidden_state(text_encoder: CLIPTextModel, input_ids):
+    clip_skip = shared.opts.CLIP_stop_at_last_layers
+    if clip_skip <= 1:
+        return text_encoder(input_ids)[0]
+    else:
+        enc_out = text_encoder(input_ids, output_hidden_states=True, return_dict=True)
+        encoder_hidden_states = enc_out['hidden_states'][-clip_skip]
+        encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states)
+        return encoder_hidden_states
+
+
 def main(args):
     logging_dir = Path(args.output_dir, "logging")
 
@@ -694,7 +705,7 @@ def main(args):
                 if args.train_text_encoder:
                     text_encoder_cache.append(batch["input_ids"])
                 else:
-                    text_encoder_cache.append(text_encoder(batch["input_ids"])[0])
+                    text_encoder_cache.append(encode_hidden_state(text_encoder, batch["input_ids"]))
         train_dataset = LatentsDataset(latents_cache, text_encoder_cache)
         train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=1, collate_fn=lambda x: x,
                                                        shuffle=True)
@@ -849,11 +860,11 @@ def main(args):
                 with text_enc_context:
                     if not args.not_cache_latents:
                         if args.train_text_encoder:
-                            encoder_hidden_states = text_encoder(batch[0][1])[0]
+                            encoder_hidden_states = encode_hidden_state(text_encoder, batch[0][1])
                         else:
                             encoder_hidden_states = batch[0][1]
                     else:
-                        encoder_hidden_states = text_encoder(batch["input_ids"])[0]
+                        encoder_hidden_states = encode_hidden_state(text_encoder, batch["input_ids"])
 
                 # Predict the noise residual
                 noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
