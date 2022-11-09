@@ -16,13 +16,14 @@ from typing import Optional
 import torch
 import torch.nn.functional as F
 import torch.utils.checkpoint
-from PIL import Image
+from PIL import Image, features
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import set_seed
 from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, StableDiffusionPipeline, UNet2DConditionModel
 from diffusers.optimization import get_scheduler
 from huggingface_hub import HfFolder, whoami
+from six import StringIO
 from torch import autocast
 from torch.utils.data import Dataset
 from torchvision import transforms
@@ -302,6 +303,34 @@ def parse_args(input_args=None):
     return args
 
 
+pil_features = []
+
+
+def list_features():
+    # Create buffer for pilinfo() to write into rather than stdout
+    buffer = StringIO()
+    features.pilinfo(out=buffer)
+    global pil_features
+    pil_features = []
+    # Parse and analyse lines
+    for line in buffer.getvalue().splitlines():
+        if "Extensions:" in line:
+            ext_list = line.split(": ")[1]
+            extensions = ext_list.split(", ")
+            for extension in extensions:
+                if not extension in pil_features:
+                    pil_features.append(extension)
+
+
+def is_image(path: Path):
+    global pil_features
+    if not len(pil_features):
+        list_features()
+    is_img = path.is_file() and path.suffix in pil_features
+    if not is_img:
+        print(f"Ignoring non-image file: {path}")
+    return is_img
+
 class DreamBoothDataset(Dataset):
     """
     A dataset to prepare the instance and class images with the prompts for fine-tuning the model.
@@ -327,13 +356,12 @@ class DreamBoothDataset(Dataset):
 
         self.instance_images_path = []
         self.class_images_path = []
-
         for concept in concepts_list:
-            inst_img_path = [(x, concept["instance_prompt"]) for x in Path(concept["instance_data_dir"]).iterdir() if x.is_file()]
+            inst_img_path = [(x, concept["instance_prompt"]) for x in Path(concept["instance_data_dir"]).iterdir() if is_image(x)]
             self.instance_images_path.extend(inst_img_path)
 
             if with_prior_preservation:
-                class_img_path = [(x, concept["class_prompt"]) for x in Path(concept["class_data_dir"]).iterdir() if x.is_file()]
+                class_img_path = [(x, concept["class_prompt"]) for x in Path(concept["class_data_dir"]).iterdir() if is_image(x)]
                 self.class_images_path.extend(class_img_path[:num_class_images])
 
         random.shuffle(self.instance_images_path)
@@ -487,6 +515,10 @@ def main(args):
 
     if args.class_data_dir is None or args.class_data_dir == "":
         args.class_data_dir = os.path.join(args.output_dir, "classifiers")
+
+    if args.class_prompt is None or args.class_prompt == "":
+        if args.num_class_images == 0:
+            args.with_prior_preservation = False
 
     if not concepts_loaded:
         args.concepts_list = [
