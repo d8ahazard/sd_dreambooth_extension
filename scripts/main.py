@@ -61,10 +61,10 @@ def on_ui_tabs():
                             label='Total number of classification images to use. Set to 0 to disable.', value=0,
                             precision=0)
                         db_max_train_steps = gr.Number(label='Training steps', value=1000, precision=0)
-                        db_train_batch_size = gr.Number(label="Batch Size", precision=1, value=1)
-                        db_sample_batch_size = gr.Number(label="Class Batch Size", precision=1, value=1)
+                        db_train_batch_size = gr.Number(label="Batch Size", precision=0, value=1)
+                        db_sample_batch_size = gr.Number(label="Class Batch Size", precision=0, value=1)
                         db_learning_rate = gr.Number(label='Learning rate', value=5e-6)
-                        db_resolution = gr.Number(label="Resolution", precision=1, value=512)
+                        db_resolution = gr.Number(label="Resolution", precision=0, value=512)
                         db_save_embedding_every = gr.Number(
                             label='Save a checkpoint every N steps, 0 to disable', value=500,
                             precision=0)
@@ -74,10 +74,10 @@ def on_ui_tabs():
                         db_save_sample_prompt = gr.Textbox(label="Preview image prompt",
                                                            placeholder="Leave blank to use instance prompt.")
                         db_save_sample_negative_prompt = gr.Textbox(label="Preview image negative prompt")
-                        db_n_save_sample = gr.Number(label="Number of samples to generate", value=1)
+                        db_n_save_sample = gr.Number(label="Number of samples to generate", value=1, precision=0)
                         db_save_guidance_scale = gr.Number(label="Sample guidance scale", value=7.5, max=12, min=1,
                                                            precision=2)
-                        db_save_infer_steps = gr.Number(label="Sample steps", value=40, min=10, max=200)
+                        db_save_infer_steps = gr.Number(label="Sample steps", value=40, min=10, max=200, precision=0)
 
                     with gr.Accordion(open=False, label="Advanced"):
                         with gr.Row():
@@ -95,16 +95,16 @@ def on_ui_tabs():
                                                               choices=["linear", "cosine", "cosine_with_restarts",
                                                                        "polynomial", "constant",
                                                                        "constant_with_warmup"])
-                                db_prior_loss_weight = gr.Number(label="Prior Loss Weight", precision=1, value=1)
-                                db_num_train_epochs = gr.Number(label="# Training Epochs", precision=1, value=1)
+                                db_prior_loss_weight = gr.Number(label="Prior Loss Weight", precision=0, value=1)
+                                db_num_train_epochs = gr.Number(label="# Training Epochs", precision=0, value=1)
                                 db_adam_beta1 = gr.Number(label="Adam Beta 1", precision=1, value=0.9)
                                 db_adam_beta2 = gr.Number(label="Adam Beta 2", precision=3, value=0.999)
                                 db_adam_weight_decay = gr.Number(label="Adam Weight Decay", precision=3, value=0.01)
                                 db_adam_epsilon = gr.Number(label="Adam Epsilon", precision=8, value=0.00000001)
                                 db_max_grad_norm = gr.Number(label="Max Grad Norms", value=1.0, precision=1)
-                                db_gradient_accumulation_steps = gr.Number(label="Grad Accumulation Steps", precision=1,
+                                db_gradient_accumulation_steps = gr.Number(label="Grad Accumulation Steps", precision=0,
                                                                            value=1)
-                                db_lr_warmup_steps = gr.Number(label="Warmup Steps", precision=1, value=0)
+                                db_lr_warmup_steps = gr.Number(label="Warmup Steps", precision=0, value=0)
                                 db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
                                 db_hflip = gr.Checkbox(label="Apply horizontal Flip", value=True)
                     with gr.Row():
