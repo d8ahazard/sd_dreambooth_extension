@@ -37,7 +37,8 @@ try:
     print(f"Diffusers version is {ver}.")
     print(f"Torch version is {tver}.")
     print(f"Torch vision version is {tvver}.")
-except:
+except Exception as e:
+    print(f"Exception doing the things: {e}")
     pass
 
 if os.name == "nt":

@@ -7,12 +7,11 @@ from modules.ui import paste_symbol, setup_progressbar
 from webui import wrap_gradio_gpu_call
 
 
-print("Dreambooth UI reloaded?")
 try:
     import diffusers
     ver = diffusers.__version__
     if not "dev" in ver:
-        print(f"You should probably install stuff now: {ver}")
+        print(f"Incorrect diffusers version for Dreambooth, running installer.: {ver}")
         import install
 except:
     pass
