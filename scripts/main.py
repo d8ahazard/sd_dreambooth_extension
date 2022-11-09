@@ -7,6 +7,9 @@ from modules.ui import paste_symbol, setup_progressbar
 from webui import wrap_gradio_gpu_call
 
 
+print("Dreambooth UI reloaded?")
+
+
 def on_ui_tabs():
     with gr.Blocks() as dreambooth_interface:
         with gr.Row():
