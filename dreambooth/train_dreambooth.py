@@ -498,28 +498,33 @@ def main(args):
         shared.state.textinfo = msg
         args.train_text_encoder = False
 
-    concepts_loaded = False
     if args.seed is None:
         random.seed()
         args.seed = int(random.random())
     set_seed(args.seed)
 
+    concepts_loaded = False
+
     if args.concepts_list is not None and args.concepts_list != "":
         is_json = False
         try:
-            print(f"Trying to parse: {args.concepts_list}")
-            json.loads(args.concepts_list)
+            alist = str(args.concepts_list)
+            if "'" in alist:
+                alist = alist.replace("'", '"')
+            print(f"Trying to parse: {alist}")
+            args.concepts_list = json.loads(alist)
             is_json = True
             concepts_loaded = True
         except Exception as e:
             print(f"Unable to load concepts as JSON, trying as file: {e}")
+            traceback.print_exc()
             pass
         if not is_json:
             try:
                 if os.path.exists(args.concepts_list):
                     with open(args.concepts_list, "r") as f:
                         args.concepts_list = json.load(f)
-                        concepts_loaded = True
+                    concepts_loaded = True
                 print(f"Loaded concepts from {args.concepts_list}")
             except:
                 pass
@@ -532,6 +537,7 @@ def main(args):
             args.with_prior_preservation = False
 
     if not concepts_loaded:
+
         args.concepts_list = [
             {
                 "instance_prompt": args.instance_prompt,
