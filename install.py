@@ -1,6 +1,6 @@
 import shutil
 import sys
-
+import importlib
 import git
 
 from launch import run_pip, run
@@ -28,6 +28,9 @@ try:
     import diffusers
     import torch
     import torchvision
+    importlib.reload(diffusers)
+    importlib.reload(torch)
+    importlib.reload(torchvision)
     ver = diffusers.__version__
     tver = torch.__version__
     tvver = torchvision.__version__

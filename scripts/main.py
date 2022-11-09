@@ -8,7 +8,14 @@ from webui import wrap_gradio_gpu_call
 
 
 print("Dreambooth UI reloaded?")
-
+try:
+    import diffusers
+    ver = diffusers.__version__
+    if not "dev" in ver:
+        print(f"You should probably install stuff now: {ver}")
+        import install
+except:
+    pass
 
 def on_ui_tabs():
     with gr.Blocks() as dreambooth_interface:
