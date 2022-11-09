@@ -79,6 +79,7 @@ may help with lower-VRAM GPUs.
 ### Advanced Settings
 
 *Use CPU Only* - As indicated, this is more of a last resort if you can't get it to train with any other settings. Also, as indicated, it will be abysmally slow.
+Also, you *cannot* use 8Bit-Adam with CPU Training, or you'll have a bad time.
 
 *Don't Cache Latents* - Enabling will save a bit of VRAM at the cost of a bit of speed.
 
