@@ -691,7 +691,7 @@ def main(args):
     # as these models are only used for inference, keeping weights in full precision is not required.
     vae.to(accelerator.device, dtype=weight_dtype)
     if not args.train_text_encoder:
-        text_encoder.to(accelerator.device, dtype=weight_dtype)
+        text_encoder.to(accelerator.device)
 
     if not args.not_cache_latents:
         latents_cache = []
