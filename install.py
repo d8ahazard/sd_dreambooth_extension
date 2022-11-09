@@ -1,4 +1,5 @@
 import shutil
+import subprocess
 import sys
 import importlib
 import git
@@ -6,25 +7,18 @@ import git
 from launch import run_pip, run
 import os
 from modules.paths import script_path
-base_dir = os.path.dirname(os.path.realpath(__file__))
+name = "Dreambooth"
+subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', 'requirements.txt'])
+torch_cmd="pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url " \
+          "https://download.pytorch.org/whl/cu116 "
+subprocess.check_call([sys.executable, '-m', torch_cmd])
+
 try:
+    base_dir = os.path.dirname(os.path.realpath(__file__))
     repo = git.Repo(base_dir)
     revision = repo.rev_parse("HEAD")
     print(f"Dreambooth revision is {revision}")
-except:
-    pass
 
-name = "Dreambooth"
-reqs = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
-python = sys.executable
-run(f'{python} -m pip install -r "{reqs}"', "Checking Dreambooth requirements",
-    "Installing Dreambooth requirements failed.")
-print(f"Dreambooth req install: {reqs}")
-torch_cmd="pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url " \
-          "https://download.pytorch.org/whl/cu116 "
-run(f'"{python}" -m {torch_cmd}', "Checking Dreambooth torch version", "Updating torch version failed!")
-
-try:
     import diffusers
     import torch
     import torchvision
