@@ -807,15 +807,14 @@ def main(args):
             if args.train_text_encoder:
                 text_enc_model = accelerator.unwrap_model(text_encoder)
             else:
-                text_enc_model = CLIPTextModel.from_pretrained(args.working_dir, subfolder="text_encoder")
+                text_enc_model = CLIPTextModel.from_pretrained(os.path.join(args.working_dir, "text_encoder"))
             scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", clip_sample=False, set_alpha_to_one=False)
             pipeline = StableDiffusionPipeline.from_pretrained(
                 args.working_dir,
                 unet=accelerator.unwrap_model(unet),
                 text_encoder=text_enc_model,
                 vae=AutoencoderKL.from_pretrained(
-                    args.working_dir,
-                    subfolder="vae"
+                    os.path.join(args.working_dir, "vae")
                 ),
                 safety_checker=None,
                 scheduler=scheduler,
@@ -862,7 +861,6 @@ def main(args):
     shared.state.job_no = global_step
     shared.state.textinfo = f"Training step: {global_step}/{args.max_train_steps}"
     loss_avg = AverageMeter()
-    training_complete = False
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
     for epoch in range(args.num_train_epochs):
         try:

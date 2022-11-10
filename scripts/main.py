@@ -37,9 +37,7 @@ def on_ui_tabs():
                     db_new_model_name = gr.Textbox(label="Name")
                     src_checkpoint = gr.Dropdown(label='Source Checkpoint', choices=sorted(
                         sd_models.checkpoints_list.keys()))
-                    # I just randomly chose ddim here because we use it everywhere else. Not sure which of these
-                    # are ideal, or if it matters at all.
-                    diff_type = gr.Dropdown(label='Scheduler', choices=["pndm", "ddim", "lms"], value="pndm")
+                    diff_type = gr.Dropdown(label='Scheduler', choices=["ddim", "pndm", "lms"], value="ddim")
 
                     with gr.Row():
                         with gr.Column(scale=3):
