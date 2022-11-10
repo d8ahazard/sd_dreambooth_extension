@@ -112,13 +112,11 @@ def on_ui_tabs():
                             gr.HTML(value="")
 
             with gr.Column(variant="panel"):
-                db_output = gr.Text(elem_id="db_output", value="", show_label=False)
-                db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery', visible=False).style(
-                    grid=4)
-                db_preview = gr.Image(elem_id='db_preview', visible=True)
-                db_progressbar = gr.HTML(elem_id="db_progressbar")
                 db_progress = gr.HTML(elem_id="db_progress", value="")
                 db_outcome = gr.HTML(elem_id="db_error", value="")
+                db_progressbar = gr.HTML(elem_id="db_progressbar")
+                db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery').style(grid=4)
+                db_preview = gr.Image(elem_id='db_preview', visible=False)
                 setup_progressbar(db_progressbar, db_preview, 'db', textinfo=db_progress)
 
         db_generate_checkpoint.click(
@@ -128,7 +126,7 @@ def on_ui_tabs():
                 db_mixed_precision
             ],
             outputs=[
-                db_output,
+                db_progress,
                 db_outcome
             ]
         )
@@ -142,7 +140,7 @@ def on_ui_tabs():
             ],
             outputs=[
                 db_pretrained_model_name_or_path,
-                db_output,
+                db_progress,
                 db_outcome,
             ]
         )
@@ -193,7 +191,7 @@ def on_ui_tabs():
                 db_hflip
             ],
             outputs=[
-                db_output,
+                db_progress,
                 db_outcome,
             ]
         )
@@ -282,7 +280,7 @@ def on_ui_tabs():
                 db_use_cpu,
                 db_pad_tokens,
                 db_hflip,
-                db_output
+                db_progress
             ]
         )
 
