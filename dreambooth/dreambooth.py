@@ -67,7 +67,8 @@ def load_params(pretrained_model_name_or_path,
                 concepts_list,
                 use_cpu,
                 pad_tokens,
-                hflip):
+                hflip,
+                use_ema):
     tc = DreamboothConfig()
 
     tc.from_ui(pretrained_model_name_or_path,
@@ -110,7 +111,8 @@ def load_params(pretrained_model_name_or_path,
                concepts_list,
                use_cpu,
                pad_tokens,
-               hflip)
+               hflip,
+               use_ema)
 
     target_values = ["pretrained_vae_name_or_path",
                      "instance_data_dir",
@@ -151,7 +153,8 @@ def load_params(pretrained_model_name_or_path,
                      "concepts_list",
                      "use_cpu",
                      "pad_tokens",
-                     "hflip"]
+                     "hflip",
+                     "use_ema"]
 
     data = tc.from_file(pretrained_model_name_or_path)
     values = []
@@ -216,7 +219,8 @@ def start_training(pretrained_model_name_or_path,
                    concepts_list,
                    use_cpu,
                    pad_tokens,
-                   hflip
+                   hflip,
+                   use_ema
                    ):
     print("Starting Dreambooth training...")
     shared.sd_model.to('cpu')
@@ -273,7 +277,8 @@ def start_training(pretrained_model_name_or_path,
                    concepts_list,
                    use_cpu,
                    pad_tokens,
-                   hflip)
+                   hflip,
+                   use_ema)
     config.save()
     if not os.path.exists(config.working_dir):
         print("Invalid training data dir!")

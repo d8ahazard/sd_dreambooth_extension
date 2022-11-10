@@ -111,6 +111,7 @@ def on_ui_tabs():
                                 db_lr_warmup_steps = gr.Number(label="Warmup Steps", precision=0, value=0)
                                 db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
                                 db_hflip = gr.Checkbox(label="Apply horizontal Flip", value=True)
+                                db_use_ema = gr.Checkbox(label="Use EMA for finetuning", value=False)
                     with gr.Row():
                         with gr.Column(scale=2):
                             gr.HTML(value="")
@@ -194,7 +195,8 @@ def on_ui_tabs():
                 db_concepts_list,
                 db_use_cpu,
                 db_pad_tokens,
-                db_hflip
+                db_hflip,
+                db_use_ema
             ],
             outputs=[
                 db_progress,
@@ -245,7 +247,8 @@ def on_ui_tabs():
                 db_concepts_list,
                 db_use_cpu,
                 db_pad_tokens,
-                db_hflip
+                db_hflip,
+                db_use_ema
             ],
             outputs=[
                 db_pretrained_vae_name_or_path,
@@ -288,7 +291,8 @@ def on_ui_tabs():
                 db_use_cpu,
                 db_pad_tokens,
                 db_hflip,
-                db_progress
+                db_use_ema,
+                db_progress,
             ]
         )
 

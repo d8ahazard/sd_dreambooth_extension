@@ -63,7 +63,8 @@ class DreamboothConfig(dict):
                 concepts_list,
                 use_cpu,
                 pad_tokens,
-                hflip):
+                hflip,
+                use_ema):
 
         pretrained_model_name_or_path = images.sanitize_filename_part(pretrained_model_name_or_path, True)
         pretrained_vae_name_or_path = images.sanitize_filename_part(pretrained_vae_name_or_path, True)
@@ -115,6 +116,7 @@ class DreamboothConfig(dict):
                 "use_cpu": use_cpu,
                 "pad_tokens": pad_tokens,
                 "hflip": hflip,
+                "use_ema": use_ema,
                 "prior_loss_weight": 1,
                 "seed": None}
         for key in data:

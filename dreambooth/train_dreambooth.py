@@ -12,7 +12,7 @@ import sys
 import traceback
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
 
 import torch
 import torch.nn.functional as F
@@ -294,6 +294,7 @@ def parse_args(input_args=None):
         default=None,
         help="Path to json containing multiple concepts, will overwrite parameters like instance_prompt, class_prompt, etc.",
     )
+    parser.add_argument('--use_ema', action="store_true", help='Use EMA for finetuning')
 
     if input_args is not None:
         args = parser.parse_args(input_args)
@@ -520,6 +521,94 @@ class AverageMeter:
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+
+# Adapted from torch-ema https://github.com/fadel/pytorch_ema/blob/master/torch_ema/ema.py#L14
+class EMAModel:
+    """
+    Exponential Moving Average of models weights
+    """
+
+    def __init__(self, parameters: Iterable[torch.nn.Parameter], decay=0.9999):
+        parameters = list(parameters)
+        self.shadow_params = [p.clone().detach() for p in parameters]
+
+        self.decay = decay
+        self.optimization_step = 0
+
+    def get_decay(self, optimization_step):
+        """
+        Compute the decay factor for the exponential moving average.
+        """
+        value = (1 + optimization_step) / (10 + optimization_step)
+        return 1 - min(self.decay, value)
+
+    @torch.no_grad()
+    def step(self, parameters):
+        parameters = list(parameters)
+
+        self.optimization_step += 1
+        self.decay = self.get_decay(self.optimization_step)
+
+        for s_param, param in zip(self.shadow_params, parameters):
+            if param.requires_grad:
+                tmp = self.decay * (s_param - param)
+                s_param.sub_(tmp)
+            else:
+                s_param.copy_(param)
+
+        torch.cuda.empty_cache()
+
+    def copy_to(self, parameters: Iterable[torch.nn.Parameter]) -> None:
+        """
+        Copy current averaged parameters into given collection of parameters.
+        Args:
+            parameters: Iterable of `torch.nn.Parameter`; the parameters to be
+                updated with the stored moving averages. If `None`, the
+                parameters with which this `ExponentialMovingAverage` was
+                initialized will be used.
+        """
+        parameters = list(parameters)
+        for s_param, param in zip(self.shadow_params, parameters):
+            param.data.copy_(s_param.data)
+
+    # From CompVis LitEMA implementation
+    def store(self, parameters):
+        """
+        Save the current parameters for restoring later.
+        Args:
+          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
+            temporarily stored.
+        """
+        self.collected_params = [param.clone() for param in parameters]
+
+    def restore(self, parameters):
+        """
+        Restore the parameters stored with the `store` method.
+        Useful to validate the model with EMA parameters without affecting the
+        original optimization process. Store the parameters before the
+        `copy_to` method. After validation (or model saving), use this to
+        restore the former parameters.
+        Args:
+          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
+            updated with the stored parameters.
+        """
+        for c_param, param in zip(self.collected_params, parameters):
+            param.data.copy_(c_param.data)
+
+        del self.collected_params
+        gc.collect()
+
+    def to(self, device=None, dtype=None) -> None:
+        r"""Move internal buffers of the ExponentialMovingAverage to `device`.
+        Args:
+            device: like `device` argument to `torch.Tensor.to`
+        """
+        # .to() on the tensors handles None correctly
+        self.shadow_params = [
+            p.to(device=device, dtype=dtype) if p.is_floating_point() else p.to(device=device)
+            for p in self.shadow_params
+        ]
 
 
 def get_full_repo_name(model_id: str, organization: Optional[str] = None, token: Optional[str] = None):
@@ -834,6 +923,10 @@ def main(args):
             unet, optimizer, train_dataloader, lr_scheduler
         )
 
+    # create ema
+    if args.use_ema:
+        ema_unet = EMAModel(unet.parameters())
+
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
     if overrode_max_train_steps:
@@ -869,6 +962,9 @@ def main(args):
             else:
                 text_enc_model = CLIPTextModel.from_pretrained(os.path.join(args.working_dir, "text_encoder"))
             scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", clip_sample=False, set_alpha_to_one=False)
+            if args.use_ema:
+                ema_unet.store(unet.parameters())
+                ema_unet.copy_to(unet.parameters())
             pipeline = StableDiffusionPipeline.from_pretrained(
                 args.working_dir,
                 unet=accelerator.unwrap_model(unet),
@@ -889,6 +985,8 @@ def main(args):
                         pipeline.save_pretrained(args.working_dir)
                         save_checkpoint(args.model_name, lifetime_step,
                                         args.mixed_precision == "fp16")
+                        if args.use_ema:
+                            ema_unet.restore(unet.parameters())
                     except Exception as e:
                         print(f"Exception saving checkpoint/model: {e}")
                         traceback.print_exception(*sys.exc_info())
@@ -994,6 +1092,10 @@ def main(args):
                     lr_scheduler.step()
                     optimizer.zero_grad(set_to_none=True)
                     loss_avg.update(loss.detach_(), bsz)
+
+                    # Update EMA
+                    if args.use_ema:
+                        ema_unet.step(unet.parameters())
 
                 if not global_step % 10:
                     logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0]}
