@@ -73,7 +73,7 @@ may help with lower-VRAM GPUs.
 
 *Sample guidance scale* - Like CFG Scale in Txt2Image/Img2Img, used for generating preview.
 
-*Sample steps* - Same as sample guidance scale, but the number of steps to run to generate preview. According to (this guide)[https://github.com/nitrosocke/dreambooth-training-guide], you should train for appx 100 steps per sample image. So, if you have 40 instance/sample images, you would train for 4k steps. This is, of course, a rough approximation, and other values will have an effect on final output fidelity.
+*Sample steps* - Same as sample guidance scale, but the number of steps to run to generate preview. According to [this guide](https://github.com/nitrosocke/dreambooth-training-guide), you should train for appx 100 steps per sample image. So, if you have 40 instance/sample images, you would train for 4k steps. This is, of course, a rough approximation, and other values will have an effect on final output fidelity.
 
 
 ### Advanced Settings
@@ -118,12 +118,12 @@ If you wish to continue training a model, you can simply select the model name f
 
 As this is based on ShivamShiaro's repo, it should be able to run under the same GPU constraints, but is not guaranteed.
 
-Please check out the [https://github.com/d8ahazard/sd_dreambooth_extension/discussions](discussions) page to find some possible tips and tricks to help you get this running on your setup - or share what you've done to get it working.
+Please check out the [discussions](https://github.com/d8ahazard/sd_dreambooth_extension/discussions) page to find some possible tips and tricks to help you get this running on your setup - or share what you've done to get it working.
 
 ## Issues
 
 Please be sure to use an issue template when asking for help. Some of the questions may be tedious, but I promise, they'll help me help you faster.
 
-[https://github.com/d8ahazard/sd_dreambooth_extension/issues/new?assignees=&labels=&template=bug_report.md&title=](Bug Report)
-[https://github.com/d8ahazard/sd_dreambooth_extension/issues/new?assignees=&labels=&template=feature_request.md&title=](Feature Request)
+[Bug Report](https://github.com/d8ahazard/sd_dreambooth_extension/issues/new?assignees=&labels=&template=bug_report.md&title=)
+[Feature Request](https://github.com/d8ahazard/sd_dreambooth_extension/issues/new?assignees=&labels=&template=feature_request.md&title=)
 
