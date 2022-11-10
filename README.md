@@ -113,3 +113,17 @@ If you wish to continue training a model, you can simply select the model name f
 
 ![image](https://user-images.githubusercontent.com/1633844/200369076-8debef69-4b95-4341-83ac-cbbb02ee02f6.png)
 
+
+## Memory and Optimization
+
+As this is based on ShivamShiaro's repo, it should be able to run under the same GPU constraints, but is not guaranteed.
+
+Please check out the [https://github.com/d8ahazard/sd_dreambooth_extension/discussions](discussions) page to find some possible tips and tricks to help you get this running on your setup - or share what you've done to get it working.
+
+## Issues
+
+Please be sure to use an issue template when asking for help. Some of the questions may be tedious, but I promise, they'll help me help you faster.
+
+[https://github.com/d8ahazard/sd_dreambooth_extension/issues/new?assignees=&labels=&template=bug_report.md&title=](Bug Report)
+[https://github.com/d8ahazard/sd_dreambooth_extension/issues/new?assignees=&labels=&template=feature_request.md&title=](Feature Request)
+
