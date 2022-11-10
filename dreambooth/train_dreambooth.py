@@ -795,7 +795,7 @@ def main(args):
                 torch_dtype=torch.float16,
             )
             pipeline = pipeline.to("cuda")
-            with autocast("cuda"):
+            with autocast("cuda"), torch.inference_mode():
                 if save_model:
                     try:
                         pipeline.save_pretrained(args.working_dir)
