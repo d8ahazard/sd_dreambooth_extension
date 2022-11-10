@@ -5,5 +5,5 @@ function start_training_dreambooth(){
 }
 
 onUiUpdate(function(){
-    console.log("UI Update?");
+    check_progressbar('db', 'db_progressbar', 'db_progress_span', '', 'db_interrupt', 'db_preview', 'db_gallery')
 })

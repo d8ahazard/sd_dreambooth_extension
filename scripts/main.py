@@ -115,7 +115,7 @@ def on_ui_tabs():
                 db_output = gr.Text(elem_id="db_output", value="", show_label=False)
                 db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery', visible=False).style(
                     grid=4)
-                db_preview = gr.Image(elem_id='db_preview', visible=True).style(grid=4)
+                db_preview = gr.Image(elem_id='db_preview', visible=True)
                 db_progressbar = gr.HTML(elem_id="db_progressbar")
                 db_progress = gr.HTML(elem_id="db_progress", value="")
                 db_outcome = gr.HTML(elem_id="db_error", value="")
