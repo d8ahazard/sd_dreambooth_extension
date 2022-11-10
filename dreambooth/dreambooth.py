@@ -154,6 +154,7 @@ def load_params(pretrained_model_name_or_path,
     values = []
     for target in target_values:
         values.append(data[target])
+    values.append(f"Loaded params from {pretrained_model_name_or_path}.")
     return values
 
 

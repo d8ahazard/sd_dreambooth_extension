@@ -3,3 +3,7 @@ function start_training_dreambooth(){
     gradioApp().querySelector('#db_error').innerHTML='';
     return args_to_array(arguments);
 }
+
+onUiUpdate(function(){
+    console.log("UI Update?");
+})

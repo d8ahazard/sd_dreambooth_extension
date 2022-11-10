@@ -823,6 +823,7 @@ def main(args):
             pipeline = pipeline.to("cuda")
             with autocast("cuda"), torch.inference_mode():
                 if save_model:
+                    shared.state.textinfo = f"Saving checkpoint at step {lifetime_step}..."
                     try:
                         pipeline.save_pretrained(args.working_dir)
                         save_checkpoint(args.model_name, lifetime_step,
@@ -833,17 +834,19 @@ def main(args):
                         pass
                 save_dir = args.output_dir
                 if args.save_sample_prompt is not None and save_img:
+                    shared.state.textinfo = f"Saving preview image at step {lifetime_step}..."
                     try:
                         pipeline.set_progress_bar_config(disable=True)
                         sample_dir = os.path.join(save_dir, "logging")
                         os.makedirs(sample_dir, exist_ok=True)
-                        images = pipeline(
+                        image = pipeline(
                             args.save_sample_prompt,
                             negative_prompt=args.save_sample_negative_prompt,
                             guidance_scale=args.save_guidance_scale,
                             num_inference_steps=args.save_infer_steps,
-                        ).images
-                        images[0].save(os.path.join(sample_dir, f"{args.save_sample_prompt}{step}.png"))
+                        ).images[0]
+                        shared.state.current_image = image
+                        image.save(os.path.join(sample_dir, f"{args.save_sample_prompt}{step}.png"))
                     except Exception as e:
                         print(f"Exception with the stupid image again: {e}")
                     del pipeline

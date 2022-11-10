@@ -6,9 +6,9 @@ from modules import script_callbacks, sd_models, shared
 from modules.ui import paste_symbol, setup_progressbar
 from webui import wrap_gradio_gpu_call
 
-
 try:
     import diffusers
+
     ver = diffusers.__version__
     if not "dev" in ver:
         print(f"Incorrect diffusers version for Dreambooth, running installer.: {ver}")
@@ -16,17 +16,14 @@ try:
 except:
     pass
 
+
 def on_ui_tabs():
     with gr.Blocks() as dreambooth_interface:
-        with gr.Row():
-            with gr.Column(scale=6):
-                with gr.Row():
-                    with gr.Column(scale=80):
-                        db_pretrained_model_name_or_path = gr.Dropdown(label='Model', choices=sorted(get_db_models()))
-            with gr.Column(scale=1):
-                with gr.Row():
-                    db_interrupt_training = gr.Button(value="Cancel")
-                    db_train_embedding = gr.Button(value="Train", variant='primary')
+        with gr.Row(equal_height=True):
+            db_pretrained_model_name_or_path = gr.Dropdown(label='Model', choices=sorted(get_db_models()))
+            db_load_params = gr.Button(value='Load Params')
+            db_interrupt_training = gr.Button(value="Cancel")
+            db_train_embedding = gr.Button(value="Train", variant='primary')
 
         with gr.Row().style(equal_height=False):
             with gr.Column(variant="panel"):
@@ -45,14 +42,17 @@ def on_ui_tabs():
                 with gr.Tab("Train Model"):
                     with gr.Row():
                         db_generate_checkpoint = gr.Button(value="Generate Ckpt")
-                        db_load_params = gr.Button(value='Load Params')
 
                     with gr.Accordion(open=True, label="Settings"):
                         db_concepts_list = gr.Textbox(label="Concepts List (Overrides instance/class settings below)",
                                                       placeholder="Path to JSON file with concepts to train.")
                         db_instance_prompt = gr.Textbox(label="Instance prompt(Optional)", value="")
-                        db_use_filename_as_label = gr.Checkbox(label="Uses the image's filename as the image labels instead of the instance prompt", value=False)
-                        db_use_txt_as_label = gr.Checkbox(label="Uses the filename.txt file's content as the image labels instead of the instance prompt", value=False)
+                        db_use_filename_as_label = gr.Checkbox(
+                            label="Uses the image's filename as the image labels instead of the instance prompt",
+                            value=False)
+                        db_use_txt_as_label = gr.Checkbox(
+                            label="Uses the filename.txt file's content as the image labels instead of the instance prompt",
+                            value=False)
                         db_class_prompt = gr.Textbox(label="Class prompt", value="")
                         db_instance_data_dir = gr.Textbox(label='Dataset directory',
                                                           placeholder="Path to directory with input images")
@@ -96,7 +96,6 @@ def on_ui_tabs():
                                                               choices=["linear", "cosine", "cosine_with_restarts",
                                                                        "polynomial", "constant",
                                                                        "constant_with_warmup"])
-                                db_prior_loss_weight = gr.Number(label="Prior Loss Weight", precision=0, value=1)
                                 db_num_train_epochs = gr.Number(label="# Training Epochs", precision=0, value=1)
                                 db_adam_beta1 = gr.Number(label="Adam Beta 1", precision=1, value=0.9)
                                 db_adam_beta2 = gr.Number(label="Adam Beta 2", precision=3, value=0.999)
@@ -114,9 +113,11 @@ def on_ui_tabs():
 
             with gr.Column(variant="panel"):
                 db_output = gr.Text(elem_id="db_output", value="", show_label=False)
-                db_preview = gr.Image(elem_id='db_preview', visible=False)
-                db_progress = gr.HTML(elem_id="db_progress", value="")
+                db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery', visible=False).style(
+                    grid=4)
+                db_preview = gr.Image(elem_id='db_preview', visible=True).style(grid=4)
                 db_progressbar = gr.HTML(elem_id="db_progressbar")
+                db_progress = gr.HTML(elem_id="db_progress", value="")
                 db_outcome = gr.HTML(elem_id="db_error", value="")
                 setup_progressbar(db_progressbar, db_preview, 'db', textinfo=db_progress)
 
@@ -280,7 +281,8 @@ def on_ui_tabs():
                 db_concepts_list,
                 db_use_cpu,
                 db_pad_tokens,
-                db_hflip
+                db_hflip,
+                db_output
             ]
         )
 
