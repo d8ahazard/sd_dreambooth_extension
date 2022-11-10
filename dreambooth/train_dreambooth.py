@@ -865,113 +865,116 @@ def main(args):
     training_complete = False
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
     for epoch in range(args.num_train_epochs):
-        unet.train()
-        if args.train_text_encoder and text_encoder is not None:
-            text_encoder.train()
-        for step, batch in enumerate(train_dataloader):
-            with accelerator.accumulate(unet):
-                # Convert images to latent space
-                with torch.no_grad():
-                    if not args.not_cache_latents:
-                        latent_dist = batch[0][0]
-                    else:
-                        latent_dist = vae.encode(batch["pixel_values"].to(dtype=weight_dtype)).latent_dist
-                    latents = latent_dist.sample() * 0.18215
-
-                # Sample noise that we'll add to the latents
-                noise = torch.randn_like(latents)
-                bsz = latents.shape[0]
-                # Sample a random timestep for each image
-                timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
-                timesteps = timesteps.long()
-
-                # Add noise to the latents according to the noise magnitude at each timestep
-                # (this is the forward diffusion process)
-                noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
-
-                # Get the text embedding for conditioning
-                with text_enc_context:
-                    if not args.not_cache_latents:
-                        if args.train_text_encoder:
-                            encoder_hidden_states = encode_hidden_state(text_encoder, batch[0][1])
+        try:
+            unet.train()
+            if args.train_text_encoder and text_encoder is not None:
+                text_encoder.train()
+            for step, batch in enumerate(train_dataloader):
+                with accelerator.accumulate(unet):
+                    # Convert images to latent space
+                    with torch.no_grad():
+                        if not args.not_cache_latents:
+                            latent_dist = batch[0][0]
                         else:
-                            encoder_hidden_states = batch[0][1]
+                            latent_dist = vae.encode(batch["pixel_values"].to(dtype=weight_dtype)).latent_dist
+                        latents = latent_dist.sample() * 0.18215
+
+                    # Sample noise that we'll add to the latents
+                    noise = torch.randn_like(latents)
+                    bsz = latents.shape[0]
+                    # Sample a random timestep for each image
+                    timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
+                    timesteps = timesteps.long()
+
+                    # Add noise to the latents according to the noise magnitude at each timestep
+                    # (this is the forward diffusion process)
+                    noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+
+                    # Get the text embedding for conditioning
+                    with text_enc_context:
+                        if not args.not_cache_latents:
+                            if args.train_text_encoder:
+                                encoder_hidden_states = encode_hidden_state(text_encoder, batch[0][1])
+                            else:
+                                encoder_hidden_states = batch[0][1]
+                        else:
+                            encoder_hidden_states = encode_hidden_state(text_encoder, batch["input_ids"])
+
+                    # Predict the noise residual
+                    noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+
+                    if args.with_prior_preservation:
+                        # Chunk the noise and noise_pred into two parts and compute the loss on each part separately.
+                        noise_pred, noise_pred_prior = torch.chunk(noise_pred, 2, dim=0)
+                        noise, noise_prior = torch.chunk(noise, 2, dim=0)
+
+                        # Compute instance loss
+                        loss = F.mse_loss(noise_pred.float(), noise.float(), reduction="none").mean([1, 2, 3]).mean()
+
+                        # Compute prior loss
+                        prior_loss = F.mse_loss(noise_pred_prior.float(), noise_prior.float(), reduction="mean")
+
+                        # Add the prior loss to the instance loss.
+                        loss = loss + args.prior_loss_weight * prior_loss
                     else:
-                        encoder_hidden_states = encode_hidden_state(text_encoder, batch["input_ids"])
+                        loss = F.mse_loss(noise_pred.float(), noise.float(), reduction="mean")
 
-                # Predict the noise residual
-                noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+                    accelerator.backward(loss)
+                    # if accelerator.sync_gradients:
+                    #     params_to_clip = (
+                    #         itertools.chain(unet.parameters(), text_encoder.parameters())
+                    #         if args.train_text_encoder
+                    #         else unet.parameters()
+                    #     )
+                    #     accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
+                    optimizer.step()
+                    lr_scheduler.step()
+                    optimizer.zero_grad(set_to_none=True)
+                    loss_avg.update(loss.detach_(), bsz)
 
-                if args.with_prior_preservation:
-                    # Chunk the noise and noise_pred into two parts and compute the loss on each part separately.
-                    noise_pred, noise_pred_prior = torch.chunk(noise_pred, 2, dim=0)
-                    noise, noise_prior = torch.chunk(noise, 2, dim=0)
-
-                    # Compute instance loss
-                    loss = F.mse_loss(noise_pred.float(), noise.float(), reduction="none").mean([1, 2, 3]).mean()
-
-                    # Compute prior loss
-                    prior_loss = F.mse_loss(noise_pred_prior.float(), noise_prior.float(), reduction="mean")
-
-                    # Add the prior loss to the instance loss.
-                    loss = loss + args.prior_loss_weight * prior_loss
-                else:
-                    loss = F.mse_loss(noise_pred.float(), noise.float(), reduction="mean")
-
-                accelerator.backward(loss)
-                # if accelerator.sync_gradients:
-                #     params_to_clip = (
-                #         itertools.chain(unet.parameters(), text_encoder.parameters())
-                #         if args.train_text_encoder
-                #         else unet.parameters()
-                #     )
-                #     accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
-                optimizer.step()
-                lr_scheduler.step()
-                optimizer.zero_grad(set_to_none=True)
-                loss_avg.update(loss.detach_(), bsz)
-
-            if not global_step % 10:
-                logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0]}
-                progress_bar.set_postfix(**logs)
-                accelerator.log(logs, step=global_step)
+                if not global_step % 10:
+                    logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0]}
+                    progress_bar.set_postfix(**logs)
+                    accelerator.log(logs, step=global_step)
 
 
-            progress_bar.update(1)
-            global_step += 1
-            lifetime_step += 1
-            shared.state.job_no = global_step
+                progress_bar.update(1)
+                global_step += 1
+                lifetime_step += 1
+                shared.state.job_no = global_step
 
-            training_complete = global_step >= args.max_train_steps or shared.state.interrupted
-            if global_step > 0:
-                save_img = not global_step % args.save_preview_every
-                save_model = not global_step % args.save_embedding_every
+                training_complete = global_step >= args.max_train_steps or shared.state.interrupted
+                if global_step > 0:
+                    save_img = not global_step % args.save_preview_every
+                    save_model = not global_step % args.save_embedding_every
+                    if training_complete:
+                        save_img = True
+                        save_model = True
+                    if save_img or save_model:
+                        save_weights(lifetime_step, save_model, save_img)
+
+                shared.state.textinfo = f"Training, step {global_step}/{args.max_train_steps} current, {lifetime_step}/{args.max_train_steps + args.total_steps} lifetime"
+
+
                 if training_complete:
-                    save_img = True
-                    save_model = True
-                if save_img or save_model:
-                    save_weights(lifetime_step, save_model, save_img)
+                    print("Training complete??")
+                    if shared.state.interrupted:
+                        state = "cancelled"
+                    else:
+                        state = "complete"
 
-            shared.state.textinfo = f"Training, step {global_step}/{args.max_train_steps} current, {lifetime_step}/{args.max_train_steps + args.total_steps} lifetime"
+                    shared.state.textinfo = f"Training {state} {global_step}/{args.max_train_steps}, {lifetime_step}" \
+                                            f" total."
 
 
+                    break
+            training_complete = global_step >= args.max_train_steps or shared.state.interrupted
+            accelerator.wait_for_everyone()
             if training_complete:
-                print("Training complete??")
-                if shared.state.interrupted:
-                    state = "cancelled"
-                else:
-                    state = "complete"
-
-                shared.state.textinfo = f"Training {state} {global_step}/{args.max_train_steps}, {lifetime_step}" \
-                                        f" total."
-
-            
                 break
-        training_complete = global_step >= args.max_train_steps or shared.state.interrupted
-        accelerator.wait_for_everyone()
-        if training_complete:
-            break
-
+        except Exception as m:
+            printm(f"Exception while training: {m}")
+            traceback.print_exc()
     try:
         printm("CLEANUP: ")
         if unet:
