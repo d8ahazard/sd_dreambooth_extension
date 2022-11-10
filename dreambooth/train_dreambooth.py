@@ -542,7 +542,6 @@ def main(args):
             concepts_loaded = True
         except Exception as e:
             print(f"Unable to load concepts as JSON, trying as file: {e}")
-            traceback.print_exc()
             pass
         if not is_json:
             try:
@@ -552,6 +551,7 @@ def main(args):
                     concepts_loaded = True
                 print(f"Loaded concepts from {args.concepts_list}")
             except:
+                print("Unable to load concepts from file either, this is bad.")
                 pass
 
     if args.class_data_dir is None or args.class_data_dir == "":
