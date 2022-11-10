@@ -23,14 +23,11 @@ def on_ui_tabs():
                 with gr.Row():
                     with gr.Column(scale=80):
                         db_pretrained_model_name_or_path = gr.Dropdown(label='Model', choices=sorted(get_db_models()))
-            with gr.Column(scale=1, elem_id="roll_col"):
-                db_load_params = gr.Button(label='Load Training Params', value=paste_symbol)
-
             with gr.Column(scale=1):
                 with gr.Row():
                     db_interrupt_training = gr.Button(value="Cancel")
                     db_train_embedding = gr.Button(value="Train", variant='primary')
-            # cancel/load buttons
+
         with gr.Row().style(equal_height=False):
             with gr.Column(variant="panel"):
                 with gr.Tab("Create Model"):
@@ -46,6 +43,10 @@ def on_ui_tabs():
                         with gr.Column():
                             db_create_embedding = gr.Button(value="Create", variant='primary')
                 with gr.Tab("Train Model"):
+                    with gr.Row():
+                        db_generate_checkpoint = gr.Button(value="Generate Ckpt")
+                        db_load_params = gr.Button(value='Load Params')
+
                     with gr.Accordion(open=True, label="Settings"):
                         db_concepts_list = gr.Textbox(label="Concepts List (Overrides instance/class settings below)",
                                                       placeholder="Path to JSON file with concepts to train.")
@@ -118,6 +119,18 @@ def on_ui_tabs():
                 db_progressbar = gr.HTML(elem_id="db_progressbar")
                 db_outcome = gr.HTML(elem_id="db_error", value="")
                 setup_progressbar(db_progressbar, db_preview, 'db', textinfo=db_progress)
+
+        db_generate_checkpoint.click(
+            fn=conversion.compile_checkpoint,
+            inputs=[
+                db_pretrained_model_name_or_path,
+                db_mixed_precision
+            ],
+            outputs=[
+                db_output,
+                db_outcome
+            ]
+        )
 
         db_create_embedding.click(
             fn=conversion.extract_checkpoint,

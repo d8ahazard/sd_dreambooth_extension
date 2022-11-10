@@ -16,6 +16,7 @@
 # limitations under the License.
 """ Conversion script for the LDM checkpoints. """
 import os
+import traceback
 
 import gradio as gr
 import torch
@@ -815,7 +816,6 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
         print("State dict not found in the usual spot, trying something else.")
         try:
             checkpoint = torch.load(checkpoint_file)
-            checkpoint_loaded = True
         except:
             print("Still couldn't load checkpoint, canceling.")
             dirs = get_db_models()
@@ -899,6 +899,31 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
         os.remove(original_config_file)
     dirs = get_db_models()
     return gr.Dropdown.update(choices=sorted(dirs)), f"Created working directory for {new_model_name} at {out_dir}.", ""
+
+
+def compile_checkpoint(model_name, mixed_precision):
+    msg = ""
+    try:
+        half = mixed_precision == "fp16"
+        ckpt_dir = shared.cmd_opts.ckpt_dir
+        models_path = os.path.join(paths.models_path, "Stable-diffusion")
+        if ckpt_dir is not None:
+            models_path = ckpt_dir
+
+        config = DreamboothConfig().from_file(model_name)
+        total_steps = config["total_steps"]
+        src_path = os.path.join(paths.models_path, "dreambooth", model_name, "working")
+        out_file = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
+        try:
+            diff_to_sd(src_path, out_file, half)
+            msg = f"Saved checkpoint to {out_file}"
+        except Exception as e:
+            msg = f"Exception generating checkpoint: {e}"
+            print(msg)
+    except Exception as f:
+        print(f"Exception generating checkpoint: {f}")
+        traceback.print_exc()
+    return msg, ""
 
 
 def diff_to_sd(model_path, checkpoint_name, half=False):
