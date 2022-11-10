@@ -8,10 +8,10 @@ from launch import run_pip, run
 import os
 from modules.paths import script_path
 name = "Dreambooth"
-subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', 'requirements.txt'])
+run(f'"{sys.executable}" -m pip install -r requirements.txt', "Checking Dreambooth requirements.", "Couldn't install Dreambooth requirements.")
 torch_cmd="pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url " \
           "https://download.pytorch.org/whl/cu116 "
-subprocess.check_call([sys.executable, '-m', torch_cmd])
+run(f'"{sys.executable}" -m {torch_cmd}', "Checking torch and torchvision versions", "Couldn't install torch")
 
 try:
     base_dir = os.path.dirname(os.path.realpath(__file__))
