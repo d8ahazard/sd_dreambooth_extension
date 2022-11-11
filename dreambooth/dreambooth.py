@@ -28,6 +28,7 @@ def dumb_safety(images, clip_input):
 
 
 def load_params(pretrained_model_name_or_path,
+                pretrained_vae_name_or_path,
                 instance_data_dir,
                 class_data_dir,
                 instance_prompt,
@@ -70,6 +71,7 @@ def load_params(pretrained_model_name_or_path,
     tc = DreamboothConfig()
 
     tc.from_ui(pretrained_model_name_or_path,
+               pretrained_vae_name_or_path,
                instance_data_dir,
                class_data_dir,
                instance_prompt,
@@ -110,7 +112,8 @@ def load_params(pretrained_model_name_or_path,
                pad_tokens,
                hflip)
 
-    target_values = ["instance_data_dir",
+    target_values = ["pretrained_vae_name_or_path",
+                     "instance_data_dir",
                      "class_data_dir",
                      "instance_prompt",
                      "use_filename_as_label",
@@ -153,7 +156,10 @@ def load_params(pretrained_model_name_or_path,
     data = tc.from_file(pretrained_model_name_or_path)
     values = []
     for target in target_values:
-        values.append(data[target])
+        if target in data:
+            values.append(data[target])
+        else:
+            values.append(None)
     values.append(f"Loaded params from {pretrained_model_name_or_path}.")
     return values
 
@@ -171,6 +177,7 @@ def get_db_models():
 
 
 def start_training(pretrained_model_name_or_path,
+                   pretrained_vae_name_or_path,
                    instance_data_dir,
                    class_data_dir,
                    instance_prompt,
@@ -227,6 +234,7 @@ def start_training(pretrained_model_name_or_path,
 
     total_steps = config["total_steps"]
     config.from_ui(pretrained_model_name_or_path,
+                   pretrained_vae_name_or_path,
                    instance_data_dir,
                    class_data_dir,
                    instance_prompt,

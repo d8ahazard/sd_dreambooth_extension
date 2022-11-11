@@ -561,6 +561,12 @@ def main(args):
         if args.num_class_images == 0:
             args.with_prior_preservation = False
 
+    if "pretrained_vae_name_or_path" in args.__dict__:
+        if args.pretrained_vae_name_or_path == "":
+            args.pretrained_vae_name_or_path = None
+    else:
+        args.pretrained_vae_name_or_path = None
+        
     if not concepts_loaded:
 
         args.concepts_list = [
@@ -586,7 +592,10 @@ def main(args):
                     pipeline = StableDiffusionPipeline.from_pretrained(
                         args.working_dir,
                         vae=AutoencoderKL.from_pretrained(
-                            os.path.join(args.working_dir, "vae")),
+                            args.pretrained_vae_name_or_path or args.working_dir,
+                            subfolder=None if args.pretrained_vae_name_or_path else "vae",
+                            torch_dtype=torch_dtype
+                        ),
                         torch_dtype=torch_dtype,
                         safety_checker=None
                     )
@@ -814,7 +823,8 @@ def main(args):
                 unet=accelerator.unwrap_model(unet),
                 text_encoder=text_enc_model,
                 vae=AutoencoderKL.from_pretrained(
-                    os.path.join(args.working_dir, "vae")
+                    args.pretrained_vae_name_or_path or args.working_dir,
+                    subfolder=None if args.pretrained_vae_name_or_path else "vae"
                 ),
                 safety_checker=None,
                 scheduler=scheduler,

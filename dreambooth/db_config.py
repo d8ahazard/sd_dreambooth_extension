@@ -24,6 +24,7 @@ class DreamboothConfig(dict):
 
     def from_ui(self,
                 pretrained_model_name_or_path,
+                pretrained_vae_name_or_path,
                 instance_data_dir,
                 class_data_dir,
                 instance_prompt,
@@ -65,11 +66,13 @@ class DreamboothConfig(dict):
                 hflip):
 
         pretrained_model_name_or_path = images.sanitize_filename_part(pretrained_model_name_or_path, True)
+        pretrained_vae_name_or_path = images.sanitize_filename_part(pretrained_vae_name_or_path, True)
         models_path = paths.models_path
         model_dir = os.path.join(models_path, "dreambooth", pretrained_model_name_or_path)
         working_dir = os.path.join(model_dir, "working")
         with_prior_preservation = num_class_images > 0
         data = {"pretrained_model_name_or_path": pretrained_model_name_or_path,
+                "pretrained_vae_name_or_path,": pretrained_vae_name_or_path,
                 "instance_data_dir": instance_data_dir,
                 "class_data_dir": class_data_dir,
                 "instance_prompt": instance_prompt,

@@ -54,6 +54,10 @@ def on_ui_tabs():
                             label="Uses the filename.txt file's content as the image labels instead of the instance prompt",
                             value=False)
                         db_class_prompt = gr.Textbox(label="Class prompt", value="")
+                        db_pretrained_vae_name_or_path = gr.Textbox(label='Pretrained VAE Name or Path',
+                                                                    placeholder="Leave blank to use base model VAE.",
+                                                                    value="")
+
                         db_instance_data_dir = gr.Textbox(label='Dataset directory',
                                                           placeholder="Path to directory with input images")
                         db_class_data_dir = gr.Textbox(label='Classification dataset directory (optional).',
@@ -123,6 +127,7 @@ def on_ui_tabs():
             fn=conversion.compile_checkpoint,
             inputs=[
                 db_pretrained_model_name_or_path,
+                db_pretrained_vae_name_or_path,
                 db_mixed_precision
             ],
             outputs=[
@@ -150,6 +155,7 @@ def on_ui_tabs():
             _js="start_training_dreambooth",
             inputs=[
                 db_pretrained_model_name_or_path,
+                db_pretrained_vae_name_or_path,
                 db_instance_data_dir,
                 db_class_data_dir,
                 db_instance_prompt,
@@ -200,6 +206,7 @@ def on_ui_tabs():
             fn=dreambooth.load_params,
             inputs=[
                 db_pretrained_model_name_or_path,
+                db_pretrained_vae_name_or_path,
                 db_instance_data_dir,
                 db_class_data_dir,
                 db_instance_prompt,
@@ -241,6 +248,7 @@ def on_ui_tabs():
                 db_hflip
             ],
             outputs=[
+                db_pretrained_vae_name_or_path,
                 db_instance_data_dir,
                 db_class_data_dir,
                 db_instance_prompt,
