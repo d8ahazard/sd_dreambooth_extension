@@ -10,7 +10,7 @@ from modules.paths import script_path
 name = "Dreambooth"
 req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
 print(f"loading Dreambooth reqs from {req_file}")
-run(f'"{sys.executable}" -m pip install -r "{req_file}"', "Checking Dreambooth requirements.", "Couldn't install Dreambooth requirements.")
+run(f'"{sys.executable}" -m pip install -r "{req_file}"', f"Checking {name} requirements.", f"Couldn't install {name} requirements.")
 torch_cmd="pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url " \
           "https://download.pytorch.org/whl/cu116 "
 run(f'"{sys.executable}" -m {torch_cmd}', "Checking torch and torchvision versions", "Couldn't install torch")
