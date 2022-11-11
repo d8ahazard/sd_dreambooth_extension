@@ -7,6 +7,7 @@ import json
 import math
 import os
 import random
+import re
 import sys
 import traceback
 from contextlib import nullcontext
@@ -343,9 +344,44 @@ def is_image(path: Path):
     if not len(pil_features):
         list_features()
     is_img = path.is_file() and path.suffix in pil_features
-    if not is_img:
-        print(f"Ignoring non-image file: {path}")
+    # stop being noisy when reading a direcory of (.png, .txt) pairs created by preprocessing
+    # if not is_img:
+    #     print(f"Ignoring non-image file: {path}")
     return is_img
+
+
+class FilenameTextGetter:
+    """Adapted from modules.textual_inversion.dataset.PersonalizedBase to get caption for image."""
+    
+    re_numbers_at_start = re.compile(r"^[-\d]+\s*")
+    
+    def __init__(self):
+        self.re_word = re.compile(shared.opts.dataset_filename_word_regex) if len(shared.opts.dataset_filename_word_regex) > 0 else None
+
+    def read_text(self, img_path):
+        text_filename = os.path.splitext(img_path)[0] + ".txt"
+        filename = os.path.basename(img_path)
+
+        if os.path.exists(text_filename):
+            with open(text_filename, "r", encoding="utf8") as file:
+                filename_text = file.read()
+        else:
+            filename_text = os.path.splitext(filename)[0]
+            filename_text = re.sub(self.re_numbers_at_start, '', filename_text)
+            if self.re_word:
+                tokens = self.re_word.findall(filename_text)
+                filename_text = (shared.opts.dataset_filename_join_string or "").join(tokens)
+        
+        return filename_text
+
+    def create_text(self, text_template, filename_text):
+        tags = filename_text.split(',')
+        if shared.opts.tag_drop_out != 0:
+            tags = [t for t in tags if random.random() > shared.opts.tag_drop_out]
+        if shared.opts.shuffle_tags:
+            random.shuffle(tags)
+        return text_template.replace("[filewords]", ','.join(tags))
+
 
 class DreamBoothDataset(Dataset):
     """
@@ -374,12 +410,13 @@ class DreamBoothDataset(Dataset):
 
         self.instance_images_path = []
         self.class_images_path = []
+        self.text_getter = FilenameTextGetter()
         for concept in concepts_list:
-            inst_img_path = [(x, concept["instance_prompt"]) for x in Path(concept["instance_data_dir"]).iterdir() if is_image(x)]
+            inst_img_path = [(x, concept["instance_prompt"], self.text_getter.read_text(x)) for x in Path(concept["instance_data_dir"]).iterdir() if is_image(x)]
             self.instance_images_path.extend(inst_img_path)
 
             if with_prior_preservation:
-                class_img_path = [(x, concept["class_prompt"]) for x in Path(concept["class_data_dir"]).iterdir() if is_image(x)]
+                class_img_path = [(x, concept["class_prompt"], self.text_getter.read_text(x)) for x in Path(concept["class_data_dir"]).iterdir() if is_image(x)]
                 self.class_images_path.extend(class_img_path[:num_class_images])
 
         random.shuffle(self.instance_images_path)
@@ -404,7 +441,7 @@ class DreamBoothDataset(Dataset):
 
     def __getitem__(self, index):
         example = {}
-        instance_path, instance_prompt = self.instance_images_path[index % self.num_instance_images]
+        instance_path, instance_prompt, instance_text = self.instance_images_path[index % self.num_instance_images]
         instance_prompt = get_filename(instance_path) if self.use_filename_as_label else instance_prompt
         instance_prompt = get_label_from_txt(instance_path) if self.use_txt_as_label else instance_prompt
         instance_image = Image.open(instance_path)
@@ -414,21 +451,23 @@ class DreamBoothDataset(Dataset):
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
         example["instance_images"] = self.image_transforms(instance_image)
+        example["instance_prompt"] = self.text_getter.create_text(instance_prompt, instance_text)   #TODO: show the final prompt of the image currently being trained in the ui
         example["instance_prompt_ids"] = self.tokenizer(
-            instance_prompt,
+            example["instance_prompt"],
             padding="max_length" if self.pad_tokens else "do_not_pad",
             truncation=True,
             max_length=self.tokenizer.model_max_length,
         ).input_ids
 
         if self.with_prior_preservation:
-            class_path, class_prompt = self.class_images_path[index % self.num_class_images]
+            class_path, class_prompt, class_text = self.class_images_path[index % self.num_class_images]
             class_image = Image.open(class_path)
             if not class_image.mode == "RGB":
                 class_image = class_image.convert("RGB")
             example["class_images"] = self.image_transforms(class_image)
+            example["class_prompt"] = self.text_getter.create_text(class_prompt, class_text)
             example["class_prompt_ids"] = self.tokenizer(
-                class_prompt,
+                example["class_prompt"],
                 padding="max_length" if self.pad_tokens else "do_not_pad",
                 truncation=True,
                 max_length=self.tokenizer.model_max_length,
