@@ -479,8 +479,9 @@ class DreamBoothDataset(Dataset):
 class PromptDataset(Dataset):
     "A simple dataset to prepare the prompts to generate class images on multiple GPUs."
 
-    def __init__(self, prompt, num_samples):
+    def __init__(self, prompt, filename_texts, num_samples):
         self.prompt = prompt
+        self.filename_texts = filename_texts
         self.num_samples = num_samples
 
     def __len__(self):
@@ -488,7 +489,8 @@ class PromptDataset(Dataset):
 
     def __getitem__(self, index):
         example = {}
-        example["prompt"] = self.prompt
+        example["filename_text"] = self.filename_texts[index % len(self.filename_texts)] if len(self.filename_texts) > 0 else ""
+        example["prompt"] = self.prompt.replace("[filewords]", example["filename_text"])
         example["index"] = index
         return example
 
@@ -613,6 +615,7 @@ def main(args):
 
     if args.with_prior_preservation:
         pipeline = None
+        text_getter = FilenameTextGetter()
         for concept in args.concepts_list:
             class_images_dir = Path(concept["class_data_dir"])
             class_images_dir.mkdir(parents=True, exist_ok=True)
@@ -636,7 +639,9 @@ def main(args):
                 print(f"Number of class images to sample: {num_new_images}.")
                 shared.state.job_count = num_new_images
                 shared.state.job_no = 0
-                sample_dataset = PromptDataset(concept["class_prompt"], num_new_images)
+                save_txt = "[filewords]" in concept["class_prompt"]
+                filename_texts = [text_getter.read_text(x) for x in Path(concept["instance_data_dir"]).iterdir() if is_image(x)]
+                sample_dataset = PromptDataset(concept["class_prompt"], filename_texts, num_new_images)
                 sample_dataloader = torch.utils.data.DataLoader(sample_dataset, batch_size=args.sample_batch_size)
 
                 sample_dataloader = accelerator.prepare(sample_dataloader)
@@ -654,8 +659,14 @@ def main(args):
                             image_filename = class_images_dir / f"{example['index'][i] + cur_class_images}-{hash_image}.jpg"
                             shared.state.current_image = image
                             image.save(image_filename)
+                            if save_txt:
+                                txt_filename = class_images_dir / f"{example['index'][i] + cur_class_images}-{hash_image}.txt"
+                                with open(txt_filename, "w", encoding="utf8") as file:
+                                    # we have to write filename_text and not full prompt here, otherwise "dog, [filewords]" becomes "dog, dog, [filewords]" when read. Any elegant solution?
+                                    file.write(example["filename_text"][i] + "\n")
 
         del pipeline
+        del text_getter
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
