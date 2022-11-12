@@ -794,12 +794,8 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
     shared.state.job_no = 0
-    # Todo: What impact does using the 'og' model config if not using that model as our base?
-    original_config_file = load_file_from_url("https://raw.githubusercontent.com/CompVis/stable-diffusion/main"
-                                              "/configs/stable-diffusion/v1-inference.yaml", new_model_dir
-                                              )
-
-    original_config = OmegaConf.load(original_config_file)
+    cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "v1-inference.yaml")
+    original_config = OmegaConf.load(cfg_file)
     # Is this right?
     checkpoint_file = modules.sd_models.get_closet_checkpoint_match(checkpoint_path)
     if checkpoint_file is None or not os.path.exists(checkpoint_file[0]):
@@ -895,8 +891,6 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
     pipe.save_pretrained(out_dir)
     shared.state.textinfo = "Pretrained saved..."
     shared.state.job_no = 8
-    if os.path.isfile(original_config_file):
-        os.remove(original_config_file)
     dirs = get_db_models()
     return gr.Dropdown.update(choices=sorted(dirs)), f"Created working directory for {new_model_name} at {out_dir}.", ""
 
