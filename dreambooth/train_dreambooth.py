@@ -32,6 +32,7 @@ from transformers import CLIPTextModel, CLIPTokenizer
 
 from dreambooth import conversion
 from modules import shared, sd_models, paths
+from modules.images import sanitize_filename_part
 
 torch.backends.cudnn.benchmark = True
 
@@ -856,7 +857,8 @@ def main(args):
                             num_inference_steps=args.save_infer_steps,
                         ).images[0]
                         shared.state.current_image = image
-                        image.save(os.path.join(sample_dir, f"{args.save_sample_prompt}{step}.png"))
+                        sanitized_prompt = sanitize_filename_part(args.save_sample_prompt, replace_spaces=False)
+                        image.save(os.path.join(sample_dir, f"{sanitized_prompt}{step}.png"))
                     except Exception as e:
                         print(f"Exception with the stupid image again: {e}")
                     del pipeline
