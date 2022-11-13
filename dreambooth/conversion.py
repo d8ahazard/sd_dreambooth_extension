@@ -907,7 +907,7 @@ def compile_checkpoint(model_name, mixed_precision):
     try:
         half = mixed_precision == "fp16"
         ckpt_dir = shared.cmd_opts.ckpt_dir
-        models_path = os.path.join(os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path, "Stable-diffusion")
+        models_path = os.path.join(paths.models_path, "Stable-diffusion")
         if ckpt_dir is not None:
             models_path = ckpt_dir
 
