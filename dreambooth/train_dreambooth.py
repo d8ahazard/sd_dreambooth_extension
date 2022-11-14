@@ -7,7 +7,6 @@ import json
 import math
 import os
 import random
-import re
 import sys
 import traceback
 from contextlib import nullcontext
@@ -32,7 +31,8 @@ from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
 from dreambooth import conversion
-from modules import shared, sd_models, paths
+from dreambooth.finetune_utils import FilenameTextGetter, EMAModel, encode_hidden_state
+from modules import shared, sd_models, paths, devices
 from modules.images import sanitize_filename_part
 
 try:
@@ -120,14 +120,6 @@ def parse_args(input_args=None):
         type=str,
         default=None,
         help="The prompt with identifier specifying the instance",
-    )
-    parser.add_argument(
-        "--use_filename_as_label", action="store_true",
-        help="Uses the filename as the image labels instead of the instance_prompt, useful for regularization when training for styles with wide image variance"
-    )
-    parser.add_argument(
-        "--use_txt_as_label", action="store_true",
-        help="Uses the filename.txt file's content as the image labels instead of the instance_prompt, useful for regularization when training for styles with wide image variance"
     )
     parser.add_argument(
         "--class_prompt",
@@ -304,6 +296,7 @@ def parse_args(input_args=None):
         default=None,
         help="Path to json containing multiple concepts, will overwrite parameters like instance_prompt, class_prompt, etc.",
     )
+    parser.add_argument('--use_ema', action="store_true", help='Use EMA for finetuning')
 
     if input_args is not None:
         args = parser.parse_args(input_args)
@@ -340,18 +333,6 @@ def list_features():
                     pil_features.append(extension)
 
 
-def get_filename(path):
-    return path.stem
-
-
-def get_label_from_txt(path):
-    txt_path = path.with_suffix(".txt")  # get the path to the .txt file
-    if txt_path.exists():
-        with open(txt_path, "r") as f:
-            return f.read()
-    else:
-        return ""
-
 
 def is_image(path: Path):
     global pil_features
@@ -361,40 +342,6 @@ def is_image(path: Path):
     return is_img
 
 
-class FilenameTextGetter:
-    """Adapted from modules.textual_inversion.dataset.PersonalizedBase to get caption for image."""
-
-    re_numbers_at_start = re.compile(r"^[-\d]+\s*")
-
-    def __init__(self):
-        self.re_word = re.compile(shared.opts.dataset_filename_word_regex) if len(
-            shared.opts.dataset_filename_word_regex) > 0 else None
-
-    def read_text(self, img_path):
-        text_filename = os.path.splitext(img_path)[0] + ".txt"
-        filename = os.path.basename(img_path)
-
-        if os.path.exists(text_filename):
-            with open(text_filename, "r", encoding="utf8") as file:
-                filename_text = file.read()
-        else:
-            filename_text = os.path.splitext(filename)[0]
-            filename_text = re.sub(self.re_numbers_at_start, '', filename_text)
-            if self.re_word:
-                tokens = self.re_word.findall(filename_text)
-                filename_text = (shared.opts.dataset_filename_join_string or "").join(tokens)
-
-        return filename_text
-
-    def create_text(self, text_template, filename_text):
-        tags = filename_text.split(',')
-        if shared.opts.tag_drop_out != 0:
-            tags = [t for t in tags if random.random() > shared.opts.tag_drop_out]
-        if shared.opts.shuffle_tags:
-            random.shuffle(tags)
-        return text_template.replace("[filewords]", ','.join(tags))
-
-
 class DreamBoothDataset(Dataset):
     """
     A dataset to prepare the instance and class images with the prompts for fine-tuning the model.
@@ -402,17 +349,15 @@ class DreamBoothDataset(Dataset):
     """
 
     def __init__(
-            self,
-            concepts_list,
-            tokenizer,
-            with_prior_preservation=True,
-            size=512,
-            center_crop=False,
-            num_class_images=None,
-            pad_tokens=False,
-            hflip=False,
-            use_filename_as_label=False,
-            use_txt_as_label=False,
+        self,
+        concepts_list,
+        tokenizer,
+        with_prior_preservation=True,
+        size=512,
+        center_crop=False,
+        num_class_images=None,
+        pad_tokens=False,
+        hflip=False
     ):
         self.size = size
         self.center_crop = center_crop
@@ -437,8 +382,6 @@ class DreamBoothDataset(Dataset):
         self.num_instance_images = len(self.instance_images_path)
         self.num_class_images = len(self.class_images_path)
         self._length = max(self.num_class_images, self.num_instance_images)
-        self.use_filename_as_label = use_filename_as_label
-        self.use_txt_as_label = use_txt_as_label
 
         self.image_transforms = transforms.Compose(
             [
@@ -456,12 +399,7 @@ class DreamBoothDataset(Dataset):
     def __getitem__(self, index):
         example = {}
         instance_path, instance_prompt, instance_text = self.instance_images_path[index % self.num_instance_images]
-        instance_prompt = get_filename(instance_path) if self.use_filename_as_label else instance_prompt
-        instance_prompt = get_label_from_txt(instance_path) if self.use_txt_as_label else instance_prompt
         instance_image = Image.open(instance_path)
-
-        # print("prompt: ", instance_prompt)
-
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
         example["instance_images"] = self.image_transforms(instance_image)
@@ -545,17 +483,6 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{username}/{model_id}"
     else:
         return f"{organization}/{model_id}"
-
-
-def encode_hidden_state(text_encoder: CLIPTextModel, input_ids):
-    clip_skip = shared.opts.CLIP_stop_at_last_layers
-    if clip_skip <= 1:
-        return text_encoder(input_ids)[0]
-    else:
-        enc_out = text_encoder(input_ids, output_hidden_states=True, return_dict=True)
-        encoder_hidden_states = enc_out['hidden_states'][-clip_skip]
-        encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states)
-        return encoder_hidden_states
 
 
 def main(args):
@@ -692,8 +619,7 @@ def main(args):
 
         del pipeline
         del text_getter
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        devices.torch_gc()
 
     # Load the tokenizer
 
@@ -779,9 +705,7 @@ def main(args):
         center_crop=args.center_crop,
         num_class_images=args.num_class_images,
         pad_tokens=args.pad_tokens,
-        hflip=args.hflip,
-        use_filename_as_label=args.use_filename_as_label,
-        use_txt_as_label=args.use_txt_as_label,
+        hflip=args.hflip
     )
 
     if train_dataset.num_instance_images == 0:
@@ -854,8 +778,7 @@ def main(args):
         if not args.train_text_encoder:
             del text_encoder
             text_encoder = None
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        devices.torch_gc()
 
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
@@ -879,6 +802,10 @@ def main(args):
         unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
             unet, optimizer, train_dataloader, lr_scheduler
         )
+
+    # create ema
+    if args.use_ema:
+        ema_unet = EMAModel(unet.parameters())
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
@@ -916,6 +843,9 @@ def main(args):
                 text_enc_model = CLIPTextModel.from_pretrained(os.path.join(args.working_dir, "text_encoder"))
             scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
                                       clip_sample=False, set_alpha_to_one=False)
+            if args.use_ema:
+                ema_unet.store(unet.parameters())
+                ema_unet.copy_to(unet.parameters())
             pipeline = StableDiffusionPipeline.from_pretrained(
                 args.working_dir,
                 unet=accelerator.unwrap_model(unet),
@@ -936,6 +866,8 @@ def main(args):
                         pipeline.save_pretrained(args.working_dir)
                         save_checkpoint(args.model_name, lifetime_step,
                                         args.mixed_precision == "fp16")
+                        if args.use_ema:
+                            ema_unet.restore(unet.parameters())
                     except Exception as e:
                         print(f"Exception saving checkpoint/model: {e}")
                         traceback.print_exception(*sys.exc_info())
@@ -958,13 +890,12 @@ def main(args):
                         image.save(os.path.join(sample_dir, f"{sanitized_prompt}{step}.png"))
                     except Exception as e:
                         print(f"Exception with the stupid image again: {e}")
-                    del pipeline
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                print(f"[*] Weights saved at {save_dir}")
-                unet.to(torch.float32)
-                text_enc_model.to(torch.float32)
-
+            print(f"[*] Weights saved at {save_dir}")
+            del pipeline
+            del scheduler
+            del text_enc_model
+            devices.torch_gc()
+                
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
@@ -1043,6 +974,10 @@ def main(args):
                     lr_scheduler.step()
                     optimizer.zero_grad(set_to_none=True)
                     loss_avg.update(loss.detach_(), bsz)
+
+                    # Update EMA
+                    if args.use_ema:
+                        ema_unet.step(unet.parameters())
 
                 if not global_step % 10:
                     logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0]}
