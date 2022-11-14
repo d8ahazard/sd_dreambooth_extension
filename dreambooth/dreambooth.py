@@ -282,13 +282,13 @@ def start_training(pretrained_model_name_or_path,
 
     config.save()
     msg = None
-    if not isset(config.instance_data_dir) and not isset(config.concepts_list):
+    if not isset(instance_data_dir) and not isset(concepts_list):
         msg = "No instance data specified."
-    if not isset(config.concepts_list) and not config.use_filename_as_label and not config.use_txt_as_label:
+    if not isset(concepts_list) and not use_filename_as_label and not use_txt_as_label:
         msg = "No instance prompt specified."
     if not os.path.exists(config.working_dir):
         msg = "Invalid training data directory."
-    if isset(config.pretrained_vae_name_or_path) and not os.path.exists(pretrained_vae_name_or_path):
+    if isset(pretrained_vae_name_or_path) and not os.path.exists(pretrained_vae_name_or_path):
         msg = "Invalid Pretrained VAE Path."
     if resolution <= 0:
         msg = "Invalid resolution."

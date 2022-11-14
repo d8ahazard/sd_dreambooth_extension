@@ -22,6 +22,7 @@ import traceback
 import gradio as gr
 import torch
 from basicsr.utils.download_util import load_file_from_url
+from huggingface_hub import get_full_repo_name, Repository
 
 import modules.sd_models
 from modules import paths, shared
@@ -789,7 +790,8 @@ def convert_text_enc_state_dict(text_enc_dict):
     return text_enc_dict
 
 
-def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type="ddim"):
+def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type="ddim", new_model_url="",
+                       new_model_token=""):
     shared.state.job_count = 8
     # Set up our base directory for the model and sanitize our file name
     new_model_name = "".join(x for x in new_model_name if x.isalnum())
@@ -800,107 +802,119 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
     shared.state.job_no = 0
-    cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "v1-inference.yaml")
-    original_config = OmegaConf.load(cfg_file)
-    # Is this right?
-    checkpoint_info = modules.sd_models.get_closet_checkpoint_match(checkpoint_path)
-
-    if checkpoint_info is None:
-        print("Unable to find checkpoint file!")
-        shared.state.job_no = 8
-        return None, "Unable to find base checkpoint.", ""
-    #May be never execute
-    if not os.path.exists(checkpoint_info.filename):
-        print("Unable to find checkpoint file!")
-        shared.state.job_no = 8
-        return None, "Unable to find base checkpoint.", ""
-
+    pipe = None
     try:
-        checkpoint = torch.load(checkpoint_info.filename)
-        if "state_dict" in checkpoint:
-            checkpoint = checkpoint["state_dict"]
-    except:
-        print("Couldn't load checkpoint, canceling.")
-        dirs = get_db_models()
-        return gr.Dropdown.update(
-            choices=sorted(dirs)), f"Created working directory for {new_model_name} at {out_dir}.", ""
+        if new_model_url != "" and new_model_token != "":
+            print(f"Trying to create {new_model_name} from hugginface.co/{new_model_url}")
+            pipe = StableDiffusionPipeline.from_pretrained(new_model_url, use_auth_token=new_model_token)
+        else:
+            cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "v1-inference.yaml")
+            original_config = OmegaConf.load(cfg_file)
+            checkpoint_info = modules.sd_models.get_closet_checkpoint_match(checkpoint_path)
 
-    shared.state.textinfo = "Loaded state dict..."
-    shared.state.job_no = 1
-    print(f"Checkpoint loaded from {checkpoint_info}")
-    num_train_timesteps = original_config.model.params.timesteps
-    beta_start = original_config.model.params.linear_start
-    beta_end = original_config.model.params.linear_end
-    if scheduler_type == "pndm":
-        scheduler = PNDMScheduler(
-            beta_end=beta_end,
-            beta_schedule="scaled_linear",
-            beta_start=beta_start,
-            num_train_timesteps=num_train_timesteps,
-            skip_prk_steps=True,
-        )
-    elif scheduler_type == "lms":
-        scheduler = LMSDiscreteScheduler(beta_start=beta_start, beta_end=beta_end, beta_schedule="scaled_linear")
-    elif scheduler_type == "ddim":
-        scheduler = DDIMScheduler(
-            beta_start=beta_start,
-            beta_end=beta_end,
-            beta_schedule="scaled_linear",
-            clip_sample=False,
-            set_alpha_to_one=False,
-        )
-    else:
-        raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
-    # Convert the UNet2DConditionModel model.
-    shared.state.textinfo = "Created scheduler..."
-    shared.state.job_no = 2
-    unet_config = create_unet_diffusers_config(original_config)
-    shared.state.textinfo = "Created unet config..."
-    shared.state.job_no = 3
-    converted_unet_checkpoint = convert_ldm_unet_checkpoint(checkpoint, unet_config)
-    shared.state.textinfo = "Converted unet checkpoint..."
-    shared.state.job_no = 4
+            if checkpoint_info is None:
+                print("Unable to find checkpoint file!")
+                shared.state.job_no = 8
+                return None, "Unable to find base checkpoint.", ""
+            #May be never execute
+            if not os.path.exists(checkpoint_info.filename):
+                print("Unable to find checkpoint file!")
+                shared.state.job_no = 8
+                return None, "Unable to find base checkpoint.", ""
 
-    unet = UNet2DConditionModel(**unet_config)
-    unet.load_state_dict(converted_unet_checkpoint)
+            try:
+                checkpoint = torch.load(checkpoint_info.filename)
+                if "state_dict" in checkpoint:
+                    checkpoint = checkpoint["state_dict"]
+            except:
+                print("Couldn't load checkpoint, canceling.")
+                dirs = get_db_models()
+                return gr.Dropdown.update(
+                    choices=sorted(dirs)), f"Created working directory for {new_model_name} at {out_dir}.", ""
 
-    # Convert the VAE model.
-    vae_config = create_vae_diffusers_config(original_config)
-    shared.state.textinfo = "Converted VAE Config..."
-    shared.state.job_no = 5
-    converted_vae_checkpoint = convert_ldm_vae_checkpoint(checkpoint, vae_config)
-    shared.state.textinfo = "Converted VAE Checkpoint..."
-    shared.state.job_no = 6
-    vae = AutoencoderKL(**vae_config)
-    vae.load_state_dict(converted_vae_checkpoint)
-    shared.state.textinfo = "Loaded VAE State Dict..."
-    shared.state.job_no = 7
-    # Convert the text model.
-    text_model_type = original_config.model.params.cond_stage_config.target.split(".")[-1]
-    if text_model_type == "FrozenCLIPEmbedder":
-        text_model = convert_ldm_clip_checkpoint(checkpoint)
-        tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
-        safety_checker = StableDiffusionSafetyChecker.from_pretrained("CompVis/stable-diffusion-safety-checker")
-        feature_extractor = AutoFeatureExtractor.from_pretrained("CompVis/stable-diffusion-safety-checker")
-        pipe = StableDiffusionPipeline(
-            vae=vae,
-            text_encoder=text_model,
-            tokenizer=tokenizer,
-            unet=unet,
-            scheduler=scheduler,
-            safety_checker=safety_checker,
-            feature_extractor=feature_extractor,
-        )
-    else:
-        text_config = create_ldm_bert_config(original_config)
-        text_model = convert_ldm_bert_checkpoint(checkpoint, text_config)
-        tokenizer = BertTokenizerFast.from_pretrained("bert-base-uncased")
-        pipe = LDMTextToImagePipeline(vqvae=vae, bert=text_model, tokenizer=tokenizer, unet=unet, scheduler=scheduler)
-    pipe.save_pretrained(out_dir)
-    shared.state.textinfo = "Pretrained saved..."
-    shared.state.job_no = 8
+            shared.state.textinfo = "Loaded state dict..."
+            shared.state.job_no = 1
+            print(f"Checkpoint loaded from {checkpoint_info}")
+            num_train_timesteps = original_config.model.params.timesteps
+            beta_start = original_config.model.params.linear_start
+            beta_end = original_config.model.params.linear_end
+            if scheduler_type == "pndm":
+                scheduler = PNDMScheduler(
+                    beta_end=beta_end,
+                    beta_schedule="scaled_linear",
+                    beta_start=beta_start,
+                    num_train_timesteps=num_train_timesteps,
+                    skip_prk_steps=True,
+                )
+            elif scheduler_type == "lms":
+                scheduler = LMSDiscreteScheduler(beta_start=beta_start, beta_end=beta_end, beta_schedule="scaled_linear")
+            elif scheduler_type == "ddim":
+                scheduler = DDIMScheduler(
+                    beta_start=beta_start,
+                    beta_end=beta_end,
+                    beta_schedule="scaled_linear",
+                    clip_sample=False,
+                    set_alpha_to_one=False,
+                )
+            else:
+                raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
+            # Convert the UNet2DConditionModel model.
+            shared.state.textinfo = "Created scheduler..."
+            shared.state.job_no = 2
+            unet_config = create_unet_diffusers_config(original_config)
+            shared.state.textinfo = "Created unet config..."
+            shared.state.job_no = 3
+            converted_unet_checkpoint = convert_ldm_unet_checkpoint(checkpoint, unet_config)
+            shared.state.textinfo = "Converted unet checkpoint..."
+            shared.state.job_no = 4
+
+            unet = UNet2DConditionModel(**unet_config)
+            unet.load_state_dict(converted_unet_checkpoint)
+
+            # Convert the VAE model.
+            vae_config = create_vae_diffusers_config(original_config)
+            shared.state.textinfo = "Converted VAE Config..."
+            shared.state.job_no = 5
+            converted_vae_checkpoint = convert_ldm_vae_checkpoint(checkpoint, vae_config)
+            shared.state.textinfo = "Converted VAE Checkpoint..."
+            shared.state.job_no = 6
+            vae = AutoencoderKL(**vae_config)
+            vae.load_state_dict(converted_vae_checkpoint)
+            shared.state.textinfo = "Loaded VAE State Dict..."
+            shared.state.job_no = 7
+            # Convert the text model.
+            text_model_type = original_config.model.params.cond_stage_config.target.split(".")[-1]
+            if text_model_type == "FrozenCLIPEmbedder":
+                text_model = convert_ldm_clip_checkpoint(checkpoint)
+                tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
+                safety_checker = StableDiffusionSafetyChecker.from_pretrained("CompVis/stable-diffusion-safety-checker")
+                feature_extractor = AutoFeatureExtractor.from_pretrained("CompVis/stable-diffusion-safety-checker")
+                pipe = StableDiffusionPipeline(
+                    vae=vae,
+                    text_encoder=text_model,
+                    tokenizer=tokenizer,
+                    unet=unet,
+                    scheduler=scheduler,
+                    safety_checker=safety_checker,
+                    feature_extractor=feature_extractor,
+                )
+            else:
+                text_config = create_ldm_bert_config(original_config)
+                text_model = convert_ldm_bert_checkpoint(checkpoint, text_config)
+                tokenizer = BertTokenizerFast.from_pretrained("bert-base-uncased")
+                pipe = LDMTextToImagePipeline(vqvae=vae, bert=text_model, tokenizer=tokenizer, unet=unet, scheduler=scheduler)
+    except Exception as e:
+        print(f"Exception with the conversion: {e}")
+        traceback.print_exc()
+
+    if pipe is not None:
+        pipe = pipe.to(shared.device)
+        pipe.save_pretrained(out_dir)
+        shared.state.textinfo = "Pretrained saved..."
+        shared.state.job_no = 8
+        del pipe
     dirs = get_db_models()
-    return gr.Dropdown.update(choices=sorted(dirs)), f"Created working directory for {new_model_name} at {out_dir}.", ""
+    return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), f"Created working directory for {new_model_name} at {out_dir}.", ""
 
 
 def compile_checkpoint(model_name, vae_path, mixed_precision):
