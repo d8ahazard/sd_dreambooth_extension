@@ -75,6 +75,7 @@ def load_params(pretrained_model_name_or_path,
                 concepts_list,
                 use_cpu,
                 pad_tokens,
+                max_token_length,
                 hflip,
                 use_ema):
     tc = DreamboothConfig()
@@ -117,6 +118,7 @@ def load_params(pretrained_model_name_or_path,
                concepts_list,
                use_cpu,
                pad_tokens,
+               max_token_length,
                hflip,
                use_ema)
 
@@ -157,6 +159,7 @@ def load_params(pretrained_model_name_or_path,
                      "concepts_list",
                      "use_cpu",
                      "pad_tokens",
+                     "max_token_length",
                      "hflip",
                      "use_ema"]
 
@@ -221,6 +224,7 @@ def start_training(pretrained_model_name_or_path,
                    concepts_list,
                    use_cpu,
                    pad_tokens,
+                   max_token_length,
                    hflip,
                    use_ema
                    ):
@@ -272,6 +276,7 @@ def start_training(pretrained_model_name_or_path,
                    concepts_list,
                    use_cpu,
                    pad_tokens,
+                   max_token_length,
                    hflip,
                    use_ema)
     config.save()

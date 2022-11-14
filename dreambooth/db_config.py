@@ -65,6 +65,7 @@ class DreamboothConfig(dict):
                 concepts_list,
                 use_cpu,
                 pad_tokens,
+                max_token_length,
                 hflip,
                 use_ema):
 
@@ -115,6 +116,7 @@ class DreamboothConfig(dict):
                 "concepts_list": concepts_list,
                 "use_cpu": use_cpu,
                 "pad_tokens": pad_tokens,
+                "max_token_length": max_token_length,
                 "hflip": hflip,
                 "use_ema": use_ema,
                 "prior_loss_weight": 1,
