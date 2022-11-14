@@ -691,6 +691,8 @@ def main(args):
                 del lr_scheduler
             if vae:
                 del vae
+            if ema_unet:
+                del ema_unet
         except:
             pass
         gc.collect()  # Python thing
@@ -794,18 +796,30 @@ def main(args):
         num_training_steps=args.max_train_steps * args.gradient_accumulation_steps,
     )
     printm("Scheduler Loaded")
-    if args.train_text_encoder and text_encoder is not None:
-        unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-            unet, text_encoder, optimizer, train_dataloader, lr_scheduler
-        )
-    else:
-        unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-            unet, optimizer, train_dataloader, lr_scheduler
-        )
 
-    # create ema
+    # create ema, fix OOM
     if args.use_ema:
         ema_unet = EMAModel(unet.parameters())
+        ema_unet.to(accelerator.device, dtype=weight_dtype)
+        # ema_unet.to(accelerator.device)
+        if args.train_text_encoder and text_encoder is not None:
+            unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler
+            )
+        else:
+            unet, ema_unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                unet, ema_unet, optimizer, train_dataloader, lr_scheduler
+            )
+    else:
+        ema_unet = None
+        if args.train_text_encoder and text_encoder is not None:
+            unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                unet, text_encoder, optimizer, train_dataloader, lr_scheduler
+            )
+        else:
+            unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                unet, optimizer, train_dataloader, lr_scheduler
+            )
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
@@ -857,7 +871,6 @@ def main(args):
                 scheduler=scheduler,
                 torch_dtype=torch.float16,
             )
-            pipeline.safety_checker = dumb_safety
             pipeline = pipeline.to("cuda")
             with autocast("cuda"), torch.inference_mode():
                 if save_model:
@@ -876,6 +889,7 @@ def main(args):
                 if args.save_sample_prompt is not None and save_img:
                     shared.state.textinfo = f"Saving preview image at step {lifetime_step}..."
                     try:
+                        pipeline.safety_checker = dumb_safety
                         pipeline.set_progress_bar_config(disable=True)
                         sample_dir = os.path.join(save_dir, "logging")
                         os.makedirs(sample_dir, exist_ok=True)
@@ -976,7 +990,7 @@ def main(args):
                     loss_avg.update(loss.detach_(), bsz)
 
                     # Update EMA
-                    if args.use_ema:
+                    if args.use_ema and ema_unet is not None:
                         ema_unet.step(unet.parameters())
 
                 if not global_step % 10:
