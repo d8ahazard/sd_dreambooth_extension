@@ -76,7 +76,7 @@ class DreamboothConfig(dict):
         working_dir = os.path.join(model_dir, "working")
         with_prior_preservation = num_class_images > 0
         data = {"pretrained_model_name_or_path": pretrained_model_name_or_path,
-                "pretrained_vae_name_or_path,": pretrained_vae_name_or_path,
+                "pretrained_vae_name_or_path": pretrained_vae_name_or_path,
                 "instance_data_dir": instance_data_dir,
                 "class_data_dir": class_data_dir,
                 "instance_prompt": instance_prompt,

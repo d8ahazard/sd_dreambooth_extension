@@ -598,7 +598,8 @@ def main(args):
                             subfolder=None if args.pretrained_vae_name_or_path else "vae",
                             torch_dtype=torch_dtype
                         ),
-                        torch_dtype=torch_dtype
+                        torch_dtype=torch_dtype,
+                        safety_checker=None
                     )
                     pipeline.safety_checker = dumb_safety
                     pipeline.set_progress_bar_config(disable=True)
@@ -894,6 +895,7 @@ def main(args):
                 ),
                 scheduler=scheduler,
                 torch_dtype=torch.float16,
+                safety_checker=None
             )
             pipeline = pipeline.to("cuda")
             with autocast("cuda"), torch.inference_mode():
