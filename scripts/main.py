@@ -98,6 +98,8 @@ def on_ui_tabs():
                                                                            value=1)
                                 db_lr_warmup_steps = gr.Number(label="Warmup Steps", precision=0, value=0)
                                 db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
+                                db_max_token_length = gr.Dropdown(label="Max Token Length", value="75",
+                                                                 choices=["75", "150", "225", "300"])
                                 db_hflip = gr.Checkbox(label="Apply horizontal Flip", value=True)
                                 db_use_ema = gr.Checkbox(label="Use EMA for finetuning", value=False)
                     with gr.Row():
@@ -189,6 +191,7 @@ def on_ui_tabs():
                 db_concepts_list,
                 db_use_cpu,
                 db_pad_tokens,
+                db_max_token_length,
                 db_hflip,
                 db_use_ema
             ],
@@ -239,6 +242,7 @@ def on_ui_tabs():
                 db_concepts_list,
                 db_use_cpu,
                 db_pad_tokens,
+                db_max_token_length,
                 db_hflip,
                 db_use_ema
             ],
@@ -280,6 +284,7 @@ def on_ui_tabs():
                 db_concepts_list,
                 db_use_cpu,
                 db_pad_tokens,
+                db_max_token_length,
                 db_hflip,
                 db_use_ema,
                 db_progress,

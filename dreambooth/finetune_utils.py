@@ -33,6 +33,7 @@ class FilenameTextGetter:
                 tokens = self.re_word.findall(filename_text)
                 filename_text = (shared.opts.dataset_filename_join_string or "").join(tokens)
         
+        filename_text = filename_text.replace("\\", "")     # work with \(franchies\)
         return filename_text
 
     def create_text(self, text_template, filename_text):
@@ -132,12 +133,29 @@ class EMAModel:
         ]
 
 
-def encode_hidden_state(text_encoder: CLIPTextModel, input_ids):
+# Implementation from https://github.com/bmaltais/kohya_ss
+def encode_hidden_state(text_encoder: CLIPTextModel, input_ids, pad_tokens, b_size, max_token_length, tokenizer_max_length):
+    if pad_tokens:
+        input_ids = input_ids.reshape((-1, tokenizer_max_length))     # batch_size*3, 77
+
     clip_skip = shared.opts.CLIP_stop_at_last_layers
     if clip_skip <= 1:
-        return text_encoder(input_ids)[0]
+        encoder_hidden_states = text_encoder(input_ids)[0]
     else:
         enc_out = text_encoder(input_ids, output_hidden_states=True, return_dict=True)
         encoder_hidden_states = enc_out['hidden_states'][-clip_skip]
         encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states)
+
+    if not pad_tokens:
         return encoder_hidden_states
+
+    encoder_hidden_states = encoder_hidden_states.reshape((b_size, -1, encoder_hidden_states.shape[-1]))
+
+    if max_token_length > 75:
+        sts_list = [encoder_hidden_states[:, 0].unsqueeze(1)]
+        for i in range(1, max_token_length, tokenizer_max_length):
+            sts_list.append(encoder_hidden_states[:, i:i + tokenizer_max_length - 2])
+        sts_list.append(encoder_hidden_states[:, -1].unsqueeze(1))
+        encoder_hidden_states = torch.cat(sts_list, dim=1)
+    
+    return encoder_hidden_states

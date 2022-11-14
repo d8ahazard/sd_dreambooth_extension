@@ -297,6 +297,8 @@ def parse_args(input_args=None):
         help="Path to json containing multiple concepts, will overwrite parameters like instance_prompt, class_prompt, etc.",
     )
     parser.add_argument('--use_ema', action="store_true", help='Use EMA for finetuning')
+    parser.add_argument("--max_token_length", type=str, default="75", choices=["75", "150", "225", "300"],
+                      help="max token length of text encoder (default for 75)")  # Implementation from https://github.com/bmaltais/kohya_ss
 
     if input_args is not None:
         args = parser.parse_args(input_args)
@@ -357,13 +359,16 @@ class DreamBoothDataset(Dataset):
         center_crop=False,
         num_class_images=None,
         pad_tokens=False,
-        hflip=False
+        max_token_length=75,
+        hflip=False,
     ):
         self.size = size
         self.center_crop = center_crop
         self.tokenizer = tokenizer
         self.with_prior_preservation = with_prior_preservation
         self.pad_tokens = pad_tokens
+        self.max_token_length = max_token_length
+        self.tokenizer_max_length = self.tokenizer.model_max_length if max_token_length == 75 else max_token_length + 2
 
         self.instance_images_path = []
         self.class_images_path = []
@@ -393,6 +398,25 @@ class DreamBoothDataset(Dataset):
             ]
         )
 
+    def tokenize(self, text):
+        if not self.pad_tokens:
+            input_ids = self.tokenizer(text, padding="do_not_pad", truncation=True, max_length=self.tokenizer.model_max_length).input_ids
+            return input_ids
+
+        input_ids = self.tokenizer(text, padding="max_length", truncation=True, max_length=self.tokenizer_max_length, return_tensors="pt").input_ids
+        if self.tokenizer_max_length > self.tokenizer.model_max_length:
+            input_ids = input_ids.squeeze(0)
+            iids_list = []
+            for i in range(1, self.tokenizer_max_length - self.tokenizer.model_max_length + 2, self.tokenizer.model_max_length - 2):
+                iid = (input_ids[0].unsqueeze(0),
+                        input_ids[i:i + self.tokenizer.model_max_length - 2],
+                        input_ids[-1].unsqueeze(0))
+                iid = torch.cat(iid)
+                iids_list.append(iid)
+            input_ids = torch.stack(iids_list)      # 3,77
+
+        return input_ids
+
     def __len__(self):
         return self._length
 
@@ -403,14 +427,8 @@ class DreamBoothDataset(Dataset):
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
         example["instance_images"] = self.image_transforms(instance_image)
-        example["instance_prompt"] = self.text_getter.create_text(instance_prompt,
-                                                                  instance_text)  # TODO: show the final prompt of the image currently being trained in the ui
-        example["instance_prompt_ids"] = self.tokenizer(
-            example["instance_prompt"],
-            padding="max_length" if self.pad_tokens else "do_not_pad",
-            truncation=True,
-            max_length=self.tokenizer.model_max_length,
-        ).input_ids
+        example["instance_prompt"] = self.text_getter.create_text(instance_prompt, instance_text)   #TODO: show the final prompt of the image currently being trained in the ui
+        example["instance_prompt_ids"] = self.tokenize(example["instance_prompt"])   
 
         if self.with_prior_preservation:
             class_path, class_prompt, class_text = self.class_images_path[index % self.num_class_images]
@@ -419,12 +437,7 @@ class DreamBoothDataset(Dataset):
                 class_image = class_image.convert("RGB")
             example["class_images"] = self.image_transforms(class_image)
             example["class_prompt"] = self.text_getter.create_text(class_prompt, class_text)
-            example["class_prompt_ids"] = self.tokenizer(
-                example["class_prompt"],
-                padding="max_length" if self.pad_tokens else "do_not_pad",
-                truncation=True,
-                max_length=self.tokenizer.model_max_length,
-            ).input_ids
+            example["class_prompt_ids"] = self.tokenize(example["class_prompt"])
 
         return example
 
@@ -487,6 +500,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 
 def main(args):
     logging_dir = Path(args.output_dir, "logging")
+    args.max_token_length = int(args.max_token_length)
 
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
@@ -707,6 +721,7 @@ def main(args):
         center_crop=args.center_crop,
         num_class_images=args.num_class_images,
         pad_tokens=args.pad_tokens,
+        max_token_length=args.max_token_length,
         hflip=args.hflip
     )
 
@@ -729,11 +744,14 @@ def main(args):
         pixel_values = torch.stack(pixel_values)
         pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
 
-        input_ids = tokenizer.pad(
-            {"input_ids": input_ids},
-            padding=True,
-            return_tensors="pt",
-        ).input_ids
+        if not args.pad_tokens:
+            input_ids = tokenizer.pad(
+                {"input_ids": input_ids},
+                padding=True,
+                return_tensors="pt",
+            ).input_ids
+        else:
+            input_ids = torch.stack(input_ids)
 
         batch = {
             "input_ids": input_ids,
@@ -766,11 +784,13 @@ def main(args):
                 batch["pixel_values"] = batch["pixel_values"].to(accelerator.device, non_blocking=True,
                                                                  dtype=weight_dtype)
                 batch["input_ids"] = batch["input_ids"].to(accelerator.device, non_blocking=True)
-                latents_cache.append(vae.encode(batch["pixel_values"]).latent_dist)
+                latent_dist = vae.encode(batch["pixel_values"]).latent_dist
+                b_size = latent_dist.sample().shape[0]  #TODO: the sample is not necessary, but I don't know torch, could use a little help here
+                latents_cache.append(latent_dist)
                 if args.train_text_encoder:
                     text_encoder_cache.append(batch["input_ids"])
                 else:
-                    text_encoder_cache.append(encode_hidden_state(text_encoder, batch["input_ids"]))
+                    text_encoder_cache.append(encode_hidden_state(text_encoder, batch["input_ids"], args.pad_tokens, b_size, args.max_token_length, tokenizer.model_max_length))
         train_dataset = LatentsDataset(latents_cache, text_encoder_cache)
         train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=1, collate_fn=lambda x: x,
                                                        shuffle=True)
@@ -934,6 +954,7 @@ def main(args):
                         else:
                             latent_dist = vae.encode(batch["pixel_values"].to(dtype=weight_dtype)).latent_dist
                         latents = latent_dist.sample() * 0.18215
+                        b_size = latents.shape[0]
 
                     # Sample noise that we'll add to the latents
                     noise = torch.randn_like(latents)
@@ -951,11 +972,11 @@ def main(args):
                     with text_enc_context:
                         if not args.not_cache_latents:
                             if args.train_text_encoder:
-                                encoder_hidden_states = encode_hidden_state(text_encoder, batch[0][1])
+                                encoder_hidden_states = encode_hidden_state(text_encoder, batch[0][1], args.pad_tokens, b_size, args.max_token_length, tokenizer.model_max_length)
                             else:
                                 encoder_hidden_states = batch[0][1]
                         else:
-                            encoder_hidden_states = encode_hidden_state(text_encoder, batch["input_ids"])
+                            encoder_hidden_states = encode_hidden_state(text_encoder, batch["input_ids"], args.pad_tokens, b_size, args.max_token_length, tokenizer.model_max_length)
 
                     # Predict the noise residual
                     noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
