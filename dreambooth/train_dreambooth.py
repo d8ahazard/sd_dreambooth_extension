@@ -877,7 +877,7 @@ def main(args):
                     shared.state.textinfo = f"Saving checkpoint at step {lifetime_step}..."
                     try:
                         pipeline.save_pretrained(args.working_dir)
-                        save_checkpoint(args.model_name, lifetime_step,
+                        save_checkpoint(args.model_name, args.pretrained_vae_name_or_path, lifetime_step,
                                         args.mixed_precision == "fp16")
                         if args.use_ema:
                             ema_unet.restore(unet.parameters())
