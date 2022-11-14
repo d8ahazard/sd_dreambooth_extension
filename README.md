@@ -14,11 +14,28 @@ To install, simply go to the "Extensions" tab in the SD Web UI, select the "Avai
 
 *For 8bit adam to run properly, it may be necessary to install the CU116 version of torch and torchvision, which can be accomplished below:*
 
-Edit your webui-user.bat file, add this line after 'set COMMANDLINE_ARGS=':
+Refer to the appropriate script below for extra flags to install requirements:
 
-`set TORCH_COMMAND="pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url https://download.pytorch.org/whl/cu116"`
+https://github.com/d8ahazard/sd_dreambooth_extension/blob/main/webui-user-dreambooth.bat
+https://github.com/d8ahazard/sd_dreambooth_extension/blob/main/webui-user-dreambooth.sh
 
-Once installed, restart the SD-WebUI *entirely*, not just the UI. This will ensure all the necessary requirements are installed.
+Setting the torch command to: 
+`TORCH_COMMAND=pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url https://download.pytorch.org/whl/cu116`
+will ensure that the proper torch version is installed when webui-user is executed, and then left alone after that, versus trying to install conflicting versions.
+
+We also need a newer version of diffusers, as SD-WebUI uses version 0.3.0, while DB training requires > 0.6.0, so we use 0.7.2. Not having the right diffusers version is the cause of the 'UNet2DConditionModel' object has no attribute 'enable_gradient_checkpointing' error message, as well as safety checker warnings.
+
+To force sd-web-ui to *only* install one set of requirements, we can specify the command line argument:
+
+set/export REQS_FILE=.\extensions\sd_dreambooth_extension\requirements.txt
+
+And last, if you wish to completely skip the "native" install routine of Dreambooth, you can set the following environment flag:
+DREAMBOOTH_SKIP_INSTALL=True
+
+This is ideal for "offline mode", where you don't want the script to constantly check things from pypi.
+
+
+After installing via the WebUI, it is recommended to set the above flags and re-launch the entire Stable-diffusion-webui, not just reload it.
 
 
 ## Usage
@@ -27,6 +44,8 @@ Once installed, restart the SD-WebUI *entirely*, not just the UI. This will ensu
 1. Go to the Dreambooth tab.
 2. Under the "Create Model" sub-tab, enter a new model name and select the source checkpoint to train from.
     The source checkpoint will be extracted to models\dreambooth\MODELNAME\working - the original will not be touched.
+2b. Optionally, you can also specify a huggingface model directory and token to create the Dreambooth dataset from huggingface.co. 
+Model path format should be like so: 'runwayml/stable-diffusion-v1-5'
 3. Click "Create". This will take a minute or two, but when done, the UI should indicate that a new model directory has been set up.
 
 

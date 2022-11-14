@@ -3,18 +3,8 @@ import gradio as gr
 from dreambooth import conversion, dreambooth
 from dreambooth.dreambooth import get_db_models
 from modules import script_callbacks, sd_models, shared
-from modules.ui import paste_symbol, setup_progressbar
+from modules.ui import paste_symbol, setup_progressbar, gr_show
 from webui import wrap_gradio_gpu_call
-
-try:
-    import diffusers
-
-    ver = diffusers.__version__
-    if not "dev" in ver:
-        print(f"Incorrect diffusers version for Dreambooth, running installer.: {ver}")
-        import install
-except:
-    pass
 
 
 def on_ui_tabs():
@@ -29,6 +19,10 @@ def on_ui_tabs():
             with gr.Column(variant="panel"):
                 with gr.Tab("Create Model"):
                     db_new_model_name = gr.Textbox(label="Name")
+                    db_create_from_hub = gr.Checkbox(label="Import Model from Huggingface Hub", value=False)
+                    with gr.Row(visible=False) as hub_row:
+                        db_new_model_url = gr.Textbox(label="Model Path", value="", placeholder="runwayml/stable-diffusion-v1-5")
+                        db_new_model_token = gr.Textbox(label="HuggingFace Token", value="")
                     src_checkpoint = gr.Dropdown(label='Source Checkpoint', choices=sorted(
                         sd_models.checkpoints_list.keys()))
                     diff_type = gr.Dropdown(label='Scheduler', choices=["ddim", "pndm", "lms"], value="ddim")
@@ -118,6 +112,12 @@ def on_ui_tabs():
                 db_preview = gr.Image(elem_id='db_preview', visible=False)
                 setup_progressbar(db_progressbar, db_preview, 'db', textinfo=db_progress)
 
+        db_create_from_hub.change(
+            fn=lambda x: gr_show(x),
+            inputs=[db_create_from_hub],
+            outputs=[hub_row],
+        )
+
         db_generate_checkpoint.click(
             fn=conversion.compile_checkpoint,
             inputs=[
@@ -136,7 +136,9 @@ def on_ui_tabs():
             inputs=[
                 db_new_model_name,
                 src_checkpoint,
-                diff_type
+                diff_type,
+                db_new_model_url,
+                db_new_model_token
             ],
             outputs=[
                 db_pretrained_model_name_or_path,
