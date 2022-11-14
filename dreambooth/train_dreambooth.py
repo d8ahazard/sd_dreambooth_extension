@@ -399,8 +399,11 @@ class DreamBoothDataset(Dataset):
         )
 
     def tokenize(self, text):
-        input_ids = self.tokenizer(text, padding="max_length" if self.pad_tokens else "do_not_pad", truncation=True,
-                                 max_length=self.tokenizer_max_length, return_tensors="pt").input_ids
+        if not self.pad_tokens:
+            input_ids = self.tokenizer(text, padding="do_not_pad", truncation=True, max_length=self.tokenizer.model_max_length).input_ids
+            return input_ids
+
+        input_ids = self.tokenizer(text, padding="max_length", truncation=True, max_length=self.tokenizer_max_length, return_tensors="pt").input_ids
         if self.tokenizer_max_length > self.tokenizer.model_max_length:
             input_ids = input_ids.squeeze(0)
             iids_list = []
@@ -739,7 +742,14 @@ def main(args):
         pixel_values = torch.stack(pixel_values)
         pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
 
-        input_ids = torch.stack(input_ids)
+        if not args.pad_tokens:
+            input_ids = tokenizer.pad(
+                {"input_ids": input_ids},
+                padding=True,
+                return_tensors="pt",
+            ).input_ids
+        else:
+            input_ids = torch.stack(input_ids)
 
         batch = {
             "input_ids": input_ids,
@@ -778,7 +788,7 @@ def main(args):
                 if args.train_text_encoder:
                     text_encoder_cache.append(batch["input_ids"])
                 else:
-                    text_encoder_cache.append(encode_hidden_state(text_encoder, batch["input_ids"], b_size, args.max_token_length, tokenizer.model_max_length))
+                    text_encoder_cache.append(encode_hidden_state(text_encoder, batch["input_ids"], args.pad_tokens, b_size, args.max_token_length, tokenizer.model_max_length))
         train_dataset = LatentsDataset(latents_cache, text_encoder_cache)
         train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=1, collate_fn=lambda x: x,
                                                        shuffle=True)
@@ -948,11 +958,11 @@ def main(args):
                     with text_enc_context:
                         if not args.not_cache_latents:
                             if args.train_text_encoder:
-                                encoder_hidden_states = encode_hidden_state(text_encoder, batch[0][1], b_size, args.max_token_length, tokenizer.model_max_length)
+                                encoder_hidden_states = encode_hidden_state(text_encoder, batch[0][1], args.pad_tokens, b_size, args.max_token_length, tokenizer.model_max_length)
                             else:
                                 encoder_hidden_states = batch[0][1]
                         else:
-                            encoder_hidden_states = encode_hidden_state(text_encoder, batch["input_ids"], b_size, args.max_token_length, tokenizer.model_max_length)
+                            encoder_hidden_states = encode_hidden_state(text_encoder, batch["input_ids"], args.pad_tokens, b_size, args.max_token_length, tokenizer.model_max_length)
 
                     # Predict the noise residual
                     noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample

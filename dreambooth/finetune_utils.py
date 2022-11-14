@@ -134,8 +134,9 @@ class EMAModel:
 
 
 # Implementation from https://github.com/bmaltais/kohya_ss
-def encode_hidden_state(text_encoder: CLIPTextModel, input_ids, b_size, max_token_length, tokenizer_max_length):
-    input_ids = input_ids.reshape((-1, tokenizer_max_length))     # batch_size*3, 77
+def encode_hidden_state(text_encoder: CLIPTextModel, input_ids, pad_tokens, b_size, max_token_length, tokenizer_max_length):
+    if pad_tokens:
+        input_ids = input_ids.reshape((-1, tokenizer_max_length))     # batch_size*3, 77
 
     clip_skip = shared.opts.CLIP_stop_at_last_layers
     if clip_skip <= 1:
@@ -144,6 +145,9 @@ def encode_hidden_state(text_encoder: CLIPTextModel, input_ids, b_size, max_toke
         enc_out = text_encoder(input_ids, output_hidden_states=True, return_dict=True)
         encoder_hidden_states = enc_out['hidden_states'][-clip_skip]
         encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states)
+
+    if not pad_tokens:
+        return encoder_hidden_states
 
     encoder_hidden_states = encoder_hidden_states.reshape((b_size, -1, encoder_hidden_states.shape[-1]))
 
