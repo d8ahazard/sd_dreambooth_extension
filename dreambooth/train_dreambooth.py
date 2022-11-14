@@ -61,7 +61,7 @@ def dumb_safety(images, clip_input):
     return images, False
 
 
-def save_checkpoint(model_name: str, total_steps: int, use_half: bool = False):
+def save_checkpoint(model_name: str, vae_path: str, total_steps: int, use_half: bool = False):
     print(f"Successfully trained model for a total of {total_steps} steps, converting to ckpt.")
     ckpt_dir = shared.cmd_opts.ckpt_dir
     models_path = os.path.join(paths.models_path, "Stable-diffusion")
@@ -69,7 +69,7 @@ def save_checkpoint(model_name: str, total_steps: int, use_half: bool = False):
         models_path = ckpt_dir
     src_path = os.path.join(os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path, "dreambooth", model_name, "working")
     out_file = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
-    conversion.diff_to_sd(src_path, out_file, use_half)
+    conversion.diff_to_sd(src_path, vae_path, out_file, use_half)
     sd_models.list_models()
 
 
@@ -397,12 +397,6 @@ class DreamBoothDataset(Dataset):
         example = {}
         instance_path, instance_prompt, instance_text = self.instance_images_path[index % self.num_instance_images]
         instance_image = Image.open(instance_path)
-<<<<<<< HEAD
-=======
-
-        # print("prompt: ", instance_prompt)
-
->>>>>>> origin/main
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
         example["instance_images"] = self.image_transforms(instance_image)

@@ -1,4 +1,5 @@
 import gc
+import json
 import os
 from typing import Optional
 
@@ -30,6 +31,10 @@ def printm(msg, reset=False):
 
 def dumb_safety(images, clip_input):
     return images, False
+
+
+def isset(val: str):
+    return val is not None and val != "" and val != "*"
 
 
 def load_params(pretrained_model_name_or_path,
@@ -219,11 +224,6 @@ def start_training(pretrained_model_name_or_path,
                    hflip,
                    use_ema
                    ):
-    print("Starting Dreambooth training...")
-    shared.sd_model.to('cpu')
-    devices.torch_gc()
-    gc.collect()
-    printm("VRAM cleared.", True)
     if pretrained_model_name_or_path == "" or pretrained_model_name_or_path is None:
         print("Invalid model name.")
         return "Create or select a model first.", ""
@@ -275,10 +275,51 @@ def start_training(pretrained_model_name_or_path,
                    hflip,
                    use_ema)
     config.save()
+    msg = None
+    if not isset(config.instance_data_dir) and not isset(config.concepts_list):
+        msg = "No instance data specified."
+    if not isset(config.concepts_list) and not config.use_filename_as_label and not config.use_txt_as_label:
+        msg = "No instance prompt specified."
     if not os.path.exists(config.working_dir):
-        print("Invalid training data dir!")
-        shared.state.textinfo = "Invalid training data directory."
-        return "", 0
+        msg = "Invalid training data directory."
+    if isset(config.pretrained_vae_name_or_path) and not os.path.exists(pretrained_vae_name_or_path):
+        msg = "Invalid Pretrained VAE Path."
+    if resolution <= 0:
+        msg = "Invalid resolution."
+    if isset(concepts_list):
+        concepts_loaded = False
+        try:
+            alist = str(config.concepts_list)
+            if "'" in alist:
+                alist = alist.replace("'", '"')
+            print(f"Trying to parse: {alist}")
+            concepts_list = json.loads(alist)
+            concepts_loaded = True
+        except:
+            pass
+
+        if not concepts_loaded:
+            try:
+                if os.path.exists(concepts_list):
+                    with open(concepts_list, "r") as f:
+                        concepts_list = json.load(f)
+                    concepts_loaded = True
+            except:
+                print("Unable to load concepts from file either, this is bad.")
+                pass
+        if not concepts_loaded:
+            msg = "Unable to parse concepts list."
+
+    if msg:
+        shared.state.textinfo = msg
+        return msg, ""
+
+    # Clear memory and do "stuff" only after we've ensured all the things are right
+    print("Starting Dreambooth training...")
+    shared.sd_model.to('cpu')
+    torch.cuda.empty_cache()
+    gc.collect()
+    printm("VRAM cleared.", True)
 
     shared.state.textinfo = "Initializing dreambooth training..."
     trained_steps = main(config)
