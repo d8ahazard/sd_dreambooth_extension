@@ -29,7 +29,7 @@ export TORCH_COMMAND="pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 
 
 # Requirements file to use for stable-diffusion-webui + dreambooth.
 # If you changed the name of the dreambooth extension directory, change it below
-export REQS_FILE="./extensions/sd_dreambooth_extension/requirements_versions.txt"
+export REQS_FILE="./extensions/sd_dreambooth_extension/requirements.txt"
 # Uncomment to skip auto-install on run.
 # export DREAMBOOTH_SKIP_INSTALL=True
 # Fixed git repos
