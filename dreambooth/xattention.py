@@ -8,6 +8,8 @@ from diffusers.utils import BaseOutput
 from diffusers.utils.import_utils import is_xformers_available
 from torch import nn
 
+from modules import shared
+
 
 @dataclass
 class Transformer2DModelOutput(BaseOutput):
@@ -21,10 +23,9 @@ class Transformer2DModelOutput(BaseOutput):
     sample: torch.FloatTensor
 
 
-if is_xformers_available():
+if (shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers) and is_xformers_available():
     import xformers
     import xformers.ops
-
     xformers._is_functorch_available = True
 else:
     xformers = None
