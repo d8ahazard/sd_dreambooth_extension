@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ Conversion script for the LDM checkpoints. """
+import gc
 import os
 import traceback
 
@@ -902,7 +903,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
     return gr.Dropdown.update(choices=sorted(dirs)), f"Created working directory for {new_model_name} at {out_dir}.", ""
 
 
-def compile_checkpoint(model_name, mixed_precision):
+def compile_checkpoint(model_name, vae_path, mixed_precision):
     msg = ""
     try:
         half = mixed_precision == "fp16"
@@ -916,7 +917,7 @@ def compile_checkpoint(model_name, mixed_precision):
         src_path = os.path.join(os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path, "dreambooth", model_name, "working")
         out_file = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
         try:
-            diff_to_sd(src_path, out_file, half)
+            diff_to_sd(src_path, vae_path, half)
             msg = f"Saved checkpoint to {out_file}"
         except Exception as e:
             msg = f"Exception generating checkpoint: {e}"
@@ -927,9 +928,12 @@ def compile_checkpoint(model_name, mixed_precision):
     return msg, ""
 
 
-def diff_to_sd(model_path, checkpoint_name, half=False):
+def diff_to_sd(model_path, vae_path, checkpoint_name, half=False):
     unet_path = os.path.join(model_path, "unet", "diffusion_pytorch_model.bin")
-    vae_path = os.path.join(model_path, "vae", "diffusion_pytorch_model.bin")
+    if vae_path == "" or vae_path is None:
+        vae_path = os.path.join(model_path, "vae", "diffusion_pytorch_model.bin")
+    else:
+        vae_path = os.path.join(model_path, "diffusion_pytorch_model.bin")
     text_enc_path = os.path.join(model_path, "text_encoder", "pytorch_model.bin")
 
     # Convert the UNet model
@@ -953,6 +957,15 @@ def diff_to_sd(model_path, checkpoint_name, half=False):
         state_dict = {k: v.half() for k, v in state_dict.items()}
     state_dict = {"state_dict": state_dict}
     torch.save(state_dict, checkpoint_name)
+    try:
+        del unet_state_dict
+        del vae_state_dict
+        del text_enc_path
+        del state_dict
+    except:
+        pass
+    gc.collect()  # Python thing
+    torch.cuda.empty_cache()  # PyTorch thing
 
 
 def create_output_dir(new_model, config_data):
