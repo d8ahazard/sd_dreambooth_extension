@@ -8,7 +8,7 @@ from huggingface_hub import HfFolder, whoami
 
 from dreambooth.db_config import DreamboothConfig
 from dreambooth.train_dreambooth import main
-from modules import paths, shared
+from modules import paths, shared, devices
 
 mem_record = {}
 
@@ -216,7 +216,7 @@ def start_training(pretrained_model_name_or_path,
                    ):
     print("Starting Dreambooth training...")
     shared.sd_model.to('cpu')
-    torch.cuda.empty_cache()
+    devices.torch_gc()
     gc.collect()
     printm("VRAM cleared.", True)
     if pretrained_model_name_or_path == "" or pretrained_model_name_or_path is None:
@@ -282,7 +282,7 @@ def start_training(pretrained_model_name_or_path,
         config["total_steps"] = total_steps
         config.save()
 
-    torch.cuda.empty_cache()
+    devices.torch_gc()
     gc.collect()
     printm("Training completed, reloading SD Model.")
     print(f'Memory output: {mem_record}')

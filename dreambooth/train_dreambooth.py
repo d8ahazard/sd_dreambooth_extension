@@ -32,7 +32,7 @@ from transformers import CLIPTextModel, CLIPTokenizer
 
 from dreambooth import conversion
 from dreambooth.finetune_utils import FilenameTextGetter, EMAModel, encode_hidden_state
-from modules import shared, sd_models, paths
+from modules import shared, sd_models, paths, devices
 from modules.images import sanitize_filename_part
 
 torch.backends.cudnn.benchmark = True
@@ -609,8 +609,7 @@ def main(args):
 
         del pipeline
         del text_getter
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        devices.torch_gc()
 
     # Load the tokenizer
 
@@ -738,8 +737,7 @@ def main(args):
         if not args.train_text_encoder:
             del text_encoder
             text_encoder = None
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        devices.torch_gc()
 
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
@@ -850,12 +848,12 @@ def main(args):
                         image.save(os.path.join(sample_dir, f"{sanitized_prompt}{step}.png"))
                     except Exception as e:
                         print(f"Exception with the stupid image again: {e}")
-                    del pipeline
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                print(f"[*] Weights saved at {save_dir}")
-                unet.to(torch.float32)
-                text_enc_model.to(torch.float32)
+            print(f"[*] Weights saved at {save_dir}")
+            del pipeline
+            del scheduler
+            del text_enc_model
+            devices.torch_gc()
+                
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
@@ -1002,7 +1000,7 @@ def main(args):
     except:
         pass
     gc.collect()  # Python thing
-    torch.cuda.empty_cache()  # PyTorch thing
+    devices.torch_gc()  # PyTorch thing
     printm("Cleanup Complete.")
     accelerator.end_training()
     return global_step

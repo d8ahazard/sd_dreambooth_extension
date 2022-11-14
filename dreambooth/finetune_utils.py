@@ -8,7 +8,7 @@ import torch
 import torch.utils.checkpoint
 from transformers import CLIPTextModel
 
-from modules import shared
+from modules import shared, devices
 
 
 class FilenameTextGetter:
@@ -78,7 +78,7 @@ class EMAModel:
             else:
                 s_param.copy_(param)
 
-        torch.cuda.empty_cache()
+        devices.torch_gc()
 
     def copy_to(self, parameters: Iterable[torch.nn.Parameter]) -> None:
         """
