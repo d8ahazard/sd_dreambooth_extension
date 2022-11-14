@@ -46,13 +46,7 @@ def on_ui_tabs():
                     with gr.Accordion(open=True, label="Settings"):
                         db_concepts_list = gr.Textbox(label="Concepts List (Overrides instance/class settings below)",
                                                       placeholder="Path to JSON file with concepts to train.")
-                        db_instance_prompt = gr.Textbox(label="Instance prompt(Optional)", value="")
-                        db_use_filename_as_label = gr.Checkbox(
-                            label="Uses the image's filename as the image labels instead of the instance prompt",
-                            value=False)
-                        db_use_txt_as_label = gr.Checkbox(
-                            label="Uses the filename.txt file's content as the image labels instead of the instance prompt",
-                            value=False)
+                        db_instance_prompt = gr.Textbox(label="Instance prompt", value="")
                         db_class_prompt = gr.Textbox(label="Class prompt", value="")
                         db_pretrained_vae_name_or_path = gr.Textbox(label='Pretrained VAE Name or Path',
                                                                     placeholder="Leave blank to use base model VAE.",
@@ -160,8 +154,6 @@ def on_ui_tabs():
                 db_instance_data_dir,
                 db_class_data_dir,
                 db_instance_prompt,
-                db_use_filename_as_label,
-                db_use_txt_as_label,
                 db_class_prompt,
                 db_save_sample_prompt,
                 db_save_sample_negative_prompt,
@@ -212,8 +204,6 @@ def on_ui_tabs():
                 db_instance_data_dir,
                 db_class_data_dir,
                 db_instance_prompt,
-                db_use_filename_as_label,
-                db_use_txt_as_label,
                 db_class_prompt,
                 db_save_sample_prompt,
                 db_save_sample_negative_prompt,
@@ -255,8 +245,6 @@ def on_ui_tabs():
                 db_instance_data_dir,
                 db_class_data_dir,
                 db_instance_prompt,
-                db_use_filename_as_label,
-                db_use_txt_as_label,
                 db_class_prompt,
                 db_save_sample_prompt,
                 db_save_sample_negative_prompt,

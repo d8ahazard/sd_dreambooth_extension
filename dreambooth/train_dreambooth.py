@@ -115,12 +115,6 @@ def parse_args(input_args=None):
         help="The prompt with identifier specifying the instance",
     )
     parser.add_argument(
-        "--use_filename_as_label", action="store_true", help="Uses the filename as the image labels instead of the instance_prompt, useful for regularization when training for styles with wide image variance"
-    )
-    parser.add_argument(
-        "--use_txt_as_label", action="store_true", help="Uses the filename.txt file's content as the image labels instead of the instance_prompt, useful for regularization when training for styles with wide image variance"
-    )
-    parser.add_argument(
         "--class_prompt",
         type=str,
         default=None,
@@ -330,16 +324,6 @@ def list_features():
                 if not extension in pil_features:
                     pil_features.append(extension)
 
-def get_filename(path):
-    return path.stem
-
-def get_label_from_txt(path):
-    txt_path = path.with_suffix(".txt") # get the path to the .txt file
-    if txt_path.exists():
-        with open(txt_path, "r") as f:
-            return f.read()
-    else:
-        return ""
 
 def is_image(path: Path):
     global pil_features
@@ -400,9 +384,7 @@ class DreamBoothDataset(Dataset):
         center_crop=False,
         num_class_images=None,
         pad_tokens=False,
-        hflip=False,
-        use_filename_as_label=False,
-        use_txt_as_label=False,
+        hflip=False
     ):
         self.size = size
         self.center_crop = center_crop
@@ -425,8 +407,6 @@ class DreamBoothDataset(Dataset):
         self.num_instance_images = len(self.instance_images_path)
         self.num_class_images = len(self.class_images_path)
         self._length = max(self.num_class_images, self.num_instance_images)
-        self.use_filename_as_label = use_filename_as_label
-        self.use_txt_as_label = use_txt_as_label
 
         self.image_transforms = transforms.Compose(
             [
@@ -443,13 +423,8 @@ class DreamBoothDataset(Dataset):
 
     def __getitem__(self, index):
         example = {}
-        instance_path, instance_prompt, instance_text = self.instance_images_path[index % self.num_instance_images]
-        instance_prompt = get_filename(instance_path) if self.use_filename_as_label else instance_prompt
-        instance_prompt = get_label_from_txt(instance_path) if self.use_txt_as_label else instance_prompt
+        instance_path, instance_prompt = self.instance_images_path[index % self.num_instance_images]
         instance_image = Image.open(instance_path)
-        
-        # print("prompt: ", instance_prompt)
-        
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
         example["instance_images"] = self.image_transforms(instance_image)
@@ -828,9 +803,7 @@ def main(args):
         center_crop=args.center_crop,
         num_class_images=args.num_class_images,
         pad_tokens=args.pad_tokens,
-        hflip=args.hflip,
-        use_filename_as_label=args.use_filename_as_label,
-        use_txt_as_label=args.use_txt_as_label,
+        hflip=args.hflip
     )
 
     def collate_fn(examples):
