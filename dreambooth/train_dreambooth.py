@@ -35,6 +35,11 @@ from dreambooth.finetune_utils import FilenameTextGetter, EMAModel, encode_hidde
 from modules import shared, sd_models, paths, devices
 from modules.images import sanitize_filename_part
 
+try:
+    cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
+except:
+    cmd_dreambooth_models_path = None
+
 torch.backends.cudnn.benchmark = True
 
 logger = get_logger(__name__)
@@ -62,7 +67,7 @@ def save_checkpoint(model_name: str, total_steps: int, use_half: bool = False):
     models_path = os.path.join(paths.models_path, "Stable-diffusion")
     if ckpt_dir is not None:
         models_path = ckpt_dir
-    src_path = os.path.join(paths.models_path, "dreambooth", model_name, "working")
+    src_path = os.path.join(os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path, "dreambooth", model_name, "working")
     out_file = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
     conversion.diff_to_sd(src_path, out_file, use_half)
     sd_models.list_models()
@@ -392,6 +397,12 @@ class DreamBoothDataset(Dataset):
         example = {}
         instance_path, instance_prompt, instance_text = self.instance_images_path[index % self.num_instance_images]
         instance_image = Image.open(instance_path)
+<<<<<<< HEAD
+=======
+
+        # print("prompt: ", instance_prompt)
+
+>>>>>>> origin/main
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
         example["instance_images"] = self.image_transforms(instance_image)
@@ -540,7 +551,7 @@ def main(args):
             args.pretrained_vae_name_or_path = None
     else:
         args.pretrained_vae_name_or_path = None
-        
+
     if not concepts_loaded:
 
         args.concepts_list = [
