@@ -67,7 +67,9 @@ def save_checkpoint(model_name: str, vae_path: str, total_steps: int, use_half: 
     models_path = os.path.join(paths.models_path, "Stable-diffusion")
     if ckpt_dir is not None:
         models_path = ckpt_dir
-    src_path = os.path.join(os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path, "dreambooth", model_name, "working")
+    src_path = os.path.join(
+        os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path, "dreambooth",
+        model_name, "working")
     out_file = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
     conversion.diff_to_sd(src_path, vae_path, out_file, use_half)
     sd_models.list_models()
@@ -120,10 +122,12 @@ def parse_args(input_args=None):
         help="The prompt with identifier specifying the instance",
     )
     parser.add_argument(
-        "--use_filename_as_label", action="store_true", help="Uses the filename as the image labels instead of the instance_prompt, useful for regularization when training for styles with wide image variance"
+        "--use_filename_as_label", action="store_true",
+        help="Uses the filename as the image labels instead of the instance_prompt, useful for regularization when training for styles with wide image variance"
     )
     parser.add_argument(
-        "--use_txt_as_label", action="store_true", help="Uses the filename.txt file's content as the image labels instead of the instance_prompt, useful for regularization when training for styles with wide image variance"
+        "--use_txt_as_label", action="store_true",
+        help="Uses the filename.txt file's content as the image labels instead of the instance_prompt, useful for regularization when training for styles with wide image variance"
     )
     parser.add_argument(
         "--class_prompt",
@@ -290,7 +294,8 @@ def parse_args(input_args=None):
             "and an Nvidia Ampere GPU."
         ),
     )
-    parser.add_argument("--not_cache_latents", action="store_true", help="Do not precompute and cache latents from VAE.")
+    parser.add_argument("--not_cache_latents", action="store_true",
+                        help="Do not precompute and cache latents from VAE.")
     parser.add_argument("--hflip", action="store_true", help="Apply horizontal flip data augmentation.")
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
     parser.add_argument(
@@ -334,35 +339,36 @@ def list_features():
                 if not extension in pil_features:
                     pil_features.append(extension)
 
+
 def get_filename(path):
     return path.stem
 
+
 def get_label_from_txt(path):
-    txt_path = path.with_suffix(".txt") # get the path to the .txt file
+    txt_path = path.with_suffix(".txt")  # get the path to the .txt file
     if txt_path.exists():
         with open(txt_path, "r") as f:
             return f.read()
     else:
         return ""
 
+
 def is_image(path: Path):
     global pil_features
     if not len(pil_features):
         list_features()
-    is_img = path.is_file() and path.suffix in pil_features
-    # stop being noisy when reading a direcory of (.png, .txt) pairs created by preprocessing
-    # if not is_img:
-    #     print(f"Ignoring non-image file: {path}")
+    is_img = path.is_file() and path.suffix.lower() in pil_features
     return is_img
 
 
 class FilenameTextGetter:
     """Adapted from modules.textual_inversion.dataset.PersonalizedBase to get caption for image."""
-    
+
     re_numbers_at_start = re.compile(r"^[-\d]+\s*")
-    
+
     def __init__(self):
-        self.re_word = re.compile(shared.opts.dataset_filename_word_regex) if len(shared.opts.dataset_filename_word_regex) > 0 else None
+        self.re_word = re.compile(shared.opts.dataset_filename_word_regex) if len(
+            shared.opts.dataset_filename_word_regex) > 0 else None
 
     def read_text(self, img_path):
         text_filename = os.path.splitext(img_path)[0] + ".txt"
@@ -377,7 +383,7 @@ class FilenameTextGetter:
             if self.re_word:
                 tokens = self.re_word.findall(filename_text)
                 filename_text = (shared.opts.dataset_filename_join_string or "").join(tokens)
-        
+
         return filename_text
 
     def create_text(self, text_template, filename_text):
@@ -396,17 +402,17 @@ class DreamBoothDataset(Dataset):
     """
 
     def __init__(
-        self,
-        concepts_list,
-        tokenizer,
-        with_prior_preservation=True,
-        size=512,
-        center_crop=False,
-        num_class_images=None,
-        pad_tokens=False,
-        hflip=False,
-        use_filename_as_label=False,
-        use_txt_as_label=False,
+            self,
+            concepts_list,
+            tokenizer,
+            with_prior_preservation=True,
+            size=512,
+            center_crop=False,
+            num_class_images=None,
+            pad_tokens=False,
+            hflip=False,
+            use_filename_as_label=False,
+            use_txt_as_label=False,
     ):
         self.size = size
         self.center_crop = center_crop
@@ -418,11 +424,13 @@ class DreamBoothDataset(Dataset):
         self.class_images_path = []
         self.text_getter = FilenameTextGetter()
         for concept in concepts_list:
-            inst_img_path = [(x, concept["instance_prompt"], self.text_getter.read_text(x)) for x in Path(concept["instance_data_dir"]).iterdir() if is_image(x)]
+            inst_img_path = [(x, concept["instance_prompt"], self.text_getter.read_text(x)) for x in
+                             Path(concept["instance_data_dir"]).iterdir() if is_image(x)]
             self.instance_images_path.extend(inst_img_path)
 
             if with_prior_preservation:
-                class_img_path = [(x, concept["class_prompt"], self.text_getter.read_text(x)) for x in Path(concept["class_data_dir"]).iterdir() if is_image(x)]
+                class_img_path = [(x, concept["class_prompt"], self.text_getter.read_text(x)) for x in
+                                  Path(concept["class_data_dir"]).iterdir() if is_image(x)]
                 self.class_images_path.extend(class_img_path[:num_class_images])
 
         random.shuffle(self.instance_images_path)
@@ -457,7 +465,8 @@ class DreamBoothDataset(Dataset):
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
         example["instance_images"] = self.image_transforms(instance_image)
-        example["instance_prompt"] = self.text_getter.create_text(instance_prompt, instance_text)   #TODO: show the final prompt of the image currently being trained in the ui
+        example["instance_prompt"] = self.text_getter.create_text(instance_prompt,
+                                                                  instance_text)  # TODO: show the final prompt of the image currently being trained in the ui
         example["instance_prompt_ids"] = self.tokenizer(
             example["instance_prompt"],
             padding="max_length" if self.pad_tokens else "do_not_pad",
@@ -495,7 +504,8 @@ class PromptDataset(Dataset):
 
     def __getitem__(self, index):
         example = {}
-        example["filename_text"] = self.filename_texts[index % len(self.filename_texts)] if len(self.filename_texts) > 0 else ""
+        example["filename_text"] = self.filename_texts[index % len(self.filename_texts)] if len(
+            self.filename_texts) > 0 else ""
         example["prompt"] = self.prompt.replace("[filewords]", example["filename_text"])
         example["index"] = index
         return example
@@ -615,7 +625,6 @@ def main(args):
         args.pretrained_vae_name_or_path = None
 
     if not concepts_loaded:
-
         args.concepts_list = [
             {
                 "instance_prompt": args.instance_prompt,
@@ -655,7 +664,8 @@ def main(args):
                 shared.state.job_count = num_new_images
                 shared.state.job_no = 0
                 save_txt = "[filewords]" in concept["class_prompt"]
-                filename_texts = [text_getter.read_text(x) for x in Path(concept["instance_data_dir"]).iterdir() if is_image(x)]
+                filename_texts = [text_getter.read_text(x) for x in Path(concept["instance_data_dir"]).iterdir() if
+                                  is_image(x)]
                 sample_dataset = PromptDataset(concept["class_prompt"], filename_texts, num_new_images)
                 sample_dataloader = torch.utils.data.DataLoader(sample_dataset, batch_size=args.sample_batch_size)
 
@@ -736,6 +746,31 @@ def main(args):
 
     noise_scheduler = DDPMScheduler.from_config(os.path.join(args.working_dir, "scheduler"))
 
+    def cleanup_memory():
+        try:
+            printm("CLEANUP: ")
+            if unet:
+                del unet
+            if text_encoder:
+                del text_encoder
+            if tokenizer:
+                del tokenizer
+            if optimizer:
+                del optimizer
+            if train_dataloader:
+                del train_dataloader
+            if train_dataset:
+                del train_dataset
+            if lr_scheduler:
+                del lr_scheduler
+            if vae:
+                del vae
+        except:
+            pass
+        gc.collect()  # Python thing
+        torch.cuda.empty_cache()  # PyTorch thing
+        printm("Cleanup Complete.")
+
     train_dataset = DreamBoothDataset(
         concepts_list=args.concepts_list,
         tokenizer=tokenizer,
@@ -748,6 +783,12 @@ def main(args):
         use_filename_as_label=args.use_filename_as_label,
         use_txt_as_label=args.use_txt_as_label,
     )
+
+    if train_dataset.num_instance_images == 0:
+        msg = "Please provide a directory with actual images in it."
+        print('msg')
+        cleanup_memory()
+        return msg, ""
 
     def collate_fn(examples):
         input_ids = [example["instance_prompt_ids"] for example in examples]
@@ -873,7 +914,8 @@ def main(args):
                 text_enc_model = accelerator.unwrap_model(text_encoder)
             else:
                 text_enc_model = CLIPTextModel.from_pretrained(os.path.join(args.working_dir, "text_encoder"))
-            scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", clip_sample=False, set_alpha_to_one=False)
+            scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
+                                      clip_sample=False, set_alpha_to_one=False)
             pipeline = StableDiffusionPipeline.from_pretrained(
                 args.working_dir,
                 unet=accelerator.unwrap_model(unet),
@@ -922,6 +964,7 @@ def main(args):
                 print(f"[*] Weights saved at {save_dir}")
                 unet.to(torch.float32)
                 text_enc_model.to(torch.float32)
+
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
@@ -951,7 +994,8 @@ def main(args):
                     noise = torch.randn_like(latents)
                     bsz = latents.shape[0]
                     # Sample a random timestep for each image
-                    timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
+                    timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,),
+                                              device=latents.device)
                     timesteps = timesteps.long()
 
                     # Add noise to the latents according to the noise magnitude at each timestep
@@ -1005,7 +1049,6 @@ def main(args):
                     progress_bar.set_postfix(**logs)
                     accelerator.log(logs, step=global_step)
 
-
                 progress_bar.update(1)
                 global_step += 1
                 lifetime_step += 1
@@ -1023,7 +1066,6 @@ def main(args):
 
                 shared.state.textinfo = f"Training, step {global_step}/{args.max_train_steps} current, {lifetime_step}/{args.max_train_steps + args.total_steps} lifetime"
 
-
                 if training_complete:
                     print("Training complete??")
                     if shared.state.interrupted:
@@ -1034,7 +1076,6 @@ def main(args):
                     shared.state.textinfo = f"Training {state} {global_step}/{args.max_train_steps}, {lifetime_step}" \
                                             f" total."
 
-
                     break
             training_complete = global_step >= args.max_train_steps or shared.state.interrupted
             accelerator.wait_for_everyone()
@@ -1043,29 +1084,8 @@ def main(args):
         except Exception as m:
             printm(f"Exception while training: {m}")
             traceback.print_exc()
-    try:
-        printm("CLEANUP: ")
-        if unet:
-            del unet
-        if text_encoder:
-            del text_encoder
-        if tokenizer:
-            del tokenizer
-        if optimizer:
-            del optimizer
-        if train_dataloader:
-            del train_dataloader
-        if train_dataset:
-            del train_dataset
-        if lr_scheduler:
-            del lr_scheduler
-        if vae:
-            del vae
-    except:
-        pass
-    gc.collect()  # Python thing
-    torch.cuda.empty_cache()  # PyTorch thing
-    printm("Cleanup Complete.")
+
+    cleanup_memory()
     accelerator.end_training()
     return global_step
 
