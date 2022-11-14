@@ -9,7 +9,7 @@ from huggingface_hub import HfFolder, whoami
 
 from dreambooth.db_config import DreamboothConfig
 from dreambooth.train_dreambooth import main
-from modules import paths, shared
+from modules import paths, shared, devices
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -42,8 +42,6 @@ def load_params(pretrained_model_name_or_path,
                 instance_data_dir,
                 class_data_dir,
                 instance_prompt,
-                use_filename_as_label,
-                use_txt_as_label,
                 class_prompt,
                 save_sample_prompt,
                 save_sample_negative_prompt,
@@ -77,7 +75,8 @@ def load_params(pretrained_model_name_or_path,
                 concepts_list,
                 use_cpu,
                 pad_tokens,
-                hflip):
+                hflip,
+                use_ema):
     tc = DreamboothConfig()
 
     tc.from_ui(pretrained_model_name_or_path,
@@ -85,8 +84,6 @@ def load_params(pretrained_model_name_or_path,
                instance_data_dir,
                class_data_dir,
                instance_prompt,
-               use_filename_as_label,
-               use_txt_as_label,
                class_prompt,
                save_sample_prompt,
                save_sample_negative_prompt,
@@ -120,14 +117,13 @@ def load_params(pretrained_model_name_or_path,
                concepts_list,
                use_cpu,
                pad_tokens,
-               hflip)
+               hflip,
+               use_ema)
 
     target_values = ["pretrained_vae_name_or_path",
                      "instance_data_dir",
                      "class_data_dir",
                      "instance_prompt",
-                     "use_filename_as_label",
-                     "use_txt_as_label",
                      "class_prompt",
                      "save_sample_prompt",
                      "save_sample_negative_prompt",
@@ -161,7 +157,8 @@ def load_params(pretrained_model_name_or_path,
                      "concepts_list",
                      "use_cpu",
                      "pad_tokens",
-                     "hflip"]
+                     "hflip",
+                     "use_ema"]
 
     data = tc.from_file(pretrained_model_name_or_path)
     values = []
@@ -191,8 +188,6 @@ def start_training(pretrained_model_name_or_path,
                    instance_data_dir,
                    class_data_dir,
                    instance_prompt,
-                   use_filename_as_label,
-                   use_txt_as_label,
                    class_prompt,
                    save_sample_prompt,
                    save_sample_negative_prompt,
@@ -226,7 +221,8 @@ def start_training(pretrained_model_name_or_path,
                    concepts_list,
                    use_cpu,
                    pad_tokens,
-                   hflip
+                   hflip,
+                   use_ema
                    ):
     if pretrained_model_name_or_path == "" or pretrained_model_name_or_path is None:
         print("Invalid model name.")
@@ -243,8 +239,6 @@ def start_training(pretrained_model_name_or_path,
                    instance_data_dir,
                    class_data_dir,
                    instance_prompt,
-                   use_filename_as_label,
-                   use_txt_as_label,
                    class_prompt,
                    save_sample_prompt,
                    save_sample_negative_prompt,
@@ -278,13 +272,13 @@ def start_training(pretrained_model_name_or_path,
                    concepts_list,
                    use_cpu,
                    pad_tokens,
-                   hflip)
-
+                   hflip,
+                   use_ema)
     config.save()
     msg = None
     if not isset(instance_data_dir) and not isset(concepts_list):
         msg = "No instance data specified."
-    if not isset(concepts_list) and not use_filename_as_label and not use_txt_as_label:
+    if not isset(instance_prompt) and not isset(concepts_list):
         msg = "No instance prompt specified."
     if not os.path.exists(config.working_dir):
         msg = "Invalid training data directory."
@@ -318,6 +312,7 @@ def start_training(pretrained_model_name_or_path,
 
     if msg:
         shared.state.textinfo = msg
+        print(msg)
         return msg, ""
 
     # Clear memory and do "stuff" only after we've ensured all the things are right
@@ -334,7 +329,7 @@ def start_training(pretrained_model_name_or_path,
         config["total_steps"] = total_steps
         config.save()
 
-    torch.cuda.empty_cache()
+    devices.torch_gc()
     gc.collect()
     printm("Training completed, reloading SD Model.")
     print(f'Memory output: {mem_record}')
