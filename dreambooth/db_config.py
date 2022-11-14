@@ -1,8 +1,12 @@
 import json
 import os
 
-from modules import paths, images
+from modules import paths, images, shared
 
+try:
+    cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
+except:
+    cmd_dreambooth_models_path = None
 
 class DreamboothConfig(dict):
     def __init__(self, *args, **kwargs):
@@ -67,7 +71,7 @@ class DreamboothConfig(dict):
 
         pretrained_model_name_or_path = images.sanitize_filename_part(pretrained_model_name_or_path, True)
         pretrained_vae_name_or_path = images.sanitize_filename_part(pretrained_vae_name_or_path, True)
-        models_path = paths.models_path
+        models_path = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
         model_dir = os.path.join(models_path, "dreambooth", pretrained_model_name_or_path)
         working_dir = os.path.join(model_dir, "working")
         with_prior_preservation = num_class_images > 0
@@ -131,7 +135,7 @@ class DreamboothConfig(dict):
 
         """
         model_name = images.sanitize_filename_part(model_name, True)
-        model_path = paths.models_path
+        model_path = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
         config_file = os.path.join(model_path, "dreambooth", model_name, "db_config.json")
         try:
             with open(config_file, 'r') as openfile:
@@ -148,7 +152,7 @@ class DreamboothConfig(dict):
         """
         Save the config file3
         """
-        model_path = paths.models_path
+        model_path = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
         config_file = os.path.join(model_path, "dreambooth", self.__dict__["model_name"], "db_config.json")
         with open(config_file, "w") as outfile:
             json.dump(self.__dict__, outfile)

@@ -28,6 +28,11 @@ from dreambooth.dreambooth import get_db_models
 from dreambooth.db_config import DreamboothConfig
 
 try:
+    cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
+except:
+    cmd_dreambooth_models_path = None
+
+try:
     from omegaconf import OmegaConf
 except ImportError:
     raise ImportError(
@@ -908,7 +913,7 @@ def compile_checkpoint(model_name, mixed_precision):
 
         config = DreamboothConfig().from_file(model_name)
         total_steps = config["total_steps"]
-        src_path = os.path.join(paths.models_path, "dreambooth", model_name, "working")
+        src_path = os.path.join(os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path, "dreambooth", model_name, "working")
         out_file = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
         try:
             diff_to_sd(src_path, out_file, half)
@@ -952,7 +957,7 @@ def diff_to_sd(model_path, checkpoint_name, half=False):
 
 def create_output_dir(new_model, config_data):
     print(f"Creating dreambooth model folder: {new_model}")
-    models_dir = paths.models_path
+    models_dir = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
     model_dir = os.path.join(models_dir, "dreambooth", new_model)
     output_dir = os.path.join(model_dir, "working")
     if not os.path.exists(output_dir):
