@@ -817,20 +817,28 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
                 shared.state.job_no = 8
                 return None, "Unable to find base checkpoint.", ""
             #May be never execute
+            checkpoint_loaded = False
             if not os.path.exists(checkpoint_info.filename):
                 print("Unable to find checkpoint file!")
                 shared.state.job_no = 8
                 return None, "Unable to find base checkpoint.", ""
 
             try:
-                checkpoint = torch.load(checkpoint_info.filename)
-                if "state_dict" in checkpoint:
-                    checkpoint = checkpoint["state_dict"]
-            except:
-                print("Couldn't load checkpoint, canceling.")
-                dirs = get_db_models()
-                return gr.Dropdown.update(
-                    choices=sorted(dirs)), f"Created working directory for {new_model_name} at {out_dir}.", ""
+                checkpoint = torch.load(checkpoint_info[0])["state_dict"]
+                checkpoint_loaded = True
+            except KeyError:
+                pass
+            if not checkpoint_loaded:
+                print("State dict not found in the usual spot, trying something else.")
+                try:
+                    checkpoint = torch.load(checkpoint_info.filename)
+                    if "state_dict" in checkpoint:
+                        checkpoint = checkpoint["state_dict"]
+                except:
+                    print("Couldn't load checkpoint, canceling.")
+                    dirs = get_db_models()
+                    return gr.Dropdown.update(
+                        choices=sorted(dirs)), f"Created working directory for {new_model_name} at {out_dir}.", ""
 
             shared.state.textinfo = "Loaded state dict..."
             shared.state.job_no = 1
