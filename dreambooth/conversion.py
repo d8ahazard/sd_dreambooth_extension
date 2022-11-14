@@ -939,11 +939,12 @@ def compile_checkpoint(model_name, vae_path, mixed_precision):
         src_path = os.path.join(os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path, "dreambooth", model_name, "working")
         out_file = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
         try:
-            diff_to_sd(src_path, vae_path, half)
+            diff_to_sd(src_path, vae_path, out_file, half)
             msg = f"Saved checkpoint to {out_file}"
         except Exception as e:
             msg = f"Exception generating checkpoint: {e}"
             print(msg)
+            traceback.print_exc()
     except Exception as f:
         print(f"Exception generating checkpoint: {f}")
         traceback.print_exc()
@@ -955,9 +956,8 @@ def diff_to_sd(model_path, vae_path, checkpoint_name, half=False):
     if vae_path == "" or vae_path is None:
         vae_path = os.path.join(model_path, "vae", "diffusion_pytorch_model.bin")
     else:
-        vae_path = os.path.join(model_path, "diffusion_pytorch_model.bin")
+        vae_path = os.path.join(vae_path, "diffusion_pytorch_model.bin")
     text_enc_path = os.path.join(model_path, "text_encoder", "pytorch_model.bin")
-
     # Convert the UNet model
     unet_state_dict = torch.load(unet_path, map_location="cpu")
     unet_state_dict = convert_unet_state_dict(unet_state_dict)
