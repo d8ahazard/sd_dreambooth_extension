@@ -140,6 +140,8 @@ class DreamboothConfig(dict):
         try:
             with open(config_file, 'r') as openfile:
                 config = json.load(openfile)
+                if "max_token_length" not in config:
+                    self.__dict__["max_token_length"] = 75
                 for key in config:
                     self.__dict__[key] = config[key]
         except Exception as e:
