@@ -22,6 +22,7 @@ from accelerate.logging import get_logger
 from accelerate.utils import set_seed
 from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, StableDiffusionPipeline, UNet2DConditionModel
 from diffusers.optimization import get_scheduler
+from diffusers.models import attention
 from huggingface_hub import HfFolder, whoami
 from six import StringIO
 from torch import autocast
@@ -32,6 +33,7 @@ from transformers import CLIPTextModel, CLIPTokenizer
 
 from dreambooth import conversion
 from dreambooth.finetune_utils import FilenameTextGetter, EMAModel, encode_hidden_state
+from dreambooth import xattention
 from modules import shared, sd_models, paths, devices
 from modules.images import sanitize_filename_part
 
@@ -46,6 +48,8 @@ logger = get_logger(__name__)
 
 mem_record = {}
 
+attention.CrossAttention = xattention.CrossAttention
+attention.Transformer2DModel = xattention.Transformer2DModelOutput
 
 def printm(msg, reset=False):
     global mem_record

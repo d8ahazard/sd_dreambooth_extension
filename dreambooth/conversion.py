@@ -26,11 +26,15 @@ from huggingface_hub import get_full_repo_name, Repository
 
 import modules.sd_models
 from modules import paths, shared
+from diffusers.models import attention
+from dreambooth import xattention
 from dreambooth.dreambooth import get_db_models
 from dreambooth.db_config import DreamboothConfig
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
+    attention.CrossAttention = xattention.CrossAttention
+    attention.Transformer2DModel = xattention.Transformer2DModelOutput
 except:
     cmd_dreambooth_models_path = None
 
