@@ -10,6 +10,11 @@ from dreambooth.db_config import DreamboothConfig
 from dreambooth.train_dreambooth import main
 from modules import paths, shared
 
+try:
+    cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
+except:
+    cmd_dreambooth_models_path = None
+
 mem_record = {}
 
 
@@ -165,7 +170,7 @@ def load_params(pretrained_model_name_or_path,
 
 
 def get_db_models():
-    model_dir = paths.models_path
+    model_dir = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
     out_dir = os.path.join(model_dir, "dreambooth")
     output = []
     if os.path.exists(out_dir):

@@ -41,6 +41,7 @@ If a concepts list is specified, then the instance prompt, class prompt, instanc
 
 *Instance Prompt* - A short descriptor of your subject using a UNIQUE keyword and a classifier word. If training a dog, your instance prompt could be "photo of zkz dog".
 The key here is that "zkz" is not a word that might overlap with something in the real world "fluff", and "dog" is a generic word to describe your subject. This is only necessary if using prior preservation.
+You can use `[filewords]` as placeholder for reading caption from the image filename or a seprarte .txt file containing caption, for example, `[filewords], in the style of zymkyr`. This syntax is the same as textual inversion templates.
 
 *Class Prompt* - A keyword indicating what type of "thing" your subject is. If your instance prompt is "photo of zkz dog", your class prompt would be "photo of a dog". 
 Leave this blank to disable prior preservation training.

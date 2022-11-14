@@ -28,6 +28,11 @@ from dreambooth.dreambooth import get_db_models
 from dreambooth.db_config import DreamboothConfig
 
 try:
+    cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
+except:
+    cmd_dreambooth_models_path = None
+
+try:
     from omegaconf import OmegaConf
 except ImportError:
     raise ImportError(
@@ -797,29 +802,31 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
     cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "v1-inference.yaml")
     original_config = OmegaConf.load(cfg_file)
     # Is this right?
-    checkpoint_file = modules.sd_models.get_closet_checkpoint_match(checkpoint_path)
-    if checkpoint_file is None or not os.path.exists(checkpoint_file[0]):
+    checkpoint_info = modules.sd_models.get_closet_checkpoint_match(checkpoint_path)
+
+    if checkpoint_info is None:
         print("Unable to find checkpoint file!")
         shared.state.job_no = 8
         return None, "Unable to find base checkpoint.", ""
-    checkpoint_loaded = False
+    #May be never execute
+    if not os.path.exists(checkpoint_info.filename):
+        print("Unable to find checkpoint file!")
+        shared.state.job_no = 8
+        return None, "Unable to find base checkpoint.", ""
+
     try:
-        checkpoint = torch.load(checkpoint_file[0])["state_dict"]
-        checkpoint_loaded = True
-    except KeyError:
-        pass
-    if not checkpoint_loaded:
-        print("State dict not found in the usual spot, trying something else.")
-        try:
-            checkpoint = torch.load(checkpoint_file)
-        except:
-            print("Still couldn't load checkpoint, canceling.")
-            dirs = get_db_models()
-            return gr.Dropdown.update(
-                choices=sorted(dirs)), f"Created working directory for {new_model_name} at {out_dir}.", ""
+        checkpoint = torch.load(checkpoint_info.filename)
+        if "state_dict" in checkpoint:
+            checkpoint = checkpoint["state_dict"]
+    except:
+        print("Couldn't load checkpoint, canceling.")
+        dirs = get_db_models()
+        return gr.Dropdown.update(
+            choices=sorted(dirs)), f"Created working directory for {new_model_name} at {out_dir}.", ""
+
     shared.state.textinfo = "Loaded state dict..."
     shared.state.job_no = 1
-    print(f"Checkpoint loaded from {checkpoint_file}")
+    print(f"Checkpoint loaded from {checkpoint_info}")
     num_train_timesteps = original_config.model.params.timesteps
     beta_start = original_config.model.params.linear_start
     beta_end = original_config.model.params.linear_end
@@ -906,7 +913,7 @@ def compile_checkpoint(model_name, mixed_precision):
 
         config = DreamboothConfig().from_file(model_name)
         total_steps = config["total_steps"]
-        src_path = os.path.join(paths.models_path, "dreambooth", model_name, "working")
+        src_path = os.path.join(os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path, "dreambooth", model_name, "working")
         out_file = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
         try:
             diff_to_sd(src_path, out_file, half)
@@ -950,7 +957,7 @@ def diff_to_sd(model_path, checkpoint_name, half=False):
 
 def create_output_dir(new_model, config_data):
     print(f"Creating dreambooth model folder: {new_model}")
-    models_dir = paths.models_path
+    models_dir = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
     model_dir = os.path.join(models_dir, "dreambooth", new_model)
     output_dir = os.path.join(model_dir, "working")
     if not os.path.exists(output_dir):
