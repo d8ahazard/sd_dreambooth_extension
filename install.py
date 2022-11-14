@@ -1,24 +1,28 @@
+import os
 import shutil
-import subprocess
 import sys
-import importlib
+
 import git
-import os
 
-from launch import run_pip, run
-import os
+from launch import run
 from modules.paths import script_path
-name = "Dreambooth"
-req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
-print(f"loading Dreambooth reqs from {req_file}")
-run(f'"{sys.executable}" -m pip install -r "{req_file}"', f"Checking {name} requirements.", f"Couldn't install {name} requirements.")
 
-torch_cmd = os.environ.get('TORCH_COMMAND', None)
-if torch_cmd is None:
-    print("WARNING: overwriting existing torch/torchvision installation!")
-    torch_cmd = "pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url " \
-          "https://download.pytorch.org/whl/cu116 "
-run(f'"{sys.executable}" -m {torch_cmd}', "Checking torch and torchvision versions", "Couldn't install torch")
+dreambooth_skip_install = os.environ.get('DREAMBOOTH_SKIP_INSTALL', False)
+if dreambooth_skip_install:
+    print("Skipping dreambooth installation.")
+else:
+    name = "Dreambooth"
+    req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
+    print(f"loading Dreambooth reqs from {req_file}")
+    run(f'"{sys.executable}" -m pip install -r "{req_file}"', f"Checking {name} requirements.",
+        f"Couldn't install {name} requirements.")
+
+    torch_cmd = os.environ.get('TORCH_COMMAND', None)
+    if torch_cmd is None:
+        print("WARNING: overwriting existing torch/torchvision installation!")
+        torch_cmd = "pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url " \
+                    "https://download.pytorch.org/whl/cu116 "
+    run(f'"{sys.executable}" -m {torch_cmd}', "Checking torch and torchvision versions", "Couldn't install torch")
 
 try:
     base_dir = os.path.dirname(os.path.realpath(__file__))
@@ -29,6 +33,7 @@ try:
     import diffusers
     import torch
     import torchvision
+
     ver = diffusers.__version__
     tver = torch.__version__
     tvver = torchvision.__version__
