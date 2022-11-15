@@ -1,9 +1,13 @@
 # Borrowed from Shivam's repo so we don't have to completely clone a different diffusers version
-from typing import Optional
+import importlib
+import os
+from typing import Optional, Union
 
 import torch
 from attr import dataclass
+from diffusers import StableDiffusionPipeline
 from diffusers.models.attention import xformers
+from diffusers.pipeline_utils import LOADABLE_CLASSES
 from diffusers.utils import BaseOutput
 from diffusers.utils.import_utils import is_xformers_available
 from torch import nn
@@ -26,6 +30,7 @@ class Transformer2DModelOutput(BaseOutput):
 if (shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers) and is_xformers_available():
     import xformers
     import xformers.ops
+
     xformers._is_functorch_available = True
 else:
     xformers = None
@@ -170,3 +175,46 @@ class CrossAttention(nn.Module):
         value = value.contiguous()
         hidden_states = xformers.ops.memory_efficient_attention(query, key, value, attn_bias=None)
         return hidden_states
+
+
+def save_pretrained(self, save_directory: Union[str, os.PathLike]):
+    """
+    Save all variables of the pipeline that can be saved and loaded as well as the pipelines configuration file to
+    a directory. A pipeline variable can be saved and loaded if its class implements both a save and loading
+    method. The pipeline can easily be re-loaded using the `[`~DiffusionPipeline.from_pretrained`]` class method.
+
+    Arguments:
+        save_directory (`str` or `os.PathLike`):
+            Directory to which to save. Will be created if it doesn't exist.
+    """
+    self.save_config(save_directory)
+
+    model_index_dict = dict(self.config)
+    model_index_dict.pop("_class_name")
+    model_index_dict.pop("_diffusers_version")
+    model_index_dict.pop("_module", None)
+
+    for pipeline_component_name in model_index_dict.keys():
+        sub_model = getattr(self, pipeline_component_name)
+        if sub_model is None:
+            # edge case for saving a pipeline with safety_checker=None
+            continue
+
+        model_cls = sub_model.__class__
+
+        save_method_name = None
+        # search for the model's base class in LOADABLE_CLASSES
+        for library_name, library_classes in LOADABLE_CLASSES.items():
+            library = importlib.import_module(library_name)
+            for base_class, save_load_methods in library_classes.items():
+                class_candidate = getattr(library, base_class)
+                if issubclass(model_cls, class_candidate):
+                    # if we found a suitable base class in LOADABLE_CLASSES then grab its save method
+                    save_method_name = save_load_methods[0]
+                    break
+            if save_method_name is not None:
+                break
+
+        if save_method_name is not None:
+            save_method = getattr(sub_model, save_method_name)
+            save_method(os.path.join(save_directory, pipeline_component_name))

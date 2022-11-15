@@ -8,6 +8,7 @@ try:
 except:
     cmd_dreambooth_models_path = None
 
+
 class DreamboothConfig(dict):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -16,6 +17,7 @@ class DreamboothConfig(dict):
         self.scheduler = None
         self.src = None
         self.total_steps = None
+        self.revision = None
         self.__dict__ = self
 
     def create_new(self, name, scheduler, src, total_steps):
@@ -24,10 +26,11 @@ class DreamboothConfig(dict):
         self.scheduler = scheduler
         self.src = src
         self.total_steps = total_steps
+        self.revision = total_steps
         return self
 
     def from_ui(self,
-                pretrained_model_name_or_path,
+                model_dir,
                 pretrained_vae_name_or_path,
                 instance_data_dir,
                 class_data_dir,
@@ -36,6 +39,7 @@ class DreamboothConfig(dict):
                 save_sample_prompt,
                 save_sample_negative_prompt,
                 n_save_sample,
+                seed,
                 save_guidance_scale,
                 save_infer_steps,
                 num_class_images,
@@ -69,13 +73,24 @@ class DreamboothConfig(dict):
                 hflip,
                 use_ema):
 
-        pretrained_model_name_or_path = images.sanitize_filename_part(pretrained_model_name_or_path, True)
+        model_dir = images.sanitize_filename_part(model_dir, True)
+        dict = {}
+        try:
+            dict = self.from_file(model_dir)
+        except:
+            print(f"Exception loading model from path: {model_dir}")
+
+        if "revision" not in self.__dict__:
+            dict["revision"] = 0
         pretrained_vae_name_or_path = images.sanitize_filename_part(pretrained_vae_name_or_path, True)
         models_path = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
-        model_dir = os.path.join(models_path, "dreambooth", pretrained_model_name_or_path)
+        model_dir = os.path.join(models_path, "dreambooth", model_dir)
         working_dir = os.path.join(model_dir, "working")
         with_prior_preservation = num_class_images > 0
-        data = {"pretrained_model_name_or_path": pretrained_model_name_or_path,
+        dict["pretrained_model_name_or_path"] = working_dir
+
+        data = {"pretrained_model_name_or_path": working_dir,
+                "model_dir": model_dir,
                 "pretrained_vae_name_or_path": pretrained_vae_name_or_path,
                 "instance_data_dir": instance_data_dir,
                 "class_data_dir": class_data_dir,
@@ -84,12 +99,12 @@ class DreamboothConfig(dict):
                 "save_sample_prompt": save_sample_prompt,
                 "save_sample_negative_prompt": save_sample_negative_prompt,
                 "n_save_sample": n_save_sample,
+                "seed": seed,
                 "save_guidance_scale": save_guidance_scale,
                 "save_infer_steps": save_infer_steps,
                 "with_prior_preservation": with_prior_preservation,
                 "num_class_images": num_class_images,
                 "output_dir": model_dir,
-                "working_dir": working_dir,
                 "resolution": resolution,
                 "center_crop": center_crop,
                 "train_text_encoder": train_text_encoder,
@@ -119,10 +134,11 @@ class DreamboothConfig(dict):
                 "max_token_length": max_token_length,
                 "hflip": hflip,
                 "use_ema": use_ema,
-                "prior_loss_weight": 1,
-                "seed": None}
+                "prior_loss_weight": 1}
         for key in data:
-            self.__dict__[key] = data[key]
+            if not key in dict:
+                dict[key] = data[key]
+        self.__dict__ = dict
         return self.__dict__
 
     def from_file(self, model_name):
@@ -136,12 +152,15 @@ class DreamboothConfig(dict):
         """
         model_name = images.sanitize_filename_part(model_name, True)
         model_path = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
+        working_dir = os.path.join(model_path, "dreambooth", model_name, "working")
         config_file = os.path.join(model_path, "dreambooth", model_name, "db_config.json")
         try:
             with open(config_file, 'r') as openfile:
                 config = json.load(openfile)
                 if "max_token_length" not in config:
                     self.__dict__["max_token_length"] = 75
+                    self.__dict__["model_dir"] = working_dir
+                    self.__dict__["pretrained_model_name_or_path"] = working_dir
                 for key in config:
                     self.__dict__[key] = config[key]
         except Exception as e:
@@ -152,9 +171,9 @@ class DreamboothConfig(dict):
 
     def save(self):
         """
-        Save the config file3
+        Save the config file
         """
         model_path = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
         config_file = os.path.join(model_path, "dreambooth", self.__dict__["model_name"], "db_config.json")
         with open(config_file, "w") as outfile:
-            json.dump(self.__dict__, outfile)
+            json.dump(self.__dict__, outfile, indent=4)
