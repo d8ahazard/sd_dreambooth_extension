@@ -42,10 +42,12 @@ def on_ui_tabs():
                                                           placeholder="Path to JSON file with concepts to train, "
                                                                       "or a JSON string.")
                         with gr.Column() as prompts_col:
-                            db_instance_prompt = gr.Textbox(label="Instance Prompt", value="")
+                            db_instance_prompt = gr.Textbox(label="Instance prompt",
+                                                            placeholder="Optionally use [filewords] to read image captions from files.")
                             db_instance_data_dir = gr.Textbox(label='Dataset Directory',
                                                               placeholder="Path to directory with input images")
-                            db_class_prompt = gr.Textbox(label="Class Prompt", value="")
+                            db_class_prompt = gr.Textbox(label="Class Prompt", 
+                                                         placeholder="Optionally use [filewords] to read image captions from files.")
                             db_class_data_dir = gr.Textbox(label='Classification Dataset Directory',
                                                            placeholder="(Optional) Path to directory with classification/regularization images")
 
@@ -106,7 +108,7 @@ def on_ui_tabs():
                                 db_max_grad_norm = gr.Number(label="Max Grad Norms", value=1.0, precision=1)
                                 db_lr_warmup_steps = gr.Number(label="Warmup Steps", precision=0, value=0)
                                 db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
-                                db_max_token_length = gr.Dropdown(label="Max Token Length", value="75",
+                                db_max_token_length = gr.Dropdown(label="Max Token Length (Requires Pad Tokens for > 75)", value="75",
                                                                  choices=["75", "150", "225", "300"])
 
                     with gr.Row():
