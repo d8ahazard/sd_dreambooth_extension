@@ -31,17 +31,22 @@ Torch vision version is *.*.*.
 
 **Have you updated the Stable-Diffusion-WebUI to the latest version?**
 
-**No, really. Please save us both some trouble and update the SD-WebUI and Extension and restart before posting this. Reply 'OK' Below to acknowledge that you did this**
+**No, really. Please save us both some trouble and update the SD-WebUI and Extension and restart before posting this. Reply 'OK' Below to acknowledge that you did this.**
 
 **Describe the bug**
+
 (A clear and concise description of what the bug is)
 
 **Provide logs**
+
 If a crash has occurred, please provide the *entire* stack trace from the log, including the last few log messages *before* the crash occurred.
 
 **Environment**
+
 What OS?
+
 If Windows - WSL or native?
+
 What GPU are you using?
 
 **Screenshots/Config**
