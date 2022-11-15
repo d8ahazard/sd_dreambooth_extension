@@ -22,7 +22,7 @@ def on_ui_tabs():
                     db_new_model_name = gr.Textbox(label="Name")
                     db_create_from_hub = gr.Checkbox(label="Import Model from Huggingface Hub", value=False)
                     with gr.Column(visible=False) as hub_row:
-                        db_new_model_url = gr.Textbox(label="Model Path", value="", placeholder="runwayml/stable-diffusion-v1-5")
+                        db_new_model_url = gr.Textbox(label="Model Path", value="runwayml/stable-diffusion-v1-5")
                         db_new_model_token = gr.Textbox(label="HuggingFace Token", value="")
                     with gr.Row() as local_row:
                         src_checkpoint = gr.Dropdown(label='Source Checkpoint', choices=sorted(sd_models.checkpoints_list.keys()))
