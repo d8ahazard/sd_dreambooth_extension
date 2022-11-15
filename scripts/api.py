@@ -2,21 +2,20 @@ import base64
 import io
 import time
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks
 from dreambooth import conversion, dreambooth
 import gradio as gr
 from webui import wrap_gradio_gpu_call
 import modules.script_callbacks as script_callbacks
 from pydantic import BaseModel
 from typing import Optional
+import asyncio
 class dreamboothParameters(BaseModel):
     db_pretrained_model_name_or_path: str
     db_pretrained_vae_name_or_path: Optional[str] = ""
     db_instance_data_dir: str
     db_class_data_dir: Optional[str] = ""
     db_instance_prompt: Optional[str] = ""
-    db_use_filename_as_label: Optional[bool] = False
-    db_use_txt_as_label: Optional[bool] = False
     db_class_prompt: Optional[str] = ""
     db_save_sample_prompt: Optional[str]  = ""
     db_save_sample_negative_prompt: Optional[str]  = ""
@@ -50,7 +49,9 @@ class dreamboothParameters(BaseModel):
     db_concepts_list: Optional[str] = ""
     db_use_cpu: Optional[bool] = False
     db_pad_tokens: Optional[bool] = True
+    db_max_token_length: Optional[int] = 75
     db_hflip: Optional[bool] = True
+    db_use_ema: Optional[bool] = False
 
 
 def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
@@ -61,6 +62,9 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
     @app.post("/dreambooth/start_straining")
     async def start_training(paras: dreamboothParameters):
         print("Starting Training")
+        task = asyncio.create_task(train_model(paras))
+        return {"status" : "finished"}
+    async def train_model(paras: dreamboothParameters):
         fn = wrap_gradio_gpu_call(dreambooth.start_training(
             paras.db_pretrained_model_name_or_path,
             paras.db_pretrained_vae_name_or_path,
@@ -102,8 +106,10 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
             paras.db_concepts_list,
             paras.db_use_cpu,
             paras.db_pad_tokens,
-            paras.db_hflip))
-
+            paras.db_max_token_length,
+            paras.db_hflip,
+            paras.db_use_ema
+        ))
 
 script_callbacks.on_app_started(dreamBoothAPI)
 
