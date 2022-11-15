@@ -163,6 +163,7 @@ def on_ui_tabs():
 
         db_performance_wizard.click(
             fn=performance_wizard,
+            inputs=[],
             outputs=[
                 db_num_class_images,
                 db_train_batch_size,
