@@ -851,7 +851,7 @@ def main(args, memory_record):
                             ema_unet.restore(unet.parameters())
                     except Exception as e:
                         logger.debug(f"Exception saving checkpoint/model: {e}")
-                        traceback.logger.debug_exception(*sys.exc_info())
+                        traceback.print_exc()
                         pass
                 save_dir = args.output_dir
                 if args.save_sample_prompt is not None and save_img:
@@ -1024,7 +1024,7 @@ def main(args, memory_record):
                 break
         except Exception as m:
             printm(f"Exception while training: {m}")
-            traceback.logger.debug_exc()
+            traceback.print_exc()
 
     cleanup_memory()
     accelerator.end_training()
