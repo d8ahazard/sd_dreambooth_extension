@@ -3,18 +3,8 @@ import gradio as gr
 from dreambooth import conversion, dreambooth
 from dreambooth.dreambooth import get_db_models
 from modules import script_callbacks, sd_models, shared
-from modules.ui import paste_symbol, setup_progressbar
+from modules.ui import paste_symbol, setup_progressbar, gr_show
 from webui import wrap_gradio_gpu_call
-
-try:
-    import diffusers
-
-    ver = diffusers.__version__
-    if not "dev" in ver:
-        print(f"Incorrect diffusers version for Dreambooth, running installer.: {ver}")
-        import install
-except:
-    pass
 
 
 def on_ui_tabs():
@@ -29,6 +19,10 @@ def on_ui_tabs():
             with gr.Column(variant="panel"):
                 with gr.Tab("Create Model"):
                     db_new_model_name = gr.Textbox(label="Name")
+                    db_create_from_hub = gr.Checkbox(label="Import Model from Huggingface Hub", value=False)
+                    with gr.Row(visible=False) as hub_row:
+                        db_new_model_url = gr.Textbox(label="Model Path", value="", placeholder="runwayml/stable-diffusion-v1-5")
+                        db_new_model_token = gr.Textbox(label="HuggingFace Token", value="")
                     src_checkpoint = gr.Dropdown(label='Source Checkpoint', choices=sorted(
                         sd_models.checkpoints_list.keys()))
                     diff_type = gr.Dropdown(label='Scheduler', choices=["ddim", "pndm", "lms"], value="ddim")
@@ -46,13 +40,7 @@ def on_ui_tabs():
                     with gr.Accordion(open=True, label="Settings"):
                         db_concepts_list = gr.Textbox(label="Concepts List (Overrides instance/class settings below)",
                                                       placeholder="Path to JSON file with concepts to train.")
-                        db_instance_prompt = gr.Textbox(label="Instance prompt(Optional)", value="")
-                        db_use_filename_as_label = gr.Checkbox(
-                            label="Uses the image's filename as the image labels instead of the instance prompt",
-                            value=False)
-                        db_use_txt_as_label = gr.Checkbox(
-                            label="Uses the filename.txt file's content as the image labels instead of the instance prompt",
-                            value=False)
+                        db_instance_prompt = gr.Textbox(label="Instance prompt", value="")
                         db_class_prompt = gr.Textbox(label="Class prompt", value="")
                         db_pretrained_vae_name_or_path = gr.Textbox(label='Pretrained VAE Name or Path',
                                                                     placeholder="Leave blank to use base model VAE.",
@@ -110,7 +98,10 @@ def on_ui_tabs():
                                                                            value=1)
                                 db_lr_warmup_steps = gr.Number(label="Warmup Steps", precision=0, value=0)
                                 db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
+                                db_max_token_length = gr.Dropdown(label="Max Token Length", value="75",
+                                                                 choices=["75", "150", "225", "300"])
                                 db_hflip = gr.Checkbox(label="Apply horizontal Flip", value=True)
+                                db_use_ema = gr.Checkbox(label="Use EMA for finetuning", value=False)
                     with gr.Row():
                         with gr.Column(scale=2):
                             gr.HTML(value="")
@@ -122,6 +113,12 @@ def on_ui_tabs():
                 db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery').style(grid=4)
                 db_preview = gr.Image(elem_id='db_preview', visible=False)
                 setup_progressbar(db_progressbar, db_preview, 'db', textinfo=db_progress)
+
+        db_create_from_hub.change(
+            fn=lambda x: gr_show(x),
+            inputs=[db_create_from_hub],
+            outputs=[hub_row],
+        )
 
         db_generate_checkpoint.click(
             fn=conversion.compile_checkpoint,
@@ -141,7 +138,9 @@ def on_ui_tabs():
             inputs=[
                 db_new_model_name,
                 src_checkpoint,
-                diff_type
+                diff_type,
+                db_new_model_url,
+                db_new_model_token
             ],
             outputs=[
                 db_pretrained_model_name_or_path,
@@ -159,8 +158,6 @@ def on_ui_tabs():
                 db_instance_data_dir,
                 db_class_data_dir,
                 db_instance_prompt,
-                db_use_filename_as_label,
-                db_use_txt_as_label,
                 db_class_prompt,
                 db_save_sample_prompt,
                 db_save_sample_negative_prompt,
@@ -194,7 +191,9 @@ def on_ui_tabs():
                 db_concepts_list,
                 db_use_cpu,
                 db_pad_tokens,
-                db_hflip
+                db_max_token_length,
+                db_hflip,
+                db_use_ema
             ],
             outputs=[
                 db_progress,
@@ -210,8 +209,6 @@ def on_ui_tabs():
                 db_instance_data_dir,
                 db_class_data_dir,
                 db_instance_prompt,
-                db_use_filename_as_label,
-                db_use_txt_as_label,
                 db_class_prompt,
                 db_save_sample_prompt,
                 db_save_sample_negative_prompt,
@@ -245,15 +242,15 @@ def on_ui_tabs():
                 db_concepts_list,
                 db_use_cpu,
                 db_pad_tokens,
-                db_hflip
+                db_max_token_length,
+                db_hflip,
+                db_use_ema
             ],
             outputs=[
                 db_pretrained_vae_name_or_path,
                 db_instance_data_dir,
                 db_class_data_dir,
                 db_instance_prompt,
-                db_use_filename_as_label,
-                db_use_txt_as_label,
                 db_class_prompt,
                 db_save_sample_prompt,
                 db_save_sample_negative_prompt,
@@ -287,8 +284,10 @@ def on_ui_tabs():
                 db_concepts_list,
                 db_use_cpu,
                 db_pad_tokens,
+                db_max_token_length,
                 db_hflip,
-                db_progress
+                db_use_ema,
+                db_progress,
             ]
         )
 

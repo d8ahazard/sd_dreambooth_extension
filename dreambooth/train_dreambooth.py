@@ -7,7 +7,6 @@ import json
 import math
 import os
 import random
-import re
 import sys
 import traceback
 from contextlib import nullcontext
@@ -23,6 +22,7 @@ from accelerate.logging import get_logger
 from accelerate.utils import set_seed
 from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, StableDiffusionPipeline, UNet2DConditionModel
 from diffusers.optimization import get_scheduler
+from diffusers.models import attention
 from huggingface_hub import HfFolder, whoami
 from six import StringIO
 from torch import autocast
@@ -32,7 +32,9 @@ from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
 from dreambooth import conversion
-from modules import shared, sd_models, paths
+from dreambooth.finetune_utils import FilenameTextGetter, EMAModel, encode_hidden_state
+from dreambooth import xattention
+from modules import shared, sd_models, paths, devices
 from modules.images import sanitize_filename_part
 
 try:
@@ -46,6 +48,8 @@ logger = get_logger(__name__)
 
 mem_record = {}
 
+attention.CrossAttention = xattention.CrossAttention
+attention.Transformer2DModel = xattention.Transformer2DModelOutput
 
 def printm(msg, reset=False):
     global mem_record
@@ -120,14 +124,6 @@ def parse_args(input_args=None):
         type=str,
         default=None,
         help="The prompt with identifier specifying the instance",
-    )
-    parser.add_argument(
-        "--use_filename_as_label", action="store_true",
-        help="Uses the filename as the image labels instead of the instance_prompt, useful for regularization when training for styles with wide image variance"
-    )
-    parser.add_argument(
-        "--use_txt_as_label", action="store_true",
-        help="Uses the filename.txt file's content as the image labels instead of the instance_prompt, useful for regularization when training for styles with wide image variance"
     )
     parser.add_argument(
         "--class_prompt",
@@ -304,6 +300,9 @@ def parse_args(input_args=None):
         default=None,
         help="Path to json containing multiple concepts, will overwrite parameters like instance_prompt, class_prompt, etc.",
     )
+    parser.add_argument('--use_ema', action="store_true", help='Use EMA for finetuning')
+    parser.add_argument("--max_token_length", type=str, default="75", choices=["75", "150", "225", "300"],
+                      help="max token length of text encoder (default for 75)")  # Implementation from https://github.com/bmaltais/kohya_ss
 
     if input_args is not None:
         args = parser.parse_args(input_args)
@@ -340,18 +339,6 @@ def list_features():
                     pil_features.append(extension)
 
 
-def get_filename(path):
-    return path.stem
-
-
-def get_label_from_txt(path):
-    txt_path = path.with_suffix(".txt")  # get the path to the .txt file
-    if txt_path.exists():
-        with open(txt_path, "r") as f:
-            return f.read()
-    else:
-        return ""
-
 
 def is_image(path: Path):
     global pil_features
@@ -361,40 +348,6 @@ def is_image(path: Path):
     return is_img
 
 
-class FilenameTextGetter:
-    """Adapted from modules.textual_inversion.dataset.PersonalizedBase to get caption for image."""
-
-    re_numbers_at_start = re.compile(r"^[-\d]+\s*")
-
-    def __init__(self):
-        self.re_word = re.compile(shared.opts.dataset_filename_word_regex) if len(
-            shared.opts.dataset_filename_word_regex) > 0 else None
-
-    def read_text(self, img_path):
-        text_filename = os.path.splitext(img_path)[0] + ".txt"
-        filename = os.path.basename(img_path)
-
-        if os.path.exists(text_filename):
-            with open(text_filename, "r", encoding="utf8") as file:
-                filename_text = file.read()
-        else:
-            filename_text = os.path.splitext(filename)[0]
-            filename_text = re.sub(self.re_numbers_at_start, '', filename_text)
-            if self.re_word:
-                tokens = self.re_word.findall(filename_text)
-                filename_text = (shared.opts.dataset_filename_join_string or "").join(tokens)
-
-        return filename_text
-
-    def create_text(self, text_template, filename_text):
-        tags = filename_text.split(',')
-        if shared.opts.tag_drop_out != 0:
-            tags = [t for t in tags if random.random() > shared.opts.tag_drop_out]
-        if shared.opts.shuffle_tags:
-            random.shuffle(tags)
-        return text_template.replace("[filewords]", ','.join(tags))
-
-
 class DreamBoothDataset(Dataset):
     """
     A dataset to prepare the instance and class images with the prompts for fine-tuning the model.
@@ -402,23 +355,24 @@ class DreamBoothDataset(Dataset):
     """
 
     def __init__(
-            self,
-            concepts_list,
-            tokenizer,
-            with_prior_preservation=True,
-            size=512,
-            center_crop=False,
-            num_class_images=None,
-            pad_tokens=False,
-            hflip=False,
-            use_filename_as_label=False,
-            use_txt_as_label=False,
+        self,
+        concepts_list,
+        tokenizer,
+        with_prior_preservation=True,
+        size=512,
+        center_crop=False,
+        num_class_images=None,
+        pad_tokens=False,
+        max_token_length=75,
+        hflip=False,
     ):
         self.size = size
         self.center_crop = center_crop
         self.tokenizer = tokenizer
         self.with_prior_preservation = with_prior_preservation
         self.pad_tokens = pad_tokens
+        self.max_token_length = max_token_length
+        self.tokenizer_max_length = self.tokenizer.model_max_length if max_token_length == 75 else max_token_length + 2
 
         self.instance_images_path = []
         self.class_images_path = []
@@ -437,8 +391,6 @@ class DreamBoothDataset(Dataset):
         self.num_instance_images = len(self.instance_images_path)
         self.num_class_images = len(self.class_images_path)
         self._length = max(self.num_class_images, self.num_instance_images)
-        self.use_filename_as_label = use_filename_as_label
-        self.use_txt_as_label = use_txt_as_label
 
         self.image_transforms = transforms.Compose(
             [
@@ -450,29 +402,37 @@ class DreamBoothDataset(Dataset):
             ]
         )
 
+    def tokenize(self, text):
+        if not self.pad_tokens:
+            input_ids = self.tokenizer(text, padding="do_not_pad", truncation=True, max_length=self.tokenizer.model_max_length).input_ids
+            return input_ids
+
+        input_ids = self.tokenizer(text, padding="max_length", truncation=True, max_length=self.tokenizer_max_length, return_tensors="pt").input_ids
+        if self.tokenizer_max_length > self.tokenizer.model_max_length:
+            input_ids = input_ids.squeeze(0)
+            iids_list = []
+            for i in range(1, self.tokenizer_max_length - self.tokenizer.model_max_length + 2, self.tokenizer.model_max_length - 2):
+                iid = (input_ids[0].unsqueeze(0),
+                        input_ids[i:i + self.tokenizer.model_max_length - 2],
+                        input_ids[-1].unsqueeze(0))
+                iid = torch.cat(iid)
+                iids_list.append(iid)
+            input_ids = torch.stack(iids_list)      # 3,77
+
+        return input_ids
+
     def __len__(self):
         return self._length
 
     def __getitem__(self, index):
         example = {}
         instance_path, instance_prompt, instance_text = self.instance_images_path[index % self.num_instance_images]
-        instance_prompt = get_filename(instance_path) if self.use_filename_as_label else instance_prompt
-        instance_prompt = get_label_from_txt(instance_path) if self.use_txt_as_label else instance_prompt
         instance_image = Image.open(instance_path)
-
-        # print("prompt: ", instance_prompt)
-
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
         example["instance_images"] = self.image_transforms(instance_image)
-        example["instance_prompt"] = self.text_getter.create_text(instance_prompt,
-                                                                  instance_text)  # TODO: show the final prompt of the image currently being trained in the ui
-        example["instance_prompt_ids"] = self.tokenizer(
-            example["instance_prompt"],
-            padding="max_length" if self.pad_tokens else "do_not_pad",
-            truncation=True,
-            max_length=self.tokenizer.model_max_length,
-        ).input_ids
+        example["instance_prompt"] = self.text_getter.create_text(instance_prompt, instance_text)   #TODO: show the final prompt of the image currently being trained in the ui
+        example["instance_prompt_ids"] = self.tokenize(example["instance_prompt"])   
 
         if self.with_prior_preservation:
             class_path, class_prompt, class_text = self.class_images_path[index % self.num_class_images]
@@ -481,12 +441,7 @@ class DreamBoothDataset(Dataset):
                 class_image = class_image.convert("RGB")
             example["class_images"] = self.image_transforms(class_image)
             example["class_prompt"] = self.text_getter.create_text(class_prompt, class_text)
-            example["class_prompt_ids"] = self.tokenizer(
-                example["class_prompt"],
-                padding="max_length" if self.pad_tokens else "do_not_pad",
-                truncation=True,
-                max_length=self.tokenizer.model_max_length,
-            ).input_ids
+            example["class_prompt_ids"] = self.tokenize(example["class_prompt"])
 
         return example
 
@@ -547,19 +502,9 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
-def encode_hidden_state(text_encoder: CLIPTextModel, input_ids):
-    clip_skip = shared.opts.CLIP_stop_at_last_layers
-    if clip_skip <= 1:
-        return text_encoder(input_ids)[0]
-    else:
-        enc_out = text_encoder(input_ids, output_hidden_states=True, return_dict=True)
-        encoder_hidden_states = enc_out['hidden_states'][-clip_skip]
-        encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states)
-        return encoder_hidden_states
-
-
 def main(args):
     logging_dir = Path(args.output_dir, "logging")
+    args.max_token_length = int(args.max_token_length)
 
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
@@ -656,6 +601,7 @@ def main(args):
                         torch_dtype=torch_dtype,
                         safety_checker=None
                     )
+                    pipeline.safety_checker = dumb_safety
                     pipeline.set_progress_bar_config(disable=True)
                     pipeline.to(accelerator.device)
 
@@ -692,8 +638,7 @@ def main(args):
 
         del pipeline
         del text_getter
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        devices.torch_gc()
 
     # Load the tokenizer
 
@@ -765,6 +710,8 @@ def main(args):
                 del lr_scheduler
             if vae:
                 del vae
+            if ema_unet:
+                del ema_unet
         except:
             pass
         gc.collect()  # Python thing
@@ -779,9 +726,8 @@ def main(args):
         center_crop=args.center_crop,
         num_class_images=args.num_class_images,
         pad_tokens=args.pad_tokens,
-        hflip=args.hflip,
-        use_filename_as_label=args.use_filename_as_label,
-        use_txt_as_label=args.use_txt_as_label,
+        max_token_length=args.max_token_length,
+        hflip=args.hflip
     )
 
     if train_dataset.num_instance_images == 0:
@@ -803,11 +749,14 @@ def main(args):
         pixel_values = torch.stack(pixel_values)
         pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
 
-        input_ids = tokenizer.pad(
-            {"input_ids": input_ids},
-            padding=True,
-            return_tensors="pt",
-        ).input_ids
+        if not args.pad_tokens:
+            input_ids = tokenizer.pad(
+                {"input_ids": input_ids},
+                padding=True,
+                return_tensors="pt",
+            ).input_ids
+        else:
+            input_ids = torch.stack(input_ids)
 
         batch = {
             "input_ids": input_ids,
@@ -840,11 +789,13 @@ def main(args):
                 batch["pixel_values"] = batch["pixel_values"].to(accelerator.device, non_blocking=True,
                                                                  dtype=weight_dtype)
                 batch["input_ids"] = batch["input_ids"].to(accelerator.device, non_blocking=True)
-                latents_cache.append(vae.encode(batch["pixel_values"]).latent_dist)
+                latent_dist = vae.encode(batch["pixel_values"]).latent_dist
+                b_size = latent_dist.sample().shape[0]  #TODO: the sample is not necessary, but I don't know torch, could use a little help here
+                latents_cache.append(latent_dist)
                 if args.train_text_encoder:
                     text_encoder_cache.append(batch["input_ids"])
                 else:
-                    text_encoder_cache.append(encode_hidden_state(text_encoder, batch["input_ids"]))
+                    text_encoder_cache.append(encode_hidden_state(text_encoder, batch["input_ids"], args.pad_tokens, b_size, args.max_token_length, tokenizer.model_max_length))
         train_dataset = LatentsDataset(latents_cache, text_encoder_cache)
         train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=1, collate_fn=lambda x: x,
                                                        shuffle=True)
@@ -854,8 +805,7 @@ def main(args):
         if not args.train_text_encoder:
             del text_encoder
             text_encoder = None
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        devices.torch_gc()
 
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
@@ -871,14 +821,30 @@ def main(args):
         num_training_steps=args.max_train_steps * args.gradient_accumulation_steps,
     )
     printm("Scheduler Loaded")
-    if args.train_text_encoder and text_encoder is not None:
-        unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-            unet, text_encoder, optimizer, train_dataloader, lr_scheduler
-        )
+
+    # create ema, fix OOM
+    if args.use_ema:
+        ema_unet = EMAModel(unet.parameters())
+        ema_unet.to(accelerator.device, dtype=weight_dtype)
+        # ema_unet.to(accelerator.device)
+        if args.train_text_encoder and text_encoder is not None:
+            unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler
+            )
+        else:
+            unet, ema_unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                unet, ema_unet, optimizer, train_dataloader, lr_scheduler
+            )
     else:
-        unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-            unet, optimizer, train_dataloader, lr_scheduler
-        )
+        ema_unet = None
+        if args.train_text_encoder and text_encoder is not None:
+            unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                unet, text_encoder, optimizer, train_dataloader, lr_scheduler
+            )
+        else:
+            unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                unet, optimizer, train_dataloader, lr_scheduler
+            )
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
@@ -916,6 +882,9 @@ def main(args):
                 text_enc_model = CLIPTextModel.from_pretrained(os.path.join(args.working_dir, "text_encoder"))
             scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
                                       clip_sample=False, set_alpha_to_one=False)
+            if args.use_ema:
+                ema_unet.store(unet.parameters())
+                ema_unet.copy_to(unet.parameters())
             pipeline = StableDiffusionPipeline.from_pretrained(
                 args.working_dir,
                 unet=accelerator.unwrap_model(unet),
@@ -924,9 +893,9 @@ def main(args):
                     args.pretrained_vae_name_or_path or args.working_dir,
                     subfolder=None if args.pretrained_vae_name_or_path else "vae"
                 ),
-                safety_checker=None,
                 scheduler=scheduler,
                 torch_dtype=torch.float16,
+                safety_checker=None
             )
             pipeline = pipeline.to("cuda")
             with autocast("cuda"), torch.inference_mode():
@@ -934,8 +903,10 @@ def main(args):
                     shared.state.textinfo = f"Saving checkpoint at step {lifetime_step}..."
                     try:
                         pipeline.save_pretrained(args.working_dir)
-                        save_checkpoint(args.model_name, lifetime_step,
+                        save_checkpoint(args.model_name, args.pretrained_vae_name_or_path, lifetime_step,
                                         args.mixed_precision == "fp16")
+                        if args.use_ema:
+                            ema_unet.restore(unet.parameters())
                     except Exception as e:
                         print(f"Exception saving checkpoint/model: {e}")
                         traceback.print_exception(*sys.exc_info())
@@ -944,6 +915,7 @@ def main(args):
                 if args.save_sample_prompt is not None and save_img:
                     shared.state.textinfo = f"Saving preview image at step {lifetime_step}..."
                     try:
+                        pipeline.safety_checker = dumb_safety
                         pipeline.set_progress_bar_config(disable=True)
                         sample_dir = os.path.join(save_dir, "logging")
                         os.makedirs(sample_dir, exist_ok=True)
@@ -958,13 +930,12 @@ def main(args):
                         image.save(os.path.join(sample_dir, f"{sanitized_prompt}{step}.png"))
                     except Exception as e:
                         print(f"Exception with the stupid image again: {e}")
-                    del pipeline
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                print(f"[*] Weights saved at {save_dir}")
-                unet.to(torch.float32)
-                text_enc_model.to(torch.float32)
-
+            print(f"[*] Weights saved at {save_dir}")
+            del pipeline
+            del scheduler
+            del text_enc_model
+            devices.torch_gc()
+                
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
@@ -989,6 +960,7 @@ def main(args):
                         else:
                             latent_dist = vae.encode(batch["pixel_values"].to(dtype=weight_dtype)).latent_dist
                         latents = latent_dist.sample() * 0.18215
+                        b_size = latents.shape[0]
 
                     # Sample noise that we'll add to the latents
                     noise = torch.randn_like(latents)
@@ -1006,11 +978,11 @@ def main(args):
                     with text_enc_context:
                         if not args.not_cache_latents:
                             if args.train_text_encoder:
-                                encoder_hidden_states = encode_hidden_state(text_encoder, batch[0][1])
+                                encoder_hidden_states = encode_hidden_state(text_encoder, batch[0][1], args.pad_tokens, b_size, args.max_token_length, tokenizer.model_max_length)
                             else:
                                 encoder_hidden_states = batch[0][1]
                         else:
-                            encoder_hidden_states = encode_hidden_state(text_encoder, batch["input_ids"])
+                            encoder_hidden_states = encode_hidden_state(text_encoder, batch["input_ids"], args.pad_tokens, b_size, args.max_token_length, tokenizer.model_max_length)
 
                     # Predict the noise residual
                     noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
@@ -1043,6 +1015,10 @@ def main(args):
                     lr_scheduler.step()
                     optimizer.zero_grad(set_to_none=True)
                     loss_avg.update(loss.detach_(), bsz)
+
+                    # Update EMA
+                    if args.use_ema and ema_unet is not None:
+                        ema_unet.step(unet.parameters())
 
                 if not global_step % 10:
                     logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0]}

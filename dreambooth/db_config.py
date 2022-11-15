@@ -32,8 +32,6 @@ class DreamboothConfig(dict):
                 instance_data_dir,
                 class_data_dir,
                 instance_prompt,
-                use_filename_as_label,
-                use_txt_as_label,
                 class_prompt,
                 save_sample_prompt,
                 save_sample_negative_prompt,
@@ -67,7 +65,9 @@ class DreamboothConfig(dict):
                 concepts_list,
                 use_cpu,
                 pad_tokens,
-                hflip):
+                max_token_length,
+                hflip,
+                use_ema):
 
         pretrained_model_name_or_path = images.sanitize_filename_part(pretrained_model_name_or_path, True)
         pretrained_vae_name_or_path = images.sanitize_filename_part(pretrained_vae_name_or_path, True)
@@ -76,12 +76,10 @@ class DreamboothConfig(dict):
         working_dir = os.path.join(model_dir, "working")
         with_prior_preservation = num_class_images > 0
         data = {"pretrained_model_name_or_path": pretrained_model_name_or_path,
-                "pretrained_vae_name_or_path,": pretrained_vae_name_or_path,
+                "pretrained_vae_name_or_path": pretrained_vae_name_or_path,
                 "instance_data_dir": instance_data_dir,
                 "class_data_dir": class_data_dir,
                 "instance_prompt": instance_prompt,
-                "use_filename_as_label": use_filename_as_label,
-                "use_txt_as_label": use_txt_as_label,
                 "class_prompt": class_prompt,
                 "save_sample_prompt": save_sample_prompt,
                 "save_sample_negative_prompt": save_sample_negative_prompt,
@@ -118,7 +116,9 @@ class DreamboothConfig(dict):
                 "concepts_list": concepts_list,
                 "use_cpu": use_cpu,
                 "pad_tokens": pad_tokens,
+                "max_token_length": max_token_length,
                 "hflip": hflip,
+                "use_ema": use_ema,
                 "prior_loss_weight": 1,
                 "seed": None}
         for key in data:
@@ -140,6 +140,8 @@ class DreamboothConfig(dict):
         try:
             with open(config_file, 'r') as openfile:
                 config = json.load(openfile)
+                if "max_token_length" not in config:
+                    self.__dict__["max_token_length"] = 75
                 for key in config:
                     self.__dict__[key] = config[key]
         except Exception as e:
