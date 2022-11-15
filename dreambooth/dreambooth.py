@@ -54,11 +54,13 @@ def performance_wizard():
             not_cache_latents = False
             train_text_encoder = True
             use_ema = True
+            use_8bit_adam = False
             gradient_checkpointing = False
         if 24 > gb >= 12:
             train_text_encoder = True
-            use_ema = True
-            gradient_checkpointing = False
+            use_ema = False
+            gradient_checkpointing = True
+            not_cache_latents = True
         if gb < 12:
             use_cpu = True
             use_8bit_adam = False
