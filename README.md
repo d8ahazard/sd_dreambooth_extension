@@ -121,7 +121,11 @@ The next two were added after I wrote the above bit, so just ignore me being a b
 
 *Pad Tokens* - Pads the text tokens to a longer length for some reason. 
 
+*Max Token Length* - raise the tokenizer's default limit above 75. Requires Pad Tokens for > 75.
+
 *Apply Horizontal Flip* - "Apply horizontal flip augmentation". Flips images horizontally at random, which can potentially offer better editability?
+
+*Use EMA for finetuning* - Use exponential moving average weight to reduce overfitting during the last iterations.
 
 
 ### Continuing Training

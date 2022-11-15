@@ -505,6 +505,8 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 def main(args):
     logging_dir = Path(args.output_dir, "logging")
     args.max_token_length = int(args.max_token_length)
+    if not args.pad_tokens and args.max_token_length > 75:
+        print("Cannot raise token length limit above 75 when pad_tokens=False")
 
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,

@@ -40,8 +40,8 @@ def on_ui_tabs():
                     with gr.Accordion(open=True, label="Settings"):
                         db_concepts_list = gr.Textbox(label="Concepts List (Overrides instance/class settings below)",
                                                       placeholder="Path to JSON file with concepts to train.")
-                        db_instance_prompt = gr.Textbox(label="Instance prompt", value="")
-                        db_class_prompt = gr.Textbox(label="Class prompt", value="")
+                        db_instance_prompt = gr.Textbox(label="Instance prompt", value="", placeholder="Optionally use [filewords] to read image captions from files.")
+                        db_class_prompt = gr.Textbox(label="Class prompt", value="", placeholder="Optionally use [filewords] to read image captions from files.")
                         db_pretrained_vae_name_or_path = gr.Textbox(label='Pretrained VAE Name or Path',
                                                                     placeholder="Leave blank to use base model VAE.",
                                                                     value="")
@@ -98,7 +98,7 @@ def on_ui_tabs():
                                                                            value=1)
                                 db_lr_warmup_steps = gr.Number(label="Warmup Steps", precision=0, value=0)
                                 db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
-                                db_max_token_length = gr.Dropdown(label="Max Token Length", value="75",
+                                db_max_token_length = gr.Dropdown(label="Max Token Length (Requires Pad Tokens for > 75)", value="75",
                                                                  choices=["75", "150", "225", "300"])
                                 db_hflip = gr.Checkbox(label="Apply horizontal Flip", value=True)
                                 db_use_ema = gr.Checkbox(label="Use EMA for finetuning", value=False)
