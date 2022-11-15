@@ -33,10 +33,14 @@ from dreambooth.db_config import DreamboothConfig
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
+except:
+    cmd_dreambooth_models_path = None
+
+try:
     attention.CrossAttention = xattention.CrossAttention
     attention.Transformer2DModel = xattention.Transformer2DModelOutput
 except:
-    cmd_dreambooth_models_path = None
+    pass
 
 try:
     from omegaconf import OmegaConf
