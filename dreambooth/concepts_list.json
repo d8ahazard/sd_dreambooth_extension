@@ -2,6 +2,8 @@
     {
         "instance_prompt":      "photo of zwx dog",
         "class_prompt":         "photo of a dog",
+        "sample_prompt":        "photo of zwx at the beach",
+        "negative_prompt":      "blurry",
         "instance_data_dir":    "../../../data/alvan",
         "class_data_dir":       "../../../data/dog"
     }

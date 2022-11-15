@@ -136,8 +136,7 @@ class DreamboothConfig(dict):
                 "use_ema": use_ema,
                 "prior_loss_weight": 1}
         for key in data:
-            if not key in dict:
-                dict[key] = data[key]
+            dict[key] = data[key]
         self.__dict__ = dict
         return self.__dict__
 

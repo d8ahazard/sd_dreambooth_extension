@@ -3,6 +3,7 @@ import argparse
 import gc
 import hashlib
 import itertools
+import logging
 import math
 import os
 import random
@@ -49,7 +50,12 @@ attention.Transformer2DModel = xattention.Transformer2DModelOutput
 
 torch.backends.cudnn.benchmark = True
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
+# define a Handler which writes INFO messages or higher to the sys.stderr
+console = logging.StreamHandler()
+console.setLevel(logging.DEBUG)
+logger.addHandler(console)
+logger.setLevel(logging.DEBUG)
 
 
 def parse_args(input_args=None):
@@ -162,7 +168,7 @@ def parse_args(input_args=None):
         default="text-inversion-model",
         help="The output directory where the model predictions and checkpoints will be written.",
     )
-    parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible training.")
+    parser.add_argument("--seed", type=int, default=-1, help="A seed for reproducible training.")
     parser.add_argument(
         "--resolution",
         type=int,
@@ -470,16 +476,16 @@ def main(args, memory_record):
         shared.state.textinfo = msg
         args.train_text_encoder = False
 
-    if args.seed is None:
-        random.seed()
-        args.seed = int(random.random())
-    set_seed(args.seed)
+    if args.seed is not None and args.seed != -1 and args.seed != "":
+        set_seed(args.seed)
 
     if args.concepts_list is None:
         args.concepts_list = [
             {
                 "instance_prompt": args.instance_prompt,
                 "class_prompt": args.class_prompt,
+                "sample_prompt": args.save_sample_prompt,
+                "negative_prompt": args.save_sample_negative_prompt,
                 "instance_data_dir": args.instance_data_dir,
                 "class_data_dir": args.class_data_dir
             }
@@ -604,7 +610,7 @@ def main(args, memory_record):
             optimizer_class = bnb.optim.AdamW8bit
             use_adam = True
         except Exception as a:
-            logger.debug(f"Exception importing 8bit adam: {a}")
+            logger.warn(f"Exception importing 8bit adam: {a}")
 
     params_to_optimize = (
         itertools.chain(unet.parameters(), text_encoder.parameters()) if args.train_text_encoder else unet.parameters()
@@ -850,22 +856,35 @@ def main(args, memory_record):
                     shared.state.textinfo = f"Saving preview image at step {args.revision}..."
                     try:
                         pipeline = pipeline.to(accelerator.device)
-                        g_cuda = torch.Generator(device=accelerator.device).manual_seed(args.seed)
+                        seed = args.seed
+                        # I feel like this might not actually be necessary...but what the heck.
+                        if seed is None or seed == '' or seed == -1:
+                            seed = int(random.randrange(4294967294))
+                        g_cuda = torch.Generator(device=accelerator.device).manual_seed(seed)
                         pipeline.set_progress_bar_config(disable=True)
                         sample_dir = os.path.join(save_dir, "samples")
                         os.makedirs(sample_dir, exist_ok=True)
                         with torch.autocast("cuda"), torch.inference_mode():
-                            for i in tqdm(range(args.n_save_sample), desc="Generating samples"):
-                                images = pipeline(
-                                    args.save_sample_prompt,
-                                    negative_prompt=args.save_sample_negative_prompt,
-                                    guidance_scale=args.save_guidance_scale,
-                                    num_inference_steps=args.save_infer_steps,
-                                    generator=g_cuda
-                                ).images
-                                shared.state.current_image = images[0]
-                                sanitized_prompt = sanitize_filename_part(args.save_sample_prompt, replace_spaces=False)
-                                images[0].save(os.path.join(sample_dir, f"{sanitized_prompt}{step}-{i}.png"))
+                            for c in args.concepts_list:
+                                sample_prompt = args.save_sample_prompt
+                                negative_prompt = args.save_sample_negative_prompt
+                                if "sample_prompt" in c:
+                                    sample_prompt = c["sample_prompt"]
+                                if "negative_prompt" in c:
+                                    negative_prompt = c["sample_prompt"]
+                                if sample_prompt is None or sample_prompt == "":
+                                    sample_prompt = c["instance_prompt"]
+                                for i in tqdm(range(args.n_save_sample), desc="Generating samples"):
+                                    images = pipeline(
+                                        sample_prompt,
+                                        negative_prompt=negative_prompt,
+                                        guidance_scale=args.save_guidance_scale,
+                                        num_inference_steps=args.save_infer_steps,
+                                        generator=g_cuda
+                                    ).images
+                                    shared.state.current_image = images[0]
+                                    sanitized_prompt = sanitize_filename_part(args.save_sample_prompt, replace_spaces=False)
+                                    images[0].save(os.path.join(sample_dir, f"{sanitized_prompt}{step}-{i}.png"))
                     except Exception as e:
                         logger.debug(f"Exception with the stupid image again: {e}")
             logger.debug(f"[*] Weights saved at {save_dir}")

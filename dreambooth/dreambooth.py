@@ -1,7 +1,9 @@
 import gc
 import json
+import logging
 import math
 import os
+import random
 from pathlib import Path
 from typing import Optional
 
@@ -24,6 +26,8 @@ except:
     cmd_dreambooth_models_path = None
 
 logger = get_logger(__name__)
+logger.setLevel(logging.DEBUG)
+
 mem_record = {}
 
 StableDiffusionPipeline.save_pretrained = save_pretrained
@@ -55,6 +59,10 @@ def performance_wizard():
             train_text_encoder = True
             use_ema = True
             gradient_checkpointing = False
+        if gb < 12:
+            use_cpu = True
+            use_8bit_adam = False
+            mixed_precision = 'no'
     except:
         pass
 
@@ -107,7 +115,7 @@ def is_image(path: Path, feats=None):
 
 
 def load_params(model_dir, *args):
-    data = DreamboothConfig().from_ui(model_dir, *args)
+    data = DreamboothConfig().from_file(model_dir)
 
     target_values = ["pretrained_vae_name_or_path",
                      "instance_data_dir",
@@ -264,6 +272,7 @@ def start_training(model_dir,
                                         hflip,
                                         use_ema)
 
+    # Parse/sanitize concepts list
     concepts_loaded = False
 
     if config.concepts_list is not None and config.concepts_list != "":
@@ -289,21 +298,29 @@ def start_training(model_dir,
             except:
                 print("Unable to load concepts from file either, this is bad.")
                 pass
+    first_class = None
     if not concepts_loaded:
         config.concepts_list = None
+    else:
+        first_concepts = config.concepts_list[0]
+        first_class = first_concepts["class_prompt"]
 
+    # Set class dir if not specified
     if config.class_data_dir is None or config.class_data_dir == "":
-        config.class_data_dir = os.path.join(config.output_dir, "classifiers")
+        config.class_data_dir = os.path.join(config.model_dir, "classifiers")
 
-    if config.class_prompt is None or config.class_prompt == "":
+    # Disable prior preservation if no class prompt and no sample images
+    if (config.class_prompt is None or config.class_prompt == "") and first_class is None:
         if config.num_class_images == 0:
             config.with_prior_preservation = False
 
+    # Clear pretrained VAE Name if applicable
     if "pretrained_vae_name_or_path" in config.__dict__:
         if config.pretrained_vae_name_or_path == "":
             config.pretrained_vae_name_or_path = None
     else:
         config.pretrained_vae_name_or_path = None
+
     config.save()
     msg = None
 

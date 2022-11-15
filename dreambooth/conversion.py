@@ -939,7 +939,9 @@ def compile_checkpoint(model_name, vae_path, mixed_precision):
             models_path = ckpt_dir
 
         config = DreamboothConfig().from_file(model_name)
-        total_steps = config["total_steps"]
+        total_steps = config["revision"]
+        if total_steps == 0:
+            return "Please train the model first.", ""
         src_path = os.path.join(os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path, "dreambooth", model_name, "working")
         out_file = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
         try:
