@@ -72,6 +72,8 @@ images will be generated to /models/dreambooth/MODELNAME/classifiers/
 
 *Total number of classification images to use* - Leave at 0 to disable prior preservation. For best results you want ~n*10 classification images - so if you have 40 training photos, then set this to 400. This is just a guess.
 
+*Training steps* - How many total training steps to complete. According to [this guide](https://github.com/nitrosocke/dreambooth-training-guide), you should train for appx 100 steps per sample image. So, if you have 40 instance/sample images, you would train for 4k steps. This is, of course, a rough approximation, and other values will have an effect on final output fidelity.
+
 *Batch size* - How many training steps to process simultaneously. You probably want to leave this at 1.
 
 *Class batch size* - How many classification images to generate simultaneously. Set this to whatever you can safely process at once using Txt2Image, or just leave it alone.
@@ -93,7 +95,7 @@ may help with lower-VRAM GPUs.
 
 *Sample guidance scale* - Like CFG Scale in Txt2Image/Img2Img, used for generating preview.
 
-*Sample steps* - Same as sample guidance scale, but the number of steps to run to generate preview. According to [this guide](https://github.com/nitrosocke/dreambooth-training-guide), you should train for appx 100 steps per sample image. So, if you have 40 instance/sample images, you would train for 4k steps. This is, of course, a rough approximation, and other values will have an effect on final output fidelity.
+*Sample steps* - Same as sample guidance scale, but the number of steps to run to generate preview. 
 
 
 ### Advanced Settings
