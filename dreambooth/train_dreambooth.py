@@ -501,8 +501,11 @@ def main(args, memory_record):
         for concept in args.concepts_list:
             class_images_dir = Path(concept["class_data_dir"])
             class_images_dir.mkdir(parents=True, exist_ok=True)
-            cur_class_images = len(list(class_images_dir.iterdir()))
-
+            cur_class_images = 0
+            pil_features = list_features()
+            for x in class_images_dir.iterdir():
+                if is_image(x, pil_features):
+                    cur_class_images += 1
             if cur_class_images < args.num_class_images:
                 shared.state.textinfo = f"Generating class images for training..."
                 torch_dtype = torch.float16 if accelerator.device.type == "cuda" else torch.float32
