@@ -53,7 +53,7 @@ new_titles = {
     "Use CPU Only (SLOW)": "Guess what - this will be incredibly slow, but it will work for < 8GB GPUs.",
     "Gradient Checkpointing": "Don't checkpoint the gradients, Duh. Set to False to slightly increase speed at the cost of a bit of VRAM.",
     "Mixed Precision": "You probably want this to be 'fp16'.",
-    "Don't Cache Latents": "Uh, latents won't be cached and stuff if you check this. UN-chcking this will sav a bit of VRAM.",
+    "Don't Cache Latents": "When this box is *checked* latents will not be cached. When latents are not cached, you will save a bit of VRAM, but train slightly slower",
     "Train Text Encoder": "Enabling this will provide better results and editability, but cost more VRAM.",
     "Train EMA": "Enabling this will provide better results and editability, but cost more VRAM.",
     "Use 8bit Adam": "Enable this to save VRAM.",
