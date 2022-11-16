@@ -130,6 +130,15 @@ def on_ui_tabs():
                 db_preview = gr.Image(elem_id='db_preview', visible=False)
                 setup_progressbar(db_progressbar, db_preview, 'db', textinfo=db_progress)
 
+        db_shuffle_after_epoch.change(
+            fn=lambda x, y, z: {
+                db_not_cache_latents: False if x else y,
+                db_train_text_encoder: True if x else z
+            },
+            inputs=[db_shuffle_after_epoch, db_not_cache_latents, db_train_text_encoder],
+            outputs=[db_not_cache_latents, db_train_text_encoder]
+        )
+
         db_num_class_images.change(
             fn=lambda x: gr_show(x),
             inputs=[db_num_class_images],
