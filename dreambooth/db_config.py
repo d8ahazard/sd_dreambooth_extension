@@ -174,6 +174,12 @@ class DreamboothConfig(dict):
                     self.__dict__["class_infer_steps"] = 60
                 for key in config:
                     self.__dict__[key] = config[key]
+                if "revision" not in config:
+                    if "total_steps" in config:
+                        revision = config["total_steps"]
+                    else:
+                        revision = 0
+                    self.__dict__["revision"] = revision
         except Exception as e:
             print(f"Exception loading config: {e}")
             return None
