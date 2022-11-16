@@ -538,9 +538,15 @@ def main(args, memory_record):
                             sample_dataloader, desc="Generating class images",
                             disable=not accelerator.is_local_main_process
                     ):
-                        images = pipeline(example["prompt"]).images
+                        print(f"Example prompt is: {example['prompt']}, negative is {args.class_negative_prompt}")
+                        images = pipeline(example["prompt"][0], num_inference_steps=args.class_infer_steps,
+                                          guidance_scale=args.class_guidance_scale,
+                                          negative_prompt=args.class_negative_prompt).images
 
                         for i, image in enumerate(images):
+                            if shared.state.interrupted:
+                                print("Generation canceled.")
+                                return args, "Training canceled."
                             shared.state.job_no += 1
                             hash_image = hashlib.sha1(image.tobytes()).hexdigest()
                             image_filename = class_images_dir / f"{example['index'][i] + cur_class_images}-{hash_image}.jpg"

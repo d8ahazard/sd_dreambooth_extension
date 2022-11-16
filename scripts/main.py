@@ -55,6 +55,12 @@ def on_ui_tabs():
                         db_num_class_images = gr.Number(
                             label='Total Number of Class/Reg Images', value=0,
                             precision=0)
+                        with gr.Column() as class_col:
+                            db_class_negative_prompt = gr.Textbox(label="Classification Image Negative Prompt")
+                            db_class_guidance_scale = gr.Number(label="Classification CFG Scale", value=7.5, max=12, min=1,
+                                                               precision=2)
+                            db_class_infer_steps = gr.Number(label="Classification Steps", value=40, min=10, max=200,
+                                                            precision=0)
                         db_learning_rate = gr.Number(label='Learning Rate', value=5e-6)
                         db_resolution = gr.Number(label="Resolution", precision=0, value=512)
                         db_pretrained_vae_name_or_path = gr.Textbox(label='Pretrained VAE Name or Path',
@@ -67,9 +73,9 @@ def on_ui_tabs():
                             label='Save Preview(s) Frequency', value=500,
                             precision=0)
                         with gr.Column() as sample_settings:
-                            db_save_sample_prompt = gr.Textbox(label="Preview Image Prompt",
+                            db_save_sample_prompt = gr.Textbox(label="Sample Image Prompt",
                                                                placeholder="Leave blank to use instance prompt.")
-                            db_save_sample_negative_prompt = gr.Textbox(label="Preview Image Negative Prompt")
+                            db_save_sample_negative_prompt = gr.Textbox(label="Sample Image Negative Prompt")
                             db_n_save_sample = gr.Number(label="Number of Samples to Generate", value=1, precision=0)
                             db_sample_seed = gr.Number(label="Sample Seed", value=None, precision=0)
                             db_save_guidance_scale = gr.Number(label="Sample CFG Scale", value=7.5, max=12, min=1,
@@ -122,6 +128,12 @@ def on_ui_tabs():
                 db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery').style(grid=4)
                 db_preview = gr.Image(elem_id='db_preview', visible=False)
                 setup_progressbar(db_progressbar, db_preview, 'db', textinfo=db_progress)
+
+        db_num_class_images.change(
+            fn=lambda x: gr_show(x),
+            inputs=[db_num_class_images],
+            outputs=[class_col],
+        )
 
         db_create_from_hub.change(
             fn=lambda x: gr_show(x),
@@ -254,7 +266,10 @@ def on_ui_tabs():
                 db_pad_tokens,
                 db_max_token_length,
                 db_hflip,
-                db_use_ema
+                db_use_ema,
+                db_class_negative_prompt,
+                db_class_guidance_scale,
+                db_class_infer_steps
             ],
             outputs=[
                 db_progress,
@@ -306,7 +321,10 @@ def on_ui_tabs():
                 db_pad_tokens,
                 db_max_token_length,
                 db_hflip,
-                db_use_ema
+                db_use_ema,
+                db_class_negative_prompt,
+                db_class_guidance_scale,
+                db_class_infer_steps
             ],
             outputs=[
                 db_pretrained_vae_name_or_path,
@@ -350,7 +368,10 @@ def on_ui_tabs():
                 db_max_token_length,
                 db_hflip,
                 db_use_ema,
-                db_progress,
+                db_class_negative_prompt,
+                db_class_guidance_scale,
+                db_class_infer_steps,
+                db_progress
             ]
         )
 

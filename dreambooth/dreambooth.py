@@ -159,7 +159,11 @@ def load_params(model_dir, *args):
                      "pad_tokens",
                      "max_token_length",
                      "hflip",
-                     "use_ema"]
+                     "use_ema",
+                     "class_negative_prompt",
+                     "class_guidance_scale",
+                     "class_infer_steps"
+                     ]
 
     values = []
     for target in target_values:
@@ -224,7 +228,10 @@ def start_training(model_dir,
                    pad_tokens,
                    max_token_length,
                    hflip,
-                   use_ema
+                   use_ema,
+                   class_negative_prompt,
+                   class_guidance_scale,
+                   class_infer_steps
                    ):
     global mem_record
     if model_dir == "" or model_dir is None:
@@ -272,7 +279,11 @@ def start_training(model_dir,
                                         pad_tokens,
                                         max_token_length,
                                         hflip,
-                                        use_ema)
+                                        use_ema,
+                                        class_negative_prompt,
+                                        class_guidance_scale,
+                                        class_infer_steps
+                                        )
 
     # Parse/sanitize concepts list
     concepts_loaded = False

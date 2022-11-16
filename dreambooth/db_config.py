@@ -39,7 +39,7 @@ class DreamboothConfig(dict):
                 save_sample_prompt,
                 save_sample_negative_prompt,
                 n_save_sample,
-                seed,
+                sample_seed,
                 save_guidance_scale,
                 save_infer_steps,
                 num_class_images,
@@ -71,7 +71,11 @@ class DreamboothConfig(dict):
                 pad_tokens,
                 max_token_length,
                 hflip,
-                use_ema):
+                use_ema,
+                class_negative_prompt,
+                class_guidance_scale,
+                class_infer_steps
+                ):
 
         model_dir = images.sanitize_filename_part(model_dir, True)
         dict = {}
@@ -99,7 +103,7 @@ class DreamboothConfig(dict):
                 "save_sample_prompt": save_sample_prompt,
                 "save_sample_negative_prompt": save_sample_negative_prompt,
                 "n_save_sample": n_save_sample,
-                "seed": seed,
+                "seed": sample_seed,
                 "save_guidance_scale": save_guidance_scale,
                 "save_infer_steps": save_infer_steps,
                 "with_prior_preservation": with_prior_preservation,
@@ -134,7 +138,11 @@ class DreamboothConfig(dict):
                 "max_token_length": max_token_length,
                 "hflip": hflip,
                 "use_ema": use_ema,
-                "prior_loss_weight": 1}
+                "prior_loss_weight": 1,
+                "class_negative_prompt": class_negative_prompt,
+                "class_guidance_scale": class_guidance_scale,
+                "class_infer_steps": class_infer_steps
+        }
         for key in data:
             dict[key] = data[key]
         self.__dict__ = dict
@@ -160,6 +168,10 @@ class DreamboothConfig(dict):
                     self.__dict__["max_token_length"] = 75
                     self.__dict__["model_dir"] = working_dir
                     self.__dict__["pretrained_model_name_or_path"] = working_dir
+                if "class_negative_prompt" not in config:
+                    self.__dict__["class_guidance_scale"] = 7.5
+                    self.__dict__["class_negative_prompt"] = ""
+                    self.__dict__["class_infer_steps"] = 60
                 for key in config:
                     self.__dict__[key] = config[key]
         except Exception as e:
