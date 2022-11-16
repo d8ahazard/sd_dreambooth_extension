@@ -536,7 +536,7 @@ def main(args, memory_record):
 
                 sample_dataloader = accelerator.prepare(sample_dataloader)
 
-                with torch.autocast("cuda"), torch.inference_mode():
+                with accelerator.autocast(), torch.inference_mode():
                     for example in tqdm(
                             sample_dataloader, desc="Generating class images",
                             disable=not accelerator.is_local_main_process
@@ -848,8 +848,8 @@ def main(args, memory_record):
                 revision=args.revision,
                 safety_checker=None
             )
-            pipeline = pipeline.to("cuda")
-            with autocast("cuda"), torch.inference_mode():
+            pipeline = pipeline.to(accelerator.device)
+            with accelerator.autocast(), torch.inference_mode():
                 if save_model:
                     shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
                     try:
@@ -866,7 +866,7 @@ def main(args, memory_record):
                 if args.save_sample_prompt is not None and save_img:
                     shared.state.textinfo = f"Saving preview image at step {args.revision}..."
                     try:
-                        pipeline = pipeline.to(accelerator.device)
+                        
                         seed = args.seed
                         # I feel like this might not actually be necessary...but what the heck.
                         if seed is None or seed == '' or seed == -1:
@@ -875,7 +875,7 @@ def main(args, memory_record):
                         pipeline.set_progress_bar_config(disable=True)
                         sample_dir = os.path.join(save_dir, "samples")
                         os.makedirs(sample_dir, exist_ok=True)
-                        with torch.autocast("cuda"), torch.inference_mode():
+                        with accelerator.autocast(), torch.inference_mode():
                             for c in args.concepts_list:
                                 sample_prompt = args.save_sample_prompt
                                 negative_prompt = args.save_sample_negative_prompt
