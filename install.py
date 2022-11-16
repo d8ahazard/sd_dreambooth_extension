@@ -59,4 +59,4 @@ if os.name == "nt":
         else:
             dest = bnb_dest
         dest_file = os.path.join(dest, file)
-        shutil.copy2(src_file, bnb_dest)
+        shutil.copy2(src_file, dest)
