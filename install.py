@@ -59,9 +59,4 @@ if os.name == "nt":
         else:
             dest = bnb_dest
         dest_file = os.path.join(dest, file)
-        if not filecmp.cmp(src_file, dest_file, False):
-            if not printed:
-                print("Copying 8Bit Adam files for Windows.")
-                printed = True
-
-            shutil.copy2(src_file, bnb_dest)
+        shutil.copy2(src_file, bnb_dest)
