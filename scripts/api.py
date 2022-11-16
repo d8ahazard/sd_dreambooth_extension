@@ -1,25 +1,26 @@
-import base64
-import io
-import time
-import uvicorn
-from fastapi import FastAPI, BackgroundTasks
-from dreambooth import conversion, dreambooth
-import gradio as gr
-from webui import wrap_gradio_gpu_call
-import modules.script_callbacks as script_callbacks
-from pydantic import BaseModel
-from typing import Optional
 import asyncio
-class dreamboothParameters(BaseModel):
+from typing import Optional
+
+import gradio as gr
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+import modules.script_callbacks as script_callbacks
+from dreambooth import conversion, dreambooth
+from webui import wrap_gradio_gpu_call
+
+
+class DreamboothParameters(BaseModel):
     db_pretrained_model_name_or_path: str
     db_pretrained_vae_name_or_path: Optional[str] = ""
     db_instance_data_dir: str
     db_class_data_dir: Optional[str] = ""
     db_instance_prompt: Optional[str] = ""
     db_class_prompt: Optional[str] = ""
-    db_save_sample_prompt: Optional[str]  = ""
-    db_save_sample_negative_prompt: Optional[str]  = ""
+    db_save_sample_prompt: Optional[str] = ""
+    db_save_sample_negative_prompt: Optional[str] = ""
     db_n_save_sample: Optional[int] = 500
+    db_seed: Optional[int] = -1
     db_save_guidance_scale: Optional[float] = 7.5
     db_save_infer_steps: Optional[int] = 40
     db_num_class_images: Optional[int] = 0
@@ -43,7 +44,7 @@ class dreamboothParameters(BaseModel):
     db_adam_epsilon: Optional[float] = 0.00000001
     db_max_grad_norm: Optional[int] = 1
     db_save_preview_every: Optional[int] = 500
-    db_save_embedding_every: Optional[int] =500
+    db_save_embedding_every: Optional[int] = 500
     db_mixed_precision: Optional[str] = "no"
     db_not_cache_latents: Optional[bool] = True
     db_concepts_list: Optional[str] = ""
@@ -52,6 +53,9 @@ class dreamboothParameters(BaseModel):
     db_max_token_length: Optional[int] = 75
     db_hflip: Optional[bool] = True
     db_use_ema: Optional[bool] = False
+    db_class_negative_prompt: Optional[str] = ""
+    db_class_guidance_scale: Optional[float] = 7.5
+    db_class_infer_steps: Optional[int] = 60
 
 
 def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
@@ -59,57 +63,62 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
     async def createModel(name: str, source: str, scheduler: str):
         print("Creating new Checkpoint: " + name)
         fn = conversion.extract_checkpoint(name, source, scheduler)
+
     @app.post("/dreambooth/start_straining")
-    async def start_training(paras: dreamboothParameters):
+    async def start_training(params: DreamboothParameters):
         print("Starting Training")
-        task = asyncio.create_task(train_model(paras))
-        return {"status" : "finished"}
-    async def train_model(paras: dreamboothParameters):
+        task = asyncio.create_task(train_model(params))
+        return {"status": "finished"}
+
+    async def train_model(params: DreamboothParameters):
         fn = wrap_gradio_gpu_call(dreambooth.start_training(
-            paras.db_pretrained_model_name_or_path,
-            paras.db_pretrained_vae_name_or_path,
-            paras.db_instance_data_dir,
-            paras.db_class_data_dir,
-            paras.db_instance_prompt,
-            paras.db_use_filename_as_label,
-            paras.db_use_txt_as_label,
-            paras.db_class_prompt,
-            paras.db_save_sample_prompt,
-            paras.db_save_sample_negative_prompt,
-            paras.db_n_save_sample,
-            paras.db_save_guidance_scale,
-            paras.db_save_infer_steps,
-            paras.db_num_class_images,
-            paras.db_resolution,
-            paras.db_center_crop,
-            paras.db_train_text_encoder,
-            paras.db_train_batch_size,
-            paras.db_sample_batch_size,
-            paras.db_num_train_epochs,
-            paras.db_max_train_steps,
-            paras.db_gradient_accumulation_steps,
-            paras.db_gradient_checkpointing,
-            paras.db_learning_rate,
-            paras.db_scale_lr,
-            paras.db_lr_scheduler,
-            paras.db_lr_warmup_steps,
-            paras.db_use_8bit_adam,
-            paras.db_adam_beta1,
-            paras.db_adam_beta2,
-            paras.db_adam_weight_decay,
-            paras.db_adam_epsilon,
-            paras.db_max_grad_norm,
-            paras.db_save_preview_every,
-            paras.db_save_embedding_every,
-            paras.db_mixed_precision,
-            paras.db_not_cache_latents,
-            paras.db_concepts_list,
-            paras.db_use_cpu,
-            paras.db_pad_tokens,
-            paras.db_max_token_length,
-            paras.db_hflip,
-            paras.db_use_ema
+            params.db_pretrained_model_name_or_path,
+            params.db_pretrained_vae_name_or_path,
+            params.db_instance_data_dir,
+            params.db_class_data_dir,
+            params.db_instance_prompt,
+            params.db_class_prompt,
+            params.db_save_sample_prompt,
+            params.db_save_sample_negative_prompt,
+            params.db_n_save_sample,
+            params.db_seed,
+            params.db_save_guidance_scale,
+            params.db_save_infer_steps,
+            params.db_num_class_images,
+            params.db_resolution,
+            params.db_center_crop,
+            params.db_train_text_encoder,
+            params.db_train_batch_size,
+            params.db_sample_batch_size,
+            params.db_num_train_epochs,
+            params.db_max_train_steps,
+            params.db_gradient_accumulation_steps,
+            params.db_gradient_checkpointing,
+            params.db_learning_rate,
+            params.db_scale_lr,
+            params.db_lr_scheduler,
+            params.db_lr_warmup_steps,
+            params.db_use_8bit_adam,
+            params.db_adam_beta1,
+            params.db_adam_beta2,
+            params.db_adam_weight_decay,
+            params.db_adam_epsilon,
+            params.db_max_grad_norm,
+            params.db_save_preview_every,
+            params.db_save_embedding_every,
+            params.db_mixed_precision,
+            params.db_not_cache_latents,
+            params.db_concepts_list,
+            params.db_use_cpu,
+            params.db_pad_tokens,
+            params.db_max_token_length,
+            params.db_hflip,
+            params.db_use_ema,
+            params.db_class_negative_prompt,
+            params.db_class_guidance_scale,
+            params.db_class_infer_steps
         ))
+
 
 script_callbacks.on_app_started(dreamBoothAPI)
 
