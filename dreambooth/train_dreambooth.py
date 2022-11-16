@@ -7,7 +7,6 @@ import logging
 import math
 import os
 import random
-import sys
 import traceback
 from contextlib import nullcontext
 from pathlib import Path
@@ -18,7 +17,6 @@ import torch.nn.functional as F
 import torch.utils.checkpoint
 from PIL import Image
 from accelerate import Accelerator
-from accelerate.logging import get_logger
 from accelerate.utils import set_seed
 from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, StableDiffusionPipeline, UNet2DConditionModel
 from diffusers.models import attention

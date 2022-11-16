@@ -36,6 +36,8 @@ def on_ui_tabs():
                             db_create_embedding = gr.Button(value="Create", variant='primary')
                 with gr.Tab("Train Model"):
                     with gr.Accordion(open=True, label="Settings"):
+                        db_train_wizard_person = gr.Button(value="Training Wizard (Person)")
+                        db_train_wizard_object = gr.Button(value="Training Wizard (Object/Style)")
                         db_use_concepts = gr.Checkbox(label="Use Concepts List", value=False)
                         with gr.Row(visible=False) as concepts_row:
                             db_concepts_list = gr.Textbox(label="Concepts List",
@@ -191,6 +193,44 @@ def on_ui_tabs():
                 db_mixed_precision,
                 db_use_cpu,
                 db_use_8bit_adam
+            ]
+        )
+
+        db_train_wizard_person.click(
+            fn=training_wizard_person,
+            inputs=[
+                db_model_dir,
+                db_use_concepts,
+                db_concepts_list,
+                db_instance_data_dir,
+                db_class_data_dir
+            ],
+            outputs=[
+                db_max_train_steps,
+                db_num_class_images,
+                db_scale_lr,
+                db_lr_warmup_steps,
+                db_lr_scheduler,
+                db_learning_rate
+            ]
+        )
+
+        db_train_wizard_object.click(
+            fn=training_wizard,
+            inputs=[
+                db_model_dir,
+                db_use_concepts,
+                db_concepts_list,
+                db_instance_data_dir,
+                db_class_data_dir
+            ],
+            outputs=[
+                db_max_train_steps,
+                db_num_class_images,
+                db_scale_lr,
+                db_lr_warmup_steps,
+                db_lr_scheduler,
+                db_learning_rate
             ]
         )
 

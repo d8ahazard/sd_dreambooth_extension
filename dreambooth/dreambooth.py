@@ -33,6 +33,91 @@ mem_record = {}
 StableDiffusionPipeline.save_pretrained = save_pretrained
 
 
+# Borrowed from https://wandb.ai/psuraj/dreambooth/reports/Training-Stable-Diffusion-with-Dreambooth--VmlldzoyNzk0NDc3#tl,dr;
+# and https://www.reddit.com/r/StableDiffusion/comments/ybxv7h/good_dreambooth_formula/
+def training_wizard_person(
+        model_dir,
+        use_concepts,
+        concepts_list,
+        instance_data_dir,
+        class_data_dir
+):
+    return training_wizard(
+        model_dir,
+        use_concepts,
+        concepts_list,
+        instance_data_dir,
+        class_data_dir,
+        is_person=True)
+
+
+def training_wizard(
+        model_dir,
+        use_concepts,
+        concepts_list,
+        instance_data_dir,
+        class_data_dir,
+        is_person=False
+):
+    config = DreamboothConfig().from_file(model_dir)
+    total_steps = config.revision
+    concepts_loaded = False
+    if use_concepts:
+        if concepts_list is not None and concepts_list != "":
+            try:
+                alist = str(config.concepts_list)
+                if "'" in alist:
+                    alist = alist.replace("'", '"')
+                print(f"Trying to parse: {alist}")
+                concepts_list = json.loads(alist)
+                concepts_loaded = True
+            except:
+                pass
+            if not concepts_loaded:
+                try:
+                    if os.path.exists(config.concepts_list):
+                        with open(config.concepts_list, "r") as f:
+                            concepts_list = json.load(f)
+                        concepts_loaded = True
+                    print(f"Loaded concepts from {config.concepts_list}")
+                except:
+                    print("Unable to load concepts from file either, this is bad.")
+                    pass
+    else:
+        concepts_list = [
+            {
+                "instance_data_dir": instance_data_dir,
+                "class_data_dir": class_data_dir
+            }
+        ]
+        concepts_loaded = True
+
+    if not concepts_loaded:
+        print("Error loading params.")
+        return 1000, 100, False, 0, "constant"
+    else:
+        total_images = 0
+        pil_feats = list_features()
+        for concept in concepts_list:
+            for x in Path(concept["instance_data_dir"]).iterdir():
+                if is_image(x, pil_feats):
+                    total_images += 1
+        required_steps = total_images * 80
+        if is_person:
+            max_samples = total_images * 12
+            learning_rate = 1e-6
+        else:
+            max_samples = 0
+            learning_rate = 2e-6
+        lr_warmup_steps = int(required_steps / 10)
+        if total_steps >= required_steps:
+            required_steps = 0
+        else:
+            required_steps = required_steps - total_steps
+
+        return required_steps, max_samples, True, lr_warmup_steps, "polynomial", learning_rate
+
+
 def performance_wizard():
     num_class_images = 0
     train_batch_size = 1
@@ -384,7 +469,7 @@ def start_training(model_dir,
     printm("VRAM cleared.", True)
     total_steps = config.revision
     shared.state.textinfo = "Initializing dreambooth training..."
-    from dreambooth.train_dreambooth import main
+    from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
     config, mem_record = main(config, mem_record)
     if config.revision != total_steps:
         config.save()

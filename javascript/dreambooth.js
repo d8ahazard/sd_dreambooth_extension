@@ -62,6 +62,8 @@ new_titles = {
     "Apply Horizontal Flip": "Randomly decide to flip images horizontally.",
     "Scale Learning Rate": "Scale the learning rate by the number of GPUs, gradient accumulation steps, and batch size.",
     "Learning Rate Scheduler": "The learning rate scheduler to use.",
+    "Training Wizard (Person)": "Calculate training parameters for a human subject. Enables prior preservation.",
+    "Training Wizard (Object/Style)": "Calculate training parameters for a non-human subject. Disables prior preservation.",
     "# Training Epochs": "Set this or number of steps to train for, not both.",
     "Adam Beta 1": "The beta1 parameter for the Adam optimizer.",
     "Adam Beta 2": "The beta2 parameter for the Adam optimizer.",
