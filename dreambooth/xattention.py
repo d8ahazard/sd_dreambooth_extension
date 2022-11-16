@@ -5,7 +5,6 @@ from typing import Optional, Union
 
 import torch
 from attr import dataclass
-from diffusers import StableDiffusionPipeline
 from diffusers.models.attention import xformers
 from diffusers.pipeline_utils import LOADABLE_CLASSES
 from diffusers.utils import BaseOutput
