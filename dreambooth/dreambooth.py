@@ -14,11 +14,11 @@ from accelerate.logging import get_logger
 from huggingface_hub import HfFolder, whoami
 from six import StringIO
 
-from dreambooth import conversion
-from dreambooth.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth import conversion
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from modules import paths, shared, devices, sd_models
 from diffusers import StableDiffusionPipeline
-from dreambooth.xattention import save_pretrained
+from extensions.sd_dreambooth_extension.dreambooth.xattention import save_pretrained
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path

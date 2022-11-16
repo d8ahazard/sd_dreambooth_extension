@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 import modules.script_callbacks as script_callbacks
-from dreambooth import conversion, dreambooth
+from extensions.sd_dreambooth_extension.dreambooth import conversion, dreambooth
 from webui import wrap_gradio_gpu_call
 
 

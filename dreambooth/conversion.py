@@ -27,9 +27,9 @@ from huggingface_hub import get_full_repo_name, Repository
 import modules.sd_models
 from modules import paths, shared
 from diffusers.models import attention
-from dreambooth import xattention
-from dreambooth.dreambooth import get_db_models
-from dreambooth.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth import xattention
+from extensions.sd_dreambooth_extension.dreambooth.dreambooth import get_db_models
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path

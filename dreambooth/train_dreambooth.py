@@ -23,8 +23,6 @@ from accelerate.utils import set_seed
 from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, StableDiffusionPipeline, UNet2DConditionModel
 from diffusers.models import attention
 from diffusers.optimization import get_scheduler
-from dreambooth.dreambooth import dumb_safety, save_checkpoint, list_features, is_image, printm
-from dreambooth.finetune_utils import FilenameTextGetter, EMAModel, encode_hidden_state
 from huggingface_hub import HfFolder, whoami
 from torch import autocast
 from torch.utils.data import Dataset
@@ -32,7 +30,11 @@ from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
-from dreambooth import xattention
+from extensions.sd_dreambooth_extension.dreambooth import xattention
+from extensions.sd_dreambooth_extension.dreambooth.dreambooth import dumb_safety, save_checkpoint, list_features, \
+    is_image, printm
+from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, EMAModel, \
+    encode_hidden_state
 from modules import shared, devices
 from modules.images import sanitize_filename_part
 
