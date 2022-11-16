@@ -103,7 +103,7 @@ may help with lower-VRAM GPUs.
 *Use CPU Only* - As indicated, this is more of a last resort if you can't get it to train with any other settings. Also, as indicated, it will be abysmally slow.
 Also, you *cannot* use 8Bit-Adam with CPU Training, or you'll have a bad time.
 
-*Don't Cache Latents* - Enabling will save a bit of VRAM at the cost of a bit of speed.
+*Don't Cache Latents* - Why is this not just called "cache" latents? Because that's what the original script uses, and I'm trying to maintain the ability to update this as easily as possible. Anyway...when this box is *checked* latents will not be cached. When latents are not cached, you will save a bit of VRAM, but train slightly slower.
 
 *Train Text Encoder* - Not required, but recommended. Enabling this will probably cost a bit more VRAM, but also purportedly increase output image fidelity.
 
