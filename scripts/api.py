@@ -56,6 +56,7 @@ class DreamboothParameters(BaseModel):
     db_class_negative_prompt: Optional[str] = ""
     db_class_guidance_scale: Optional[float] = 7.5
     db_class_infer_steps: Optional[int] = 60
+    db_shuffle_after_epoch: Optional[bool] = False
 
 
 def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
@@ -116,7 +117,8 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
             params.db_use_ema,
             params.db_class_negative_prompt,
             params.db_class_guidance_scale,
-            params.db_class_infer_steps
+            params.db_class_infer_steps,
+            params.db_shuffle_after_epoch
         ))
 
 

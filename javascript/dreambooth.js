@@ -55,6 +55,7 @@ new_titles = {
     "Mixed Precision": "You probably want this to be 'fp16'.",
     "Don't Cache Latents": "Uh, latents won't be cached and stuff if you check this. UN-chcking this will sav a bit of VRAM.",
     "Train Text Encoder": "Enabling this will provide better results and editability, but cost more VRAM.",
+	"Shuffle After Epoch": "Shuffles class images after each epoch for potentially better training results.",
     "Train EMA": "Enabling this will provide better results and editability, but cost more VRAM.",
     "Use 8bit Adam": "Enable this to save VRAM.",
     "Gradient Accumulation Steps": "Set this to 2 to increase speed?",

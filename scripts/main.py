@@ -95,6 +95,7 @@ def on_ui_tabs():
 
                                 db_not_cache_latents = gr.Checkbox(label="Don't Cache Latents", value=True)
                                 db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
+                                db_shuffle_after_epoch = gr.Checkbox(label="Shuffle After Epoch", value=False)
                                 db_use_ema = gr.Checkbox(label="Train EMA", value=False)
                                 db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                 db_gradient_accumulation_steps = gr.Number(label="Gradient Accumulation Steps", precision=0,
@@ -269,7 +270,8 @@ def on_ui_tabs():
                 db_use_ema,
                 db_class_negative_prompt,
                 db_class_guidance_scale,
-                db_class_infer_steps
+                db_class_infer_steps,
+                db_shuffle_after_epoch
             ],
             outputs=[
                 db_progress,
@@ -324,7 +326,8 @@ def on_ui_tabs():
                 db_use_ema,
                 db_class_negative_prompt,
                 db_class_guidance_scale,
-                db_class_infer_steps
+                db_class_infer_steps,
+                db_shuffle_after_epoch
             ],
             outputs=[
                 db_pretrained_vae_name_or_path,
@@ -371,6 +374,7 @@ def on_ui_tabs():
                 db_class_negative_prompt,
                 db_class_guidance_scale,
                 db_class_infer_steps,
+                db_shuffle_after_epoch,
                 db_progress
             ]
         )

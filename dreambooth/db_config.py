@@ -74,7 +74,8 @@ class DreamboothConfig(dict):
                 use_ema,
                 class_negative_prompt,
                 class_guidance_scale,
-                class_infer_steps
+                class_infer_steps,
+                shuffle_after_epoch
                 ):
 
         model_dir = images.sanitize_filename_part(model_dir, True)
@@ -141,7 +142,8 @@ class DreamboothConfig(dict):
                 "prior_loss_weight": 1,
                 "class_negative_prompt": class_negative_prompt,
                 "class_guidance_scale": class_guidance_scale,
-                "class_infer_steps": class_infer_steps
+                "class_infer_steps": class_infer_steps,
+                "shuffle_after_epoch": shuffle_after_epoch
         }
         for key in data:
             dict[key] = data[key]

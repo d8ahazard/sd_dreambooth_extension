@@ -162,7 +162,8 @@ def load_params(model_dir, *args):
                      "use_ema",
                      "class_negative_prompt",
                      "class_guidance_scale",
-                     "class_infer_steps"
+                     "class_infer_steps",
+                     "shuffle_after_epoch"
                      ]
 
     values = []
@@ -231,7 +232,8 @@ def start_training(model_dir,
                    use_ema,
                    class_negative_prompt,
                    class_guidance_scale,
-                   class_infer_steps
+                   class_infer_steps,
+                   shuffle_after_epoch
                    ):
     global mem_record
     if model_dir == "" or model_dir is None:
@@ -282,7 +284,8 @@ def start_training(model_dir,
                                         use_ema,
                                         class_negative_prompt,
                                         class_guidance_scale,
-                                        class_infer_steps
+                                        class_infer_steps,
+                                        shuffle_after_epoch
                                         )
 
     # Parse/sanitize concepts list
