@@ -90,7 +90,7 @@ class DreamboothConfig(dict):
         models_path = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
         model_dir = os.path.join(models_path, "dreambooth", model_dir)
         working_dir = os.path.join(model_dir, "working")
-        with_prior_preservation = num_class_images > 0
+        with_prior_preservation = num_class_images is not None and num_class_images > 0
         dict["pretrained_model_name_or_path"] = working_dir
 
         data = {"pretrained_model_name_or_path": working_dir,
