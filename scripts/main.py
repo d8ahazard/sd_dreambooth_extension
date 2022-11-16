@@ -61,11 +61,19 @@ def on_ui_tabs():
                                                                precision=2)
                             db_class_infer_steps = gr.Number(label="Classification Steps", value=40, min=10, max=200,
                                                             precision=0)
-                        db_learning_rate = gr.Number(label='Learning Rate', value=5e-6)
                         db_resolution = gr.Number(label="Resolution", precision=0, value=512)
                         db_pretrained_vae_name_or_path = gr.Textbox(label='Pretrained VAE Name or Path',
                                                                     placeholder="Leave blank to use base model VAE.",
                                                                     value="")
+
+                        db_learning_rate = gr.Number(label='Learning Rate', value=5e-6)
+                        db_scale_lr = gr.Checkbox(label="Scale Learning Rate", value=False)
+                        db_lr_warmup_steps = gr.Number(label="Warmup Steps", precision=0, value=0)
+                        db_lr_scheduler = gr.Dropdown(label="Learning Rate Scheduler", value="constant",
+                                                      choices=["linear", "cosine", "cosine_with_restarts",
+                                                               "polynomial", "constant",
+                                                               "constant_with_warmup"])
+
                         db_save_embedding_every = gr.Number(
                             label='Save Checkpoint Frequency', value=500,
                             precision=0)
@@ -101,18 +109,12 @@ def on_ui_tabs():
                                                                            value=1)
                                 db_center_crop = gr.Checkbox(label="Center Crop", value=False)
                                 db_hflip = gr.Checkbox(label="Apply Horizontal Flip", value=True)
-                                db_scale_lr = gr.Checkbox(label="Scale Learning Rate", value=False)
-                                db_lr_scheduler = gr.Dropdown(label="Scheduler", value="constant",
-                                                              choices=["linear", "cosine", "cosine_with_restarts",
-                                                                       "polynomial", "constant",
-                                                                       "constant_with_warmup"])
                                 db_num_train_epochs = gr.Number(label="# Training Epochs", precision=0, value=1)
                                 db_adam_beta1 = gr.Number(label="Adam Beta 1", precision=1, value=0.9)
                                 db_adam_beta2 = gr.Number(label="Adam Beta 2", precision=3, value=0.999)
                                 db_adam_weight_decay = gr.Number(label="Adam Weight Decay", precision=3, value=0.01)
                                 db_adam_epsilon = gr.Number(label="Adam Epsilon", precision=8, value=0.00000001)
                                 db_max_grad_norm = gr.Number(label="Max Grad Norms", value=1.0, precision=1)
-                                db_lr_warmup_steps = gr.Number(label="Warmup Steps", precision=0, value=0)
                                 db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
                                 db_max_token_length = gr.Dropdown(label="Max Token Length (Requires Pad Tokens for > 75)", value="75",
                                                                  choices=["75", "150", "225", "300"])

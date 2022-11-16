@@ -61,7 +61,7 @@ new_titles = {
     "Center Crop": "If an image is too large, crop it from the center.",
     "Apply Horizontal Flip": "Randomly decide to flip images horizontally.",
     "Scale Learning Rate": "Scale the learning rate by the number of GPUs, gradient accumulation steps, and batch size.",
-    "Scheduler": "The learning rate scheduler to use.",
+    "Learning Rate Scheduler": "The learning rate scheduler to use.",
     "# Training Epochs": "Set this or number of steps to train for, not both.",
     "Adam Beta 1": "The beta1 parameter for the Adam optimizer.",
     "Adam Beta 2": "The beta2 parameter for the Adam optimizer.",
