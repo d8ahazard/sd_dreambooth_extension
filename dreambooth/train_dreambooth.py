@@ -144,6 +144,24 @@ def parse_args(input_args=None):
         help="The number of inference steps for save sample.",
     )
     parser.add_argument(
+        "--class_negative_prompt",
+        type=str,
+        default=None,
+        help="The negative prompt used to generate sample outputs to save.",
+    )
+    parser.add_argument(
+        "--class_guidance_scale",
+        type=float,
+        default=7.5,
+        help="CFG for save sample.",
+    )
+    parser.add_argument(
+        "--class_infer_steps",
+        type=int,
+        default=50,
+        help="The number of inference steps for save sample.",
+    )
+    parser.add_argument(
         "--pad_tokens",
         default=False,
         action="store_true",
@@ -272,7 +290,8 @@ def parse_args(input_args=None):
             "and an Nvidia Ampere GPU."
         ),
     )
-    parser.add_argument("--not_cache_latents", action="store_true", help="Do not precompute and cache latents from VAE.")
+    parser.add_argument("--not_cache_latents", action="store_true",
+                        help="Do not precompute and cache latents from VAE.")
     parser.add_argument("--hflip", action="store_true", help="Apply horizontal flip data augmentation.")
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
     parser.add_argument(
@@ -280,6 +299,18 @@ def parse_args(input_args=None):
         type=str,
         default=None,
         help="Path to json containing multiple concepts, will overwrite parameters like instance_prompt, class_prompt, etc.",
+    )
+    parser.add_argument(
+        "--use_ema",
+        type=bool,
+        default=False,
+        help="Use EMA for unet",
+    )
+    parser.add_argument(
+        "--max_token_length",
+        type=int,
+        default=75,
+        help="Token length when padding tokens.",
     )
 
     if input_args is not None:
