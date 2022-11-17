@@ -763,6 +763,7 @@ def main(args, memory_record):
     if not args.train_text_encoder:
         text_encoder.to(accelerator.device, dtype=weight_dtype)
 
+    printm("Loaded dataset, moved vae and text encoder.")
     if not args.not_cache_latents:
         latents_cache = []
         text_encoder_cache = []
@@ -791,7 +792,7 @@ def main(args, memory_record):
             del text_encoder
             text_encoder = None
         devices.torch_gc()
-
+    printm("Cached latents if selected, cleaned up VAE.")
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
@@ -805,7 +806,6 @@ def main(args, memory_record):
         num_warmup_steps=args.lr_warmup_steps * args.gradient_accumulation_steps,
         num_training_steps=args.max_train_steps * args.gradient_accumulation_steps,
     )
-    printm("Scheduler Loaded")
 
     # create ema, fix OOM
     if args.use_ema:
@@ -831,6 +831,7 @@ def main(args, memory_record):
                 unet, optimizer, train_dataloader, lr_scheduler
             )
 
+    printm("Scheduler, EMA Loaded.")
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
     if overrode_max_train_steps:
@@ -847,7 +848,7 @@ def main(args, memory_record):
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
     stats = f"CPU: {args.use_cpu} Adam: {use_adam}, Prec: {args.mixed_precision}, " \
             f"Prior: {args.with_prior_preservation}, Grad: {args.gradient_checkpointing}, " \
-            f"TextTr: {args.train_text_encoder} "
+            f"TextTr: {args.train_text_encoder} EM: {args.use_ema}, LR: {args.learning_rate}"
 
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(train_dataset)}")
@@ -857,15 +858,18 @@ def main(args, memory_record):
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
     logger.info(f"  Total optimization steps = {args.max_train_steps}")
+    printm(f"  Training settings: {stats}")
 
-    def save_weights(step, save_model, save_img):
+    def save_weights():
         # Create the pipeline using using the trained modules and save it.
         if accelerator.is_main_process:
             if args.train_text_encoder:
                 text_enc_model = accelerator.unwrap_model(text_encoder)
             else:
-                text_enc_model = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="text_encoder", revision=args.revision)
-            scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", clip_sample=False, set_alpha_to_one=False)
+                text_enc_model = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path,
+                                                               subfolder="text_encoder", revision=args.revision)
+            scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
+                                      clip_sample=False, set_alpha_to_one=False)
             if args.use_ema:
                 ema_unet.store(unet.parameters())
                 ema_unet.copy_to(unet.parameters())
@@ -919,17 +923,19 @@ def main(args, memory_record):
                                     negative_prompt = c["sample_prompt"]
                                 if sample_prompt is None or sample_prompt == "":
                                     sample_prompt = c["instance_prompt"]
-                                for i in tqdm(range(args.n_save_sample), desc="Generating samples"):
-                                    images = pipeline(
+                                for si in tqdm(range(args.n_save_sample), desc="Generating samples"):
+                                    s_image = pipeline(
                                         sample_prompt,
                                         negative_prompt=negative_prompt,
                                         guidance_scale=args.save_guidance_scale,
                                         num_inference_steps=args.save_infer_steps,
                                         generator=g_cuda
-                                    ).images
-                                    shared.state.current_image = images[0]
-                                    sanitized_prompt = sanitize_filename_part(args.save_sample_prompt, replace_spaces=False)
-                                    images[0].save(os.path.join(sample_dir, f"{sanitized_prompt}{step}-{i}.png"))
+                                    ).images[0]
+                                    shared.state.current_image = s_image
+                                    sanitized_prompt = sanitize_filename_part(args.save_sample_prompt,
+                                                                              replace_spaces=False)
+                                    s_image.save(
+                                        os.path.join(sample_dir, f"{sanitized_prompt}{args.revision}-{si}.png"))
                     except Exception as e:
                         logger.debug(f"Exception with the stupid image again: {e}")
             logger.debug(f"[*] Weights saved at {save_dir}")
@@ -1044,7 +1050,7 @@ def main(args, memory_record):
                         save_img = True
                         save_model = True
                     if save_img or save_model:
-                        save_weights(args.revision, save_model, save_img)
+                        save_weights()
 
                 if global_step == 0 or global_step == 5:
                     printm(f"Step {global_step} completed.")

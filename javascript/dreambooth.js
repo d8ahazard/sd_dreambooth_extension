@@ -44,7 +44,6 @@ new_titles = {
     "Sample Seed": "The seed to use when generating samples. Set to -1 to use a random seed every time.",
     "Sample Cfg Scale": "The Classifier-Free Guidance Scale to use for preview images.",
     "Sample Steps": "Number of sampling steps to use when generating preview images.",
-    "Auto-Adjust": "Attempt to automatically set training parameters based on total VRAM. Still under development.",
     "Auto-Adjust (WIP)": "Attempt to automatically set training parameters based on total VRAM. Still under development.",
     "Batch Size": "How many images to process at once per training step?",
     "Class Batch Size": "How many classifier/regularization images to generate at once.",
@@ -71,7 +70,7 @@ new_titles = {
     "Adam Weight Decay": "Weight decay for the Adam optimizer, duh.",
     "Adam Epsilon": "",
     "Max Grad Norms": "Max Gradient norms.",
-    "Warmup Steps": "Number of steps for the warmup in the lr scheduler.",
+    "Learning Rate Warmup Steps": "Number of steps for the warmup in the lr scheduler.",
     "Pad Tokens": "Pad the input images token lenght to this amount. You probably want to do this.",
     "Max Token Length": "Maximum token length to respect. You probably want to leave this at 75."
 }
