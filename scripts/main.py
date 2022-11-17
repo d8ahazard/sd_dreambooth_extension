@@ -140,19 +140,16 @@ def on_ui_tabs():
         )
 
         db_not_cache_latents.change(
-            fn=lambda x, y: {
-                db_not_cache_latents: False if x else y
+            fn=lambda: {
+                db_shuffle_after_epoch: False
             },
-            inputs=[db_shuffle_after_epoch, db_not_cache_latents],
-            outputs=[db_not_cache_latents]
+            outputs=[db_shuffle_after_epoch]
         )
-
         db_train_text_encoder.change(
-            fn=lambda x, y: {
-                db_train_text_encoder: True if x else y
+            fn=lambda: {
+                db_shuffle_after_epoch: False
             },
-            inputs=[db_shuffle_after_epoch, db_train_text_encoder],
-            outputs=[db_train_text_encoder]
+            outputs=[db_shuffle_after_epoch]
         )
 
         db_num_class_images.change(
