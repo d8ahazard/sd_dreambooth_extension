@@ -139,6 +139,22 @@ def on_ui_tabs():
             outputs=[db_not_cache_latents, db_train_text_encoder]
         )
 
+        db_not_cache_latents.change(
+            fn=lambda x, y: {
+                db_not_cache_latents: False if x else y
+            },
+            inputs=[db_shuffle_after_epoch, db_not_cache_latents],
+            outputs=[db_not_cache_latents]
+        )
+
+        db_train_text_encoder.change(
+            fn=lambda x, y: {
+                db_train_text_encoder: True if x else y
+            },
+            inputs=[db_shuffle_after_epoch, db_train_text_encoder],
+            outputs=[db_train_text_encoder]
+        )
+
         db_num_class_images.change(
             fn=lambda x: gr_show(x),
             inputs=[db_num_class_images],
