@@ -1051,6 +1051,7 @@ def main(args, memory_record):
                         save_model = True
                     if save_img or save_model:
                         save_weights()
+                        args.save()
 
                 if global_step == 0 or global_step == 5:
                     printm(f"Step {global_step} completed.")
