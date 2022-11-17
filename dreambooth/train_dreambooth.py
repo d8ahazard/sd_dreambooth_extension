@@ -19,6 +19,7 @@ from PIL import Image
 from accelerate import Accelerator
 from accelerate.utils import set_seed
 from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, StableDiffusionPipeline, UNet2DConditionModel
+from diffusers.utils import logging as dl
 from diffusers.models import attention
 from diffusers.optimization import get_scheduler
 from huggingface_hub import HfFolder, whoami
@@ -56,6 +57,8 @@ console = logging.StreamHandler()
 console.setLevel(logging.DEBUG)
 logger.addHandler(console)
 logger.setLevel(logging.DEBUG)
+
+dl.set_verbosity_error()
 
 
 def parse_args(input_args=None):
