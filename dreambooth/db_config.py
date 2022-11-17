@@ -31,6 +31,7 @@ class DreamboothConfig(dict):
 
     def from_ui(self,
                 model_dir,
+                use_concepts,
                 pretrained_vae_name_or_path,
                 instance_data_dir,
                 class_data_dir,
@@ -95,6 +96,7 @@ class DreamboothConfig(dict):
 
         data = {"pretrained_model_name_or_path": working_dir,
                 "model_dir": model_dir,
+                "use_concepts": use_concepts,
                 "pretrained_vae_name_or_path": pretrained_vae_name_or_path,
                 "instance_data_dir": instance_data_dir,
                 "class_data_dir": class_data_dir,
@@ -172,6 +174,8 @@ class DreamboothConfig(dict):
                     self.__dict__["class_guidance_scale"] = 7.5
                     self.__dict__["class_negative_prompt"] = ""
                     self.__dict__["class_infer_steps"] = 60
+                if "use_concepts" not in config:
+                    self.__dict__["use_concepts"] = False
                 for key in config:
                     self.__dict__[key] = config[key]
                 if "revision" not in config:

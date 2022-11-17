@@ -268,6 +268,7 @@ def on_ui_tabs():
             _js="start_training_dreambooth",
             inputs=[
                 db_model_dir,
+                db_use_concepts,
                 db_pretrained_vae_name_or_path,
                 db_instance_data_dir,
                 db_class_data_dir,
@@ -323,6 +324,7 @@ def on_ui_tabs():
             fn=dreambooth.load_params,
             inputs=[
                 db_model_dir,
+                db_use_concepts,
                 db_pretrained_vae_name_or_path,
                 db_instance_data_dir,
                 db_class_data_dir,
@@ -369,6 +371,7 @@ def on_ui_tabs():
                 db_class_infer_steps
             ],
             outputs=[
+                db_use_concepts,
                 db_pretrained_vae_name_or_path,
                 db_instance_data_dir,
                 db_class_data_dir,

@@ -33,6 +33,56 @@ mem_record = {}
 StableDiffusionPipeline.save_pretrained = save_pretrained
 
 
+def build_concepts(model_dir, use_concepts, concepts_list, instance_prompt, instance_dir, class_prompt, class_dir, class_negative_prompt, sample_prompt):
+    # Parse/sanitize concepts list
+    output = None
+    msg = ""
+    if use_concepts:
+        if not isset(concepts_list):
+            msg = "Unable to build concepts, no list specified."
+        is_json = False
+        try:
+            alist = str(concepts_list)
+            if "'" in alist:
+                alist = alist.replace("'", '"')
+            output = json.loads(alist)
+            is_json = True
+            msg = "Loaded concepts from JSON String."
+        except Exception as e:
+            pass
+        if not is_json:
+            try:
+                if os.path.exists(concepts_list):
+                    with open(concepts_list, "r") as f:
+                        output = json.load(f)
+                    msg = "Loaded concepts from file."
+            except:
+                msg = "Unable to load concepts from JSON or file!"
+                pass
+    else:
+        if isset(instance_prompt) and isset(instance_dir):
+            concepts = {
+                "instance_prompt":      instance_prompt,
+                "class_prompt":         class_prompt,
+                "sample_prompt":        sample_prompt,
+                "negative_prompt":      class_negative_prompt,
+                "instance_data_dir":    instance_dir,
+                "class_data_dir":       class_dir
+            }
+            output = [concepts]
+            msg = "Created concepts from prompt"
+        else:
+            msg = "Please specify an instance prompt and instance directory."
+    if output is not None:
+        cindex = 0
+        for concept in output:
+            if not isset(concept["class_data_dir"]):
+                concept["class_data_dir"] = os.path.join(model_dir, f"classifiers_concept_{cindex}")
+            cindex += 1
+
+    return output, msg
+
+
 # Borrowed from https://wandb.ai/psuraj/dreambooth/reports/Training-Stable-Diffusion-with-Dreambooth--VmlldzoyNzk0NDc3#tl,dr;
 # and https://www.reddit.com/r/StableDiffusion/comments/ybxv7h/good_dreambooth_formula/
 def training_wizard_person(
@@ -40,7 +90,9 @@ def training_wizard_person(
         use_concepts,
         concepts_list,
         instance_data_dir,
-        class_data_dir
+        class_data_dir,
+        train_text_encoder,
+        use_ema
 ):
     return training_wizard(
         model_dir,
@@ -48,6 +100,8 @@ def training_wizard_person(
         concepts_list,
         instance_data_dir,
         class_data_dir,
+        train_text_encoder,
+        use_ema,
         is_person=True)
 
 
@@ -57,65 +111,55 @@ def training_wizard(
         concepts_list,
         instance_data_dir,
         class_data_dir,
+        train_text_encoder,
+        use_ema,
         is_person=False
 ):
+    # Load config, get total steps
     config = DreamboothConfig().from_file(model_dir)
     total_steps = config.revision
-    concepts_loaded = False
-    if use_concepts:
-        if concepts_list is not None and concepts_list != "":
-            try:
-                alist = str(config.concepts_list)
-                if "'" in alist:
-                    alist = alist.replace("'", '"')
-                print(f"Trying to parse: {alist}")
-                concepts_list = json.loads(alist)
-                concepts_loaded = True
-            except:
-                pass
-            if not concepts_loaded:
-                try:
-                    if os.path.exists(config.concepts_list):
-                        with open(config.concepts_list, "r") as f:
-                            concepts_list = json.load(f)
-                        concepts_loaded = True
-                    print(f"Loaded concepts from {config.concepts_list}")
-                except:
-                    print("Unable to load concepts from file either, this is bad.")
-                    pass
-    else:
-        concepts_list = [
-            {
-                "instance_data_dir": instance_data_dir,
-                "class_data_dir": class_data_dir
-            }
-        ]
-        concepts_loaded = True
 
-    if not concepts_loaded:
+    # Build concepts list using current settings
+    concepts, msg = build_concepts(model_dir, use_concepts, concepts_list, "foo", instance_data_dir, "foo2", class_data_dir,
+                              "foo3", "foo4")
+
+    pil_feats = list_features()
+
+    if concepts is None:
         print("Error loading params.")
         return 1000, 100, False, 0, "constant"
-    else:
-        total_images = 0
-        pil_feats = list_features()
-        for concept in concepts_list:
+
+    # Count the total number of images in all datasets
+    total_images = 0
+    for concept in concepts:
+        if not os.path.exists(concept["instance_data_dir"]):
+            print("Nonexistent instance directory.")
+        else:
             for x in Path(concept["instance_data_dir"]).iterdir():
                 if is_image(x, pil_feats):
                     total_images += 1
-        required_steps = total_images * 80
-        if is_person:
-            max_samples = total_images * 12
-            learning_rate = 1e-6
-        else:
-            max_samples = 0
-            learning_rate = 2e-6
-        lr_warmup_steps = int(required_steps / 10)
-        if total_steps >= required_steps:
-            required_steps = 0
-        else:
-            required_steps = required_steps - total_steps
 
-        return required_steps, max_samples, True, lr_warmup_steps, "polynomial", learning_rate
+    if total_images == 0:
+        print("No training images found, can't do math.")
+        return 1000, 100, False, 0, "constant"
+
+    # Set "base" value
+    required_steps = total_images * 50
+    if is_person:
+        num_class_images = total_images * 12
+        learning_rate = 1e-6
+        train_text_encoder = True
+    else:
+        num_class_images = 0
+        learning_rate = 2e-6
+
+    # Ensure we don't over-train?
+    if total_steps >= required_steps:
+        required_steps = 0
+    else:
+        required_steps = required_steps - total_steps
+
+    return required_steps, num_class_images, learning_rate, train_text_encoder
 
 
 def performance_wizard():
@@ -136,7 +180,6 @@ def performance_wizard():
         if gb >= 24:
             train_batch_size = 2
             sample_batch_size = 4
-            not_cache_latents = False
             train_text_encoder = True
             use_ema = True
             use_8bit_adam = False
@@ -159,6 +202,8 @@ def performance_wizard():
 
 def printm(msg, reset=False):
     global mem_record
+    if not mem_record:
+        mem_record = {}
     if reset:
         mem_record = {}
     allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
@@ -204,7 +249,8 @@ def is_image(path: Path, feats=None):
 def load_params(model_dir, *args):
     data = DreamboothConfig().from_file(model_dir)
 
-    target_values = ["pretrained_vae_name_or_path",
+    target_values = ["use_concepts",
+                     "pretrained_vae_name_or_path",
                      "instance_data_dir",
                      "class_data_dir",
                      "instance_prompt",
@@ -253,7 +299,10 @@ def load_params(model_dir, *args):
     values = []
     for target in target_values:
         if target in data:
-            values.append(data[target])
+            value = data[target]
+            if target == "max_token_length":
+                value = str(value)
+            values.append(value)
         else:
             values.append(None)
     values.append(f"Loaded params from {model_dir}.")
@@ -273,6 +322,7 @@ def get_db_models():
 
 
 def start_training(model_dir,
+                   use_concepts,
                    pretrained_vae_name_or_path,
                    instance_data_dir,
                    class_data_dir,
@@ -324,6 +374,7 @@ def start_training(model_dir,
         return "Create or select a model first.", ""
 
     config = DreamboothConfig().from_ui(model_dir,
+                                        use_concepts,
                                         pretrained_vae_name_or_path,
                                         instance_data_dir,
                                         class_data_dir,
@@ -370,47 +421,22 @@ def start_training(model_dir,
                                         class_infer_steps
                                         )
 
-    # Parse/sanitize concepts list
-    concepts_loaded = False
+    concepts, msg = build_concepts(config.pretrained_model_name_or_path, use_concepts, concepts_list, instance_prompt,
+                              instance_data_dir, class_prompt, class_data_dir, class_negative_prompt, save_sample_prompt)
 
-    if config.concepts_list is not None and config.concepts_list != "":
-        is_json = False
-        try:
-            alist = str(config.concepts_list)
-            if "'" in alist:
-                alist = alist.replace("'", '"')
-            print(f"Trying to parse: {alist}")
-            config.concepts_list = json.loads(alist)
-            is_json = True
-            concepts_loaded = True
-        except Exception as e:
-            print(f"Unable to load concepts as JSON, trying as file: {e}")
-            pass
-        if not is_json:
-            try:
-                if os.path.exists(config.concepts_list):
-                    with open(config.concepts_list, "r") as f:
-                        config.concepts_list = json.load(f)
-                    concepts_loaded = True
-                print(f"Loaded concepts from {config.concepts_list}")
-            except:
-                print("Unable to load concepts from file either, this is bad.")
-                pass
-    first_class = None
-    if not concepts_loaded:
-        config.concepts_list = None
+    if concepts is not None:
+        config.concepts_list = concepts
+        print(f"Loading concepts: {concepts}")
     else:
-        first_concepts = config.concepts_list[0]
-        first_class = first_concepts["class_prompt"]
-
-    # Set class dir if not specified
-    if config.class_data_dir is None or config.class_data_dir == "":
-        config.class_data_dir = os.path.join(config.model_dir, "classifiers")
+        print("Unable to lbuild concepts.")
+        return config, "Unable to load concepts."
 
     # Disable prior preservation if no class prompt and no sample images
-    if (config.class_prompt is None or config.class_prompt == "") and first_class is None:
-        if config.num_class_images == 0:
-            config.with_prior_preservation = False
+    if config.num_class_images == 0:
+        config.with_prior_preservation = False
+
+    if config.max_token_length is None or config.max_token_length == 0:
+        config.max_token_length = 75
 
     # Clear pretrained VAE Name if applicable
     if "pretrained_vae_name_or_path" in config.__dict__:
@@ -502,7 +528,7 @@ def printm(msg, reset=False):
         mem_record = {}
     allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
     cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
-    mem_record[msg] = f"{allocated}/{cached}GB"
+    mem_record[msg] = f"{allocated},{cached}"
     print(f' {msg} \n Allocated: {allocated}GB \n Reserved: {cached}GB \n')
 
 
