@@ -16,6 +16,7 @@
 # limitations under the License.
 """ Conversion script for the LDM checkpoints. """
 import gc
+import math
 import os
 import traceback
 
@@ -28,7 +29,7 @@ import modules.sd_models
 from modules import paths, shared
 from diffusers.models import attention
 from extensions.sd_dreambooth_extension.dreambooth import xattention
-from extensions.sd_dreambooth_extension.dreambooth.dreambooth import get_db_models
+from extensions.sd_dreambooth_extension.dreambooth.dreambooth import get_db_models, printm
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 
 try:
@@ -739,6 +740,7 @@ def convert_ldm_clip_checkpoint(checkpoint):
     if reload_dict:
         del text_model
         text_model = CLIPTextModel.from_pretrained("openai/clip-vit-large-patch14")
+        printm("Loaded base text model.")
         text_model_dict = {}
 
         for key in keys:
@@ -830,16 +832,24 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
                 print("Unable to find checkpoint file!")
                 shared.state.job_no = 8
                 return None, "Unable to find base checkpoint.", ""
-
+            ckpt_size = os.path.getsize(checkpoint_info.filename)
+            ckpt_size = math.ceil(ckpt_size / 1073741824)
+            vram = torch.cuda.get_device_properties(0).total_memory
+            vram = math.ceil(vram / 1073741824)
+            if vram <= ckpt_size * 2:
+                printm(f"Checkpoint size is {ckpt_size}, vram is {vram}. Mapping checkpoint to CPU to avoid OOM.")
+                map_location = torch.device('cpu')
+            else:
+                map_location = shared.device
             try:
-                checkpoint = torch.load(checkpoint_info[0])["state_dict"]
+                checkpoint = torch.load(checkpoint_info[0], map_location=map_location)["state_dict"]
                 checkpoint_loaded = True
             except KeyError:
                 pass
             if not checkpoint_loaded:
                 print("State dict not found in the usual spot, trying something else.")
                 try:
-                    checkpoint = torch.load(checkpoint_info.filename)
+                    checkpoint = torch.load(checkpoint_info.filename, map_location=map_location)
                     if "state_dict" in checkpoint:
                         checkpoint = checkpoint["state_dict"]
                 except:
@@ -883,10 +893,8 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
             converted_unet_checkpoint = convert_ldm_unet_checkpoint(checkpoint, unet_config)
             shared.state.textinfo = "Converted unet checkpoint..."
             shared.state.job_no = 4
-
             unet = UNet2DConditionModel(**unet_config)
             unet.load_state_dict(converted_unet_checkpoint)
-
             # Convert the VAE model.
             vae_config = create_vae_diffusers_config(original_config)
             shared.state.textinfo = "Converted VAE Config..."
@@ -933,10 +941,10 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
     return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), f"Created working directory for {new_model_name} at {out_dir}.", ""
 
 
-def compile_checkpoint(model_name, vae_path, mixed_precision):
+def compile_checkpoint(model_name, vae_path, half_checkpoint):
     msg = ""
     try:
-        half = mixed_precision == "fp16"
+        half = half_checkpoint
         ckpt_dir = shared.cmd_opts.ckpt_dir
         models_path = os.path.join(paths.models_path, "Stable-diffusion")
         if ckpt_dir is not None:
