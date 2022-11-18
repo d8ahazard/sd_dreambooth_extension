@@ -495,7 +495,8 @@ def start_training(model_dir,
 
     # Clear memory and do "stuff" only after we've ensured all the things are right
     print("Starting Dreambooth training...")
-    shared.sd_model.to('cpu')
+    if shared.sd_model is not None:
+        shared.sd_model.to('cpu')
     torch.cuda.empty_cache()
     gc.collect()
     printm("VRAM cleared.", True)
@@ -510,7 +511,8 @@ def start_training(model_dir,
     gc.collect()
     printm("Training completed, reloading SD Model.")
     print(f'Memory output: {mem_record}')
-    shared.sd_model.to(shared.device)
+    if shared.sd_model is not None:
+        shared.sd_model.to(shared.device)
     print("Re-applying optimizations...")
     res = f"Training {'interrupted' if shared.state.interrupted else 'finished'}. " \
           f"Total lifetime steps: {total_steps} \n"
