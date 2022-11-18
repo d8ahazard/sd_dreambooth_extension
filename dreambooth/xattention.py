@@ -1,14 +1,16 @@
 # Borrowed from Shivam's repo so we don't have to completely clone a different diffusers version
 import importlib
 import os
-from typing import Optional, Union
+from typing import Optional, Union, Dict, Any
 
 import torch
+import transformers
 from attr import dataclass
 from diffusers.models.attention import xformers
 from diffusers.pipeline_utils import LOADABLE_CLASSES
 from diffusers.utils import BaseOutput
 from diffusers.utils.import_utils import is_xformers_available
+from transformers import modeling_utils
 from torch import nn
 
 from modules import shared
@@ -217,3 +219,14 @@ def save_pretrained(self, save_directory: Union[str, os.PathLike]):
         if save_method_name is not None:
             save_method = getattr(sub_model, save_method_name)
             save_method(os.path.join(save_directory, pipeline_component_name))
+
+
+def _validate_model_kwargs(self, model_kwargs: Dict[str, Any]):
+    pass
+
+
+trans_ver = transformers.__version__
+if int(trans_ver.split(".")[1]) > 19:
+    print("Patching transformers to fix kwargs errors.")
+
+    transformers.generation_utils.GenerationMixin._validate_model_kwargs = _validate_model_kwargs

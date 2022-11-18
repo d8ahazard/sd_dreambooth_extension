@@ -30,4 +30,4 @@ timm==0.6.7
 torch
 torchdiffeq==0.2.3
 tqdm==4.64.1
-transformers==4.22.1
+transformers==4.24.0

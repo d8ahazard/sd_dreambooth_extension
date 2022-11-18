@@ -34,13 +34,16 @@ try:
     import diffusers
     import torch
     import torchvision
+    import transformers
 
     ver = diffusers.__version__
     tver = torch.__version__
     tvver = torchvision.__version__
+    trver = transformers.__version__
     print(f"Diffusers version is {ver}.")
     print(f"Torch version is {tver}.")
     print(f"Torch vision version is {tvver}.")
+    print(f"Transformers version is {trver}.")
 except Exception as e:
     print(f"Exception doing the things: {e}")
     pass
