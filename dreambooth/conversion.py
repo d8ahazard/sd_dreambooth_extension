@@ -803,6 +803,7 @@ def convert_text_enc_state_dict(text_enc_dict):
 def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type="ddim", new_model_url="",
                        new_model_token=""):
     shared.state.job_count = 8
+    map_location = shared.device
     # Set up our base directory for the model and sanitize our file name
     new_model_name = "".join(x for x in new_model_name if x.isalnum())
     config = DreamboothConfig().create_new(new_model_name, scheduler_type, checkpoint_path, 0)
@@ -839,8 +840,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
             if vram <= ckpt_size * 2:
                 printm(f"Checkpoint size is {ckpt_size}, vram is {vram}. Mapping checkpoint to CPU to avoid OOM.")
                 map_location = torch.device('cpu')
-            else:
-                map_location = shared.device
+
             try:
                 checkpoint = torch.load(checkpoint_info[0], map_location=map_location)["state_dict"]
                 checkpoint_loaded = True
@@ -932,7 +932,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
         traceback.print_exc()
 
     if pipe is not None:
-        pipe = pipe.to(shared.device)
+        pipe = pipe.to(map_location)
         pipe.save_pretrained(out_dir)
         shared.state.textinfo = "Pretrained saved..."
         shared.state.job_no = 8
