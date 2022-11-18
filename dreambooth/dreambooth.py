@@ -33,7 +33,8 @@ mem_record = {}
 StableDiffusionPipeline.save_pretrained = save_pretrained
 
 
-def build_concepts(model_dir, use_concepts, concepts_list, instance_prompt, instance_dir, class_prompt, class_dir, class_negative_prompt, sample_prompt):
+def build_concepts(model_dir, use_concepts, concepts_list, instance_prompt, instance_dir, class_prompt, class_dir,
+                   class_negative_prompt, sample_prompt):
     # Parse/sanitize concepts list
     output = None
     msg = ""
@@ -62,12 +63,12 @@ def build_concepts(model_dir, use_concepts, concepts_list, instance_prompt, inst
     else:
         if isset(instance_prompt) and isset(instance_dir):
             concepts = {
-                "instance_prompt":      instance_prompt,
-                "class_prompt":         class_prompt,
-                "sample_prompt":        sample_prompt,
-                "negative_prompt":      class_negative_prompt,
-                "instance_data_dir":    instance_dir,
-                "class_data_dir":       class_dir
+                "instance_prompt": instance_prompt,
+                "class_prompt": class_prompt,
+                "sample_prompt": sample_prompt,
+                "negative_prompt": class_negative_prompt,
+                "instance_data_dir": instance_dir,
+                "class_data_dir": class_dir
             }
             output = [concepts]
             msg = "Created concepts from prompt"
@@ -120,8 +121,9 @@ def training_wizard(
     total_steps = config.revision
 
     # Build concepts list using current settings
-    concepts, msg = build_concepts(model_dir, use_concepts, concepts_list, "foo", instance_data_dir, "foo2", class_data_dir,
-                              "foo3", "foo4")
+    concepts, msg = build_concepts(model_dir, use_concepts, concepts_list, "foo", instance_data_dir, "foo2",
+                                   class_data_dir,
+                                   "foo3", "foo4")
 
     pil_feats = list_features()
 
@@ -249,7 +251,8 @@ def is_image(path: Path, feats=None):
 def load_params(model_dir, *args):
     data = DreamboothConfig().from_file(model_dir)
 
-    target_values = ["use_concepts",
+    target_values = ["half_model",
+                     "use_concepts",
                      "pretrained_vae_name_or_path",
                      "instance_data_dir",
                      "class_data_dir",
@@ -322,6 +325,7 @@ def get_db_models():
 
 
 def start_training(model_dir,
+                   half_model,
                    use_concepts,
                    pretrained_vae_name_or_path,
                    instance_data_dir,
@@ -374,6 +378,7 @@ def start_training(model_dir,
         return "Create or select a model first.", ""
 
     config = DreamboothConfig().from_ui(model_dir,
+                                        half_model,
                                         use_concepts,
                                         pretrained_vae_name_or_path,
                                         instance_data_dir,
@@ -422,7 +427,8 @@ def start_training(model_dir,
                                         )
 
     concepts, msg = build_concepts(config.pretrained_model_name_or_path, use_concepts, concepts_list, instance_prompt,
-                              instance_data_dir, class_prompt, class_data_dir, class_negative_prompt, save_sample_prompt)
+                                   instance_data_dir, class_prompt, class_data_dir, class_negative_prompt,
+                                   save_sample_prompt)
 
     if concepts is not None:
         config.concepts_list = concepts

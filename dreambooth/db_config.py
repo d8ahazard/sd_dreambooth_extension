@@ -31,6 +31,7 @@ class DreamboothConfig(dict):
 
     def from_ui(self,
                 model_dir,
+                half_model,
                 use_concepts,
                 pretrained_vae_name_or_path,
                 instance_data_dir,
@@ -96,6 +97,7 @@ class DreamboothConfig(dict):
 
         data = {"pretrained_model_name_or_path": working_dir,
                 "model_dir": model_dir,
+                "half_model": half_model,
                 "use_concepts": use_concepts,
                 "pretrained_vae_name_or_path": pretrained_vae_name_or_path,
                 "instance_data_dir": instance_data_dir,
@@ -176,6 +178,8 @@ class DreamboothConfig(dict):
                     self.__dict__["class_infer_steps"] = 60
                 if "use_concepts" not in config:
                     self.__dict__["use_concepts"] = False
+                if "half_model" not in config:
+                    self.__dict__["half_model"] = False
                 for key in config:
                     self.__dict__[key] = config[key]
                 if "revision" not in config:

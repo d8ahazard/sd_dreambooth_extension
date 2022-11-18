@@ -12,6 +12,7 @@ def on_ui_tabs():
     with gr.Blocks() as dreambooth_interface:
         with gr.Row(equal_height=True):
             db_model_dir = gr.Dropdown(label='Model', choices=sorted(get_db_models()))
+            db_half_model = gr.Checkbox(label="Half Model", value=False)
             db_load_params = gr.Button(value='Load Params')
             db_generate_checkpoint = gr.Button(value="Generate Ckpt")
             db_interrupt_training = gr.Button(value="Cancel")
@@ -29,7 +30,7 @@ def on_ui_tabs():
                         src_checkpoint = gr.Dropdown(label='Source Checkpoint',
                                                      choices=sorted(sd_models.checkpoints_list.keys()))
                     diff_type = gr.Dropdown(label='Scheduler', choices=["ddim", "pndm", "lms"], value="ddim")
-                    db_half_model = gr.Checkbox(label="Half", value=False)
+
 
                     with gr.Row():
                         with gr.Column(scale=3):
@@ -271,6 +272,7 @@ def on_ui_tabs():
             _js="start_training_dreambooth",
             inputs=[
                 db_model_dir,
+                db_half_model,
                 db_use_concepts,
                 db_pretrained_vae_name_or_path,
                 db_instance_data_dir,
@@ -327,6 +329,7 @@ def on_ui_tabs():
             fn=dreambooth.load_params,
             inputs=[
                 db_model_dir,
+                db_half_model,
                 db_use_concepts,
                 db_pretrained_vae_name_or_path,
                 db_instance_data_dir,
@@ -374,6 +377,7 @@ def on_ui_tabs():
                 db_class_infer_steps
             ],
             outputs=[
+                db_half_model,
                 db_use_concepts,
                 db_pretrained_vae_name_or_path,
                 db_instance_data_dir,

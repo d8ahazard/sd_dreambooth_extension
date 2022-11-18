@@ -18,7 +18,7 @@ import torch.utils.checkpoint
 from PIL import Image
 from accelerate import Accelerator
 from accelerate.utils import set_seed
-from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, StableDiffusionPipeline, UNet2DConditionModel
+from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, EulerAncestralDiscreteScheduler, StableDiffusionPipeline, UNet2DConditionModel
 from diffusers.utils import logging as dl
 from diffusers.models import attention
 from diffusers.optimization import get_scheduler
@@ -30,6 +30,7 @@ from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth import xattention
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import dumb_safety, save_checkpoint, list_features, \
     is_image, printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, EMAModel, \
@@ -311,6 +312,12 @@ def parse_args(input_args=None):
         type=int,
         default=75,
         help="Token length when padding tokens.",
+    )
+    parser.add_argument(
+        "--half_model",
+        type=bool,
+        default=False,
+        help="Generate half-precision checkpoints (Saves space, minor difference in output)",
     )
 
     if input_args is not None:
@@ -870,6 +877,7 @@ def main(args, memory_record):
                                                                subfolder="text_encoder", revision=args.revision)
             scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
                                       clip_sample=False, set_alpha_to_one=False)
+            e_scheduler = EulerAncestralDiscreteScheduler(beta_start=0.00085, beta_end=0.012)
             if args.use_ema:
                 ema_unet.store(unet.parameters())
                 ema_unet.copy_to(unet.parameters())
@@ -887,13 +895,14 @@ def main(args, memory_record):
                 safety_checker=None
             )
             pipeline = pipeline.to(accelerator.device)
+            pipeline.scheduler = e_scheduler
             with accelerator.autocast(), torch.inference_mode():
                 if save_model:
                     shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
                     try:
                         pipeline.save_pretrained(args.pretrained_model_name_or_path)
                         save_checkpoint(args.model_name, args.pretrained_vae_name_or_path, args.revision,
-                                        args.mixed_precision == "fp16")
+                                        args.half_model)
                         if args.use_ema:
                             ema_unet.restore(unet.parameters())
                     except Exception as e:
@@ -924,6 +933,7 @@ def main(args, memory_record):
                                 if sample_prompt is None or sample_prompt == "":
                                     sample_prompt = c["instance_prompt"]
                                 for si in tqdm(range(args.n_save_sample), desc="Generating samples"):
+                                    pipeline.scheduler = e_scheduler
                                     s_image = pipeline(
                                         sample_prompt,
                                         negative_prompt=negative_prompt,
