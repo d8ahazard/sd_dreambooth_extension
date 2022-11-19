@@ -383,13 +383,13 @@ class DreamBoothDataset(Dataset):
         self.tokenizer_max_length = self.tokenizer.model_max_length if max_token_length == 75 else max_token_length + 2
         self.text_getter = FilenameTextGetter()
         for concept in concepts_list:
-            inst_img_path = [(x, concept["instance_prompt"], concept["instance_token"], concept["class_token"], self.text_getter.read_text(x)) for x in
-                             Path(concept["instance_data_dir"]).iterdir() if is_image(x, pil_features)]
+            inst_img_path = [(x, concept.get("instance_prompt", ""), concept.get("instance_token", ""), concept.get("class_token", ""), self.text_getter.read_text(x)) for x in
+                             Path(concept.get("instance_data_dir", "")).iterdir() if is_image(x, pil_features)]
             self.instance_images_path.extend(inst_img_path)
 
             if with_prior_preservation:
-                class_img_path = [(x, concept["class_prompt"], concept["instance_token"], concept["class_token"], self.text_getter.read_text(x)) for x in
-                                  Path(concept["class_data_dir"]).iterdir() if is_image(x, pil_features)]
+                class_img_path = [(x, concept.get("class_prompt", ""), concept.get("instance_token", ""), concept.get("class_token", ""), self.text_getter.read_text(x)) for x in
+                                  Path(concept.get("class_data_dir", "")).iterdir() if is_image(x, pil_features)]
                 self.class_images_path.extend(class_img_path[:num_class_images])
 
         random.shuffle(self.instance_images_path)
@@ -572,7 +572,7 @@ def main(args, memory_record):
         text_getter = FilenameTextGetter()
         pil_features = list_features()
         for concept in args.concepts_list:
-            class_images_dir = Path(concept["class_data_dir"])
+            class_images_dir = Path(concept.get("class_data_dir", ""))
             class_images_dir.mkdir(parents=True, exist_ok=True)
             cur_class_images = 0
             iterfiles = 0
@@ -604,11 +604,11 @@ def main(args, memory_record):
 
                 shared.state.job_count = num_new_images
                 shared.state.job_no = 0
-                save_txt = "[filewords]" in concept["class_prompt"]
-                filename_texts = [text_getter.read_text(x) for x in Path(concept["instance_data_dir"]).iterdir() if
+                save_txt = "[filewords]" in concept.get("class_prompt", "")
+                filename_texts = [text_getter.read_text(x) for x in Path(concept.get("instance_data_dir", "")).iterdir() if
                                   is_image(x, pil_features)]
-                sample_dataset = PromptDataset(concept["class_prompt"], num_new_images, filename_texts,
-                                               args.file_prompt_contents, concept["class_token"], concept["instance_token"])
+                sample_dataset = PromptDataset(concept.get("class_prompt", ""), num_new_images, filename_texts,
+                                               args.file_prompt_contents, concept.get("class_token", ""), concept.get("instance_token", ""))
                 with accelerator.autocast(), torch.inference_mode():
                     generated_images = 0
                     s_len = sample_dataset.__len__() - 1
