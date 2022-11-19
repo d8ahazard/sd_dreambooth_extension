@@ -827,20 +827,16 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
                 print("Unable to find checkpoint file!")
                 shared.state.job_no = 8
                 return None, "Unable to find base checkpoint.", ""
-            #May be never execute
+
             checkpoint_loaded = False
             if not os.path.exists(checkpoint_info.filename):
                 print("Unable to find checkpoint file!")
                 shared.state.job_no = 8
                 return None, "Unable to find base checkpoint.", ""
-            ckpt_size = os.path.getsize(checkpoint_info.filename)
-            ckpt_size = math.ceil(ckpt_size / 1073741824)
-            vram = torch.cuda.get_device_properties(0).total_memory
-            vram = math.ceil(vram / 1073741824)
-            if vram <= ckpt_size * 2:
-                printm(f"Checkpoint size is {ckpt_size}, vram is {vram}. Mapping checkpoint to CPU to avoid OOM.")
-                map_location = torch.device('cpu')
 
+            if shared.cmd_opts.lowvram or shared.cmd_opts.medvram:
+                printm(f"Using CPU for extraction.")
+                map_location = torch.device('cpu')
             try:
                 checkpoint = torch.load(checkpoint_info[0], map_location=map_location)["state_dict"]
                 checkpoint_loaded = True
