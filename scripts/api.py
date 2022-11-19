@@ -11,16 +11,21 @@ from webui import wrap_gradio_gpu_call
 
 
 class DreamboothParameters(BaseModel):
+    db_half_model: bool = False,
+    db_use_concepts: bool = False,
     db_pretrained_model_name_or_path: str
     db_pretrained_vae_name_or_path: Optional[str] = ""
     db_instance_data_dir: str
     db_class_data_dir: Optional[str] = ""
     db_instance_prompt: Optional[str] = ""
     db_class_prompt: Optional[str] = ""
+    db_file_prompt_contents: str = "Description"
+    db_instance_token: str = ""
+    db_class_token: str = ""
     db_save_sample_prompt: Optional[str] = ""
     db_save_sample_negative_prompt: Optional[str] = ""
     db_n_save_sample: Optional[int] = 500
-    db_seed: Optional[int] = -1
+    db_sample_seed: Optional[int] = -1
     db_save_guidance_scale: Optional[float] = 7.5
     db_save_infer_steps: Optional[int] = 40
     db_num_class_images: Optional[int] = 0
@@ -60,9 +65,14 @@ class DreamboothParameters(BaseModel):
 
 def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
     @app.post("/dreambooth/createModel")
-    async def createModel(name: str, source: str, scheduler: str):
+    async def createModel(
+                name,
+                source,
+                scheduler,
+                model_url,
+                hub_token):
         print("Creating new Checkpoint: " + name)
-        fn = conversion.extract_checkpoint(name, source, scheduler)
+        fn = conversion.extract_checkpoint(name, source, scheduler, model_url, hub_token)
 
     @app.post("/dreambooth/start_straining")
     async def start_training(params: DreamboothParameters):
@@ -73,15 +83,20 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
     async def train_model(params: DreamboothParameters):
         fn = wrap_gradio_gpu_call(dreambooth.start_training(
             params.db_pretrained_model_name_or_path,
+            params.db_half_model,
+            params.db_use_concepts,
             params.db_pretrained_vae_name_or_path,
             params.db_instance_data_dir,
             params.db_class_data_dir,
             params.db_instance_prompt,
             params.db_class_prompt,
+            params.db_file_prompt_contents,
+            params.db_instance_token,
+            params.db_class_token,
             params.db_save_sample_prompt,
             params.db_save_sample_negative_prompt,
             params.db_n_save_sample,
-            params.db_seed,
+            params.db_sample_seed,
             params.db_save_guidance_scale,
             params.db_save_infer_steps,
             params.db_num_class_images,
