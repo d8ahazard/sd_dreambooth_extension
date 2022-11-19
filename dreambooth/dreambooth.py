@@ -33,12 +33,12 @@ mem_record = {}
 StableDiffusionPipeline.save_pretrained = save_pretrained
 
 
-def build_concepts(model_dir, use_concepts, concepts_list, instance_prompt, instance_dir, class_prompt, class_dir,
-                   class_negative_prompt, sample_prompt):
+def build_concepts(config: DreamboothConfig):
     # Parse/sanitize concepts list
     output = None
     msg = ""
-    if use_concepts:
+    if config["use_concepts"]:
+        concepts_list = config["concepts_list"]
         if not isset(concepts_list):
             msg = "Unable to build concepts, no list specified."
         is_json = False
@@ -61,24 +61,28 @@ def build_concepts(model_dir, use_concepts, concepts_list, instance_prompt, inst
                 msg = "Unable to load concepts from JSON or file!"
                 pass
     else:
-        if isset(instance_prompt) and isset(instance_dir):
-            concepts = {
-                "instance_prompt": instance_prompt,
-                "class_prompt": class_prompt,
-                "sample_prompt": sample_prompt,
-                "negative_prompt": class_negative_prompt,
-                "instance_data_dir": instance_dir,
-                "class_data_dir": class_dir
-            }
+        if isset(config["instance_prompt"]) and isset(config["instance_data_dir"]):
+            concepts = {}
+            keys = ["instance_prompt",
+                    "class_prompt",
+                    "sample_prompt",
+                    "negative_prompt",
+                    "instance_data_dir",
+                    "class_data_dir",
+                    "instance_token",
+                    "class_token"]
+            for key in keys:
+                if key in config:
+                    concepts[key] = config[key]
             output = [concepts]
-            msg = "Created concepts from prompt"
+            msg = "Created concepts from prompts."
         else:
             msg = "Please specify an instance prompt and instance directory."
     if output is not None:
         cindex = 0
         for concept in output:
-            if not isset(concept["class_data_dir"]):
-                concept["class_data_dir"] = os.path.join(model_dir, f"classifiers_concept_{cindex}")
+            if "class_data_dir" not in concept or not isset(concept["class_data_dir"]):
+                concept["class_data_dir"] = os.path.join(config["model_dir"], f"classifiers_concept_{cindex}")
             cindex += 1
 
     return output, msg
@@ -119,12 +123,17 @@ def training_wizard(
     # Load config, get total steps
     config = DreamboothConfig().from_file(model_dir)
     total_steps = config.revision
-
+    config["use_concepts"] = use_concepts
+    config["concepts_list"] = concepts_list
+    config["instance_data_dir"] = instance_data_dir
+    config["class_data_dir"] = class_data_dir
+    config["instance_prompt"] = "foo"
+    config["class_prompt"] = "foo"
+    config["sample_prompt"] = ""
+    config["instance_token"] = ""
+    config["class_token"] = ""
     # Build concepts list using current settings
-    concepts, msg = build_concepts(model_dir, use_concepts, concepts_list, "foo", instance_data_dir, "foo2",
-                                   class_data_dir,
-                                   "foo3", "foo4")
-
+    concepts, msg = build_concepts(config)
     pil_feats = list_features()
 
     if concepts is None:
@@ -258,6 +267,9 @@ def load_params(model_dir, *args):
                      "class_data_dir",
                      "instance_prompt",
                      "class_prompt",
+                     "file_prompt_contents",
+                     "instance_token",
+                     "class_token",
                      "save_sample_prompt",
                      "save_sample_negative_prompt",
                      "n_save_sample",
@@ -332,6 +344,9 @@ def start_training(model_dir,
                    class_data_dir,
                    instance_prompt,
                    class_prompt,
+                   file_prompt_contents,
+                   instance_token,
+                   class_token,
                    save_sample_prompt,
                    save_sample_negative_prompt,
                    n_save_sample,
@@ -385,6 +400,9 @@ def start_training(model_dir,
                                         class_data_dir,
                                         instance_prompt,
                                         class_prompt,
+                                        file_prompt_contents,
+                                        instance_token,
+                                        class_token,
                                         save_sample_prompt,
                                         save_sample_negative_prompt,
                                         n_save_sample,
@@ -426,9 +444,7 @@ def start_training(model_dir,
                                         class_infer_steps
                                         )
 
-    concepts, msg = build_concepts(config.pretrained_model_name_or_path, use_concepts, concepts_list, instance_prompt,
-                                   instance_data_dir, class_prompt, class_data_dir, class_negative_prompt,
-                                   save_sample_prompt)
+    concepts, msg = build_concepts(config)
 
     if concepts is not None:
         config.concepts_list = concepts

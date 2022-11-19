@@ -18,6 +18,12 @@ class DreamboothConfig(dict):
         self.src = None
         self.total_steps = None
         self.revision = None
+        self.instance_prompt = ""
+        self.class_prompt = ""
+        self.instance_token = ""
+        self.class_token = ""
+        self.instance_data_dir = ""
+        self.class_data_dir = ""
         self.__dict__ = self
 
     def create_new(self, name, scheduler, src, total_steps):
@@ -38,6 +44,9 @@ class DreamboothConfig(dict):
                 class_data_dir,
                 instance_prompt,
                 class_prompt,
+                file_prompt_contents,
+                instance_token,
+                class_token,
                 save_sample_prompt,
                 save_sample_negative_prompt,
                 n_save_sample,
@@ -104,6 +113,9 @@ class DreamboothConfig(dict):
                 "class_data_dir": class_data_dir,
                 "instance_prompt": instance_prompt,
                 "class_prompt": class_prompt,
+                "file_prompt_contents": file_prompt_contents,
+                "instance_token": instance_token,
+                "class_token": class_token,
                 "save_sample_prompt": save_sample_prompt,
                 "save_sample_negative_prompt": save_sample_negative_prompt,
                 "n_save_sample": n_save_sample,
@@ -180,6 +192,11 @@ class DreamboothConfig(dict):
                     self.__dict__["use_concepts"] = False
                 if "half_model" not in config:
                     self.__dict__["half_model"] = False
+                if "file_prompt_contents" not in config:
+                    self.__dict__["file_prompt_contents"] = "description"
+                    self.__dict__["instance_token"] = ""
+                    self.__dict__["class_token"] = ""
+
                 for key in config:
                     self.__dict__[key] = config[key]
                 if "revision" not in config:

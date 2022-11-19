@@ -6,5 +6,15 @@
         "negative_prompt":      "blurry",
         "instance_data_dir":    "../../../data/alvan",
         "class_data_dir":       "../../../data/dog"
+    },
+    {
+        "instance_prompt": "[filewords]",
+        "class_prompt": "[filewords]",
+        "sample_prompt": "photo of mypik at the beach",
+        "negative_prompt": "blurry",
+        "instance_data_dir": "E:\\images\\data\\mypik",
+        "class_data_dir": "E:\\images\\data\\man",
+        "instance_token": "mypik",
+        "class_token": "a man, man"
     }
 ]

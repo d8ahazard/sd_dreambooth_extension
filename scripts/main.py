@@ -60,6 +60,14 @@ def on_ui_tabs():
                             db_class_data_dir = gr.Textbox(label='Classification Dataset Directory',
                                                            placeholder="(Optional) Path to directory with "
                                                                        "classification/regularization images")
+                            db_file_prompt_contents = gr.Dropdown(label="Existing Prompt Contents",
+                                                                  choices=["Description",
+                                                                           "Instance Token + Description",
+                                                                           "Class Token + Description",
+                                                                           "Instance Token + Class Token + Description"])
+                            db_instance_token = gr.Textbox(label='Instance token to swap')
+                            db_class_token = gr.Textbox(label='Class token(s) to swap, can be comma-separated')
+
 
                         db_num_class_images = gr.Number(
                             label='Total Number of Class/Reg Images', value=0,
@@ -279,6 +287,9 @@ def on_ui_tabs():
                 db_class_data_dir,
                 db_instance_prompt,
                 db_class_prompt,
+                db_file_prompt_contents,
+                db_instance_token,
+                db_class_token,
                 db_save_sample_prompt,
                 db_save_sample_negative_prompt,
                 db_n_save_sample,
@@ -336,6 +347,9 @@ def on_ui_tabs():
                 db_class_data_dir,
                 db_instance_prompt,
                 db_class_prompt,
+                db_file_prompt_contents,
+                db_instance_token,
+                db_class_token,
                 db_save_sample_prompt,
                 db_save_sample_negative_prompt,
                 db_n_save_sample,
@@ -384,6 +398,9 @@ def on_ui_tabs():
                 db_class_data_dir,
                 db_instance_prompt,
                 db_class_prompt,
+                db_file_prompt_contents,
+                db_instance_token,
+                db_class_token,
                 db_save_sample_prompt,
                 db_save_sample_negative_prompt,
                 db_n_save_sample,
