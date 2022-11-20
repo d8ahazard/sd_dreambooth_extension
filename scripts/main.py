@@ -144,6 +144,7 @@ def on_ui_tabs():
                             gr.HTML(value="")
 
             with gr.Column(variant="panel"):
+                db_status = gr.HTML(elem_id="db_status", value="")
                 db_progress = gr.HTML(elem_id="db_progress", value="")
                 db_outcome = gr.HTML(elem_id="db_error", value="")
                 db_progressbar = gr.HTML(elem_id="db_progressbar")
@@ -201,6 +202,7 @@ def on_ui_tabs():
             fn=performance_wizard,
             inputs=[],
             outputs=[
+                db_status,
                 db_num_class_images,
                 db_train_batch_size,
                 db_sample_batch_size,
@@ -226,7 +228,11 @@ def on_ui_tabs():
                 db_use_ema
             ],
             outputs=[
-                db_max_train_steps, db_num_class_images, db_learning_rate, db_train_text_encoder
+                db_status,
+                db_max_train_steps,
+                db_num_class_images,
+                db_learning_rate,
+                db_train_text_encoder
             ]
         )
 
@@ -242,7 +248,11 @@ def on_ui_tabs():
                 db_use_ema
             ],
             outputs=[
-                db_max_train_steps, db_num_class_images, db_learning_rate, db_train_text_encoder
+                db_status,
+                db_max_train_steps,
+                db_num_class_images,
+                db_learning_rate,
+                db_train_text_encoder
             ]
         )
 
@@ -254,7 +264,7 @@ def on_ui_tabs():
                 db_half_model
             ],
             outputs=[
-                db_progress,
+                db_status,
                 db_outcome
             ]
         )
@@ -270,7 +280,7 @@ def on_ui_tabs():
             ],
             outputs=[
                 db_model_dir,
-                db_progress,
+                db_status,
                 db_outcome,
             ]
         )
@@ -331,7 +341,7 @@ def on_ui_tabs():
                 db_class_infer_steps
             ],
             outputs=[
-                db_progress,
+                db_status,
                 db_outcome,
             ]
         )
@@ -440,7 +450,7 @@ def on_ui_tabs():
                 db_class_negative_prompt,
                 db_class_guidance_scale,
                 db_class_infer_steps,
-                db_progress
+                db_status
             ]
         )
 

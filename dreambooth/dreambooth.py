@@ -18,6 +18,7 @@ from extensions.sd_dreambooth_extension.dreambooth import conversion
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from modules import paths, shared, devices, sd_models
 from diffusers import StableDiffusionPipeline
+from diffusers.utils.import_utils import is_xformers_available
 from extensions.sd_dreambooth_extension.dreambooth.xattention import save_pretrained
 
 try:
@@ -138,7 +139,7 @@ def training_wizard(
 
     if concepts is None:
         print("Error loading params.")
-        return 1000, 100, False, 0, "constant"
+        return "Unable to load concepts.", 1000, 100, False, 0, "constant"
 
     # Count the total number of images in all datasets
     total_images = 0
@@ -152,7 +153,7 @@ def training_wizard(
 
     if total_images == 0:
         print("No training images found, can't do math.")
-        return 1000, 100, False, 0, "constant"
+        return "No training images found, can't do math.", 1000, 100, False, 0, "constant"
 
     # Set "base" value
     required_steps = total_images * 50
@@ -170,7 +171,7 @@ def training_wizard(
     else:
         required_steps = required_steps - total_steps
 
-    return required_steps, num_class_images, learning_rate, train_text_encoder
+    return f"Wizard completed, using {required_steps} lifetime steps and {num_class_images} class images.", required_steps, num_class_images, learning_rate, train_text_encoder
 
 
 def performance_wizard():
@@ -184,6 +185,7 @@ def performance_wizard():
     mixed_precision = 'fp16'
     use_cpu = False
     use_8bit_adam = True
+    gb = 0
     try:
         t = torch.cuda.get_device_properties(0).total_memory
         gb = math.ceil(t / 1073741824)
@@ -195,19 +197,37 @@ def performance_wizard():
             use_ema = True
             use_8bit_adam = False
             gradient_checkpointing = False
-        if 24 > gb >= 12:
+        if 24 > gb >= 10:
             train_text_encoder = True
             use_ema = False
             gradient_checkpointing = True
             not_cache_latents = True
-        if gb < 12:
+        if gb < 10:
             use_cpu = True
             use_8bit_adam = False
             mixed_precision = 'no'
+
     except:
         pass
+    msg = f"Calculated training params based on {gb}GB of VRAM detected."
 
-    return num_class_images, train_batch_size, sample_batch_size, not_cache_latents, gradient_checkpointing, use_ema, \
+    has_xformers = False
+    try:
+        if (shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers) and is_xformers_available():
+            import xformers
+            import xformers.ops
+            has_xformers = shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers
+    except:
+        pass
+    if has_xformers:
+        use_8bit_adam = True
+        mixed_precision = "fp16"
+        msg += "<br>Xformers detected, enabling 8Bit Adam and setting mixed precision to 'fp16'"
+        print()
+
+    if use_cpu:
+        msg += "<br>Detected less than 10GB of VRAM, setting CPU training to true."
+    return msg, num_class_images, train_batch_size, sample_batch_size, not_cache_latents, gradient_checkpointing, use_ema, \
            train_text_encoder, mixed_precision, use_cpu, use_8bit_adam
 
 
@@ -457,6 +477,7 @@ def start_training(model_dir,
     if config.num_class_images == 0:
         config.with_prior_preservation = False
 
+    # Ensure we have a max token length set
     if config.max_token_length is None or config.max_token_length == 0:
         config.max_token_length = 75
 
@@ -469,7 +490,20 @@ def start_training(model_dir,
 
     config.save()
     msg = None
-
+    has_xformers = False
+    try:
+        if (shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers) and is_xformers_available():
+            import xformers
+            import xformers.ops
+            has_xformers = shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers
+    except:
+        pass
+    if has_xformers:
+        if not use_8bit_adam or mixed_precision == "no":
+            msg = "Xformers detected, please enable 8Bit Adam and set mixed precision to 'fp16' to continue."
+    if use_cpu:
+        if use_8bit_adam or mixed_precision != "no":
+            msg = "CPU Training detected, please disable 8Bit Adam and set mixed precision to 'no' to continue."
     if not isset(instance_data_dir) and not isset(concepts_list):
         msg = "No instance data specified."
     if not isset(instance_prompt) and not isset(concepts_list):
@@ -507,7 +541,7 @@ def start_training(model_dir,
     if msg:
         shared.state.textinfo = msg
         print(msg)
-        return msg, ""
+        return msg, msg
 
     # Clear memory and do "stuff" only after we've ensured all the things are right
     print("Starting Dreambooth training...")
