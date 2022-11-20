@@ -60,7 +60,7 @@ def on_ui_tabs():
                             db_class_data_dir = gr.Textbox(label='Classification Dataset Directory',
                                                            placeholder="(Optional) Path to directory with "
                                                                        "classification/regularization images")
-                            db_file_prompt_contents = gr.Dropdown(label="Existing Prompt Contents",
+                            db_file_prompt_contents = gr.Dropdown(label="Existing Prompt Contents", value="Description",
                                                                   choices=["Description",
                                                                            "Instance Token + Description",
                                                                            "Class Token + Description",
