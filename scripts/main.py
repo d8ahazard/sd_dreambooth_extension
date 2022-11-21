@@ -12,7 +12,7 @@ def on_ui_tabs():
     with gr.Blocks() as dreambooth_interface:
         with gr.Row(equal_height=True):
             db_model_dir = gr.Dropdown(label='Model', choices=sorted(get_db_models()))
-            db_half_model = gr.Checkbox(label="Half Model", value=False)
+            db_half_model = gr.Checkbox(label="Half", value=False)
             db_load_params = gr.Button(value='Load Params')
             db_generate_checkpoint = gr.Button(value="Generate Ckpt")
             db_interrupt_training = gr.Button(value="Cancel")
@@ -42,106 +42,136 @@ def on_ui_tabs():
                     with gr.Accordion(open=True, label="Settings"):
                         db_train_wizard_person = gr.Button(value="Training Wizard (Person)")
                         db_train_wizard_object = gr.Button(value="Training Wizard (Object/Style)")
-                        db_max_train_steps = gr.Number(label='Training Steps', value=1000, precision=0)
+                        with gr.Column():
+                            gr.HTML(value="Intervals")
+                            db_max_train_steps = gr.Number(label='Training Steps', value=1000, precision=0)
+                            db_num_train_epochs = gr.Number(label="Training Epochs", precision=0, value=1)
+                            db_save_embedding_every = gr.Number(
+                                label='Save Checkpoint Frequency', value=500,
+                                precision=0)
+                            db_save_preview_every = gr.Number(
+                                label='Save Preview(s) Frequency', value=500,
+                                precision=0)
+
+                        with gr.Column():
+                            gr.HTML(value="Learning Rate")
+                            db_learning_rate = gr.Number(label='Learning Rate', value=1.72e-6)
+                            db_scale_lr = gr.Checkbox(label="Scale Learning Rate", value=False)
+                            db_lr_scheduler = gr.Dropdown(label="Learning Rate Scheduler", value="constant",
+                                                          choices=["linear", "cosine", "cosine_with_restarts",
+                                                                   "polynomial", "constant",
+                                                                   "constant_with_warmup"])
+                            db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=0)
+
+                        with gr.Column():
+                            gr.HTML(value="Instance Image Processing")
+                            db_resolution = gr.Number(label="Resolution", precision=0, value=512)
+                            db_center_crop = gr.Checkbox(label="Center Crop", value=False)
+                            db_hflip = gr.Checkbox(label="Apply Horizontal Flip", value=True)
+                        db_pretrained_vae_name_or_path = gr.Textbox(label='Pretrained VAE Name or Path',
+                                                                    placeholder="Leave blank to use base model VAE.",
+                                                                    value="")
+
                         db_use_concepts = gr.Checkbox(label="Use Concepts List", value=False)
-                        with gr.Row(visible=False) as concepts_row:
+                        with gr.Column(visible=False) as concepts_col:
+                            gr.HTML(value="Concepts")
                             db_concepts_list = gr.Textbox(label="Concepts List",
                                                           placeholder="Path to JSON file with concepts to train, "
                                                                       "or a JSON string.")
-                        with gr.Column() as prompts_col:
-                            db_instance_prompt = gr.Textbox(label="Instance prompt",
-                                                            placeholder="Optionally use [filewords] to read image "
-                                                                        "captions from files.")
+                        with gr.Column() as dir_col:
+                            gr.HTML(value="Directories")
                             db_instance_data_dir = gr.Textbox(label='Dataset Directory',
                                                               placeholder="Path to directory with input images")
-                            db_class_prompt = gr.Textbox(label="Class Prompt",
-                                                         placeholder="Optionally use [filewords] to read image "
-                                                                     "captions from files.")
                             db_class_data_dir = gr.Textbox(label='Classification Dataset Directory',
                                                            placeholder="(Optional) Path to directory with "
                                                                        "classification/regularization images")
-                            db_file_prompt_contents = gr.Dropdown(label="Existing Prompt Contents", value="Description",
+
+                        with gr.Column():
+                            gr.HTML(value="Prompts")
+                            db_file_prompt_contents = gr.Dropdown(label="Existing Prompt Contents",
+                                                                  value="Description",
                                                                   choices=["Description",
                                                                            "Instance Token + Description",
                                                                            "Class Token + Description",
                                                                            "Instance Token + Class Token + Description"])
-                            db_instance_token = gr.Textbox(label='Instance Token')
-                            db_class_token = gr.Textbox(label='Class Token')
 
+                            with gr.Column() as prompts_col:
+                                db_instance_prompt = gr.Textbox(label="Instance prompt",
+                                                                placeholder="Optionally use [filewords] to read image "
+                                                                            "captions from files.")
+                                db_class_prompt = gr.Textbox(label="Class Prompt",
+                                                             placeholder="Optionally use [filewords] to read image "
+                                                                         "captions from files.")
+                                db_save_sample_prompt = gr.Textbox(label="Sample Image Prompt",
+                                                                   placeholder="Leave blank to use instance prompt. "
+                                                                               "Optionally use [filewords] to base "
+                                                                               "sample captions on instance images.")
+                                db_instance_token = gr.Textbox(label='Instance Token', placeholder="When using [filewords], this is the subject to use when building prompts.")
+                                db_class_token = gr.Textbox(label='Class Token', placeholder="When using [filewords], this is the class to use when building prompts.")
 
-                        db_num_class_images = gr.Number(
-                            label='Total Number of Class/Reg Images', value=0,
-                            precision=0)
-                        with gr.Column() as class_col:
-                            db_class_negative_prompt = gr.Textbox(label="Classification Image Negative Prompt")
-                            db_class_guidance_scale = gr.Number(label="Classification CFG Scale", value=7.5, max=12,
-                                                                min=1,
-                                                                precision=2)
-                            db_class_infer_steps = gr.Number(label="Classification Steps", value=40, min=10, max=200,
+                            with gr.Column():
+                                gr.HTML(value="Class Images")
+                                db_num_class_images = gr.Number(
+                                    label='Total Number of Class/Reg Images', value=0, precision=0)
+
+                                with gr.Column(visible=False) as class_col:
+                                    db_class_negative_prompt = gr.Textbox(label="Classification Image Negative Prompt")
+                                    db_class_guidance_scale = gr.Number(label="Classification CFG Scale", value=7.5, max=12,
+                                                                        min=1,
+                                                                        precision=2)
+                                    db_class_infer_steps = gr.Number(label="Classification Steps", value=40, min=10, max=200,
+                                                                     precision=0)
+                            with gr.Column() as sample_settings:
+                                gr.HTML(value="Sample Images")
+                                db_save_sample_negative_prompt = gr.Textbox(label="Sample Image Negative Prompt")
+                                db_n_save_sample = gr.Number(label="Number of Samples to Generate", value=1,
                                                              precision=0)
-                        db_resolution = gr.Number(label="Resolution", precision=0, value=512)
-                        db_pretrained_vae_name_or_path = gr.Textbox(label='Pretrained VAE Name or Path',
-                                                                    placeholder="Leave blank to use base model VAE.",
-                                                                    value="")
-                        db_scale_lr = gr.Checkbox(label="Scale Learning Rate", value=False)
-                        db_learning_rate = gr.Number(label='Learning Rate', value=1.72e-6)
-                        db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=0)
-                        db_lr_scheduler = gr.Dropdown(label="Learning Rate Scheduler", value="constant",
-                                                      choices=["linear", "cosine", "cosine_with_restarts",
-                                                               "polynomial", "constant",
-                                                               "constant_with_warmup"])
-
-                        db_save_embedding_every = gr.Number(
-                            label='Save Checkpoint Frequency', value=500,
-                            precision=0)
-                        db_save_preview_every = gr.Number(
-                            label='Save Preview(s) Frequency', value=500,
-                            precision=0)
-                        with gr.Column() as sample_settings:
-                            db_save_sample_prompt = gr.Textbox(label="Sample Image Prompt",
-                                                               placeholder="Leave blank to use instance prompt.")
-                            db_save_sample_negative_prompt = gr.Textbox(label="Sample Image Negative Prompt")
-                            db_n_save_sample = gr.Number(label="Number of Samples to Generate", value=1, precision=0)
-                            db_sample_seed = gr.Number(label="Sample Seed", value=None, precision=0)
-                            db_save_guidance_scale = gr.Number(label="Sample CFG Scale", value=7.5, max=12, min=1,
-                                                               precision=2)
-                            db_save_infer_steps = gr.Number(label="Sample Steps", value=40, min=10, max=200,
-                                                            precision=0)
+                                db_sample_seed = gr.Number(label="Sample Seed", value=None, precision=0)
+                                db_save_guidance_scale = gr.Number(label="Sample CFG Scale", value=7.5, max=12, min=1,
+                                                                   precision=2)
+                                db_save_infer_steps = gr.Number(label="Sample Steps", value=40, min=10, max=200,
+                                                                precision=0)
 
                     with gr.Accordion(open=False, label="Advanced"):
                         with gr.Row():
                             with gr.Column():
                                 db_performance_wizard = gr.Button(value="Auto-Adjust (WIP)")
-                                db_train_batch_size = gr.Number(label="Batch Size", precision=0, value=1)
-                                db_sample_batch_size = gr.Number(label="Class Batch Size", precision=0, value=1)
-                                db_use_cpu = gr.Checkbox(label="Use CPU Only (SLOW)", value=False)
-                                db_not_cache_latents = gr.Checkbox(label="Don't Cache Latents", value=True)
-                                db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
-                                db_shuffle_after_epoch = gr.Checkbox(label="Shuffle After Epoch", value=False)
-                                db_use_ema = gr.Checkbox(label="Train EMA", value=False)
-                                db_attention = gr.Dropdown(
-                                    label="Memory Attention", value="default",
-                                    choices=["default", "xformers", "flash_attention"])
-                                db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
-                                db_gradient_checkpointing = gr.Checkbox(label="Gradient Checkpointing", value=True)
-                                db_gradient_accumulation_steps = gr.Number(label="Gradient Accumulation Steps",
-                                                                           precision=0,
-                                                                           value=1)
-                                db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
-                                                                 choices=["no", "fp16", "bf16"])
+                                with gr.Column():
+                                    gr.HTML(value="Batch")
+                                    db_train_batch_size = gr.Number(label="Batch Size", precision=0, value=1)
+                                    db_sample_batch_size = gr.Number(label="Class Batch Size", precision=0, value=1)
+                                with gr.Column():
+                                    gr.HTML(value="Tuning")
+                                    db_use_cpu = gr.Checkbox(label="Use CPU Only (SLOW)", value=False)
+                                    db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
+                                    db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
+                                                                     choices=["no", "fp16", "bf16"])
+                                    db_attention = gr.Dropdown(
+                                        label="Memory Attention", value="default",
+                                        choices=["default", "xformers", "flash_attention"])
 
-                                db_center_crop = gr.Checkbox(label="Center Crop", value=False)
-                                db_hflip = gr.Checkbox(label="Apply Horizontal Flip", value=True)
-                                db_num_train_epochs = gr.Number(label="# Training Epochs", precision=0, value=1)
-                                db_adam_beta1 = gr.Number(label="Adam Beta 1", precision=1, value=0.9)
-                                db_adam_beta2 = gr.Number(label="Adam Beta 2", precision=3, value=0.999)
-                                db_adam_weight_decay = gr.Number(label="Adam Weight Decay", precision=3, value=0.01)
-                                db_adam_epsilon = gr.Number(label="Adam Epsilon", precision=8, value=0.00000001)
-                                db_max_grad_norm = gr.Number(label="Max Grad Norms", value=1.0, precision=1)
-                                db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
-                                db_max_token_length = gr.Dropdown(
-                                    label="Max Token Length (Requires Pad Tokens for > 75)", value="75",
-                                    choices=["75", "150", "225", "300"])
+                                    db_not_cache_latents = gr.Checkbox(label="Don't Cache Latents", value=True)
+                                    db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
+                                    db_use_ema = gr.Checkbox(label="Train EMA", value=False)
+                                    db_shuffle_after_epoch = gr.Checkbox(label="Shuffle After Epoch", value=False)
+                                    db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
+                                    db_max_token_length = gr.Dropdown(
+                                        label="Max Token Length (Requires Pad Tokens for > 75)", value="75",
+                                        choices=["75", "150", "225", "300"])
+                                with gr.Column():
+                                    gr.HTML("Gradients")
+                                    db_gradient_checkpointing = gr.Checkbox(label="Gradient Checkpointing", value=True)
+                                    db_gradient_accumulation_steps = gr.Number(label="Gradient Accumulation Steps",
+                                                                               precision=0,
+                                                                               value=1)
+                                    db_max_grad_norm = gr.Number(label="Max Grad Norms", value=1.0, precision=1)
+
+                                with gr.Column():
+                                    gr.HTML("Adam Advanced")
+                                    db_adam_beta1 = gr.Number(label="Adam Beta 1", precision=1, value=0.9)
+                                    db_adam_beta2 = gr.Number(label="Adam Beta 2", precision=3, value=0.999)
+                                    db_adam_weight_decay = gr.Number(label="Adam Weight Decay", precision=3, value=0.01)
+                                    db_adam_epsilon = gr.Number(label="Adam Epsilon", precision=8, value=0.00000001)
 
                     with gr.Row():
                         with gr.Column(scale=2):
@@ -203,13 +233,15 @@ def on_ui_tabs():
 
         db_use_concepts.change(
             fn=lambda x: {
-                concepts_row: gr_show(x is True),
-                prompts_col: gr_show(x is False)
+                concepts_col: gr_show(x is True),
+                prompts_col: gr_show(x is False),
+                dir_col: gr_show(x is False)
             },
             inputs=[db_use_concepts],
             outputs=[
-                concepts_row,
-                prompts_col
+                concepts_col,
+                prompts_col,
+                dir_col
             ]
         )
 

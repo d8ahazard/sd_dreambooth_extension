@@ -14,7 +14,6 @@ ex_titles = titles;
 console.log("Existing titles: ", ex_titles);
 
 new_titles = {
-    "# Training Epochs": "Set this or number of steps to train for, not both.",
     "Adam Beta 1": "The beta1 parameter for the Adam optimizer.",
     "Adam Beta 2": "The beta2 parameter for the Adam optimizer.",
     "Adam Epsilon": "",
@@ -37,9 +36,10 @@ new_titles = {
     "Dataset Directory": "The directory containing training images.",
     "Don't Cache Latents": "When this box is *checked* latents will not be cached. When latents are not cached, you will save a bit of VRAM, but train slightly slower",
     "Existing Prompt Contents": "If using [filewords], this tells the string builder how the existing prompts are formatted.",
-    "Generate Ckpt": "Generate a checkpoint at the current training lvel.",
+    "Generate Ckpt": "Generate a checkpoint at the current training level.",
     "Gradient Accumulation Steps": "Set this to 2 to increase speed?",
     "Gradient Checkpointing": "Don't checkpoint the gradients, Duh. Set to False to slightly increase speed at the cost of a bit of VRAM.",
+    "Half Model": "Enable this to generate model with fp16 precision. Results in a smaller checkpoint with minimal loss in quality.",
     "HuggingFace Token": "Your huggingface token to use for cloning files.",
     "Import Model from Huggingface Hub": "Import a model from Huggingface.co instead of using a local checkpoint.",
     "Instance Prompt": "A prompt describing the subject. Use [Filewords] to parse image filename or .txt to insert existing prompt here.",
@@ -72,10 +72,11 @@ new_titles = {
     "Total Number of Class/Reg Images": "Total number of classification/regularization images to use. If no images exist, they will be generated. Set to 0 to disable prior preservation.",
     "Train EMA": "Enabling this will provide better results and editability, but cost more VRAM.",
     "Train Text Encoder": "Enabling this will provide better results and editability, but cost more VRAM.",
+    "Training Epochs": "Set this or number of steps to train for, not both.",
     "Train": "Start training.",
     "Training Steps": "Total number of training steps to perform. If provided, overrides num_train_epochs.",
-    "Training Wizard (Object/Style)": "Calculate training parameters for a non-human subject based on number of images and set larning rate. Disables prior preservation.",
-    "Training Wizard (Person)": "Calculate training parameters for a human subject based on number of images and set learning rate. Enables prior preservation.",
+    "Training Wizard (Object/Style)": "Calculate training parameters for a non-human subject based on number of instance images and set larning rate. Disables prior preservation.",
+    "Training Wizard (Person)": "Calculate training parameters for a human subject based on number of instance images and set learning rate. Enables prior preservation.",
     "Use 8bit Adam": "Enable this to save VRAM.",
     "Use CPU Only (SLOW)": "Guess what - this will be incredibly slow, but it will work for < 8GB GPUs.",
     "Use Concepts List": "Train multiple concepts from a JSON file or string."
