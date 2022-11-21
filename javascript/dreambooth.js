@@ -51,7 +51,7 @@ new_titles = {
     "Max Grad Norms": "Max Gradient norms.",
     "Max Token Length": "Maximum token length to respect. You probably want to leave this at 75.",
     "Memory Attention": "The type of memory attention to use. Selecting 'xformers' requires the --xformers command line argument.",
-    "Mixed Precision": "You probably want this to be 'fp16'.",
+    "Mixed Precision": "You probably want this to be 'fp16'. If using xformers, you definitely want this to be 'fp16'.",
     "Model Path": "The URL to the model on huggingface. Should be in the format of 'developer/model_name'.",
     "Model": "The model to train.",
     "Name": "The name of the model to create.",
