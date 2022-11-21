@@ -125,51 +125,6 @@ for j in range(2):
     sd_mid_res_prefix = f"middle_block.{2 * j}."
     unet_conversion_map_layer.append((sd_mid_res_prefix, hf_mid_res_prefix))
 
-vae_conversion_map = [
-    # (stable-diffusion, HF Diffusers)
-    ("nin_shortcut", "conv_shortcut"),
-    ("norm_out", "conv_norm_out"),
-    ("mid.attn_1.", "mid_block.attentions.0."),
-]
-
-for i in range(4):
-    # down_blocks have two resnets
-    for j in range(2):
-        hf_down_prefix = f"encoder.down_blocks.{i}.resnets.{j}."
-        sd_down_prefix = f"encoder.down.{i}.block.{j}."
-        vae_conversion_map.append((sd_down_prefix, hf_down_prefix))
-
-    if i < 3:
-        hf_downsample_prefix = f"down_blocks.{i}.downsamplers.0."
-        sd_downsample_prefix = f"down.{i}.downsample."
-        vae_conversion_map.append((sd_downsample_prefix, hf_downsample_prefix))
-
-        hf_upsample_prefix = f"up_blocks.{i}.upsamplers.0."
-        sd_upsample_prefix = f"up.{3 - i}.upsample."
-        vae_conversion_map.append((sd_upsample_prefix, hf_upsample_prefix))
-
-    # up_blocks have three resnets
-    # also, up blocks in hf are numbered in reverse from sd
-    for j in range(3):
-        hf_up_prefix = f"decoder.up_blocks.{i}.resnets.{j}."
-        sd_up_prefix = f"decoder.up.{3 - i}.block.{j}."
-        vae_conversion_map.append((sd_up_prefix, hf_up_prefix))
-
-# this part accounts for mid blocks in both the encoder and the decoder
-for i in range(2):
-    hf_mid_res_prefix = f"mid_block.resnets.{i}."
-    sd_mid_res_prefix = f"mid.block_{i + 1}."
-    vae_conversion_map.append((sd_mid_res_prefix, hf_mid_res_prefix))
-
-vae_conversion_map_attn = [
-    # (stable-diffusion, HF Diffusers)
-    ("norm.", "group_norm."),
-    ("q.", "query."),
-    ("k.", "key."),
-    ("v.", "value."),
-    ("proj_out.", "proj_attn."),
-]
-
 
 def shave_segments(path, n_shave_prefix_segments=1):
     """
@@ -262,7 +217,7 @@ def renew_vae_attention_paths(old_list, n_shave_prefix_segments=0):
 
 
 def assign_to_checkpoint(
-        paths, checkpoint, old_checkpoint, attention_paths_to_split=None, additional_replacements=None, config=None
+    paths, checkpoint, old_checkpoint, attention_paths_to_split=None, additional_replacements=None, config=None
 ):
     """
     This does the final conversion step: take locally converted weights and apply a global renaming
@@ -406,15 +361,31 @@ def create_ldm_bert_config(original_config):
     return config
 
 
-def convert_ldm_unet_checkpoint(checkpoint, config):
+def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False):
     """
     Takes a state dict and a config, and returns a converted checkpoint.
     """
 
     # extract state_dict for UNet
     unet_state_dict = {}
-    unet_key = "model.diffusion_model."
     keys = list(checkpoint.keys())
+    unet_key = "model.diffusion_model."
+    if sum(k.startswith("model_ema") for k in keys) > 100:
+        print(f"Checkpoint {path} has both EMA and non-EMA weights.")
+        if extract_ema:
+            print(
+                "In this conversion only the EMA weights are extracted. If you want to instead extract the non-EMA"
+                " weights (useful to continue fine-tuning), please make sure to remove the `--extract_ema` flag."
+            )
+            for key in keys:
+                if key.startswith("model.diffusion_model"):
+                    flat_ema_key = "model_ema." + "".join(key.split(".")[1:])
+                    unet_state_dict[key.replace(unet_key, "")] = checkpoint.pop(flat_ema_key)
+        else:
+            print(
+                "In this conversion only the non-EMA weights are extracted. If you want to instead extract the EMA"
+                " weights (usually better for inference), please make sure to add the `--extract_ema` flag."
+            )
     for key in keys:
         if key.startswith(unet_key):
             unet_state_dict[key.replace(unet_key, "")] = checkpoint.pop(key)
@@ -514,6 +485,7 @@ def convert_ldm_unet_checkpoint(checkpoint, config):
             resnets = [key for key in output_blocks[i] if f"output_blocks.{i}.0" in key]
             attentions = [key for key in output_blocks[i] if f"output_blocks.{i}.1" in key]
 
+            resnet_0_paths = renew_resnet_paths(resnets)
             paths = renew_resnet_paths(resnets)
 
             meta_path = {"old": f"output_blocks.{i}.0", "new": f"up_blocks.{block_id}.resnets.{layer_in_block_id}"}
@@ -563,22 +535,23 @@ def convert_ldm_vae_checkpoint(checkpoint, config):
         if key.startswith(vae_key):
             vae_state_dict[key.replace(vae_key, "")] = checkpoint.get(key)
 
-    new_checkpoint = {"encoder.conv_in.weight": vae_state_dict["encoder.conv_in.weight"],
-                      "encoder.conv_in.bias": vae_state_dict["encoder.conv_in.bias"],
-                      "encoder.conv_out.weight": vae_state_dict["encoder.conv_out.weight"],
-                      "encoder.conv_out.bias": vae_state_dict["encoder.conv_out.bias"],
-                      "encoder.conv_norm_out.weight": vae_state_dict["encoder.norm_out.weight"],
-                      "encoder.conv_norm_out.bias": vae_state_dict["encoder.norm_out.bias"],
-                      "decoder.conv_in.weight": vae_state_dict["decoder.conv_in.weight"],
-                      "decoder.conv_in.bias": vae_state_dict["decoder.conv_in.bias"],
-                      "decoder.conv_out.weight": vae_state_dict["decoder.conv_out.weight"],
-                      "decoder.conv_out.bias": vae_state_dict["decoder.conv_out.bias"],
-                      "decoder.conv_norm_out.weight": vae_state_dict["decoder.norm_out.weight"],
-                      "decoder.conv_norm_out.bias": vae_state_dict["decoder.norm_out.bias"],
-                      "quant_conv.weight": vae_state_dict["quant_conv.weight"],
-                      "quant_conv.bias": vae_state_dict["quant_conv.bias"],
-                      "post_quant_conv.weight": vae_state_dict["post_quant_conv.weight"],
-                      "post_quant_conv.bias": vae_state_dict["post_quant_conv.bias"]}
+    new_checkpoint = {}
+    new_checkpoint["encoder.conv_in.weight"] = vae_state_dict["encoder.conv_in.weight"]
+    new_checkpoint["encoder.conv_in.bias"] = vae_state_dict["encoder.conv_in.bias"]
+    new_checkpoint["encoder.conv_out.weight"] = vae_state_dict["encoder.conv_out.weight"]
+    new_checkpoint["encoder.conv_out.bias"] = vae_state_dict["encoder.conv_out.bias"]
+    new_checkpoint["encoder.conv_norm_out.weight"] = vae_state_dict["encoder.norm_out.weight"]
+    new_checkpoint["encoder.conv_norm_out.bias"] = vae_state_dict["encoder.norm_out.bias"]
+    new_checkpoint["decoder.conv_in.weight"] = vae_state_dict["decoder.conv_in.weight"]
+    new_checkpoint["decoder.conv_in.bias"] = vae_state_dict["decoder.conv_in.bias"]
+    new_checkpoint["decoder.conv_out.weight"] = vae_state_dict["decoder.conv_out.weight"]
+    new_checkpoint["decoder.conv_out.bias"] = vae_state_dict["decoder.conv_out.bias"]
+    new_checkpoint["decoder.conv_norm_out.weight"] = vae_state_dict["decoder.norm_out.weight"]
+    new_checkpoint["decoder.conv_norm_out.bias"] = vae_state_dict["decoder.norm_out.bias"]
+    new_checkpoint["quant_conv.weight"] = vae_state_dict["quant_conv.weight"]
+    new_checkpoint["quant_conv.bias"] = vae_state_dict["quant_conv.bias"]
+    new_checkpoint["post_quant_conv.weight"] = vae_state_dict["post_quant_conv.weight"]
+    new_checkpoint["post_quant_conv.bias"] = vae_state_dict["post_quant_conv.bias"]
 
     # Retrieves the keys for the encoder down blocks only
     num_down_blocks = len({".".join(layer.split(".")[:3]) for layer in vae_state_dict if "encoder.down" in layer})
@@ -759,6 +732,52 @@ def convert_unet_state_dict(unet_state_dict):
     new_state_dict = {v: unet_state_dict[k] for k, v in mapping.items()}
     return new_state_dict
 
+vae_conversion_map = [
+    # (stable-diffusion, HF Diffusers)
+    ("nin_shortcut", "conv_shortcut"),
+    ("norm_out", "conv_norm_out"),
+    ("mid.attn_1.", "mid_block.attentions.0."),
+]
+
+for i in range(4):
+    # down_blocks have two resnets
+    for j in range(2):
+        hf_down_prefix = f"encoder.down_blocks.{i}.resnets.{j}."
+        sd_down_prefix = f"encoder.down.{i}.block.{j}."
+        vae_conversion_map.append((sd_down_prefix, hf_down_prefix))
+
+    if i < 3:
+        hf_downsample_prefix = f"down_blocks.{i}.downsamplers.0."
+        sd_downsample_prefix = f"down.{i}.downsample."
+        vae_conversion_map.append((sd_downsample_prefix, hf_downsample_prefix))
+
+        hf_upsample_prefix = f"up_blocks.{i}.upsamplers.0."
+        sd_upsample_prefix = f"up.{3-i}.upsample."
+        vae_conversion_map.append((sd_upsample_prefix, hf_upsample_prefix))
+
+    # up_blocks have three resnets
+    # also, up blocks in hf are numbered in reverse from sd
+    for j in range(3):
+        hf_up_prefix = f"decoder.up_blocks.{i}.resnets.{j}."
+        sd_up_prefix = f"decoder.up.{3-i}.block.{j}."
+        vae_conversion_map.append((sd_up_prefix, hf_up_prefix))
+
+# this part accounts for mid blocks in both the encoder and the decoder
+for i in range(2):
+    hf_mid_res_prefix = f"mid_block.resnets.{i}."
+    sd_mid_res_prefix = f"mid.block_{i+1}."
+    vae_conversion_map.append((sd_mid_res_prefix, hf_mid_res_prefix))
+
+
+vae_conversion_map_attn = [
+    # (stable-diffusion, HF Diffusers)
+    ("norm.", "group_norm."),
+    ("q.", "query."),
+    ("k.", "key."),
+    ("v.", "value."),
+    ("proj_out.", "proj_attn."),
+]
+
 
 def reshape_weight_for_sd(w):
     # convert HF linear weights to SD conv2d weights
@@ -790,8 +809,10 @@ def convert_text_enc_state_dict(text_enc_dict):
 
 
 def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type="ddim", new_model_url="",
-                       new_model_token=""):
+                       new_model_token="", extract_ema=False):
     shared.state.job_count = 8
+    if shared.sd_model is not None:
+        shared.sd_model.to('cpu')
     map_location = shared.device
     # Set up our base directory for the model and sanitize our file name
     new_model_name = "".join(x for x in new_model_name if x.isalnum())
@@ -822,15 +843,17 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
                 print("Unable to find checkpoint file!")
                 shared.state.job_no = 8
                 return None, "Unable to find base checkpoint.", ""
-
+            checkpoint = None
             if shared.cmd_opts.ckptfix or shared.cmd_opts.medvram or shared.cmd_opts.lowvram:
                 printm(f"Using CPU for extraction.")
                 map_location = torch.device('cpu')
             try:
                 checkpoint = torch.load(checkpoint_info[0], map_location=map_location)["state_dict"]
+                checkpoint_path = checkpoint_info[0]
                 checkpoint_loaded = True
             except KeyError:
                 pass
+
             if not checkpoint_loaded:
                 print("State dict not found in the usual spot, trying something else.")
                 try:
@@ -875,7 +898,8 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
             unet_config = create_unet_diffusers_config(original_config)
             shared.state.textinfo = "Created unet config..."
             shared.state.job_no = 3
-            converted_unet_checkpoint = convert_ldm_unet_checkpoint(checkpoint, unet_config)
+            converted_unet_checkpoint = convert_ldm_unet_checkpoint(checkpoint, unet_config, path=checkpoint_path,
+                                                                    extract_ema=extract_ema)
             shared.state.textinfo = "Converted unet checkpoint..."
             shared.state.job_no = 4
             unet = UNet2DConditionModel(**unet_config)
@@ -922,7 +946,23 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
         shared.state.textinfo = "Pretrained saved..."
         shared.state.job_no = 8
         del pipe
+    try:
+        del vae
+        del text_model
+        del tokenizer
+        del unet
+        del scheduler
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+        gc.collect()
+    except:
+        pass
+    if shared.sd_model is not None:
+        shared.sd_model.to(shared.device)
+    printm("Extraction completed.")
     dirs = get_db_models()
+
     return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), f"Created working directory for {new_model_name} at {out_dir}.", ""
 
 
