@@ -91,20 +91,20 @@ class DreamboothConfig(dict):
                 ):
 
         model_dir = images.sanitize_filename_part(model_dir, True)
-        dict = {}
+        base_dict = {}
         try:
-            dict = self.from_file(model_dir)
+            base_dict = self.from_file(model_dir)
         except:
             print(f"Exception loading model from path: {model_dir}")
 
         if "revision" not in self.__dict__:
-            dict["revision"] = 0
+            base_dict["revision"] = 0
         pretrained_vae_name_or_path = images.sanitize_filename_part(pretrained_vae_name_or_path, True)
         models_path = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
         model_dir = os.path.join(models_path, "dreambooth", model_dir)
         working_dir = os.path.join(model_dir, "working")
         with_prior_preservation = num_class_images is not None and num_class_images > 0
-        dict["pretrained_model_name_or_path"] = working_dir
+        base_dict["pretrained_model_name_or_path"] = working_dir
 
         data = {"pretrained_model_name_or_path": working_dir,
                 "model_dir": model_dir,
@@ -162,10 +162,10 @@ class DreamboothConfig(dict):
                 "class_guidance_scale": class_guidance_scale,
                 "class_infer_steps": class_infer_steps,
                 "shuffle_after_epoch": shuffle_after_epoch
-        }
+                }
         for key in data:
-            dict[key] = data[key]
-        self.__dict__ = dict
+            base_dict[key] = data[key]
+        self.__dict__ = base_dict
         return self.__dict__
 
     def from_file(self, model_name):

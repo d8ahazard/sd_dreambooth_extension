@@ -49,7 +49,7 @@ def build_concepts(config: DreamboothConfig):
             output = json.loads(alist)
             is_json = True
             msg = "Loaded concepts from JSON String."
-        except Exception as e:
+        except Exception:
             pass
         if not is_json:
             try:
@@ -88,15 +88,14 @@ def build_concepts(config: DreamboothConfig):
     return output, msg
 
 
-# Borrowed from https://wandb.ai/psuraj/dreambooth/reports/Training-Stable-Diffusion-with-Dreambooth--VmlldzoyNzk0NDc3#tl,dr;
-# and https://www.reddit.com/r/StableDiffusion/comments/ybxv7h/good_dreambooth_formula/
+# Borrowed from https://wandb.ai/psuraj/dreambooth/reports/Training-Stable-Diffusion-with-Dreambooth
+# --VmlldzoyNzk0NDc3#tl,dr; and https://www.reddit.com/r/StableDiffusion/comments/ybxv7h/good_dreambooth_formula/
 def training_wizard_person(
         model_dir,
         use_concepts,
         concepts_list,
         instance_data_dir,
         class_data_dir,
-        train_text_encoder,
         learning_rate
 ):
     return training_wizard(
@@ -105,7 +104,6 @@ def training_wizard_person(
         concepts_list,
         instance_data_dir,
         class_data_dir,
-        train_text_encoder,
         learning_rate,
         is_person=True)
 
@@ -116,7 +114,6 @@ def training_wizard(
         concepts_list,
         instance_data_dir,
         class_data_dir,
-        train_text_encoder,
         learning_rate,
         is_person=False
 ):
@@ -225,8 +222,8 @@ def performance_wizard():
 
     if use_cpu:
         msg += "<br>Detected less than 10GB of VRAM, setting CPU training to true."
-    return msg, num_class_images, train_batch_size, sample_batch_size, not_cache_latents, gradient_checkpointing, use_ema, \
-           train_text_encoder, mixed_precision, use_cpu, use_8bit_adam
+    return msg, num_class_images, train_batch_size, sample_batch_size, not_cache_latents, gradient_checkpointing, \
+           use_ema, train_text_encoder, mixed_precision, use_cpu, use_8bit_adam
 
 
 def printm(msg, reset=False):
@@ -275,7 +272,7 @@ def is_image(path: Path, feats=None):
     return is_img
 
 
-def load_params(model_dir, *args):
+def load_params(model_dir):
     data = DreamboothConfig().from_file(model_dir)
 
     target_values = ["half_model",
@@ -509,28 +506,6 @@ def start_training(model_dir,
         msg = "Invalid Pretrained VAE Path."
     if resolution <= 0:
         msg = "Invalid resolution."
-    if isset(concepts_list):
-        concepts_loaded = False
-        try:
-            alist = str(config.concepts_list)
-            if "'" in alist:
-                alist = alist.replace("'", '"')
-            concepts_list = json.loads(alist)
-            concepts_loaded = True
-        except:
-            pass
-
-        if not concepts_loaded:
-            try:
-                if os.path.exists(concepts_list):
-                    with open(concepts_list, "r") as f:
-                        concepts_list = json.load(f)
-                    concepts_loaded = True
-            except:
-                print("Unable to load concepts from file either, this is bad.")
-                pass
-        if not concepts_loaded:
-            msg = "Unable to parse concepts list."
 
     if msg:
         shared.state.textinfo = msg
@@ -572,20 +547,6 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{username}/{model_id}"
     else:
         return f"{organization}/{model_id}"
-
-
-def printm(msg, reset=False):
-    global mem_record
-    if reset:
-        mem_record = {}
-    allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
-    cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
-    mem_record[msg] = f"{allocated},{cached}"
-    print(f' {msg} \n Allocated: {allocated}GB \n Reserved: {cached}GB \n')
-
-
-def dumb_safety(images, clip_input):
-    return images, False
 
 
 def save_checkpoint(model_name: str, vae_path: str, total_steps: int, use_half: bool = False):

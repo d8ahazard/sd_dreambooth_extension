@@ -8,6 +8,7 @@ clean-fid==0.1.29
 diffusers==0.7.2
 einops==0.4.1
 fairscale==0.4.9
+fastapi==0.87.0
 font-roboto
 fonts
 ftfy==6.1.1

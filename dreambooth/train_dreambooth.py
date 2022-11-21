@@ -20,7 +20,6 @@ from accelerate import Accelerator
 from accelerate.utils import set_seed
 from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, EulerAncestralDiscreteScheduler, \
     StableDiffusionPipeline, UNet2DConditionModel
-from diffusers.models import attention
 from diffusers.optimization import get_scheduler
 from diffusers.utils import logging as dl
 from huggingface_hub import HfFolder, whoami
@@ -351,7 +350,7 @@ def parse_args(input_args=None):
         choices=["default", "xformers", "flash_attention"],
         default="default",
         help="Type of attention to use."
-    )  
+    )
     parser.add_argument(
         "--shuffle_after_epoch",
         action="store_true",
@@ -695,7 +694,6 @@ def main(args, memory_record):
                                 txt_filename = class_images_dir / f"{generated_images + cur_class_images}-" \
                                                                   f"{hash_image}.txt "
                                 with open(txt_filename, "w", encoding="utf8") as file:
-                                    # we have to write filename_text and not full prompt here, otherwise "dog, [filewords]" becomes "dog, dog, [filewords]" when read. Any elegant solution?
                                     file.write(example["filename_text"][i] + "\n")
                             shared.state.job_no += 1
                             generated_images += 1
@@ -760,7 +758,7 @@ def main(args, memory_record):
 
     if args.scale_lr:
         args.learning_rate = (
-            args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
+                args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
         )
 
     # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
@@ -870,8 +868,7 @@ def main(args, memory_record):
         train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
     )
 
-
-    # Move text_encode and vae to gpu.
+    # Move text_encoder and VAE to GPU.
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
     # as these models are only used for inference, keeping weights in full precision is not required.
 
@@ -1007,7 +1004,6 @@ def main(args, memory_record):
                                                                subfolder="text_encoder", revision=args.revision)
             scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
                                       clip_sample=False, set_alpha_to_one=False)
-            e_scheduler = EulerAncestralDiscreteScheduler(beta_start=0.00085, beta_end=0.012)
             if args.use_ema:
                 ema_unet.store(unet.parameters())
                 ema_unet.copy_to(unet.parameters())
@@ -1190,7 +1186,8 @@ def main(args, memory_record):
                 if not global_step % 10:
                     allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                     cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
-                    logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0], "vram": f"{allocated}/{cached}"}
+                    logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0],
+                            "vram": f"{allocated}/{cached}"}
                     progress_bar.set_postfix(**logs)
                     accelerator.log(logs, step=global_step)
 

@@ -51,13 +51,13 @@ class FilenameTextGetter:
 
             if not is_class:
                 # If the instance prompt is not in the prompt, add it
-                if not "Instance" in file_prompt_contents:
+                if "Instance" not in file_prompt_contents:
                     for token in class_tokens:
                         if token in filename_text:
                             filename_text = filename_text.replace(token, f"{instance_token} {class_token}")
                 else:
                     # Append the class as well
-                    if not "Class" in file_prompt_contents:
+                    if "Class" not in file_prompt_contents:
                         filename_text = filename_text.replace(instance_token, f"{instance_token} {class_token}")
 
         tags = filename_text.split(',')
@@ -81,6 +81,7 @@ class EMAModel:
 
         self.decay = decay
         self.optimization_step = 0
+        self.collected_params = []
 
     def get_decay(self, optimization_step):
         """
@@ -149,6 +150,7 @@ class EMAModel:
         r"""Move internal buffers of the ExponentialMovingAverage to `device`.
         Args:
             device: like `device` argument to `torch.Tensor.to`
+            dtype: Floating point-type for the stuff.
         """
         # .to() on the tensors handles None correctly
         self.shadow_params = [

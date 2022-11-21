@@ -48,11 +48,11 @@ def replace_unet_cross_attn_to_default():
     diffusers.models.attention.CrossAttention.forward = forward_default
 
 
-# FlashAttention
-# based on https://github.com/lucidrains/memory-efficient-attention-pytorch/blob/main/memory_efficient_attention_pytorch/flash_attention.py
-# LICENSE MIT https://github.com/lucidrains/memory-efficient-attention-pytorch/blob/main/LICENSE
-# constants
+# FlashAttention based on https://github.com/lucidrains/memory-efficient-attention-pytorch/blob/main
+# /memory_efficient_attention_pytorch/flash_attention.py LICENSE MIT
+# https://github.com/lucidrains/memory-efficient-attention-pytorch/blob/main/LICENSE constants
 EPSILON = 1e-6
+
 
 # helper functions
 
@@ -64,13 +64,14 @@ def exists(val):
 def default(val, d):
     return val if exists(val) else d
 
+
 # flash attention forwards and backwards
 # https://arxiv.org/abs/2205.14135
 
 
 class FlashAttentionFunction(torch.autograd.function.Function):
-    @ staticmethod
-    @ torch.no_grad()
+    @staticmethod
+    @torch.no_grad()
     def forward(ctx, q, k, v, mask, causal, q_bucket_size, k_bucket_size):
         """ Algorithm 2 in the paper """
 
@@ -143,7 +144,7 @@ class FlashAttentionFunction(torch.autograd.function.Function):
                     block_row_maxes - new_row_maxes)
 
                 new_row_sums = exp_row_max_diff * row_sums + \
-                    exp_block_row_max_diff * block_row_sums
+                               exp_block_row_max_diff * block_row_sums
 
                 oc.mul_((row_sums / new_row_sums) * exp_row_max_diff).add_(
                     (exp_block_row_max_diff / new_row_sums) * exp_values)
@@ -156,8 +157,8 @@ class FlashAttentionFunction(torch.autograd.function.Function):
 
         return o
 
-    @ staticmethod
-    @ torch.no_grad()
+    @staticmethod
+    @torch.no_grad()
     def backward(ctx, do):
         """ Algorithm 4 in the paper """
 
@@ -329,6 +330,7 @@ def save_pretrained(self, save_directory: Union[str, os.PathLike]):
     method. The pipeline can easily be re-loaded using the `[`~DiffusionPipeline.from_pretrained`]` class method.
 
     Arguments:
+        self: ME, ME, ME, ME MEEEEE!!!!
         save_directory (`str` or `os.PathLike`):
             Directory to which to save. Will be created if it doesn't exist.
     """
