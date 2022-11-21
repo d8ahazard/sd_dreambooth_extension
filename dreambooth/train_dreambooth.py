@@ -308,7 +308,8 @@ def parse_args(input_args=None):
         "--concepts_list",
         type=str,
         default=None,
-        help="Path to json containing multiple concepts, will overwrite parameters like instance_prompt, class_prompt, etc.",
+        help="Path to json containing multiple concepts, will overwrite parameters like instance_prompt, "
+             "class_prompt, etc.",
     )
     parser.add_argument(
         "--use_ema",
@@ -491,14 +492,12 @@ class DreamBoothDataset(Dataset):
 
 
 class PromptDataset(Dataset):
-    "A simple dataset to prepare the prompts to generate class images on multiple GPUs."
+    """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
 
     def __init__(self, prompt: str, num_samples: int, filename_texts, file_prompt_contents: str, class_token: str,
                  instance_token: str):
         self.prompt = prompt
         self.instance_token = instance_token
-        if "," in class_token:
-            class_token = class_token.split(",")[0].strip()
         self.class_token = class_token
         self.num_samples = num_samples
         self.filename_texts = filename_texts
@@ -512,11 +511,14 @@ class PromptDataset(Dataset):
             self.filename_texts) > 0 else ""}
         prompt = example["filename_text"]
         if "Instance" in self.file_prompt_contents:
+            class_token = self.class_token
             # If the token is already in the prompt, just remove the instance token, don't swap it
-            if self.class_token in prompt:
-                prompt = prompt.replace(self.instance_token, "")
-            else:
-                prompt = prompt.replace(self.instance_token, self.class_token)
+            class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
+            for token in class_tokens:
+                if token in prompt:
+                    prompt = prompt.replace(self.instance_token, "")
+                else:
+                    prompt = prompt.replace(self.instance_token, self.class_token)
 
         prompt = self.prompt.replace("[filewords]", prompt)
         example["prompt"] = prompt
@@ -539,7 +541,9 @@ class LatentsDataset(Dataset):
 class AverageMeter:
     def __init__(self, name=None):
         self.name = name
-        self.reset()
+        self.avg: torch.Tensor = None
+        self.sum = 0
+        self.count = 0
 
     def reset(self):
         self.sum = self.count = self.avg = 0
@@ -612,7 +616,6 @@ def main(args, memory_record):
     if args.with_prior_preservation:
         pipeline = None
         text_getter = FilenameTextGetter()
-        pil_features = list_features()
         for concept in args.concepts_list:
             class_images_dir = Path(concept["class_data_dir"])
             class_images_dir.mkdir(parents=True, exist_ok=True)
@@ -674,19 +677,23 @@ def main(args, memory_record):
                                 shared.state.textinfo = "Training canceled."
                                 return args, mem_record
                             hash_image = hashlib.sha1(image.tobytes()).hexdigest()
-                            image_filename = class_images_dir / f"{generated_images + cur_class_images}-{hash_image}.jpg"
+                            image_filename = class_images_dir / f"{generated_images + cur_class_images}-" \
+                                                                f"{hash_image}.jpg"
                             image.save(image_filename)
                             if save_txt:
-                                txt_filename = class_images_dir / f"{generated_images + cur_class_images}-{hash_image}.txt"
+                                txt_filename = class_images_dir / f"{generated_images + cur_class_images}-" \
+                                                                  f"{hash_image}.txt "
                                 with open(txt_filename, "w", encoding="utf8") as file:
                                     # we have to write filename_text and not full prompt here, otherwise "dog, [filewords]" becomes "dog, dog, [filewords]" when read. Any elegant solution?
                                     file.write(example["filename_text"][i] + "\n")
                             shared.state.job_no += 1
                             generated_images += 1
-                            shared.state.textinfo = f"Class image {generated_images}/{num_new_images}, Prompt: '{example['prompt']}'"
+                            shared.state.textinfo = f"Class image {generated_images}/{num_new_images}, " \
+                                                    f"Prompt: '{example['prompt']}'"
                             shared.state.current_image = image
                             pbar.update()
-
+                    del pbar
+                del sample_dataset
         del pipeline
         del text_getter
         cleanup()
@@ -697,7 +704,7 @@ def main(args, memory_record):
             args.tokenizer_name,
             revision=args.revision,
         )
-    elif args.pretrained_model_name_or_path:
+    else:
         tokenizer = CLIPTokenizer.from_pretrained(
             args.pretrained_model_name_or_path,
             subfolder="tokenizer",
@@ -742,7 +749,7 @@ def main(args, memory_record):
 
     if args.scale_lr:
         args.learning_rate = (
-                args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
+            args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
         )
 
     # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
@@ -755,7 +762,7 @@ def main(args, memory_record):
             optimizer_class = bnb.optim.AdamW8bit
             use_adam = True
         except Exception as a:
-            logger.warn(f"Exception importing 8bit adam: {a}")
+            logger.warning(f"Exception importing 8bit adam: {a}")
 
     params_to_optimize = (
         itertools.chain(unet.parameters(), text_encoder.parameters()) if args.train_text_encoder else unet.parameters()
@@ -821,14 +828,14 @@ def main(args, memory_record):
         return args, mem_record
 
     def collate_fn(examples):
-        input_ids = [example["instance_prompt_ids"] for example in examples]
-        pixel_values = [example["instance_images"] for example in examples]
+        input_ids = [ex["instance_prompt_ids"] for ex in examples]
+        pixel_values = [ex["instance_images"] for ex in examples]
 
         # Concat class and instance examples for prior preservation.
         # We do this to avoid doing two forward passes.
         if args.with_prior_preservation:
-            input_ids += [example["class_prompt_ids"] for example in examples]
-            pixel_values += [example["class_images"] for example in examples]
+            input_ids += [ex["class_prompt_ids"] for ex in examples]
+            pixel_values += [ex["class_images"] for ex in examples]
 
         pixel_values = torch.stack(pixel_values)
         pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
@@ -842,21 +849,16 @@ def main(args, memory_record):
         else:
             input_ids = torch.stack(input_ids)
 
-        batch = {
+        output = {
             "input_ids": input_ids,
             "pixel_values": pixel_values,
         }
-        return batch
+        return output
 
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
     )
 
-    weight_dtype = torch.float32
-    if args.mixed_precision == "fp16":
-        weight_dtype = torch.float16
-    elif args.mixed_precision == "bf16":
-        weight_dtype = torch.bfloat16
 
     # Move text_encode and vae to gpu.
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
@@ -998,7 +1000,7 @@ def main(args, memory_record):
             if args.use_ema:
                 ema_unet.store(unet.parameters())
                 ema_unet.copy_to(unet.parameters())
-            pipeline = StableDiffusionPipeline.from_pretrained(
+            s_pipeline = StableDiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
                 unet=accelerator.unwrap_model(unet),
                 text_encoder=text_enc_model,
@@ -1008,12 +1010,12 @@ def main(args, memory_record):
                 revision=args.revision,
                 safety_checker=None
             )
-            pipeline = pipeline.to(accelerator.device)
+            s_pipeline = s_pipeline.to(accelerator.device)
             with accelerator.autocast(), torch.inference_mode():
                 if save_model:
                     shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
                     try:
-                        pipeline.save_pretrained(args.pretrained_model_name_or_path)
+                        s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
                         save_checkpoint(args.model_name, args.pretrained_vae_name_or_path, args.revision,
                                         args.half_model)
                         if args.use_ema:
@@ -1031,7 +1033,7 @@ def main(args, memory_record):
                         if seed is None or seed == '' or seed == -1:
                             seed = int(random.randrange(21474836147))
                         g_cuda = torch.Generator(device=accelerator.device).manual_seed(seed)
-                        pipeline.set_progress_bar_config(disable=True)
+                        s_pipeline.set_progress_bar_config(disable=True)
                         sample_dir = os.path.join(save_dir, "samples")
                         os.makedirs(sample_dir, exist_ok=True)
                         pc = args.file_prompt_contents
@@ -1048,27 +1050,28 @@ def main(args, memory_record):
                                 if "[filewords]" in sample_prompt:
                                     random_example = gen_dataset.__getitem__(
                                         random.randrange(0, gen_dataset.__len__() - 1))
-                                    print(f"REX: {random_example}")
                                     random_prompt = random_example["instance_prompt"]
                                     if "class_token" in c and "instance_token" in c:
-                                        class_tokens = [c["class_token"]]
-                                        if "," in c["class_token"]:
-                                            class_tokens = c["class_token"].split(",")
-                                        if not "Instance" in pc and "Class" in pc:
+                                        class_token = c["class_token"]
+                                        class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}",
+                                                        class_token]
+                                        if "Instance" not in pc and "Class" in pc:
                                             for token in class_tokens:
-                                                if token.strip() in random_prompt:
-                                                    random_prompt = random_prompt.replace(token.strip(),
-                                                                                          f"{token.strip()} {c['instance_token']}")
+                                                if token in random_prompt:
+                                                    random_prompt = random_prompt.replace(
+                                                        token,
+                                                        f"{c['instance_token']} {class_token}"
+                                                    )
                                                     break
                                     sample_prompt = sample_prompt.replace("[filewords]", random_prompt)
 
                                 for si in tqdm(range(args.n_save_sample), desc="Generating samples"):
-                                    s_image = pipeline(sample_prompt, num_inference_steps=args.save_infer_steps,
-                                                       guidance_scale=args.save_guidance_scale,
-                                                       scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
-                                                                                                 beta_end=0.012),
-                                                       negative_prompt=negative_prompt,
-                                                       generator=g_cuda).images[0]
+                                    s_image = s_pipeline(sample_prompt, num_inference_steps=args.save_infer_steps,
+                                                         guidance_scale=args.save_guidance_scale,
+                                                         scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
+                                                                                                   beta_end=0.012),
+                                                         negative_prompt=negative_prompt,
+                                                         generator=g_cuda).images[0]
                                     shared.state.current_image = s_image
                                     shared.state.textinfo = sample_prompt
                                     sanitized_prompt = sanitize_filename_part(sample_prompt, replace_spaces=False)
@@ -1079,7 +1082,7 @@ def main(args, memory_record):
                         traceback.print_exc()
                         pass
             logger.debug(f"[*] Weights saved at {save_dir}")
-            del pipeline
+            del s_pipeline
             del scheduler
             del text_enc_model
             cleanup()
@@ -1174,7 +1177,9 @@ def main(args, memory_record):
                         ema_unet.step(unet.parameters())
 
                 if not global_step % 10:
-                    logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0]}
+                    allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
+                    cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
+                    logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0], "vram": f"{allocated}/{cached}"}
                     progress_bar.set_postfix(**logs)
                     accelerator.log(logs, step=global_step)
 
@@ -1197,7 +1202,8 @@ def main(args, memory_record):
                     training_complete = True
                 if global_step == 0 or global_step == 5:
                     printm(f"Step {global_step} completed.")
-                shared.state.textinfo = f"Training, step {global_step}/{args.max_train_steps} current, {args.revision}/{args.max_train_steps + lifetime_step} lifetime"
+                shared.state.textinfo = f"Training, step {global_step}/{args.max_train_steps} current," \
+                                        f" {args.revision}/{args.max_train_steps + lifetime_step} lifetime"
 
                 if training_complete:
                     logger.debug("Training complete.")

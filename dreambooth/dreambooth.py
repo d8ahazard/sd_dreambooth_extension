@@ -98,7 +98,7 @@ def training_wizard_person(
         instance_data_dir,
         class_data_dir,
         train_text_encoder,
-        use_ema
+        learning_rate
 ):
     return training_wizard(
         model_dir,
@@ -107,7 +107,7 @@ def training_wizard_person(
         instance_data_dir,
         class_data_dir,
         train_text_encoder,
-        use_ema,
+        learning_rate,
         is_person=True)
 
 
@@ -118,7 +118,7 @@ def training_wizard(
         instance_data_dir,
         class_data_dir,
         train_text_encoder,
-        use_ema,
+        learning_rate,
         is_person=False
 ):
     # Load config, get total steps
@@ -156,22 +156,21 @@ def training_wizard(
         return "No training images found, can't do math.", 1000, 100, False, 0, "constant"
 
     # Set "base" value
-    required_steps = total_images * 50
+    magick_number = 58139534.88372093
+    required_steps = round(total_images * magick_number * learning_rate, -2)
     if is_person:
-        num_class_images = total_images * 12
-        learning_rate = 1e-6
-        train_text_encoder = True
+        num_class_images = round(total_images * 12, -1)
     else:
         num_class_images = 0
-        learning_rate = 2e-6
+        required_steps = round(required_steps * 1.5, -2)
 
     # Ensure we don't over-train?
     if total_steps >= required_steps:
         required_steps = 0
     else:
         required_steps = required_steps - total_steps
-
-    return f"Wizard completed, using {required_steps} lifetime steps and {num_class_images} class images.", required_steps, num_class_images, learning_rate, train_text_encoder
+    msg = f"Wizard completed, using {required_steps} lifetime steps and {num_class_images} class images."
+    return msg, required_steps, num_class_images
 
 
 def performance_wizard():
@@ -471,7 +470,6 @@ def start_training(model_dir,
 
     if concepts is not None:
         config.concepts_list = concepts
-        print(f"Loading concepts: {concepts}")
     else:
         print("Unable to lbuild concepts.")
         return config, "Unable to load concepts."
@@ -523,7 +521,6 @@ def start_training(model_dir,
             alist = str(config.concepts_list)
             if "'" in alist:
                 alist = alist.replace("'", '"')
-            print(f"Trying to parse: {alist}")
             concepts_list = json.loads(alist)
             concepts_loaded = True
         except:

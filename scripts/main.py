@@ -65,8 +65,8 @@ def on_ui_tabs():
                                                                            "Instance Token + Description",
                                                                            "Class Token + Description",
                                                                            "Instance Token + Class Token + Description"])
-                            db_instance_token = gr.Textbox(label='Instance token to swap')
-                            db_class_token = gr.Textbox(label='Class token(s) to swap, can be comma-separated')
+                            db_instance_token = gr.Textbox(label='Instance Token')
+                            db_class_token = gr.Textbox(label='Class Token')
 
 
                         db_num_class_images = gr.Number(
@@ -84,7 +84,7 @@ def on_ui_tabs():
                                                                     placeholder="Leave blank to use base model VAE.",
                                                                     value="")
                         db_scale_lr = gr.Checkbox(label="Scale Learning Rate", value=False)
-                        db_learning_rate = gr.Number(label='Learning Rate', value=5e-6)
+                        db_learning_rate = gr.Number(label='Learning Rate', value=1.72e-6)
                         db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=0)
                         db_lr_scheduler = gr.Dropdown(label="Learning Rate Scheduler", value="constant",
                                                       choices=["linear", "cosine", "cosine_with_restarts",
@@ -247,14 +247,12 @@ def on_ui_tabs():
                 db_instance_data_dir,
                 db_class_data_dir,
                 db_train_text_encoder,
-                db_use_ema
+                db_learning_rate
             ],
             outputs=[
                 db_status,
                 db_max_train_steps,
-                db_num_class_images,
-                db_learning_rate,
-                db_train_text_encoder
+                db_num_class_images
             ]
         )
 
@@ -267,14 +265,12 @@ def on_ui_tabs():
                 db_instance_data_dir,
                 db_class_data_dir,
                 db_train_text_encoder,
-                db_use_ema
+                db_learning_rate
             ],
             outputs=[
                 db_status,
                 db_max_train_steps,
-                db_num_class_images,
-                db_learning_rate,
-                db_train_text_encoder
+                db_num_class_images
             ]
         )
 
