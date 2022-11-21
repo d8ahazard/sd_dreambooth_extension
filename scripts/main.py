@@ -119,6 +119,9 @@ def on_ui_tabs():
                                 db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
                                 db_shuffle_after_epoch = gr.Checkbox(label="Shuffle After Epoch", value=False)
                                 db_use_ema = gr.Checkbox(label="Train EMA", value=False)
+                                db_attention = gr.Dropdown(
+                                    label="Type of attention to use", value="default",
+                                    choices=["default", "xformers", "flash_attention"])
                                 db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                 db_gradient_checkpointing = gr.Checkbox(label="Gradient Checkpointing", value=True)
                                 db_gradient_accumulation_steps = gr.Number(label="Gradient Accumulation Steps",
@@ -339,6 +342,7 @@ def on_ui_tabs():
                 db_scale_lr,
                 db_lr_scheduler,
                 db_lr_warmup_steps,
+                db_attention,
                 db_use_8bit_adam,
                 db_adam_beta1,
                 db_adam_beta2,
@@ -400,6 +404,7 @@ def on_ui_tabs():
                 db_scale_lr,
                 db_lr_scheduler,
                 db_lr_warmup_steps,
+                db_attention,
                 db_use_8bit_adam,
                 db_adam_beta1,
                 db_adam_beta2,
@@ -452,6 +457,7 @@ def on_ui_tabs():
                 db_scale_lr,
                 db_lr_scheduler,
                 db_lr_warmup_steps,
+                db_attention,
                 db_use_8bit_adam,
                 db_adam_beta1,
                 db_adam_beta2,

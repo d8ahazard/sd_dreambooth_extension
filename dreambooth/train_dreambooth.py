@@ -45,8 +45,6 @@ except:
 
 pil_features = list_features()
 mem_record = {}
-attention.CrossAttention = xattention.CrossAttention
-attention.Transformer2DModel = xattention.Transformer2DModelOutput
 # End custom stuff
 
 torch.backends.cudnn.benchmark = True
@@ -348,6 +346,13 @@ def parse_args(input_args=None):
         help="Instance token used to swap subjects in file prompts."
     )
     parser.add_argument(
+        "--attention",
+        type=str,
+        choices=["default", "xformers", "flash_attention"],
+        default="default",
+        help="Type of attention to use."
+    )  
+    parser.add_argument(
         "--shuffle_after_epoch",
         action="store_true",
         type=bool,
@@ -571,6 +576,13 @@ def main(args, memory_record):
     args.max_token_length = int(args.max_token_length)
     if not args.pad_tokens and args.max_token_length > 75:
         logger.debug("Cannot raise token length limit above 75 when pad_tokens=False")
+
+    if args.attention == "xformers":
+        xattention.replace_unet_cross_attn_to_xformers()
+    elif args.attention == "flash_attention":
+        xattention.replace_unet_cross_attn_to_flash_attention()
+    else:
+        xattention.replace_unet_cross_attn_to_default()
 
     weight_dtype = torch.float32
     if args.mixed_precision == "fp16":

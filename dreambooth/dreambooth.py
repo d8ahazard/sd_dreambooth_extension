@@ -308,6 +308,7 @@ def load_params(model_dir, *args):
                      "scale_lr",
                      "lr_scheduler",
                      "lr_warmup_steps",
+                     "attention",
                      "use_8bit_adam",
                      "adam_beta1",
                      "adam_beta2",
@@ -386,6 +387,7 @@ def start_training(model_dir,
                    scale_lr,
                    lr_scheduler,
                    lr_warmup_steps,
+                   attention,
                    use_8bit_adam,
                    adam_beta1,
                    adam_beta2,
@@ -443,6 +445,7 @@ def start_training(model_dir,
                                         scale_lr,
                                         lr_scheduler,
                                         lr_warmup_steps,
+                                        attention,
                                         use_8bit_adam,
                                         adam_beta1,
                                         adam_beta2,
@@ -490,17 +493,9 @@ def start_training(model_dir,
 
     config.save()
     msg = None
-    has_xformers = False
-    try:
-        if (shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers) and is_xformers_available():
-            import xformers
-            import xformers.ops
-            has_xformers = shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers
-    except:
-        pass
-    if has_xformers:
-        if not use_8bit_adam or mixed_precision == "no":
-            msg = "Xformers detected, please enable 8Bit Adam and set mixed precision to 'fp16' to continue."
+    if attention == "xformers":
+        if mixed_precision == "no":
+            msg = "Using xformers, please set mixed precision to 'fp16' to continue."
     if use_cpu:
         if use_8bit_adam or mixed_precision != "no":
             msg = "CPU Training detected, please disable 8Bit Adam and set mixed precision to 'no' to continue."

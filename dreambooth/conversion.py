@@ -16,19 +16,14 @@
 # limitations under the License.
 """ Conversion script for the LDM checkpoints. """
 import gc
-import math
 import os
 import traceback
 
 import gradio as gr
 import torch
-from basicsr.utils.download_util import load_file_from_url
-from huggingface_hub import get_full_repo_name, Repository
 
 import modules.sd_models
 from modules import paths, shared
-from diffusers.models import attention
-from extensions.sd_dreambooth_extension.dreambooth import xattention
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import get_db_models, printm
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 
@@ -36,12 +31,6 @@ try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
 except:
     cmd_dreambooth_models_path = None
-
-try:
-    attention.CrossAttention = xattention.CrossAttention
-    attention.Transformer2DModel = xattention.Transformer2DModelOutput
-except:
-    pass
 
 try:
     from omegaconf import OmegaConf
