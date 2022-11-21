@@ -40,25 +40,25 @@ class FilenameTextGetter:
     def create_text(self, text_template, filename_text, instance_token, class_token, file_prompt_contents,
                     is_class=True):
         # If we are creating text for a class image and it has our instance token in it, remove/replace it
-        class_tokens = [class_token] if not "," in class_token else class_token.split(",")
+        class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
         if instance_token != "" and class_token != "":
             if is_class and "Instance" in file_prompt_contents:
                 if "Class" in file_prompt_contents:
                     filename_text = filename_text.replace(instance_token, "")
                     filename_text = filename_text.replace("  ", " ")
                 else:
-                    filename_text = filename_text.replace(instance_token, class_tokens[0])
+                    filename_text = filename_text.replace(instance_token, class_token)
 
             if not is_class:
                 # If the instance prompt is not in the prompt, add it
                 if not "Instance" in file_prompt_contents:
                     for token in class_tokens:
                         if token in filename_text:
-                            filename_text = filename_text.replace(token, f"{instance_token} {token}")
+                            filename_text = filename_text.replace(token, f"{instance_token} {class_token}")
                 else:
                     # Append the class as well
                     if not "Class" in file_prompt_contents:
-                        filename_text = filename_text.replace(instance_token, f"{instance_token} {class_tokens[0]}")
+                        filename_text = filename_text.replace(instance_token, f"{instance_token} {class_token}")
 
         tags = filename_text.split(',')
         if shared.opts.tag_drop_out != 0:

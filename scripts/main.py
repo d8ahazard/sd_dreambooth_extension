@@ -65,8 +65,8 @@ def on_ui_tabs():
                                                                            "Instance Token + Description",
                                                                            "Class Token + Description",
                                                                            "Instance Token + Class Token + Description"])
-                            db_instance_token = gr.Textbox(label='Instance token to swap')
-                            db_class_token = gr.Textbox(label='Class token(s) to swap, can be comma-separated')
+                            db_instance_token = gr.Textbox(label='Instance Token')
+                            db_class_token = gr.Textbox(label='Class Token')
 
 
                         db_num_class_images = gr.Number(
@@ -84,7 +84,7 @@ def on_ui_tabs():
                                                                     placeholder="Leave blank to use base model VAE.",
                                                                     value="")
                         db_scale_lr = gr.Checkbox(label="Scale Learning Rate", value=False)
-                        db_learning_rate = gr.Number(label='Learning Rate', value=5e-6)
+                        db_learning_rate = gr.Number(label='Learning Rate', value=1.72e-6)
                         db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=0)
                         db_lr_scheduler = gr.Dropdown(label="Learning Rate Scheduler", value="constant",
                                                       choices=["linear", "cosine", "cosine_with_restarts",
@@ -117,6 +117,7 @@ def on_ui_tabs():
                                 db_use_cpu = gr.Checkbox(label="Use CPU Only (SLOW)", value=False)
                                 db_not_cache_latents = gr.Checkbox(label="Don't Cache Latents", value=True)
                                 db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
+                                db_shuffle_after_epoch = gr.Checkbox(label="Shuffle After Epoch", value=False)
                                 db_use_ema = gr.Checkbox(label="Train EMA", value=False)
                                 db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                 db_gradient_checkpointing = gr.Checkbox(label="Gradient Checkpointing", value=True)
@@ -151,6 +152,27 @@ def on_ui_tabs():
                 db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery').style(grid=4)
                 db_preview = gr.Image(elem_id='db_preview', visible=False)
                 setup_progressbar(db_progressbar, db_preview, 'db', textinfo=db_progress)
+
+        db_shuffle_after_epoch.change(
+            fn=lambda x, y, z: {
+                db_not_cache_latents: False if x else y,
+                db_train_text_encoder: True if x else z
+            },
+            inputs=[db_shuffle_after_epoch, db_not_cache_latents, db_train_text_encoder],
+            outputs=[db_not_cache_latents, db_train_text_encoder]
+        )
+        db_not_cache_latents.change(
+            fn=lambda: {
+                db_shuffle_after_epoch: False
+            },
+            outputs=[db_shuffle_after_epoch]
+        )
+        db_train_text_encoder.change(
+            fn=lambda: {
+                db_shuffle_after_epoch: False
+            },
+            outputs=[db_shuffle_after_epoch]
+        )
 
         db_num_class_images.change(
             fn=lambda x: gr_show(x),
@@ -225,14 +247,12 @@ def on_ui_tabs():
                 db_instance_data_dir,
                 db_class_data_dir,
                 db_train_text_encoder,
-                db_use_ema
+                db_learning_rate
             ],
             outputs=[
                 db_status,
                 db_max_train_steps,
-                db_num_class_images,
-                db_learning_rate,
-                db_train_text_encoder
+                db_num_class_images
             ]
         )
 
@@ -245,19 +265,18 @@ def on_ui_tabs():
                 db_instance_data_dir,
                 db_class_data_dir,
                 db_train_text_encoder,
-                db_use_ema
+                db_learning_rate
             ],
             outputs=[
                 db_status,
                 db_max_train_steps,
-                db_num_class_images,
-                db_learning_rate,
-                db_train_text_encoder
+                db_num_class_images
             ]
         )
 
         db_generate_checkpoint.click(
             fn=conversion.compile_checkpoint,
+            _js="start_training_dreambooth",
             inputs=[
                 db_model_dir,
                 db_pretrained_vae_name_or_path,
@@ -338,7 +357,8 @@ def on_ui_tabs():
                 db_use_ema,
                 db_class_negative_prompt,
                 db_class_guidance_scale,
-                db_class_infer_steps
+                db_class_infer_steps,
+                db_shuffle_after_epoch
             ],
             outputs=[
                 db_status,
@@ -398,7 +418,8 @@ def on_ui_tabs():
                 db_use_ema,
                 db_class_negative_prompt,
                 db_class_guidance_scale,
-                db_class_infer_steps
+                db_class_infer_steps,
+                db_shuffle_after_epoch
             ],
             outputs=[
                 db_half_model,
@@ -450,6 +471,7 @@ def on_ui_tabs():
                 db_class_negative_prompt,
                 db_class_guidance_scale,
                 db_class_infer_steps,
+                db_shuffle_after_epoch,
                 db_status
             ]
         )
