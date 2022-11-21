@@ -276,6 +276,7 @@ def on_ui_tabs():
 
         db_generate_checkpoint.click(
             fn=conversion.compile_checkpoint,
+            _js="start_training_dreambooth",
             inputs=[
                 db_model_dir,
                 db_pretrained_vae_name_or_path,

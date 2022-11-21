@@ -3,7 +3,6 @@ import json
 import logging
 import math
 import os
-import random
 from pathlib import Path
 from typing import Optional
 
@@ -11,15 +10,15 @@ import torch
 import torch.utils.checkpoint
 from PIL import features
 from accelerate.logging import get_logger
+from diffusers import StableDiffusionPipeline
+from diffusers.utils.import_utils import is_xformers_available
 from huggingface_hub import HfFolder, whoami
 from six import StringIO
 
 from extensions.sd_dreambooth_extension.dreambooth import conversion
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
-from modules import paths, shared, devices, sd_models
-from diffusers import StableDiffusionPipeline
-from diffusers.utils.import_utils import is_xformers_available
 from extensions.sd_dreambooth_extension.dreambooth.xattention import save_pretrained
+from modules import paths, shared, devices, sd_models
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path

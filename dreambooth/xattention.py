@@ -6,11 +6,9 @@ from typing import Optional, Union, Dict, Any
 import torch
 import transformers
 from attr import dataclass
-from diffusers.models.attention import xformers
 from diffusers.pipeline_utils import LOADABLE_CLASSES
 from diffusers.utils import BaseOutput
 from diffusers.utils.import_utils import is_xformers_available
-from transformers import modeling_utils
 from torch import nn
 
 from modules import shared
@@ -29,10 +27,14 @@ class Transformer2DModelOutput(BaseOutput):
 
 
 if (shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers) and is_xformers_available():
-    import xformers
-    import xformers.ops
+    xformers = None
+    try:
+        import xformers
+        import xformers.ops
 
-    xformers._is_functorch_available = True
+        xformers._is_functorch_available = True
+    except:
+        pass
 else:
     xformers = None
     print("[!] Not using xformers memory efficient attention.")
