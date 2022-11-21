@@ -20,23 +20,21 @@ from accelerate import Accelerator
 from accelerate.utils import set_seed
 from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, EulerAncestralDiscreteScheduler, \
     StableDiffusionPipeline, UNet2DConditionModel
-from diffusers.utils import logging as dl
 from diffusers.models import attention
 from diffusers.optimization import get_scheduler
+from diffusers.utils import logging as dl
 from huggingface_hub import HfFolder, whoami
-from torch import autocast
 from torch.utils.data import Dataset
 from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth import xattention
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import dumb_safety, save_checkpoint, list_features, \
     is_image, printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, EMAModel, \
     encode_hidden_state
-from modules import shared, devices
+from modules import shared
 from modules.images import sanitize_filename_part
 
 # Custom stuff
@@ -52,13 +50,23 @@ mem_record = {}
 torch.backends.cudnn.benchmark = True
 
 logger = logging.getLogger(__name__)
-# define a Handler which writes INFO messages or higher to the sys.stderr
+# define a Handler which writes DEBUG messages or higher to the sys.stderr
 console = logging.StreamHandler()
 console.setLevel(logging.DEBUG)
 logger.addHandler(console)
 logger.setLevel(logging.DEBUG)
-
 dl.set_verbosity_error()
+
+
+def cleanup():
+    try:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+        gc.collect()
+    except:
+        pass
+    printm("Cleanup completed.")
 
 
 def parse_args(input_args=None):
@@ -298,7 +306,8 @@ def parse_args(input_args=None):
         "--concepts_list",
         type=str,
         default=None,
-        help="Path to json containing multiple concepts, will overwrite parameters like instance_prompt, class_prompt, etc.",
+        help="Path to json containing multiple concepts, will overwrite parameters like instance_prompt, "
+             "class_prompt, etc.",
     )
     parser.add_argument(
         "--use_ema",
@@ -342,6 +351,12 @@ def parse_args(input_args=None):
         choices=["default", "xformers", "flash_attention"],
         default="default",
         help="Type of attention to use."
+    )  
+    parser.add_argument(
+        "--shuffle_after_epoch",
+        action="store_true",
+        type=bool,
+        help="Whether or not to shuffle and recache training dataset each epoch."
     )
 
     if input_args is not None:
@@ -373,27 +388,32 @@ class DreamBoothDataset(Dataset):
             num_class_images=None,
             pad_tokens=False,
             hflip=False,
-            max_token_length=75
+            max_token_length=75,
+            shuffle=False
     ):
         self.size = size
         self.center_crop = center_crop
         self.tokenizer = tokenizer
         self.with_prior_preservation = with_prior_preservation
         self.pad_tokens = pad_tokens
+        self.shuffle = shuffle
         self.file_prompt_contents = file_prompt_contents
         self.instance_images_path = []
         self.class_images_path = []
+        self.class_images_randomizer_stack = []
 
         self.max_token_length = max_token_length
         self.tokenizer_max_length = self.tokenizer.model_max_length if max_token_length == 75 else max_token_length + 2
         self.text_getter = FilenameTextGetter()
         for concept in concepts_list:
-            inst_img_path = [(x, concept["instance_prompt"], concept["instance_token"], concept["class_token"], self.text_getter.read_text(x)) for x in
+            inst_img_path = [(x, concept["instance_prompt"], concept["instance_token"], concept["class_token"],
+                              self.text_getter.read_text(x)) for x in
                              Path(concept["instance_data_dir"]).iterdir() if is_image(x, pil_features)]
             self.instance_images_path.extend(inst_img_path)
 
             if with_prior_preservation:
-                class_img_path = [(x, concept["class_prompt"], concept["instance_token"], concept["class_token"], self.text_getter.read_text(x)) for x in
+                class_img_path = [(x, concept["class_prompt"], concept["instance_token"], concept["class_token"],
+                                   self.text_getter.read_text(x)) for x in
                                   Path(concept["class_data_dir"]).iterdir() if is_image(x, pil_features)]
                 self.class_images_path.extend(class_img_path[:num_class_images])
 
@@ -437,37 +457,51 @@ class DreamBoothDataset(Dataset):
     def __len__(self):
         return self._length
 
+    def _get_random_class_image_index(self):
+        if len(self.class_images_randomizer_stack) == 0:
+            self.class_images_randomizer_stack = [x for x in range(self.num_class_images)]
+        random_index = random.randint(0, len(self.class_images_randomizer_stack) - 1)
+        result = self.class_images_randomizer_stack.pop(random_index)
+        return result
+
     def __getitem__(self, index):
         example = {}
-        instance_path, instance_prompt, instance_token, class_token, instance_text = self.instance_images_path[index % self.num_instance_images]
+        instance_path, instance_prompt, instance_token, class_token, instance_text = self.instance_images_path[
+            index % self.num_instance_images]
         instance_image = Image.open(instance_path)
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
         example["instance_images"] = self.image_transforms(instance_image)
         example["instance_prompt"] = self.text_getter.create_text(instance_prompt,
-                                                                  instance_text, instance_token, class_token, self.file_prompt_contents, False)  # TODO: show the final prompt of the image currently being trained in the ui
+                                                                  instance_text, instance_token, class_token,
+                                                                  self.file_prompt_contents,
+                                                                  False)
         example["instance_prompt_ids"] = self.tokenize(example["instance_prompt"])
 
         if self.with_prior_preservation:
-            class_path, class_prompt, instance_token, class_token,  class_text = self.class_images_path[index % self.num_class_images]
+            if self.shuffle:
+                idx = self._get_random_class_image_index()
+            else:
+                idx = index % self.num_class_images
+            class_path, class_prompt, instance_token, class_token, class_text = self.class_images_path[idx]
             class_image = Image.open(class_path)
             if not class_image.mode == "RGB":
                 class_image = class_image.convert("RGB")
             example["class_images"] = self.image_transforms(class_image)
-            example["class_prompt"] = self.text_getter.create_text(class_prompt, class_text, instance_token, class_token, self.file_prompt_contents)
+            example["class_prompt"] = self.text_getter.create_text(class_prompt, class_text, instance_token,
+                                                                   class_token, self.file_prompt_contents)
             example["class_prompt_ids"] = self.tokenize(example["class_prompt"])
 
         return example
 
 
 class PromptDataset(Dataset):
-    "A simple dataset to prepare the prompts to generate class images on multiple GPUs."
+    """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
 
-    def __init__(self, prompt: str, num_samples: int, filename_texts, file_prompt_contents: str, class_token: str, instance_token: str):
+    def __init__(self, prompt: str, num_samples: int, filename_texts, file_prompt_contents: str, class_token: str,
+                 instance_token: str):
         self.prompt = prompt
         self.instance_token = instance_token
-        if "," in class_token:
-            class_token = class_token.split(",")[0].strip()
         self.class_token = class_token
         self.num_samples = num_samples
         self.filename_texts = filename_texts
@@ -481,11 +515,14 @@ class PromptDataset(Dataset):
             self.filename_texts) > 0 else ""}
         prompt = example["filename_text"]
         if "Instance" in self.file_prompt_contents:
+            class_token = self.class_token
             # If the token is already in the prompt, just remove the instance token, don't swap it
-            if self.class_token in prompt:
-                prompt = prompt.replace(self.instance_token, "")
-            else:
-                prompt = prompt.replace(self.instance_token, self.class_token)
+            class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
+            for token in class_tokens:
+                if token in prompt:
+                    prompt = prompt.replace(self.instance_token, "")
+                else:
+                    prompt = prompt.replace(self.instance_token, self.class_token)
 
         prompt = self.prompt.replace("[filewords]", prompt)
         example["prompt"] = prompt
@@ -508,7 +545,9 @@ class LatentsDataset(Dataset):
 class AverageMeter:
     def __init__(self, name=None):
         self.name = name
-        self.reset()
+        self.avg: torch.Tensor = None
+        self.sum = 0
+        self.count = 0
 
     def reset(self):
         self.sum = self.count = self.avg = 0
@@ -544,6 +583,12 @@ def main(args, memory_record):
         xattention.replace_unet_cross_attn_to_flash_attention()
     else:
         xattention.replace_unet_cross_attn_to_default()
+
+    weight_dtype = torch.float32
+    if args.mixed_precision == "fp16":
+        weight_dtype = torch.float16
+    elif args.mixed_precision == "bf16":
+        weight_dtype = torch.bfloat16
 
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
@@ -582,7 +627,6 @@ def main(args, memory_record):
     if args.with_prior_preservation:
         pipeline = None
         text_getter = FilenameTextGetter()
-        pil_features = list_features()
         for concept in args.concepts_list:
             class_images_dir = Path(concept["class_data_dir"])
             class_images_dir.mkdir(parents=True, exist_ok=True)
@@ -620,7 +664,8 @@ def main(args, memory_record):
                 filename_texts = [text_getter.read_text(x) for x in Path(concept["instance_data_dir"]).iterdir() if
                                   is_image(x, pil_features)]
                 sample_dataset = PromptDataset(concept["class_prompt"], num_new_images, filename_texts,
-                                               args.file_prompt_contents, concept["class_token"], concept["instance_token"])
+                                               args.file_prompt_contents, concept["class_token"],
+                                               concept["instance_token"])
                 with accelerator.autocast(), torch.inference_mode():
                     generated_images = 0
                     s_len = sample_dataset.__len__() - 1
@@ -634,7 +679,8 @@ def main(args, memory_record):
                         images = pipeline(example["prompt"], num_inference_steps=args.class_infer_steps,
                                           guidance_scale=args.class_guidance_scale,
                                           scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085, beta_end=0.012),
-                                          negative_prompt=args.class_negative_prompt, num_images_per_prompt=args.sample_batch_size).images
+                                          negative_prompt=args.class_negative_prompt,
+                                          num_images_per_prompt=args.sample_batch_size).images
 
                         for i, image in enumerate(images):
                             if shared.state.interrupted:
@@ -642,23 +688,26 @@ def main(args, memory_record):
                                 shared.state.textinfo = "Training canceled."
                                 return args, mem_record
                             hash_image = hashlib.sha1(image.tobytes()).hexdigest()
-                            image_filename = class_images_dir / f"{generated_images + cur_class_images}-{hash_image}.jpg"
+                            image_filename = class_images_dir / f"{generated_images + cur_class_images}-" \
+                                                                f"{hash_image}.jpg"
                             image.save(image_filename)
                             if save_txt:
-                                txt_filename = class_images_dir / f"{generated_images + cur_class_images}-{hash_image}.txt"
+                                txt_filename = class_images_dir / f"{generated_images + cur_class_images}-" \
+                                                                  f"{hash_image}.txt "
                                 with open(txt_filename, "w", encoding="utf8") as file:
                                     # we have to write filename_text and not full prompt here, otherwise "dog, [filewords]" becomes "dog, dog, [filewords]" when read. Any elegant solution?
                                     file.write(example["filename_text"][i] + "\n")
                             shared.state.job_no += 1
                             generated_images += 1
-                            shared.state.textinfo = f"Class image {generated_images}/{num_new_images}, Prompt: '{example['prompt']}'"
+                            shared.state.textinfo = f"Class image {generated_images}/{num_new_images}, " \
+                                                    f"Prompt: '{example['prompt']}'"
                             shared.state.current_image = image
                             pbar.update()
-
-
+                    del pbar
+                del sample_dataset
         del pipeline
         del text_getter
-        devices.torch_gc()
+        cleanup()
 
     # Load the tokenizer
     if args.tokenizer_name:
@@ -666,7 +715,7 @@ def main(args, memory_record):
             args.tokenizer_name,
             revision=args.revision,
         )
-    elif args.pretrained_model_name_or_path:
+    else:
         tokenizer = CLIPTokenizer.from_pretrained(
             args.pretrained_model_name_or_path,
             subfolder="tokenizer",
@@ -679,11 +728,6 @@ def main(args, memory_record):
         subfolder="text_encoder",
         revision=args.revision,
     )
-    vae = AutoencoderKL.from_pretrained(
-        args.pretrained_model_name_or_path,
-        subfolder="vae",
-        revision=args.revision,
-    )
     unet = UNet2DConditionModel.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="unet",
@@ -691,7 +735,20 @@ def main(args, memory_record):
         torch_dtype=torch.float32
     )
     printm("Loaded model.")
-    vae.requires_grad_(False)
+
+    def create_vae():
+        vae_path = args.pretrained_vae_name_or_path if args.pretrained_vae_name_or_path else \
+            args.pretrained_model_name_or_path
+        result = AutoencoderKL.from_pretrained(
+            vae_path,
+            subfolder=None if args.pretrained_vae_name_or_path else "vae",
+            revision=args.revision
+        )
+        result.requires_grad_(False)
+        result.to(accelerator.device, dtype=weight_dtype)
+        return result
+
+    vae = create_vae()
 
     if not args.train_text_encoder:
         text_encoder.requires_grad_(False)
@@ -703,7 +760,7 @@ def main(args, memory_record):
 
     if args.scale_lr:
         args.learning_rate = (
-                args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
+            args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
         )
 
     # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
@@ -716,7 +773,7 @@ def main(args, memory_record):
             optimizer_class = bnb.optim.AdamW8bit
             use_adam = True
         except Exception as a:
-            logger.warn(f"Exception importing 8bit adam: {a}")
+            logger.warning(f"Exception importing 8bit adam: {a}")
 
     params_to_optimize = (
         itertools.chain(unet.parameters(), text_encoder.parameters()) if args.train_text_encoder else unet.parameters()
@@ -755,8 +812,7 @@ def main(args, memory_record):
         except:
             pass
         try:
-            gc.collect()  # Python thing
-            torch.cuda.empty_cache()  # PyTorch thing
+            cleanup()
         except:
             pass
         printm("Cleanup Complete.")
@@ -771,6 +827,7 @@ def main(args, memory_record):
         pad_tokens=args.pad_tokens,
         hflip=args.hflip,
         max_token_length=args.max_token_length,
+        shuffle=False,
         file_prompt_contents=args.file_prompt_contents
     )
 
@@ -782,14 +839,14 @@ def main(args, memory_record):
         return args, mem_record
 
     def collate_fn(examples):
-        input_ids = [example["instance_prompt_ids"] for example in examples]
-        pixel_values = [example["instance_images"] for example in examples]
+        input_ids = [ex["instance_prompt_ids"] for ex in examples]
+        pixel_values = [ex["instance_images"] for ex in examples]
 
         # Concat class and instance examples for prior preservation.
         # We do this to avoid doing two forward passes.
         if args.with_prior_preservation:
-            input_ids += [example["class_prompt_ids"] for example in examples]
-            pixel_values += [example["class_images"] for example in examples]
+            input_ids += [ex["class_prompt_ids"] for ex in examples]
+            pixel_values += [ex["class_images"] for ex in examples]
 
         pixel_values = torch.stack(pixel_values)
         pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
@@ -803,59 +860,75 @@ def main(args, memory_record):
         else:
             input_ids = torch.stack(input_ids)
 
-        batch = {
+        output = {
             "input_ids": input_ids,
             "pixel_values": pixel_values,
         }
-        return batch
+        return output
 
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
     )
 
-    weight_dtype = torch.float32
-    if args.mixed_precision == "fp16":
-        weight_dtype = torch.float16
-    elif args.mixed_precision == "bf16":
-        weight_dtype = torch.bfloat16
 
     # Move text_encode and vae to gpu.
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
     # as these models are only used for inference, keeping weights in full precision is not required.
-    vae.to(accelerator.device, dtype=weight_dtype)
+
     if not args.train_text_encoder:
         text_encoder.to(accelerator.device, dtype=weight_dtype)
 
-    printm("Loaded dataset, moved vae and text encoder.")
-    if not args.not_cache_latents:
+    def cache_latents(shuffle, td=None, tdl=None, enc_vae=None):
+        if td is not None:
+            del td
+        if tdl is not None:
+            del tdl
+        cleanup()
+
+        if enc_vae is None:
+            enc_vae = create_vae()
+
+        dataset = DreamBoothDataset(
+            concepts_list=args.concepts_list,
+            tokenizer=tokenizer,
+            with_prior_preservation=args.with_prior_preservation,
+            size=args.resolution,
+            center_crop=args.center_crop,
+            num_class_images=args.num_class_images,
+            pad_tokens=args.pad_tokens,
+            hflip=args.hflip,
+            max_token_length=args.max_token_length,
+            file_prompt_contents=args.file_prompt_contents,
+            shuffle=shuffle
+        )
+        dataloader = torch.utils.data.DataLoader(
+            dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
+        )
         latents_cache = []
         text_encoder_cache = []
-        for batch in tqdm(train_dataloader, desc="Caching latents"):
+        for d_batch in tqdm(dataloader, desc="Caching latents"):
             with torch.no_grad():
-                batch["pixel_values"] = batch["pixel_values"].to(accelerator.device, non_blocking=True,
-                                                                 dtype=weight_dtype)
-                batch["input_ids"] = batch["input_ids"].to(accelerator.device, non_blocking=True)
-                latent_dist = vae.encode(batch["pixel_values"]).latent_dist
-                b_size = latent_dist.sample().shape[
-                    0]  # TODO: the sample is not necessary, but I don't know torch, could use a little help here
-                latents_cache.append(latent_dist)
+                d_batch["pixel_values"] = d_batch["pixel_values"].to(accelerator.device, non_blocking=True,
+                                                                     dtype=weight_dtype)
+                d_batch["input_ids"] = d_batch["input_ids"].to(accelerator.device, non_blocking=True)
+                latents_cache.append(enc_vae.encode(d_batch["pixel_values"]).latent_dist)
                 if args.train_text_encoder:
-                    text_encoder_cache.append(batch["input_ids"])
+                    text_encoder_cache.append(d_batch["input_ids"])
                 else:
-                    text_encoder_cache.append(
-                        encode_hidden_state(text_encoder, batch["input_ids"], args.pad_tokens, b_size,
-                                            args.max_token_length, tokenizer.model_max_length))
-        train_dataset = LatentsDataset(latents_cache, text_encoder_cache)
-        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=1, collate_fn=lambda x: x,
-                                                       shuffle=True)
+                    text_encoder_cache.append(text_encoder(d_batch["input_ids"])[0])
+        dataset = LatentsDataset(latents_cache, text_encoder_cache)
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda x: x, shuffle=True)
+        if enc_vae is not None:
+            del enc_vae
+        cleanup()
+        return dataset, dataloader
 
-        del vae
-        vae = None
-        if not args.train_text_encoder:
-            del text_encoder
-            text_encoder = None
-        devices.torch_gc()
-    printm("Cached latents if selected, cleaned up VAE.")
+    # Store our original uncached dataset for preview generation
+    gen_dataset = train_dataset
+
+    if not args.not_cache_latents:
+        train_dataset, train_dataloader = cache_latents(False, vae)
+    cleanup()
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
@@ -917,6 +990,7 @@ def main(args, memory_record):
     logger.info(f"  Num examples = {len(train_dataset)}")
     logger.info(f"  Num batches each epoch = {len(train_dataloader)}")
     logger.info(f"  Num Epochs = {args.num_train_epochs}")
+    logger.info(f"  Shuffle After Epoch = {args.shuffle_after_epoch}")
     logger.info(f"  Instantaneous batch size per device = {args.train_batch_size}")
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
@@ -937,25 +1011,22 @@ def main(args, memory_record):
             if args.use_ema:
                 ema_unet.store(unet.parameters())
                 ema_unet.copy_to(unet.parameters())
-            pipeline = StableDiffusionPipeline.from_pretrained(
+            s_pipeline = StableDiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
                 unet=accelerator.unwrap_model(unet),
                 text_encoder=text_enc_model,
-                vae=vae if vae is not None else AutoencoderKL.from_pretrained(
-                    args.pretrained_vae_name_or_path or args.pretrained_model_name_or_path,
-                    subfolder=None if args.pretrained_vae_name_or_path else "vae"
-                ),
+                vae=vae if vae is not None else create_vae(),
                 scheduler=scheduler,
                 torch_dtype=torch.float16,
                 revision=args.revision,
                 safety_checker=None
             )
-            pipeline = pipeline.to(accelerator.device)
+            s_pipeline = s_pipeline.to(accelerator.device)
             with accelerator.autocast(), torch.inference_mode():
                 if save_model:
                     shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
                     try:
-                        pipeline.save_pretrained(args.pretrained_model_name_or_path)
+                        s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
                         save_checkpoint(args.model_name, args.pretrained_vae_name_or_path, args.revision,
                                         args.half_model)
                         if args.use_ema:
@@ -973,7 +1044,7 @@ def main(args, memory_record):
                         if seed is None or seed == '' or seed == -1:
                             seed = int(random.randrange(21474836147))
                         g_cuda = torch.Generator(device=accelerator.device).manual_seed(seed)
-                        pipeline.set_progress_bar_config(disable=True)
+                        s_pipeline.set_progress_bar_config(disable=True)
                         sample_dir = os.path.join(save_dir, "samples")
                         os.makedirs(sample_dir, exist_ok=True)
                         pc = args.file_prompt_contents
@@ -988,26 +1059,30 @@ def main(args, memory_record):
                                 if sample_prompt is None or sample_prompt == "":
                                     sample_prompt = c["instance_prompt"]
                                 if "[filewords]" in sample_prompt:
-                                    random_example = train_dataset.__getitem__(random.randrange(0, train_dataset.__len__() - 1))
+                                    random_example = gen_dataset.__getitem__(
+                                        random.randrange(0, gen_dataset.__len__() - 1))
                                     random_prompt = random_example["instance_prompt"]
                                     if "class_token" in c and "instance_token" in c:
-                                        class_tokens = [c["class_token"]]
-                                        if "," in c["class_token"]:
-                                            class_tokens = c["class_token"].split(",")
-                                        if not "Instance" in pc and "Class" in pc:
+                                        class_token = c["class_token"]
+                                        class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}",
+                                                        class_token]
+                                        if "Instance" not in pc and "Class" in pc:
                                             for token in class_tokens:
-                                                if token.strip() in random_prompt:
-                                                    random_prompt = random_prompt.replace(token.strip(), f"{token.strip()} {c['instance_token']}")
+                                                if token in random_prompt:
+                                                    random_prompt = random_prompt.replace(
+                                                        token,
+                                                        f"{c['instance_token']} {class_token}"
+                                                    )
                                                     break
                                     sample_prompt = sample_prompt.replace("[filewords]", random_prompt)
 
                                 for si in tqdm(range(args.n_save_sample), desc="Generating samples"):
-                                    s_image = pipeline(sample_prompt, num_inference_steps=args.save_infer_steps,
-                                                       guidance_scale=args.save_guidance_scale,
-                                                       scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
-                                                                                                 beta_end=0.012),
-                                                       negative_prompt=negative_prompt,
-                                                       generator=g_cuda).images[0]
+                                    s_image = s_pipeline(sample_prompt, num_inference_steps=args.save_infer_steps,
+                                                         guidance_scale=args.save_guidance_scale,
+                                                         scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
+                                                                                                   beta_end=0.012),
+                                                         negative_prompt=negative_prompt,
+                                                         generator=g_cuda).images[0]
                                     shared.state.current_image = s_image
                                     shared.state.textinfo = sample_prompt
                                     sanitized_prompt = sanitize_filename_part(sample_prompt, replace_spaces=False)
@@ -1018,10 +1093,10 @@ def main(args, memory_record):
                         traceback.print_exc()
                         pass
             logger.debug(f"[*] Weights saved at {save_dir}")
-            del pipeline
+            del s_pipeline
             del scheduler
             del text_enc_model
-            devices.torch_gc()
+            cleanup()
 
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
@@ -1033,6 +1108,7 @@ def main(args, memory_record):
     shared.state.textinfo = f"Training step: {global_step}/{args.max_train_steps}"
     loss_avg = AverageMeter()
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
+    training_complete = False
     for epoch in range(args.num_train_epochs):
         try:
             unet.train()
@@ -1112,7 +1188,9 @@ def main(args, memory_record):
                         ema_unet.step(unet.parameters())
 
                 if not global_step % 10:
-                    logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0]}
+                    allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
+                    cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
+                    logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0], "vram": f"{allocated}/{cached}"}
                     progress_bar.set_postfix(**logs)
                     accelerator.log(logs, step=global_step)
 
@@ -1135,7 +1213,8 @@ def main(args, memory_record):
                     training_complete = True
                 if global_step == 0 or global_step == 5:
                     printm(f"Step {global_step} completed.")
-                shared.state.textinfo = f"Training, step {global_step}/{args.max_train_steps} current, {args.revision}/{args.max_train_steps + lifetime_step} lifetime"
+                shared.state.textinfo = f"Training, step {global_step}/{args.max_train_steps} current," \
+                                        f" {args.revision}/{args.max_train_steps + lifetime_step} lifetime"
 
                 if training_complete:
                     logger.debug("Training complete.")
@@ -1155,6 +1234,12 @@ def main(args, memory_record):
         except Exception as m:
             printm(f"Exception while training: {m}")
             traceback.print_exc()
+        if shared.state.interrupted:
+            training_complete = True
+        if not training_complete:
+            if args.shuffle_after_epoch:
+                train_dataset, train_dataloader = cache_latents(args.shuffle_after_epoch >= epoch, train_dataset,
+                                                                train_dataloader, vae)
 
     cleanup_memory()
     accelerator.end_training()
