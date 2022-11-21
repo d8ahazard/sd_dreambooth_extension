@@ -120,7 +120,7 @@ def on_ui_tabs():
                                 db_shuffle_after_epoch = gr.Checkbox(label="Shuffle After Epoch", value=False)
                                 db_use_ema = gr.Checkbox(label="Train EMA", value=False)
                                 db_attention = gr.Dropdown(
-                                    label="Type of attention to use", value="default",
+                                    label="Memory Attention", value="default",
                                     choices=["default", "xformers", "flash_attention"])
                                 db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                 db_gradient_checkpointing = gr.Checkbox(label="Gradient Checkpointing", value=True)
