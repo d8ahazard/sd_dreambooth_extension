@@ -202,7 +202,8 @@ class DreamboothConfig(dict):
                     self.__dict__["class_token"] = ""
                 if "shuffle_after_epoch" not in config:
                     self.__dict__["shuffle_after_epoch"] = False
-
+                if "db_attention" not in config:
+                    self.__dict__["db_attention"] = "default"
                 for key in config:
                     self.__dict__[key] = config[key]
                 if "revision" not in config:

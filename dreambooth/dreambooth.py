@@ -493,6 +493,8 @@ def start_training(model_dir,
     if attention == "xformers":
         if mixed_precision == "no":
             msg = "Using xformers, please set mixed precision to 'fp16' to continue."
+        if not shared.cmd_opts.xformers and not shared.cmd_opts.force_enable_xformers:
+            msg = "Xformers is not enabled, please relaunch using the --xformers command-line argument to continue."
     if use_cpu:
         if use_8bit_adam or mixed_precision != "no":
             msg = "CPU Training detected, please disable 8Bit Adam and set mixed precision to 'no' to continue."
