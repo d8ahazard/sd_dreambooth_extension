@@ -20,23 +20,21 @@ from accelerate import Accelerator
 from accelerate.utils import set_seed
 from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, EulerAncestralDiscreteScheduler, \
     StableDiffusionPipeline, UNet2DConditionModel
-from diffusers.utils import logging as dl
 from diffusers.models import attention
 from diffusers.optimization import get_scheduler
+from diffusers.utils import logging as dl
 from huggingface_hub import HfFolder, whoami
-from torch import autocast
 from torch.utils.data import Dataset
 from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth import xattention
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import dumb_safety, save_checkpoint, list_features, \
     is_image, printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, EMAModel, \
     encode_hidden_state
-from modules import shared, devices
+from modules import shared
 from modules.images import sanitize_filename_part
 
 # Custom stuff
@@ -54,13 +52,23 @@ attention.Transformer2DModel = xattention.Transformer2DModelOutput
 torch.backends.cudnn.benchmark = True
 
 logger = logging.getLogger(__name__)
-# define a Handler which writes INFO messages or higher to the sys.stderr
+# define a Handler which writes DEBUG messages or higher to the sys.stderr
 console = logging.StreamHandler()
 console.setLevel(logging.DEBUG)
 logger.addHandler(console)
 logger.setLevel(logging.DEBUG)
-
 dl.set_verbosity_error()
+
+
+def cleanup():
+    try:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+        gc.collect()
+    except:
+        pass
+    printm("Cleanup completed.")
 
 
 def parse_args(input_args=None):
@@ -383,12 +391,14 @@ class DreamBoothDataset(Dataset):
         self.tokenizer_max_length = self.tokenizer.model_max_length if max_token_length == 75 else max_token_length + 2
         self.text_getter = FilenameTextGetter()
         for concept in concepts_list:
-            inst_img_path = [(x, concept["instance_prompt"], concept["instance_token"], concept["class_token"], self.text_getter.read_text(x)) for x in
+            inst_img_path = [(x, concept["instance_prompt"], concept["instance_token"], concept["class_token"],
+                              self.text_getter.read_text(x)) for x in
                              Path(concept["instance_data_dir"]).iterdir() if is_image(x, pil_features)]
             self.instance_images_path.extend(inst_img_path)
 
             if with_prior_preservation:
-                class_img_path = [(x, concept["class_prompt"], concept["instance_token"], concept["class_token"], self.text_getter.read_text(x)) for x in
+                class_img_path = [(x, concept["class_prompt"], concept["instance_token"], concept["class_token"],
+                                   self.text_getter.read_text(x)) for x in
                                   Path(concept["class_data_dir"]).iterdir() if is_image(x, pil_features)]
                 self.class_images_path.extend(class_img_path[:num_class_images])
 
@@ -434,22 +444,27 @@ class DreamBoothDataset(Dataset):
 
     def __getitem__(self, index):
         example = {}
-        instance_path, instance_prompt, instance_token, class_token, instance_text = self.instance_images_path[index % self.num_instance_images]
+        instance_path, instance_prompt, instance_token, class_token, instance_text = self.instance_images_path[
+            index % self.num_instance_images]
         instance_image = Image.open(instance_path)
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
         example["instance_images"] = self.image_transforms(instance_image)
         example["instance_prompt"] = self.text_getter.create_text(instance_prompt,
-                                                                  instance_text, instance_token, class_token, self.file_prompt_contents, False)  # TODO: show the final prompt of the image currently being trained in the ui
+                                                                  instance_text, instance_token, class_token,
+                                                                  self.file_prompt_contents,
+                                                                  False)  # TODO: show the final prompt of the image currently being trained in the ui
         example["instance_prompt_ids"] = self.tokenize(example["instance_prompt"])
 
         if self.with_prior_preservation:
-            class_path, class_prompt, instance_token, class_token,  class_text = self.class_images_path[index % self.num_class_images]
+            class_path, class_prompt, instance_token, class_token, class_text = self.class_images_path[
+                index % self.num_class_images]
             class_image = Image.open(class_path)
             if not class_image.mode == "RGB":
                 class_image = class_image.convert("RGB")
             example["class_images"] = self.image_transforms(class_image)
-            example["class_prompt"] = self.text_getter.create_text(class_prompt, class_text, instance_token, class_token, self.file_prompt_contents)
+            example["class_prompt"] = self.text_getter.create_text(class_prompt, class_text, instance_token,
+                                                                   class_token, self.file_prompt_contents)
             example["class_prompt_ids"] = self.tokenize(example["class_prompt"])
 
         return example
@@ -458,7 +473,8 @@ class DreamBoothDataset(Dataset):
 class PromptDataset(Dataset):
     "A simple dataset to prepare the prompts to generate class images on multiple GPUs."
 
-    def __init__(self, prompt: str, num_samples: int, filename_texts, file_prompt_contents: str, class_token: str, instance_token: str):
+    def __init__(self, prompt: str, num_samples: int, filename_texts, file_prompt_contents: str, class_token: str,
+                 instance_token: str):
         self.prompt = prompt
         self.instance_token = instance_token
         if "," in class_token:
@@ -608,7 +624,8 @@ def main(args, memory_record):
                 filename_texts = [text_getter.read_text(x) for x in Path(concept["instance_data_dir"]).iterdir() if
                                   is_image(x, pil_features)]
                 sample_dataset = PromptDataset(concept["class_prompt"], num_new_images, filename_texts,
-                                               args.file_prompt_contents, concept["class_token"], concept["instance_token"])
+                                               args.file_prompt_contents, concept["class_token"],
+                                               concept["instance_token"])
                 with accelerator.autocast(), torch.inference_mode():
                     generated_images = 0
                     s_len = sample_dataset.__len__() - 1
@@ -622,7 +639,8 @@ def main(args, memory_record):
                         images = pipeline(example["prompt"], num_inference_steps=args.class_infer_steps,
                                           guidance_scale=args.class_guidance_scale,
                                           scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085, beta_end=0.012),
-                                          negative_prompt=args.class_negative_prompt, num_images_per_prompt=args.sample_batch_size).images
+                                          negative_prompt=args.class_negative_prompt,
+                                          num_images_per_prompt=args.sample_batch_size).images
 
                         for i, image in enumerate(images):
                             if shared.state.interrupted:
@@ -643,10 +661,9 @@ def main(args, memory_record):
                             shared.state.current_image = image
                             pbar.update()
 
-
         del pipeline
         del text_getter
-        devices.torch_gc()
+        cleanup()
 
     # Load the tokenizer
     if args.tokenizer_name:
@@ -743,8 +760,7 @@ def main(args, memory_record):
         except:
             pass
         try:
-            gc.collect()  # Python thing
-            torch.cuda.empty_cache()  # PyTorch thing
+            cleanup()
         except:
             pass
         printm("Cleanup Complete.")
@@ -842,7 +858,7 @@ def main(args, memory_record):
         if not args.train_text_encoder:
             del text_encoder
             text_encoder = None
-        devices.torch_gc()
+        cleanup()
     printm("Cached latents if selected, cleaned up VAE.")
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
@@ -976,7 +992,8 @@ def main(args, memory_record):
                                 if sample_prompt is None or sample_prompt == "":
                                     sample_prompt = c["instance_prompt"]
                                 if "[filewords]" in sample_prompt:
-                                    random_example = train_dataset.__getitem__(random.randrange(0, train_dataset.__len__() - 1))
+                                    random_example = train_dataset.__getitem__(
+                                        random.randrange(0, train_dataset.__len__() - 1))
                                     random_prompt = random_example["instance_prompt"]
                                     if "class_token" in c and "instance_token" in c:
                                         class_tokens = [c["class_token"]]
@@ -985,7 +1002,8 @@ def main(args, memory_record):
                                         if not "Instance" in pc and "Class" in pc:
                                             for token in class_tokens:
                                                 if token.strip() in random_prompt:
-                                                    random_prompt = random_prompt.replace(token.strip(), f"{token.strip()} {c['instance_token']}")
+                                                    random_prompt = random_prompt.replace(token.strip(),
+                                                                                          f"{token.strip()} {c['instance_token']}")
                                                     break
                                     sample_prompt = sample_prompt.replace("[filewords]", random_prompt)
 
@@ -1009,7 +1027,7 @@ def main(args, memory_record):
             del pipeline
             del scheduler
             del text_enc_model
-            devices.torch_gc()
+            cleanup()
 
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
