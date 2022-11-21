@@ -42,6 +42,7 @@ class DreamboothParameters(BaseModel):
     db_scale_lr: Optional[bool] = False
     db_lr_scheduler: Optional[str] = "constant"
     db_lr_warmup_steps: Optional[int] = 0
+    db_attention: Optional[str] = "default"
     db_use_8bit_adam: Optional[bool] = False
     db_adam_beta1: Optional[float] = 0.9
     db_adam_beta2: Optional[float] = 0.999
@@ -113,6 +114,7 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
             params.db_scale_lr,
             params.db_lr_scheduler,
             params.db_lr_warmup_steps,
+            params.db_attention,
             params.db_use_8bit_adam,
             params.db_adam_beta1,
             params.db_adam_beta2,

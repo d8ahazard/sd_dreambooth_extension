@@ -134,6 +134,8 @@ Also, you *cannot* use 8Bit-Adam with CPU Training, or you'll have a bad time.
 
 *Train Text Encoder* - Not required, but recommended. Enabling this will probably cost a bit more VRAM, but also purportedly increase output image fidelity.
 
+*Attention* - Type of attention to use. Choices are: 'default': usually fastest, but use most VRAM; 'xformers': slower, uses less VRAM, can only be used with *Mixed Precision* = 'fp16'; 'flash_attention': slowest, requires lowest VRAM.
+
 *Use 8Bit Adam* - Enable this to save VRAM. Should now work on both windows and Linux without needing WSL.
 
 *Center Crop* - Crop images if they aren't the right dimensions? I don't use this, and I recommend you just crop your images "right".
