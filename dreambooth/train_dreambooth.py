@@ -474,7 +474,6 @@ class DreamBoothDataset(Dataset):
         example["instance_prompt_ids"] = self.tokenize(example["instance_prompt"])
 
         if self.with_prior_preservation:
-            class_path, class_prompt, instance_token, class_token, class_text = self.class_images_path[
             if self.shuffle:
                 idx = self._get_random_class_image_index()
             else:
