@@ -50,33 +50,56 @@ Model path format should be like so: 'runwayml/stable-diffusion-v1-5'
 
 
 ### Training (Basic Settings)
+
+#### Using [filewords]
+For any instance prompt, class prompt, or sample prompt, you may optionally use the '[filewords]' flag to replace '[filewords]' in your prompt string with a prompt from an instance image (or accompanying .txt file.
+
+To properly edit filewords prompts for the various image types, there are additional fields = "Existing Prompt Contents", "Instance Token to swap", and "Class token(s) to swap". 
+
+The instance token is the unique word used to identify the subject. The class token is one or more words or phrases used to identify the class of the subject "man","a man", etc. 
+
+By setting the value of "Existing Prompt Contents" to indicate whether our filewords prompts contain the instance token, class token, both, or none. We can then use this information to properly swap out or append words when generating preview or class images, without having to edit any existing caption structure. 
+
+#### No, really, training
+
 1. After creating a new model, select the new model name from the "Model" dropdown at the very top.
 2. Select the "Train Model" sub-tab.
 3. Fill in the paramters as described below:
 
-*Concepts List* - The path to a JSON file or a JSON string containing multiple concepts. See [here](https://raw.githubusercontent.com/d8ahazard/sd_dreambooth_extension/main/dreambooth/concepts_list.json) for an example.
 
-If a concepts list is specified, then the instance prompt, class prompt, instance data dir, and class data dir fields will be ignored.
+*Training steps* - How many total training steps to complete. According to [this guide](https://github.com/nitrosocke/dreambooth-training-guide), you should train for appx 100 steps per sample image. So, if you have 40 instance/sample images, you would train for 4k steps. This is, of course, a rough approximation, and other values will have an effect on final output fidelity.
+
+*Use Concepts* - Whether to use a JSON file or string with multiple concepts, or the individual settings below.
+
+*Concepts List* - The path to a JSON file or a JSON string containing multiple concepts. See [here](https://raw.githubusercontent.com/d8ahazard/sd_dreambooth_extension/main/dreambooth/concepts_list.json) for an example.
 
 *Instance Prompt* - A short descriptor of your subject using a UNIQUE keyword and a classifier word. If training a dog, your instance prompt could be "photo of zkz dog".
 The key here is that "zkz" is not a word that might overlap with something in the real world "fluff", and "dog" is a generic word to describe your subject. This is only necessary if using prior preservation.
-You can use `[filewords]` as placeholder for reading caption from the image filename or a seprarte .txt file containing caption, for example, `[filewords], in the style of zymkyr`. This syntax is the same as textual inversion templates.
-
-*Class Prompt* - A keyword indicating what type of "thing" your subject is. If your instance prompt is "photo of zkz dog", your class prompt would be "photo of a dog". 
-Leave this blank to disable prior preservation training.
+You can use `[filewords]` in the instance prompt.
 
 *Dataset Directory* - The path to the directory where the images described in Instance Prompt are kept. *REQUIRED*
+
+*Class Prompt* - A keyword indicating what type of "thing" your subject is. If your instance prompt is "photo of zkz dog", your class prompt would be "photo of a dog". 
+Leave this blank to disable prior preservation training. You can use '[filewords]' in the class prompt.
 
 *Classification dataset directory* - The path to the directory where the images described in Class Prompt are kept. If a class prompt is specified and this is left blank, 
 images will be generated to /models/dreambooth/MODELNAME/classifiers/
 
-*Total number of classification images to use* - Leave at 0 to disable prior preservation. For best results you want ~n*10 classification images - so if you have 40 training photos, then set this to 400. This is just a guess.
+*Existing prompt contents* - Whether existing file captions contain the class, subject, both, or none.
 
-*Training steps* - How many total training steps to complete. According to [this guide](https://github.com/nitrosocke/dreambooth-training-guide), you should train for appx 100 steps per sample image. So, if you have 40 instance/sample images, you would train for 4k steps. This is, of course, a rough approximation, and other values will have an effect on final output fidelity.
+*Instance token to swap* - The unique word for your subject. 'sks', 'xyz', etc. NOT 'a photo of sks' or 'sks person', JUST 'sks'. Used with [filewords] to build prompts to generate sample and class images if [filewords] specified in their respective prompts.
 
-*Batch size* - How many training steps to process simultaneously. You probably want to leave this at 1.
+*Class token to swap* - Similar to 'Instance token to swap', with the distinction of being able to accept either a single token, or a comma-separated list of tokens. 
 
-*Class batch size* - How many classification images to generate simultaneously. Set this to whatever you can safely process at once using Txt2Image, or just leave it alone.
+For example, if an image caption is 'a photo of a woman' or 'a photo of a man and a woman', you can use 'a woman, woman' here, and both captions will be updated to 'a photo of sks woman' and 'a photo of a man and sks woman' for training and sample generation, but left as-is when generating classification images.
+
+*Total number of classification/reg images to use* - Leave at 0 to disable prior preservation. Set to anyting greater than 0 to reveal the relevant class image settings.
+
+*Classification Image Negative Prompt* - A negative prompt to use when generating class images. This is "universal", and applies to all concepts.
+
+*Classification CFG Scale* - The CFG scale to use when generating class images.
+
+*Classification Steps* - How many steps to use when generating class images. Scheduler is Euler A. 
 
 *Learning rate* - You probably don't want to touch this.
 
@@ -100,10 +123,14 @@ may help with lower-VRAM GPUs.
 
 ### Advanced Settings
 
+*Batch size* - How many training steps to process simultaneously. You probably want to leave this at 1.
+
+*Class batch size* - How many classification images to generate simultaneously. Set this to whatever you can safely process at once using Txt2Image, or just leave it alone.
+
 *Use CPU Only* - As indicated, this is more of a last resort if you can't get it to train with any other settings. Also, as indicated, it will be abysmally slow.
 Also, you *cannot* use 8Bit-Adam with CPU Training, or you'll have a bad time.
 
-*Don't Cache Latents* - Enabling will save a bit of VRAM at the cost of a bit of speed.
+*Don't Cache Latents* - Why is this not just called "cache" latents? Because that's what the original script uses, and I'm trying to maintain the ability to update this as easily as possible. Anyway...when this box is *checked* latents will not be cached. When latents are not cached, you will save a bit of VRAM, but train slightly slower.
 
 *Train Text Encoder* - Not required, but recommended. Enabling this will probably cost a bit more VRAM, but also purportedly increase output image fidelity.
 

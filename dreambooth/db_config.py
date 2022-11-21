@@ -18,6 +18,12 @@ class DreamboothConfig(dict):
         self.src = None
         self.total_steps = None
         self.revision = None
+        self.instance_prompt = ""
+        self.class_prompt = ""
+        self.instance_token = ""
+        self.class_token = ""
+        self.instance_data_dir = ""
+        self.class_data_dir = ""
         self.__dict__ = self
 
     def create_new(self, name, scheduler, src, total_steps):
@@ -31,11 +37,16 @@ class DreamboothConfig(dict):
 
     def from_ui(self,
                 model_dir,
+                half_model,
+                use_concepts,
                 pretrained_vae_name_or_path,
                 instance_data_dir,
                 class_data_dir,
                 instance_prompt,
                 class_prompt,
+                file_prompt_contents,
+                instance_token,
+                class_token,
                 save_sample_prompt,
                 save_sample_negative_prompt,
                 n_save_sample,
@@ -91,16 +102,21 @@ class DreamboothConfig(dict):
         models_path = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
         model_dir = os.path.join(models_path, "dreambooth", model_dir)
         working_dir = os.path.join(model_dir, "working")
-        with_prior_preservation = num_class_images > 0
+        with_prior_preservation = num_class_images is not None and num_class_images > 0
         dict["pretrained_model_name_or_path"] = working_dir
 
         data = {"pretrained_model_name_or_path": working_dir,
                 "model_dir": model_dir,
+                "half_model": half_model,
+                "use_concepts": use_concepts,
                 "pretrained_vae_name_or_path": pretrained_vae_name_or_path,
                 "instance_data_dir": instance_data_dir,
                 "class_data_dir": class_data_dir,
                 "instance_prompt": instance_prompt,
                 "class_prompt": class_prompt,
+                "file_prompt_contents": file_prompt_contents,
+                "instance_token": instance_token,
+                "class_token": class_token,
                 "save_sample_prompt": save_sample_prompt,
                 "save_sample_negative_prompt": save_sample_negative_prompt,
                 "n_save_sample": n_save_sample,
@@ -174,6 +190,15 @@ class DreamboothConfig(dict):
                     self.__dict__["class_guidance_scale"] = 7.5
                     self.__dict__["class_negative_prompt"] = ""
                     self.__dict__["class_infer_steps"] = 60
+                if "use_concepts" not in config:
+                    self.__dict__["use_concepts"] = False
+                if "half_model" not in config:
+                    self.__dict__["half_model"] = False
+                if "file_prompt_contents" not in config:
+                    self.__dict__["file_prompt_contents"] = "description"
+                    self.__dict__["instance_token"] = ""
+                    self.__dict__["class_token"] = ""
+
                 for key in config:
                     self.__dict__[key] = config[key]
                 if "revision" not in config:

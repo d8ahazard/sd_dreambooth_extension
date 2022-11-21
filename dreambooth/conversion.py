@@ -16,6 +16,7 @@
 # limitations under the License.
 """ Conversion script for the LDM checkpoints. """
 import gc
+import math
 import os
 import traceback
 
@@ -27,9 +28,9 @@ from huggingface_hub import get_full_repo_name, Repository
 import modules.sd_models
 from modules import paths, shared
 from diffusers.models import attention
-from dreambooth import xattention
-from dreambooth.dreambooth import get_db_models
-from dreambooth.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth import xattention
+from extensions.sd_dreambooth_extension.dreambooth.dreambooth import get_db_models, printm
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -739,6 +740,7 @@ def convert_ldm_clip_checkpoint(checkpoint):
     if reload_dict:
         del text_model
         text_model = CLIPTextModel.from_pretrained("openai/clip-vit-large-patch14")
+        printm("Loaded base text model.")
         text_model_dict = {}
 
         for key in keys:
@@ -801,6 +803,7 @@ def convert_text_enc_state_dict(text_enc_dict):
 def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type="ddim", new_model_url="",
                        new_model_token=""):
     shared.state.job_count = 8
+    map_location = shared.device
     # Set up our base directory for the model and sanitize our file name
     new_model_name = "".join(x for x in new_model_name if x.isalnum())
     config = DreamboothConfig().create_new(new_model_name, scheduler_type, checkpoint_path, 0)
@@ -824,22 +827,25 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
                 print("Unable to find checkpoint file!")
                 shared.state.job_no = 8
                 return None, "Unable to find base checkpoint.", ""
-            #May be never execute
+
             checkpoint_loaded = False
             if not os.path.exists(checkpoint_info.filename):
                 print("Unable to find checkpoint file!")
                 shared.state.job_no = 8
                 return None, "Unable to find base checkpoint.", ""
 
+            if shared.cmd_opts.ckptfix or shared.cmd_opts.medvram or shared.cmd_opts.lowvram:
+                printm(f"Using CPU for extraction.")
+                map_location = torch.device('cpu')
             try:
-                checkpoint = torch.load(checkpoint_info[0])["state_dict"]
+                checkpoint = torch.load(checkpoint_info[0], map_location=map_location)["state_dict"]
                 checkpoint_loaded = True
             except KeyError:
                 pass
             if not checkpoint_loaded:
                 print("State dict not found in the usual spot, trying something else.")
                 try:
-                    checkpoint = torch.load(checkpoint_info.filename)
+                    checkpoint = torch.load(checkpoint_info.filename, map_location=map_location)
                     if "state_dict" in checkpoint:
                         checkpoint = checkpoint["state_dict"]
                 except:
@@ -883,10 +889,8 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
             converted_unet_checkpoint = convert_ldm_unet_checkpoint(checkpoint, unet_config)
             shared.state.textinfo = "Converted unet checkpoint..."
             shared.state.job_no = 4
-
             unet = UNet2DConditionModel(**unet_config)
             unet.load_state_dict(converted_unet_checkpoint)
-
             # Convert the VAE model.
             vae_config = create_vae_diffusers_config(original_config)
             shared.state.textinfo = "Converted VAE Config..."
@@ -924,7 +928,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
         traceback.print_exc()
 
     if pipe is not None:
-        pipe = pipe.to(shared.device)
+        pipe = pipe.to(map_location)
         pipe.save_pretrained(out_dir)
         shared.state.textinfo = "Pretrained saved..."
         shared.state.job_no = 8
@@ -933,10 +937,10 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
     return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), f"Created working directory for {new_model_name} at {out_dir}.", ""
 
 
-def compile_checkpoint(model_name, vae_path, mixed_precision):
+def compile_checkpoint(model_name, vae_path, half_checkpoint):
     msg = ""
     try:
-        half = mixed_precision == "fp16"
+        half = half_checkpoint
         ckpt_dir = shared.cmd_opts.ckpt_dir
         models_path = os.path.join(paths.models_path, "Stable-diffusion")
         if ckpt_dir is not None:
