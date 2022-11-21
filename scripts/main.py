@@ -117,6 +117,7 @@ def on_ui_tabs():
                                 db_use_cpu = gr.Checkbox(label="Use CPU Only (SLOW)", value=False)
                                 db_not_cache_latents = gr.Checkbox(label="Don't Cache Latents", value=True)
                                 db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
+                                db_shuffle_after_epoch = gr.Checkbox(label="Shuffle After Epoch", value=False)
                                 db_use_ema = gr.Checkbox(label="Train EMA", value=False)
                                 db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                 db_gradient_checkpointing = gr.Checkbox(label="Gradient Checkpointing", value=True)
@@ -151,6 +152,27 @@ def on_ui_tabs():
                 db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery').style(grid=4)
                 db_preview = gr.Image(elem_id='db_preview', visible=False)
                 setup_progressbar(db_progressbar, db_preview, 'db', textinfo=db_progress)
+
+        db_shuffle_after_epoch.change(
+            fn=lambda x, y, z: {
+                db_not_cache_latents: False if x else y,
+                db_train_text_encoder: True if x else z
+            },
+            inputs=[db_shuffle_after_epoch, db_not_cache_latents, db_train_text_encoder],
+            outputs=[db_not_cache_latents, db_train_text_encoder]
+        )
+        db_not_cache_latents.change(
+            fn=lambda: {
+                db_shuffle_after_epoch: False
+            },
+            outputs=[db_shuffle_after_epoch]
+        )
+        db_train_text_encoder.change(
+            fn=lambda: {
+                db_shuffle_after_epoch: False
+            },
+            outputs=[db_shuffle_after_epoch]
+        )
 
         db_num_class_images.change(
             fn=lambda x: gr_show(x),
@@ -338,7 +360,8 @@ def on_ui_tabs():
                 db_use_ema,
                 db_class_negative_prompt,
                 db_class_guidance_scale,
-                db_class_infer_steps
+                db_class_infer_steps,
+                db_shuffle_after_epoch
             ],
             outputs=[
                 db_status,
@@ -398,7 +421,8 @@ def on_ui_tabs():
                 db_use_ema,
                 db_class_negative_prompt,
                 db_class_guidance_scale,
-                db_class_infer_steps
+                db_class_infer_steps,
+                db_shuffle_after_epoch
             ],
             outputs=[
                 db_half_model,
@@ -450,6 +474,7 @@ def on_ui_tabs():
                 db_class_negative_prompt,
                 db_class_guidance_scale,
                 db_class_infer_steps,
+                db_shuffle_after_epoch,
                 db_status
             ]
         )
