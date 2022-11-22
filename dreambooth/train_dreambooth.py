@@ -1106,6 +1106,8 @@ def main(args, memory_record):
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
     training_complete = False
     for epoch in range(args.num_train_epochs):
+        if training_complete:
+            break
         try:
             unet.train()
             if args.train_text_encoder and text_encoder is not None:
@@ -1231,6 +1233,8 @@ def main(args, memory_record):
         except Exception as m:
             printm(f"Exception while training: {m}")
             traceback.print_exc()
+            training_complete = True
+            break
         if shared.state.interrupted:
             training_complete = True
         if not training_complete:
