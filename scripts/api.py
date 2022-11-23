@@ -1,18 +1,24 @@
 import asyncio
+import base64
+import os
+import shutil
 from typing import Optional
 
+import aiohttp
 import gradio as gr
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks, UploadFile, File
 from pydantic import BaseModel
+
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse
 
 import modules.script_callbacks as script_callbacks
 from extensions.sd_dreambooth_extension.dreambooth import conversion, dreambooth
 from webui import wrap_gradio_gpu_call
 
-
 class DreamboothParameters(BaseModel):
-    db_half_model: bool = False,
-    db_use_concepts: bool = False,
+    db_half_model: Optional[bool] = False,
+    db_use_concepts: Optional[bool] = False,
     db_pretrained_model_name_or_path: str
     db_pretrained_vae_name_or_path: Optional[str] = ""
     db_instance_data_dir: str
@@ -63,9 +69,12 @@ class DreamboothParameters(BaseModel):
     db_class_guidance_scale: Optional[float] = 7.5
     db_class_infer_steps: Optional[int] = 60
     db_shuffle_after_epoch: Optional[bool] = False
+    callback_url: Optional[str] = ""
 
 
 def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
+
+    #Endpoints
     @app.post("/dreambooth/createModel")
     async def createModel(
                 name,
@@ -76,13 +85,49 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
         print("Creating new Checkpoint: " + name)
         fn = conversion.extract_checkpoint(name, source, scheduler, model_url, hub_token)
 
-    @app.post("/dreambooth/start_straining")
-    async def start_training(params: DreamboothParameters):
-        print("Starting Training")
-        task = asyncio.create_task(train_model(params))
-        return {"status": "finished"}
 
+
+    @app.post("/dreambooth/start_straining")
+    async def start_training(params: DreamboothParameters, background_tasks: BackgroundTasks):
+        print("Starting Training")
+        train_model(params)
+        return {"training": "completed"}
+
+
+    #Upload Training Images base64 and save them to a folder
+    @app.post("/dreambooth/upload_training_images")
+    async def upload_training_images(folder: str,images: list):
+        # Create folder /training/folder
+        path = os.path.join("training", folder)
+        if not os.path.exists(path):
+            os.makedirs(path)
+        # Save images to folder
+        for i, image in enumerate(images):
+            with open(os.path.join(path, str(i) + ".png"), "wb") as f:
+                f.write(base64.b64decode(image))
+        return {"upload": "completed"}
+
+    #Download Trained Model
+    @app.get("/dreambooth/download_model/{model_name}")
+    async def download_model(model_name: str):
+
+        model_path = os.path.join("models", "Stable-diffusion", model_name +".ckpt")
+        print("Downloading Model " + model_path)
+        return FileResponse(model_path)
+
+
+    @app.post("/dreambooth/upload_model")
+    async def upload_model(model_name: str, model: UploadFile = File(...)):
+        print("Uploading Model")
+        with open(os.path.join("models", "Stable-diffusion", model_name +".ckpt"), "wb") as buffer:
+            shutil.copyfileobj(model.file, buffer)
+        return {"upload": "completed"}
+
+
+
+    #Async Trainings
     async def train_model(params: DreamboothParameters):
+        print("Training Model")
         fn = wrap_gradio_gpu_call(dreambooth.start_training(
             params.db_pretrained_model_name_or_path,
             params.db_half_model,
@@ -137,6 +182,12 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
             params.db_class_infer_steps,
             params.db_shuffle_after_epoch
         ))
+        async with aiohttp.ClientSession() as session:
+            async with session.get(params.callback_url) as resp:
+                print(resp.status)
+                print(await resp.text())
+
+
 
 
 script_callbacks.on_app_started(dreamBoothAPI)
