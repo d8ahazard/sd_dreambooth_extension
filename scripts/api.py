@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
-
+from modules import paths, shared, devices, sd_models
 import modules.script_callbacks as script_callbacks
 from extensions.sd_dreambooth_extension.dreambooth import conversion, dreambooth
 from webui import wrap_gradio_gpu_call
@@ -97,8 +97,14 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
     #Upload Training Images base64 and save them to a folder
     @app.post("/dreambooth/upload_training_images")
     async def upload_training_images(folder: str,images: list):
-        # Create folder /training/folder
-        path = os.path.join("training", folder)
+
+        try:
+            path = os.path.join(shared.cmd_opts.dreambooth_models_path,folder,"training")
+        except:
+            path = os.path.join(shared.models_dir,folder,"training")
+
+
+
         if not os.path.exists(path):
             os.makedirs(path)
         # Save images to folder
