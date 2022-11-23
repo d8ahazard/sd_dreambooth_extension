@@ -57,7 +57,6 @@ try:
     has_xformers = False
     try:
         args = sys.argv
-        print(f"Args: {args}")
         if is_xformers_available():
             import xformers
             import xformers.ops
@@ -69,7 +68,7 @@ try:
     print(f"[{'*' if not torch_flag else '!'}] Torch version is {torch_ver}.")
     print(f"[{'*' if not vis_flag else '!'}] Torch vision version is {torchvision_ver}.")
     print(f"[{'*' if transformers_ver == transformers_rec else '!'}] Transformers version is {transformers_ver}.")
-    print(f"[{'*' if has_xformers else '-'}] Xformers")
+    print(f"[{'*' if has_xformers else '-'}] Xformers Installed")
     print(f"")
 except:
     pass

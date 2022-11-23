@@ -3,6 +3,8 @@ import json
 import logging
 import math
 import os
+import random
+import traceback
 from pathlib import Path
 from typing import Optional
 
@@ -10,7 +12,7 @@ import torch
 import torch.utils.checkpoint
 from PIL import features
 from accelerate.logging import get_logger
-from diffusers import StableDiffusionPipeline
+from diffusers import StableDiffusionPipeline, EulerAncestralDiscreteScheduler
 from diffusers.utils.import_utils import is_xformers_available
 from huggingface_hub import HfFolder, whoami
 from six import StringIO
@@ -18,7 +20,9 @@ from six import StringIO
 from extensions.sd_dreambooth_extension.dreambooth import conversion
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.xattention import save_pretrained
-from modules import paths, shared, devices, sd_models
+from modules import paths, shared, devices, sd_models, generation_parameters_copypaste
+from modules.images import sanitize_filename_part
+from modules.processing import create_infotext
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -33,59 +37,109 @@ mem_record = {}
 StableDiffusionPipeline.save_pretrained = save_pretrained
 
 
-def build_concepts(config: DreamboothConfig):
-    # Parse/sanitize concepts list
-    output = None
-    msg = ""
-    if config["use_concepts"]:
-        concepts_list = config["concepts_list"]
-        if not isset(concepts_list):
-            msg = "Unable to build concepts, no list specified."
-        is_json = False
-        try:
-            alist = str(concepts_list)
-            if "'" in alist:
-                alist = alist.replace("'", '"')
-            output = json.loads(alist)
-            is_json = True
-            msg = "Loaded concepts from JSON String."
-        except Exception:
-            pass
-        if not is_json:
-            try:
-                if os.path.exists(concepts_list):
-                    with open(concepts_list, "r") as f:
-                        output = json.load(f)
-                    msg = "Loaded concepts from file."
-            except:
-                msg = "Unable to load concepts from JSON or file!"
-                pass
-    else:
-        if isset(config["instance_prompt"]) and isset(config["instance_data_dir"]):
-            concepts = {}
-            keys = ["instance_prompt",
-                    "class_prompt",
-                    "sample_prompt",
-                    "negative_prompt",
-                    "instance_data_dir",
-                    "class_data_dir",
-                    "instance_token",
-                    "class_token"]
-            for key in keys:
-                if key in config:
-                    concepts[key] = config[key]
-            output = [concepts]
-            msg = "Created concepts from prompts."
-        else:
-            msg = "Please specify an instance prompt and instance directory."
-    if output is not None:
-        cindex = 0
-        for concept in output:
-            if "class_data_dir" not in concept or not isset(concept["class_data_dir"]):
-                concept["class_data_dir"] = os.path.join(config["model_dir"], f"classifiers_concept_{cindex}")
-            cindex += 1
+def log_memory():
+    mem = printm("", True)
+    return f"Current memory usage: {mem}"
 
-    return output, msg
+
+def generate_sample_img(model_dir: str, save_sample_prompt: str, save_sample_negative_prompt: str, sample_seed: int,
+                        save_guidance_scale: float, save_infer_steps: int, save_sample_count: int):
+    print("Gensample?")
+    unload_system_models()
+    models_path = shared.models_path
+    db_model_path = os.path.join(models_path, "dreambooth")
+    if shared.cmd_opts.dreambooth_models_path:
+        db_model_path = shared.cmd_opts.dreambooth_models_path
+    model_path = os.path.join(db_model_path, model_dir, "working")
+    if not os.path.exists(model_path):
+        print(f"Model path '{model_path}' doesn't exist.")
+        return f"Can't find diffusers model at {model_path}."
+    try:
+        pipeline = StableDiffusionPipeline.from_pretrained(model_path, safety_checker=None)
+        pipeline = pipeline.to(shared.device)
+        with devices.autocast(), torch.inference_mode():
+            save_dir = os.path.join(shared.sd_path, "outputs", "dreambooth")
+            if save_sample_prompt is None:
+                msg = "Please provide a sample prompt."
+                print(msg)
+                return msg
+            shared.state.textinfo = f"Generating preview image for model {db_model_path}..."
+            seed = sample_seed
+            # I feel like this might not actually be necessary...but what the heck.
+            if seed is None or seed == '' or seed == -1:
+                seed = int(random.randrange(21474836147))
+            g_cuda = torch.Generator(device=shared.device).manual_seed(seed)
+            sample_dir = os.path.join(save_dir, "samples")
+            os.makedirs(sample_dir, exist_ok=True)
+            file_count = 0
+            for x in Path(sample_dir).iterdir():
+                if is_image(x, pil_features):
+                    file_count += 1
+            shared.state.job_count = save_sample_count
+            for n in range(save_sample_count):
+                file_count += 1
+                shared.state.job_no = n
+                image = pipeline(save_sample_prompt, num_inference_steps=save_infer_steps,
+                                 guidance_scale=save_guidance_scale,
+                                 scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
+                                                                           beta_end=0.012),
+                                 negative_prompt=save_sample_negative_prompt,
+                                 generator=g_cuda).images[0]
+
+                if shared.opts.enable_pnginfo:
+                    params = {
+                        "Steps": save_infer_steps,
+                        "Sampler": "Euler A",
+                        "CFG scale": save_guidance_scale,
+                        "Seed": sample_seed
+                    }
+                    generation_params_text = ", ".join(
+                        [k if k == v else f'{k}: {generation_parameters_copypaste.quote(v)}' for k, v in
+                         params.items() if v is not None])
+
+                    negative_prompt_text = "\nNegative prompt: " + save_sample_negative_prompt
+
+                    data = f"{save_sample_prompt}{negative_prompt_text}\n{generation_params_text}".strip()
+                    image.info["parameters"] = data
+
+                shared.state.current_image = image
+                shared.state.textinfo = save_sample_prompt
+                sanitized_prompt = sanitize_filename_part(save_sample_prompt, replace_spaces=False)
+                image.save(os.path.join(sample_dir, f"{str(file_count).zfill(3)}-{sanitized_prompt}.png"))
+    except:
+        print("Exception generating sample!")
+        traceback.print_exc()
+    reload_system_models()
+    return "Sample generated."
+
+
+def cleanup():
+    try:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+        gc.collect()
+    except:
+        pass
+    printm("Cleanup completed.")
+
+
+def unload_system_models():
+    if shared.sd_model is not None:
+        shared.sd_model.to("cpu")
+    for former in shared.face_restorers:
+        try:
+            former.to("cpu")
+        except:
+            pass
+    cleanup()
+    printm("", True)
+
+
+def reload_system_models():
+    if shared.sd_model is not None:
+        shared.sd_model.to(shared.device)
+    printm("Restored system models.")
 
 
 # Borrowed from https://wandb.ai/psuraj/dreambooth/reports/Training-Stable-Diffusion-with-Dreambooth
@@ -120,17 +174,17 @@ def training_wizard(
     # Load config, get total steps
     config = DreamboothConfig().from_file(model_dir)
     total_steps = config.revision
-    config["use_concepts"] = use_concepts
-    config["concepts_list"] = concepts_list
-    config["instance_data_dir"] = instance_data_dir
-    config["class_data_dir"] = class_data_dir
-    config["instance_prompt"] = "foo"
-    config["class_prompt"] = "foo"
-    config["sample_prompt"] = ""
-    config["instance_token"] = ""
-    config["class_token"] = ""
+    config.use_concepts = use_concepts
+    config.concepts_list = concepts_list
+    config.instance_data_dir = instance_data_dir
+    config.class_data_dir = class_data_dir
+    config.instance_prompt = "foo"
+    config.class_prompt = "foo"
+    config.save_sample_prompt = ""
+    config.instance_token = ""
+    config.class_token = ""
     # Build concepts list using current settings
-    concepts, msg = build_concepts(config)
+    concepts = config.concepts_list
     pil_feats = list_features()
 
     if concepts is None:
@@ -226,16 +280,27 @@ def performance_wizard():
            use_ema, train_text_encoder, mixed_precision, use_cpu, use_8bit_adam
 
 
-def printm(msg, reset=False):
+def printm(msg="", reset=False):
     global mem_record
-    if not mem_record:
-        mem_record = {}
-    if reset:
-        mem_record = {}
-    allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
-    cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
-    mem_record[msg] = f"{allocated}/{cached}GB"
-    print(f' {msg} \n Allocated: {allocated}GB \n Reserved: {cached}GB \n')
+    try:
+        allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
+        reserved = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
+        if not mem_record:
+            mem_record = {}
+        if reset:
+            max_allocated = round(torch.cuda.max_memory_allocated(0) / 1024 ** 3, 1)
+            max_reserved = round(torch.cuda.max_memory_reserved(0) / 1024 ** 3, 1)
+            output = f" Allocated {allocated}/{max_allocated}GB \n Reserved: {reserved}/{max_reserved}GB \n"
+            torch.cuda.reset_peak_memory_stats()
+            print(output)
+            mem_record = {}
+        else:
+            mem_record[msg] = f"{allocated}/{reserved}GB"
+            output = f' {msg} \n Allocated: {allocated}GB \n Reserved: {reserved}GB \n'
+            print(output)
+    except:
+        output = "Error parsing memory stats. Do you have a NVIDIA GPU?"
+    return output
 
 
 def dumb_safety(images, clip_input):
@@ -330,8 +395,8 @@ def load_params(model_dir):
 
     values = []
     for target in target_values:
-        if target in data:
-            value = data[target]
+        if target in data.__dict__:
+            value = data.__dict__[target]
             if target == "max_token_length":
                 value = str(value)
             values.append(value)
@@ -410,67 +475,67 @@ def start_training(model_dir,
     if model_dir == "" or model_dir is None:
         print("Invalid model name.")
         return "Create or select a model first.", ""
-
-    config = DreamboothConfig().from_ui(model_dir,
-                                        half_model,
-                                        use_concepts,
-                                        pretrained_vae_name_or_path,
-                                        instance_data_dir,
-                                        class_data_dir,
-                                        instance_prompt,
-                                        class_prompt,
-                                        file_prompt_contents,
-                                        instance_token,
-                                        class_token,
-                                        save_sample_prompt,
-                                        save_sample_negative_prompt,
-                                        n_save_sample,
-                                        seed,
-                                        save_guidance_scale,
-                                        save_infer_steps,
-                                        num_class_images,
-                                        resolution,
-                                        center_crop,
-                                        train_text_encoder,
-                                        train_batch_size,
-                                        sample_batch_size,
-                                        num_train_epochs,
-                                        max_train_steps,
-                                        gradient_accumulation_steps,
-                                        gradient_checkpointing,
-                                        learning_rate,
-                                        scale_lr,
-                                        lr_scheduler,
-                                        lr_warmup_steps,
-                                        attention,
-                                        use_8bit_adam,
-                                        adam_beta1,
-                                        adam_beta2,
-                                        adam_weight_decay,
-                                        adam_epsilon,
-                                        max_grad_norm,
-                                        save_preview_every,  # Replaces save_interval, save_min_steps
-                                        save_embedding_every,
-                                        mixed_precision,
-                                        not_cache_latents,
-                                        concepts_list,
-                                        use_cpu,
-                                        pad_tokens,
-                                        max_token_length,
-                                        hflip,
-                                        use_ema,
-                                        class_negative_prompt,
-                                        class_guidance_scale,
-                                        class_infer_steps,
-                                        shuffle_after_epoch
-                                        )
+    config = DreamboothConfig(model_dir)
+    config.from_ui(model_dir,
+                   half_model,
+                   use_concepts,
+                   pretrained_vae_name_or_path,
+                   instance_data_dir,
+                   class_data_dir,
+                   instance_prompt,
+                   class_prompt,
+                   file_prompt_contents,
+                   instance_token,
+                   class_token,
+                   save_sample_prompt,
+                   save_sample_negative_prompt,
+                   n_save_sample,
+                   seed,
+                   save_guidance_scale,
+                   save_infer_steps,
+                   num_class_images,
+                   resolution,
+                   center_crop,
+                   train_text_encoder,
+                   train_batch_size,
+                   sample_batch_size,
+                   num_train_epochs,
+                   max_train_steps,
+                   gradient_accumulation_steps,
+                   gradient_checkpointing,
+                   learning_rate,
+                   scale_lr,
+                   lr_scheduler,
+                   lr_warmup_steps,
+                   attention,
+                   use_8bit_adam,
+                   adam_beta1,
+                   adam_beta2,
+                   adam_weight_decay,
+                   adam_epsilon,
+                   max_grad_norm,
+                   save_preview_every,  # Replaces save_interval, save_min_steps
+                   save_embedding_every,
+                   mixed_precision,
+                   not_cache_latents,
+                   concepts_list,
+                   use_cpu,
+                   pad_tokens,
+                   max_token_length,
+                   hflip,
+                   use_ema,
+                   class_negative_prompt,
+                   class_guidance_scale,
+                   class_infer_steps,
+                   shuffle_after_epoch
+                   )
 
     concepts, msg = build_concepts(config)
 
     if concepts is not None:
         config.concepts_list = concepts
     else:
-        print("Unable to lbuild concepts.")
+        print(f"Unable to build concepts: {msg}")
         return config, "Unable to load concepts."
 
     # Disable prior preservation if no class prompt and no sample images
@@ -482,10 +547,7 @@ def start_training(model_dir,
         config.max_token_length = 75
 
     # Clear pretrained VAE Name if applicable
-    if "pretrained_vae_name_or_path" in config.__dict__:
-        if config.pretrained_vae_name_or_path == "":
-            config.pretrained_vae_name_or_path = None
-    else:
+    if config.pretrained_vae_name_or_path == "":
         config.pretrained_vae_name_or_path = None
 
     config.save()
@@ -516,11 +578,7 @@ def start_training(model_dir,
 
     # Clear memory and do "stuff" only after we've ensured all the things are right
     print("Starting Dreambooth training...")
-    if shared.sd_model is not None:
-        shared.sd_model.to('cpu')
-    torch.cuda.empty_cache()
-    gc.collect()
-    printm("VRAM cleared.", True)
+    unload_system_models()
     total_steps = config.revision
     shared.state.textinfo = "Initializing dreambooth training..."
     from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
@@ -532,9 +590,7 @@ def start_training(model_dir,
     gc.collect()
     printm("Training completed, reloading SD Model.")
     print(f'Memory output: {mem_record}')
-    if shared.sd_model is not None:
-        shared.sd_model.to(shared.device)
-    print("Re-applying optimizations...")
+    reload_system_models()
     res = f"Training {'interrupted' if shared.state.interrupted else 'finished'}. " \
           f"Total lifetime steps: {total_steps} \n"
     print(f"Returning result: {res}")

@@ -1,4 +1,13 @@
-function start_training_dreambooth(){
+function db_start_progress(){
+    requestProgress('db');
+    gradioApp().querySelector('#db_error').innerHTML='';
+    gradioApp().querySelector('#db_status').innerHTML='';
+    return args_to_array(arguments);
+}
+
+function db_save_start_progress(){
+    btn = gradioApp().getElementById("db_save_config");
+    if(btn!=null) btn.click();
     requestProgress('db');
     gradioApp().querySelector('#db_error').innerHTML='';
     gradioApp().querySelector('#db_status').innerHTML='';

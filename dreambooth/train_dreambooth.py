@@ -29,8 +29,10 @@ from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth import xattention
+from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import dumb_safety, save_checkpoint, list_features, \
-    is_image, printm
+    is_image, printm, cleanup
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, EMAModel, \
     encode_hidden_state
 from modules import shared
@@ -55,17 +57,6 @@ console.setLevel(logging.DEBUG)
 logger.addHandler(console)
 logger.setLevel(logging.DEBUG)
 dl.set_verbosity_error()
-
-
-def cleanup():
-    try:
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.ipc_collect()
-        gc.collect()
-    except:
-        pass
-    printm("Cleanup completed.")
 
 
 def parse_args(input_args=None):
@@ -567,11 +558,11 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
-def main(args, memory_record):
+def main(args: DreamboothConfig, memory_record):
     args.tokenizer_name = None
     global mem_record
     mem_record = memory_record
-    logging_dir = Path(args.output_dir, "logging")
+    logging_dir = Path(args.model_dir, "logging")
     args.max_token_length = int(args.max_token_length)
     if not args.pad_tokens and args.max_token_length > 75:
         logger.debug("Cannot raise token length limit above 75 when pad_tokens=False")
@@ -758,7 +749,8 @@ def main(args, memory_record):
 
     if args.scale_lr:
         args.learning_rate = (
-                args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
+                args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size *
+                accelerator.num_processes
         )
 
     # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
@@ -815,21 +807,23 @@ def main(args, memory_record):
             pass
         printm("Cleanup Complete.")
 
-    train_dataset = DreamBoothDataset(
+    train_dataset = SuperDataset(
         concepts_list=args.concepts_list,
         tokenizer=tokenizer,
         with_prior_preservation=args.with_prior_preservation,
         size=args.resolution,
         center_crop=args.center_crop,
-        num_class_images=args.num_class_images,
+        num_class=args.num_class_images,
+        lifetime_steps=args.revision,
         pad_tokens=args.pad_tokens,
         hflip=args.hflip,
         max_token_length=args.max_token_length,
         shuffle=False,
-        file_prompt_contents=args.file_prompt_contents
+        file_prompt_contents=args.file_prompt_contents,
+        max_steps=args.max_train_steps
     )
 
-    if train_dataset.num_instance_images == 0:
+    if train_dataset.__len__ == 0:
         msg = "Please provide a directory with actual images in it."
         logger.debug(msg)
         shared.state.textinfo = msg
@@ -885,18 +879,20 @@ def main(args, memory_record):
         if enc_vae is None:
             enc_vae = create_vae()
 
-        dataset = DreamBoothDataset(
+        dataset = SuperDataset(
             concepts_list=args.concepts_list,
             tokenizer=tokenizer,
             with_prior_preservation=args.with_prior_preservation,
             size=args.resolution,
             center_crop=args.center_crop,
-            num_class_images=args.num_class_images,
+            lifetime_steps=args.revision,
+            num_class=args.num_class_images,
             pad_tokens=args.pad_tokens,
             hflip=args.hflip,
             max_token_length=args.max_token_length,
             file_prompt_contents=args.file_prompt_contents,
-            shuffle=shuffle
+            shuffle=shuffle,
+            max_steps=args.max_train_steps
         )
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
@@ -1241,6 +1237,8 @@ def main(args, memory_record):
             if args.shuffle_after_epoch:
                 train_dataset, train_dataloader = cache_latents(args.shuffle_after_epoch >= epoch, train_dataset,
                                                                 train_dataloader, vae)
+        else:
+            break
 
     cleanup_memory()
     accelerator.end_training()

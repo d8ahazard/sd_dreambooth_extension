@@ -24,7 +24,8 @@ import torch
 
 import modules.sd_models
 from modules import paths, shared
-from extensions.sd_dreambooth_extension.dreambooth.dreambooth import get_db_models, printm
+from extensions.sd_dreambooth_extension.dreambooth.dreambooth import get_db_models, printm, reload_system_models, \
+    unload_system_models
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 
 try:
@@ -811,17 +812,12 @@ def convert_text_enc_state_dict(text_enc_dict):
 def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type="ddim", new_model_url="",
                        new_model_token="", extract_ema=False):
     shared.state.job_count = 8
-    if shared.sd_model is not None:
-        shared.sd_model.to('cpu')
+    unload_system_models()
     map_location = shared.device
     # Set up our base directory for the model and sanitize our file name
     new_model_name = "".join(x for x in new_model_name if x.isalnum())
-    config = DreamboothConfig().create_new(new_model_name, scheduler_type, checkpoint_path, 0)
-    new_model_dir = create_output_dir(new_model_name, config)
-    # Create folder for the 'extracted' diffusion model.
-    out_dir = os.path.join(new_model_dir, "working")
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
+    config = DreamboothConfig(new_model_name, scheduler_type, checkpoint_path, 0)
+    config.save()
     shared.state.job_no = 0
     pipe = None
     try:
@@ -864,7 +860,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
                     print("Couldn't load checkpoint, canceling.")
                     dirs = get_db_models()
                     return gr.Dropdown.update(
-                        choices=sorted(dirs)), f"Created working directory for {new_model_name} at {out_dir}.", ""
+                        choices=sorted(dirs)), f"Created working directory for {new_model_name} at {config.pretrained_model_name_or_path}.", ""
 
             shared.state.textinfo = "Loaded state dict..."
             shared.state.job_no = 1
@@ -942,7 +938,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
 
     if pipe is not None:
         pipe = pipe.to(map_location)
-        pipe.save_pretrained(out_dir)
+        pipe.save_pretrained(config.pretrained_model_name_or_path)
         shared.state.textinfo = "Pretrained saved..."
         shared.state.job_no = 8
         del pipe
@@ -958,12 +954,11 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
         gc.collect()
     except:
         pass
-    if shared.sd_model is not None:
-        shared.sd_model.to(shared.device)
-    printm("Extraction completed.")
+    reload_system_models()
+    printm("Extraction completed.", True)
     dirs = get_db_models()
 
-    return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), f"Created working directory for {new_model_name} at {out_dir}.", ""
+    return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), f"Created working directory for {new_model_name} at {config.pretrained_model_name_or_path}.", ""
 
 
 def compile_checkpoint(model_name, vae_path, half_checkpoint):
@@ -1031,14 +1026,3 @@ def diff_to_sd(model_path, vae_path, checkpoint_name, half=False):
         pass
     gc.collect()  # Python thing
     torch.cuda.empty_cache()  # PyTorch thing
-
-
-def create_output_dir(new_model, config_data):
-    print(f"Creating dreambooth model folder: {new_model}")
-    models_dir = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
-    model_dir = os.path.join(models_dir, "dreambooth", new_model)
-    output_dir = os.path.join(model_dir, "working")
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    config_data.save()
-    return model_dir
