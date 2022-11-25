@@ -2,6 +2,7 @@ import filecmp
 import os
 import shutil
 import sys
+import sysconfig
 
 import git
 from launch import run
@@ -77,7 +78,7 @@ except:
 if os.name == "nt":
     python = sys.executable
     bnb_src = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bitsandbytes_windows")
-    bnb_dest = os.path.join(script_path, "venv", "Lib", "site-packages", "bitsandbytes")
+    bnb_dest = os.path.join(sysconfig.get_paths()["purelib"], "bitsandbytes")
     printed = False
     filecmp.clear_cache()
     for file in os.listdir(bnb_src):
