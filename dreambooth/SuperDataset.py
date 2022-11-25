@@ -6,6 +6,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 from pathlib import Path
 
+from extensions.sd_dreambooth_extension.dreambooth.db_config import Concept
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import is_image, list_features
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter
 from modules import images
@@ -19,13 +20,10 @@ class SuperDataset(Dataset):
 
     def __init__(
             self,
-            concepts_list,
+            concepts_list: [Concept],
             tokenizer,
-            file_prompt_contents,
-            with_prior_preservation=True,
             size=512,
             center_crop=False,
-            num_class=None,
             pad_tokens=False,
             hflip=False,
             max_token_length=75,
@@ -33,13 +31,12 @@ class SuperDataset(Dataset):
             lifetime_steps=-1,
             max_train_steps=0
     ):
+        self.concepts_list = concepts_list
         self.size = size
         self.center_crop = center_crop
         self.tokenizer = tokenizer
-        self.with_prior_preservation = with_prior_preservation
         self.pad_tokens = pad_tokens
         self.shuffle = shuffle
-        self.file_prompt_contents = file_prompt_contents
         self.instance_dict = {}
         self.class_dict = {}
         self.instance_counts = {}
@@ -55,55 +52,50 @@ class SuperDataset(Dataset):
         self.concepts_index = 0
         total_images = 0
 
-        for concept in concepts_list:
-            print(f"Loading concept: {concept}")
-            concept_with_prior = with_prior_preservation
-            num_class_images = num_class
-            instance_prompt = concept["instance_prompt"]
+        for concept_dict in concepts_list:
+            concept = Concept(input_dict=concept_dict)
+            concept_with_prior = concept.num_class_images > 0
+            num_class_images = concept.num_class_images
+            instance_prompt = concept.instance_prompt
             if "[filewords]" in instance_prompt:
-                concept_key = concept["instance_token"]
+                concept_key = concept.instance_token
             else:
                 concept_key = images.sanitize_filename_part(instance_prompt)
             max_steps = max_train_steps
-            if "max_steps" in concept:
-                max_steps = concept["max_steps"]
-                # Ensure we don't over train our concept
+            if concept.max_steps > 0:
+                max_steps = concept.max_steps
+                # Ensure we don't over-train our concept
                 if lifetime_steps >= max_steps:
                     print(f"Excluding concept {instance_prompt}")
                     max_steps = 0
                 else:
-                    print(f"Setting max_steps for {instance_prompt} to {max_steps}")
                     max_steps -= lifetime_steps
 
             # Only append things to the dict if we still want to train them
             if max_steps > 0:
-                if max_steps > total_images:
-                    total_images = max_steps
                 # We can now override num_class_images per concept
-                if "num_class_images" in concept:
-                    num_class_images = concept["num_class_images"]
-                    if num_class_images > 0:
-                        concept_with_prior = True
-
-                inst_img_path = [(x, instance_prompt, concept["instance_token"], concept["class_token"],
+                if concept.num_class_images > 0:
+                    concept_with_prior = True
+                inst_img_path = [(x, instance_prompt, concept.instance_token, concept.class_token,
                                   self.text_getter.read_text(x)) for x in
-                                 Path(concept["instance_data_dir"]).iterdir() if is_image(x, pil_features)]
+                                 Path(concept.instance_data_dir).iterdir() if is_image(x, pil_features)]
                 # Create a dictionary for each concept, one with the images, and another with the max training steps
                 random.shuffle(inst_img_path)
-
+                total_images += len(inst_img_path)
                 self.instance_dict[concept_key] = inst_img_path
                 self.instance_counts[concept_key] = max_steps
 
                 if concept_with_prior:
-                    class_img_path = [(x, concept["class_prompt"], concept["instance_token"], concept["class_token"],
+                    class_img_path = [(x, concept.class_prompt, concept.instance_token, concept.class_token,
                                        self.text_getter.read_text(x)) for x in
-                                      Path(concept["class_data_dir"]).iterdir() if is_image(x, pil_features)]
+                                      Path(concept.class_data_dir).iterdir() if is_image(x, pil_features)]
                     out = class_img_path[:num_class_images]
                     random.shuffle(out)
                     self.class_dict[concept_key] = out
 
         # We do this above when creating the dict of instance images
         self._length = total_images
+        print(f"Total images: {self._length}")
 
         self.image_transforms = transforms.Compose(
             [
@@ -162,6 +154,7 @@ class SuperDataset(Dataset):
         example = {}
         # Get the current concepts index and corresponding key for our dicts
         c_index = self.concepts_index
+        concept = self.concepts_list[c_index]
         concept_key = list(self.instance_dict)[c_index]
         # Get current dict of values for stuff
         instance_idx = self._get_random_image_index(concept_key, True)
@@ -176,11 +169,11 @@ class SuperDataset(Dataset):
         example["instance_images"] = self.image_transforms(instance_image)
         example["instance_prompt"] = self.text_getter.create_text(instance_prompt,
                                                                   instance_text, instance_token, class_token,
-                                                                  self.file_prompt_contents,
+                                                                  concept.file_prompt_contents,
                                                                   False)
         example["instance_prompt_ids"] = self.tokenize(example["instance_prompt"])
 
-        if self.with_prior_preservation and len(class_images):
+        if concept.num_class_images > 0 and len(class_images):
             class_idx = self._get_random_image_index(concept_key, False)
             class_path, class_prompt, instance_token, class_token, class_text = class_idx
             class_image = Image.open(class_path)
@@ -188,7 +181,7 @@ class SuperDataset(Dataset):
                 class_image = class_image.convert("RGB")
             example["class_images"] = self.image_transforms(class_image)
             example["class_prompt"] = self.text_getter.create_text(class_prompt, class_text, instance_token,
-                                                                   class_token, self.file_prompt_contents)
+                                                                   class_token, concept.file_prompt_contents)
             example["class_prompt_ids"] = self.tokenize(example["class_prompt"])
 
         # Here's where the "Super" comes in.
@@ -196,7 +189,8 @@ class SuperDataset(Dataset):
         concept_count -= 1
         if concept_count <= 0:
             print(f"Popping concept: {concept_key}")
-            self.instance_dict.pop(concept_key)
+            removed = self.instance_dict.pop(concept_key)
+            self._length -= len(removed)
             self.class_dict.pop(concept_key)
             self.instance_counts.pop(concept_key)
         else:

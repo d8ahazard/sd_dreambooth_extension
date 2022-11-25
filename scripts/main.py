@@ -1,26 +1,49 @@
 import gradio as gr
 
 from extensions.sd_dreambooth_extension.dreambooth import conversion, dreambooth
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.db_config import save_config
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import get_db_models, performance_wizard, \
     training_wizard, training_wizard_person, log_memory, generate_sample_img
 from modules import script_callbacks, sd_models, shared
-from modules.ui import setup_progressbar, gr_show, wrap_gradio_call
+from modules.ui import setup_progressbar, gr_show, wrap_gradio_call, create_refresh_button
 from webui import wrap_gradio_gpu_call
 
 
 def on_ui_tabs():
     with gr.Blocks() as dreambooth_interface:
-        db_save_params = gr.Button(value="Save Params", elem_id="db_save_config")
         with gr.Row(equal_height=True):
-            db_model_dir = gr.Dropdown(label='Model', choices=sorted(get_db_models()))
-            db_half_model = gr.Checkbox(label="Half", value=False)
+            db_save_params = gr.Button(value="Save Params", elem_id="db_save_config")
             db_load_params = gr.Button(value='Load Params')
             db_generate_checkpoint = gr.Button(value="Generate Ckpt")
             db_interrupt_training = gr.Button(value="Cancel")
-            db_train_embedding = gr.Button(value="Train", variant='primary')
+            db_train_model = gr.Button(value="Train", variant='primary')
 
         with gr.Row().style(equal_height=False):
+            with gr.Column(varint="panel"):
+                with gr.Row():
+                    db_model_name = gr.Dropdown(label='Model', choices=sorted(get_db_models()))
+                    create_refresh_button(db_model_name, get_db_models, lambda: {
+                            "choices": sorted(get_db_models())},
+                                          "refresh_db_models")
+                db_half_model = gr.Checkbox(label="Half Model", value=False)
+                with gr.Row():
+                    db_train_wizard_person = gr.Button(value="Training Wizard (Person)")
+                    db_train_wizard_object = gr.Button(value="Training Wizard (Object/Style)")
+                db_performance_wizard = gr.Button(value="Performance Wizard (WIP)")
+
+                with gr.Row():
+                    gr.HTML(value="Loaded Model:")
+                    db_model_path = gr.HTML()
+                with gr.Row():
+                    gr.HTML(value="Model Revision:")
+                    db_revision = gr.HTML(elem_id="db_revision")
+                with gr.Row():
+                    gr.HTML(value="Source Checkpoint:")
+                    db_src = gr.HTML()
+                with gr.Row():
+                    gr.HTML(value="Scheduler:")
+                    db_scheduler = gr.HTML()
+
             with gr.Column(variant="panel"):
                 with gr.Tab("Create Model"):
                     db_new_model_name = gr.Textbox(label="Name")
@@ -38,11 +61,9 @@ def on_ui_tabs():
                             gr.HTML(value="")
 
                         with gr.Column():
-                            db_create_embedding = gr.Button(value="Create", variant='primary')
+                            db_create_model = gr.Button(value="Create", variant='primary')
                 with gr.Tab("Parameters"):
                     with gr.Accordion(open=True, label="Settings"):
-                        db_train_wizard_person = gr.Button(value="Training Wizard (Person)")
-                        db_train_wizard_object = gr.Button(value="Training Wizard (Object/Style)")
                         with gr.Column():
                             gr.HTML(value="Intervals")
                             db_max_train_steps = gr.Number(label='Training Steps', value=1000, precision=0)
@@ -82,7 +103,6 @@ def on_ui_tabs():
                     with gr.Accordion(open=False, label="Advanced"):
                         with gr.Row():
                             with gr.Column():
-                                db_performance_wizard = gr.Button(value="Auto-Adjust (WIP)")
                                 with gr.Column():
                                     gr.HTML(value="Batch")
                                     db_train_batch_size = gr.Number(label="Batch Size", precision=0, value=1)
@@ -99,11 +119,11 @@ def on_ui_tabs():
 
                                     db_not_cache_latents = gr.Checkbox(label="Don't Cache Latents", value=True)
                                     db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
+                                    db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
                                     db_use_ema = gr.Checkbox(label="Train EMA", value=False)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
-                                    db_max_token_length = gr.Dropdown(
-                                        label="Max Token Length (Requires Pad Tokens for > 75)", value="75",
-                                        choices=["75", "150", "225", "300"])
+                                    db_max_token_length = gr.Slider(label="Max Token Length", minimum=75, maximum=300,
+                                                                    step=75)
                                 with gr.Column():
                                     gr.HTML("Gradients")
                                     db_gradient_checkpointing = gr.Checkbox(label="Gradient Checkpointing", value=True)
@@ -161,29 +181,208 @@ def on_ui_tabs():
                 db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery').style(grid=4)
                 db_preview = gr.Image(elem_id='db_preview', visible=False)
                 setup_progressbar(db_progressbar, db_preview, 'db', textinfo=db_progress)
-
+        foo = {
+            "one": "one",
+            "two": "two"
+        }
         db_save_params.click(
-            fn=DreamboothConfig().save_params,
+            fn=save_config,
             inputs=[
-                db_model_dir, db_max_train_steps, db_num_train_epochs, db_save_embedding_every, db_save_preview_every,
-                db_learning_rate, db_scale_lr, db_lr_scheduler, db_lr_warmup_steps, db_resolution, db_center_crop,
-                db_hflip, db_pretrained_vae_name_or_path, db_use_concepts, db_concepts_path,
-                db_train_batch_size, db_sample_batch_size, db_use_cpu, db_use_8bit_adam, db_mixed_precision,
-                db_attention, db_train_text_encoder, db_use_ema, db_pad_tokens, db_max_token_length,
-                db_gradient_checkpointing, db_gradient_accumulation_steps, db_max_grad_norm, db_adam_beta1,
-                db_adam_beta2, db_adam_weight_decay, db_adam_epsilon, c1_max_steps, c1_instance_data_dir, c1_class_data_dir,
-                c1_file_prompt_contents, c1_instance_prompt, c1_class_prompt, c1_save_sample_prompt, c1_instance_token,
-                c1_class_token, c1_num_class_images, c1_class_negative_prompt, c1_class_guidance_scale,
-                c1_class_infer_steps, c1_save_sample_negative_prompt, c1_n_save_sample, c1_sample_seed,
-                c1_save_guidance_scale, c1_save_infer_steps, c2_max_steps, c2_instance_data_dir, c2_class_data_dir,
-                c2_file_prompt_contents, c2_instance_prompt, c2_class_prompt, c2_save_sample_prompt,
-                c2_instance_token, c2_class_token, c2_num_class_images, c2_class_negative_prompt,
-                c2_class_guidance_scale, c2_class_infer_steps, c2_save_sample_negative_prompt,
-                c2_n_save_sample, c2_sample_seed, c2_save_guidance_scale, c2_save_infer_steps, c3_max_steps,
-                c3_instance_data_dir, c3_class_data_dir, c3_file_prompt_contents, c3_instance_prompt,
-                c3_class_prompt, c3_save_sample_prompt, c3_instance_token, c3_class_token, c3_num_class_images,
-                c3_class_negative_prompt, c3_class_guidance_scale, c3_class_infer_steps, c3_save_sample_negative_prompt,
-                c3_n_save_sample, c3_sample_seed, c3_save_guidance_scale, c3_save_infer_steps
+                db_model_name,
+                db_adam_beta1,
+                db_adam_beta2,
+                db_adam_epsilon,
+                db_adam_weight_decay,
+                db_attention,
+                db_center_crop,
+                db_concepts_path,
+                db_gradient_accumulation_steps,
+                db_gradient_checkpointing,
+                db_half_model,
+                db_hflip,
+                db_learning_rate,
+                db_lr_scheduler,
+                db_lr_warmup_steps,
+                db_max_grad_norm,
+                db_max_token_length,
+                db_max_train_steps,
+                db_mixed_precision,
+                db_model_path,
+                db_not_cache_latents,
+                db_num_train_epochs,
+                db_pad_tokens,
+                db_pretrained_vae_name_or_path,
+                db_prior_loss_weight,
+                db_resolution,
+                db_revision,
+                db_sample_batch_size,
+                db_save_embedding_every,
+                db_save_preview_every,
+                db_scale_lr,
+                db_scheduler,
+                db_src,
+                db_train_batch_size,
+                db_train_text_encoder,
+                db_use_8bit_adam,
+                db_use_concepts,
+                db_use_cpu,
+                db_use_ema,
+                c1_class_data_dir,
+                c1_class_guidance_scale,
+                c1_class_infer_steps,
+                c1_class_negative_prompt,
+                c1_class_prompt,
+                c1_class_token,
+                c1_file_prompt_contents,
+                c1_instance_data_dir,
+                c1_instance_prompt,
+                c1_instance_token,
+                c1_max_steps,
+                c1_n_save_sample,
+                c1_num_class_images,
+                c1_sample_seed,
+                c1_save_guidance_scale,
+                c1_save_infer_steps,
+                c1_save_sample_negative_prompt,
+                c1_save_sample_prompt,
+                c2_class_data_dir,
+                c2_class_guidance_scale,
+                c2_class_infer_steps,
+                c2_class_negative_prompt,
+                c2_class_prompt,
+                c2_class_token,
+                c2_file_prompt_contents,
+                c2_instance_data_dir,
+                c2_instance_prompt,
+                c2_instance_token,
+                c2_max_steps,
+                c2_n_save_sample,
+                c2_num_class_images,
+                c2_sample_seed,
+                c2_save_guidance_scale,
+                c2_save_infer_steps,
+                c2_save_sample_negative_prompt,
+                c2_save_sample_prompt,
+                c3_class_data_dir,
+                c3_class_guidance_scale,
+                c3_class_infer_steps,
+                c3_class_negative_prompt,
+                c3_class_prompt,
+                c3_class_token,
+                c3_file_prompt_contents,
+                c3_instance_data_dir,
+                c3_instance_prompt,
+                c3_instance_token,
+                c3_max_steps,
+                c3_n_save_sample,
+                c3_num_class_images,
+                c3_sample_seed,
+                c3_save_guidance_scale,
+                c3_save_infer_steps,
+                c3_save_sample_negative_prompt,
+                c3_save_sample_prompt
+            ]
+        )
+
+        db_load_params.click(
+            fn=dreambooth.load_params,
+            inputs=[
+                db_model_name
+            ],
+            outputs=[
+                db_adam_beta1,
+                db_adam_beta2,
+                db_adam_epsilon,
+                db_adam_weight_decay,
+                db_attention,
+                db_center_crop,
+                db_concepts_path,
+                db_gradient_accumulation_steps,
+                db_gradient_checkpointing,
+                db_half_model,
+                db_hflip,
+                db_learning_rate,
+                db_lr_scheduler,
+                db_lr_warmup_steps,
+                db_max_grad_norm,
+                db_max_token_length,
+                db_max_train_steps,
+                db_mixed_precision,
+                db_model_path,
+                db_not_cache_latents,
+                db_num_train_epochs,
+                db_pad_tokens,
+                db_pretrained_vae_name_or_path,
+                db_prior_loss_weight,
+                db_resolution,
+                db_revision,
+                db_sample_batch_size,
+                db_save_embedding_every,
+                db_save_preview_every,
+                db_scale_lr,
+                db_scheduler,
+                db_src,
+                db_train_batch_size,
+                db_train_text_encoder,
+                db_use_8bit_adam,
+                db_use_concepts,
+                db_use_cpu,
+                db_use_ema,
+                c1_class_data_dir,
+                c1_class_guidance_scale,
+                c1_class_infer_steps,
+                c1_class_negative_prompt,
+                c1_class_prompt,
+                c1_class_token,
+                c1_file_prompt_contents,
+                c1_instance_data_dir,
+                c1_instance_prompt,
+                c1_instance_token,
+                c1_max_steps,
+                c1_n_save_sample,
+                c1_num_class_images,
+                c1_sample_seed,
+                c1_save_guidance_scale,
+                c1_save_infer_steps,
+                c1_save_sample_negative_prompt,
+                c1_save_sample_prompt,
+                c2_class_data_dir,
+                c2_class_guidance_scale,
+                c2_class_infer_steps,
+                c2_class_negative_prompt,
+                c2_class_prompt,
+                c2_class_token,
+                c2_file_prompt_contents,
+                c2_instance_data_dir,
+                c2_instance_prompt,
+                c2_instance_token,
+                c2_max_steps,
+                c2_n_save_sample,
+                c2_num_class_images,
+                c2_sample_seed,
+                c2_save_guidance_scale,
+                c2_save_infer_steps,
+                c2_save_sample_negative_prompt,
+                c2_save_sample_prompt,
+                c3_class_data_dir,
+                c3_class_guidance_scale,
+                c3_class_infer_steps,
+                c3_class_negative_prompt,
+                c3_class_prompt,
+                c3_class_token,
+                c3_file_prompt_contents,
+                c3_instance_data_dir,
+                c3_instance_prompt,
+                c3_instance_token,
+                c3_max_steps,
+                c3_n_save_sample,
+                c3_num_class_images,
+                c3_sample_seed,
+                c3_save_guidance_scale,
+                c3_save_infer_steps,
+                c3_save_sample_negative_prompt,
+                c3_save_sample_prompt,
+                db_status
             ]
         )
 
@@ -215,20 +414,10 @@ def on_ui_tabs():
             ]
         )
 
-        sample_inputs = [
-            db_model_dir,
-            c1_save_sample_prompt,
-            c1_save_sample_negative_prompt,
-            c1_sample_seed,
-            c1_save_guidance_scale,
-            c1_save_infer_steps,
-            c1_n_save_sample
-        ]
-
         db_generate_sample.click(
             fn=wrap_gradio_gpu_call(generate_sample_img, extra_outputs=[gr.update()]),
-            _js="db_start_progress",
-            inputs=sample_inputs,
+            _js="db_save_start_progress",
+            inputs=[db_model_name],
             outputs=[db_status]
         )
 
@@ -240,63 +429,60 @@ def on_ui_tabs():
 
         db_performance_wizard.click(
             fn=performance_wizard,
-            inputs=[],
+            _js="db_save_start_progress",
+            inputs=[db_model_name],
             outputs=[
                 db_status,
-                c1_num_class_images,
-                db_train_batch_size,
-                db_sample_batch_size,
-                db_not_cache_latents,
                 db_gradient_checkpointing,
-                db_use_ema,
-                db_train_text_encoder,
                 db_mixed_precision,
+                db_not_cache_latents,
+                db_train_text_encoder,
+                db_use_8bit_adam,
                 db_use_cpu,
-                db_use_8bit_adam
+                db_use_ema
             ]
         )
 
         db_train_wizard_person.click(
-            fn=training_wizard_person,
+            fn=save_and_execute(training_wizard_person, extra_outputs=[gr.update()], wrap_gpu=False),
             inputs=[
-                db_model_dir,
-                db_use_concepts,
-                db_concepts_path,
-                c1_instance_data_dir,
-                c1_class_data_dir,
-                db_learning_rate
+                db_model_name
             ],
             outputs=[
                 db_status,
                 db_max_train_steps,
-                c1_num_class_images
+                c1_max_steps,
+                c1_num_class_images,
+                c2_max_steps,
+                c2_num_class_images,
+                c3_max_steps,
+                c3_num_class_images
             ]
         )
 
         db_train_wizard_object.click(
-            fn=training_wizard,
+            fn=save_and_execute(training_wizard, extra_outputs=[gr.update()], wrap_gpu=False),
+            _js="db_save_start_progress",
             inputs=[
-                db_model_dir,
-                db_use_concepts,
-                db_concepts_path,
-                c1_instance_data_dir,
-                c1_class_data_dir,
-                db_learning_rate
+                db_model_name
             ],
             outputs=[
                 db_status,
                 db_max_train_steps,
-                c1_num_class_images
+                c1_max_steps,
+                c1_num_class_images,
+                c2_max_steps,
+                c2_num_class_images,
+                c3_max_steps,
+                c3_num_class_images
             ]
         )
 
         db_generate_checkpoint.click(
             fn=wrap_gradio_gpu_call(conversion.compile_checkpoint, extra_outputs=[gr.update()]),
-            _js="db_start_progress",
+            _js="db_save_start_progress",
             inputs=[
-                db_model_dir,
-                db_pretrained_vae_name_or_path,
-                db_half_model
+                db_model_name
             ],
             outputs=[
                 db_status,
@@ -304,7 +490,7 @@ def on_ui_tabs():
             ]
         )
 
-        db_create_embedding.click(
+        db_create_model.click(
             fn=wrap_gradio_gpu_call(conversion.extract_checkpoint, extra_outputs=[gr.update()]),
             _js="db_start_progress",
             inputs=[
@@ -315,81 +501,25 @@ def on_ui_tabs():
                 db_new_model_token
             ],
             outputs=[
-                db_model_dir,
+                db_model_name,
+                db_model_path,
+                db_revision,
+                db_scheduler,
                 db_status,
                 db_outcome,
             ]
         )
 
-        db_train_embedding.click(
+        db_train_model.click(
             fn=save_and_execute(dreambooth.start_training, extra_outputs=[gr.update()], wrap_gpu=True),
-            _js="db_start_progress",
+            _js="db_save_start_progress",
             inputs=[
-                db_model_dir
+                db_model_name
             ],
             outputs=[
+                db_revision,
                 db_status,
                 db_outcome,
-            ]
-        )
-
-        db_load_params.click(
-            fn=dreambooth.load_params,
-            inputs=[
-                db_model_dir
-            ],
-            outputs=[
-                db_half_model,
-                db_use_concepts,
-                db_pretrained_vae_name_or_path,
-                c1_instance_data_dir,
-                c1_class_data_dir,
-                c1_instance_prompt,
-                c1_class_prompt,
-                c1_file_prompt_contents,
-                c1_instance_token,
-                c1_class_token,
-                c1_save_sample_prompt,
-                c1_save_sample_negative_prompt,
-                c1_n_save_sample,
-                c1_sample_seed,
-                c1_save_guidance_scale,
-                c1_save_infer_steps,
-                c1_num_class_images,
-                db_resolution,
-                db_center_crop,
-                db_train_text_encoder,
-                db_train_batch_size,
-                db_sample_batch_size,
-                db_num_train_epochs,
-                db_max_train_steps,
-                db_gradient_accumulation_steps,
-                db_gradient_checkpointing,
-                db_learning_rate,
-                db_scale_lr,
-                db_lr_scheduler,
-                db_lr_warmup_steps,
-                db_attention,
-                db_use_8bit_adam,
-                db_adam_beta1,
-                db_adam_beta2,
-                db_adam_weight_decay,
-                db_adam_epsilon,
-                db_max_grad_norm,
-                db_save_preview_every,
-                db_save_embedding_every,
-                db_mixed_precision,
-                db_not_cache_latents,
-                db_concepts_path,
-                db_use_cpu,
-                db_pad_tokens,
-                db_max_token_length,
-                db_hflip,
-                db_use_ema,
-                c1_class_negative_prompt,
-                c2_class_guidance_scale,
-                c3_class_infer_steps,
-                db_status
             ]
         )
 
@@ -404,7 +534,7 @@ def on_ui_tabs():
 
 def build_concept_panel():
     with gr.Column():
-        max_steps = gr.Number(label="Maximum Training Steps", value=-1,precision=0)
+        max_steps = gr.Number(label="Maximum Training Steps", value=-1, precision=0)
         gr.HTML(value="Directories")
         instance_data_dir = gr.Textbox(label='Dataset Directory',
                                        placeholder="Path to directory with input images")
@@ -448,7 +578,8 @@ def build_concept_panel():
         sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
         save_guidance_scale = gr.Number(label="Sample CFG Scale", value=7.5, max=12, min=1, precision=2)
         save_infer_steps = gr.Number(label="Sample Steps", value=40, min=10, max=200, precision=0)
-    return [max_steps, instance_data_dir, class_data_dir, file_prompt_contents, instance_prompt, class_prompt, num_class_images,
+    return [max_steps, instance_data_dir, class_data_dir, file_prompt_contents, instance_prompt, class_prompt,
+            num_class_images,
             save_sample_prompt, instance_token, class_token, num_class_images, class_negative_prompt,
             class_guidance_scale, class_infer_steps, save_sample_negative_prompt, n_save_sample, sample_seed,
             save_guidance_scale, save_infer_steps]
@@ -459,8 +590,8 @@ def save_and_execute(func, extra_outputs=None, wrap_gpu=False):
         res = func(*args, **kwargs)
         return res
 
-    if wrap_gpu:
-        return wrap_gradio_call(f, extra_outputs=extra_outputs, add_stats=True)
+    if not wrap_gpu:
+        return wrap_gradio_call(f, extra_outputs=extra_outputs, add_stats=False)
     else:
         return wrap_gradio_gpu_call(f, extra_outputs=extra_outputs)
 

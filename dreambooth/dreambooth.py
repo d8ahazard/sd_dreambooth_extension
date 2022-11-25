@@ -1,5 +1,4 @@
 import gc
-import json
 import logging
 import math
 import os
@@ -18,11 +17,10 @@ from huggingface_hub import HfFolder, whoami
 from six import StringIO
 
 from extensions.sd_dreambooth_extension.dreambooth import conversion
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, Concept
 from extensions.sd_dreambooth_extension.dreambooth.xattention import save_pretrained
 from modules import paths, shared, devices, sd_models, generation_parameters_copypaste
 from modules.images import sanitize_filename_part
-from modules.processing import create_infotext
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -42,70 +40,69 @@ def log_memory():
     return f"Current memory usage: {mem}"
 
 
-def generate_sample_img(model_dir: str, save_sample_prompt: str, save_sample_negative_prompt: str, sample_seed: int,
-                        save_guidance_scale: float, save_infer_steps: int, save_sample_count: int):
+def generate_sample_img(model_dir: str):
     print("Gensample?")
+    config = from_file(model_dir)
     unload_system_models()
-    models_path = shared.models_path
-    db_model_path = os.path.join(models_path, "dreambooth")
-    if shared.cmd_opts.dreambooth_models_path:
-        db_model_path = shared.cmd_opts.dreambooth_models_path
-    model_path = os.path.join(db_model_path, model_dir, "working")
-    if not os.path.exists(model_path):
-        print(f"Model path '{model_path}' doesn't exist.")
-        return f"Can't find diffusers model at {model_path}."
+    model_path = config.pretrained_model_name_or_path
+    if not os.path.exists(config.pretrained_model_name_or_path):
+        print(f"Model path '{config.pretrained_model_name_or_path}' doesn't exist.")
+        return f"Can't find diffusers model at {config.pretrained_model_name_or_path}."
     try:
         pipeline = StableDiffusionPipeline.from_pretrained(model_path, safety_checker=None)
         pipeline = pipeline.to(shared.device)
         with devices.autocast(), torch.inference_mode():
             save_dir = os.path.join(shared.sd_path, "outputs", "dreambooth")
-            if save_sample_prompt is None:
-                msg = "Please provide a sample prompt."
-                print(msg)
-                return msg
-            shared.state.textinfo = f"Generating preview image for model {db_model_path}..."
-            seed = sample_seed
-            # I feel like this might not actually be necessary...but what the heck.
-            if seed is None or seed == '' or seed == -1:
-                seed = int(random.randrange(21474836147))
-            g_cuda = torch.Generator(device=shared.device).manual_seed(seed)
-            sample_dir = os.path.join(save_dir, "samples")
-            os.makedirs(sample_dir, exist_ok=True)
-            file_count = 0
-            for x in Path(sample_dir).iterdir():
-                if is_image(x, pil_features):
+            for concept in config.concepts_list:
+                save_sample_prompt = concept.save_sample_prompt
+                db_model_path = concept.working_dir
+                if save_sample_prompt is None:
+                    msg = "Please provide a sample prompt."
+                    print(msg)
+                    return msg
+                shared.state.textinfo = f"Generating preview image for model {db_model_path}..."
+                seed = concept.sample_seed
+                # I feel like this might not actually be necessary...but what the heck.
+                if seed is None or seed == '' or seed == -1:
+                    seed = int(random.randrange(21474836147))
+                g_cuda = torch.Generator(device=shared.device).manual_seed(seed)
+                sample_dir = os.path.join(save_dir, "samples")
+                os.makedirs(sample_dir, exist_ok=True)
+                file_count = 0
+                for x in Path(sample_dir).iterdir():
+                    if is_image(x, pil_features):
+                        file_count += 1
+                shared.state.job_count = concept.save_sample_count
+                for n in range(concept.save_sample_count):
                     file_count += 1
-            shared.state.job_count = save_sample_count
-            for n in range(save_sample_count):
-                file_count += 1
-                shared.state.job_no = n
-                image = pipeline(save_sample_prompt, num_inference_steps=save_infer_steps,
-                                 guidance_scale=save_guidance_scale,
-                                 scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
-                                                                           beta_end=0.012),
-                                 negative_prompt=save_sample_negative_prompt,
-                                 generator=g_cuda).images[0]
+                    shared.state.job_no = n
+                    image = pipeline(save_sample_prompt, num_inference_steps=concept.save_infer_steps,
+                                     guidance_scale=concept.save_guidance_scale,
+                                     scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
+                                                                               beta_end=0.012),
+                                     negative_prompt=concept.save_sample_negative_prompt,
+                                     generator=g_cuda).images[0]
 
-                if shared.opts.enable_pnginfo:
-                    params = {
-                        "Steps": save_infer_steps,
-                        "Sampler": "Euler A",
-                        "CFG scale": save_guidance_scale,
-                        "Seed": sample_seed
-                    }
-                    generation_params_text = ", ".join(
-                        [k if k == v else f'{k}: {generation_parameters_copypaste.quote(v)}' for k, v in
-                         params.items() if v is not None])
+                    if shared.opts.enable_pnginfo:
+                        params = {
+                            "Steps": concept.save_infer_steps,
+                            "Sampler": "Euler A",
+                            "CFG scale": concept.save_guidance_scale,
+                            "Seed": concept.sample_seed
+                        }
+                        generation_params_text = ", ".join(
+                            [k if k == v else f'{k}: {generation_parameters_copypaste.quote(v)}' for k, v in
+                             params.items() if v is not None])
 
-                    negative_prompt_text = "\nNegative prompt: " + save_sample_negative_prompt
+                        negative_prompt_text = "\nNegative prompt: " + concept.save_sample_negative_prompt
 
-                    data = f"{save_sample_prompt}{negative_prompt_text}\n{generation_params_text}".strip()
-                    image.info["parameters"] = data
+                        data = f"{save_sample_prompt}{negative_prompt_text}\n{generation_params_text}".strip()
+                        image.info["parameters"] = data
 
-                shared.state.current_image = image
-                shared.state.textinfo = save_sample_prompt
-                sanitized_prompt = sanitize_filename_part(save_sample_prompt, replace_spaces=False)
-                image.save(os.path.join(sample_dir, f"{str(file_count).zfill(3)}-{sanitized_prompt}.png"))
+                    shared.state.current_image = image
+                    shared.state.textinfo = save_sample_prompt
+                    sanitized_prompt = sanitize_filename_part(save_sample_prompt, replace_spaces=False)
+                    image.save(os.path.join(sample_dir, f"{str(file_count).zfill(3)}-{sanitized_prompt}.png"))
     except:
         print("Exception generating sample!")
         traceback.print_exc()
@@ -145,82 +142,112 @@ def reload_system_models():
 # Borrowed from https://wandb.ai/psuraj/dreambooth/reports/Training-Stable-Diffusion-with-Dreambooth
 # --VmlldzoyNzk0NDc3#tl,dr; and https://www.reddit.com/r/StableDiffusion/comments/ybxv7h/good_dreambooth_formula/
 def training_wizard_person(
-        model_dir,
-        use_concepts,
-        concepts_list,
-        instance_data_dir,
-        class_data_dir,
-        learning_rate
+        model_dir
 ):
     return training_wizard(
         model_dir,
-        use_concepts,
-        concepts_list,
-        instance_data_dir,
-        class_data_dir,
-        learning_rate,
         is_person=True)
 
 
 def training_wizard(
         model_dir,
-        use_concepts,
-        concepts_list,
-        instance_data_dir,
-        class_data_dir,
-        learning_rate,
         is_person=False
 ):
+    """
+    Calculate the number of steps based on our learning rate, return the following:
+    status,
+    max_train_steps,
+    c1_max_steps,
+    c1_num_class_images,
+    c2_max_steps,
+    c2_num_class_images,
+    c3_max_steps,
+    c3_num_class_images
+    """
+    if model_dir == "" or model_dir is None:
+        return "Please select a model.", 1000, -1, 0, -1, 0, -1, 0
     # Load config, get total steps
-    config = DreamboothConfig().from_file(model_dir)
-    total_steps = config.revision
-    config.use_concepts = use_concepts
-    config.concepts_list = concepts_list
-    config.instance_data_dir = instance_data_dir
-    config.class_data_dir = class_data_dir
-    config.instance_prompt = "foo"
-    config.class_prompt = "foo"
-    config.save_sample_prompt = ""
-    config.instance_token = ""
-    config.class_token = ""
-    # Build concepts list using current settings
-    concepts = config.concepts_list
-    pil_feats = list_features()
+    config = from_file(model_dir)
 
-    if concepts is None:
-        print("Error loading params.")
-        return "Unable to load concepts.", 1000, 100, False, 0, "constant"
+    # Configure generic outputs
+    status = ""
+    max_train_steps = 1000
+    class_steps = []
+    class_concepts = []
+    c1_steps = c2_steps = c3_steps = -1
+    c1_class = c2_class = c3_class = 0
+    if config is None:
+        status = "Unable to load config."
+        return status, 1000, -1, 0, -1, 0, -1, 0
+    else:
+        rev = config.revision
+        if rev == '' or rev is None:
+            rev = 0
+        total_steps = int(rev)
+        # Build concepts list using current settings
+        concepts = config.concepts_list
+        pil_feats = list_features()
 
-    # Count the total number of images in all datasets
-    total_images = 0
-    for concept in concepts:
-        if not os.path.exists(concept["instance_data_dir"]):
-            print("Nonexistent instance directory.")
+        # Count the total number of images in all datasets
+        total_images = 0
+        image_counts = []
+        max_images = 0
+
+        for concept in concepts:
+            image_count = 0
+            if not os.path.exists(concept["instance_data_dir"]):
+                print("Nonexistent instance directory.")
+            else:
+                for x in Path(concept["instance_data_dir"]).iterdir():
+                    if is_image(x, pil_feats):
+                        total_images += 1
+                        image_count += 1
+            if image_count > max_images:
+                max_images = image_count
+            image_counts.append(image_count)
+
+        if total_images == 0:
+            print("No training images found, can't do math.")
+            return "No training images found, can't do math.", 1000, -1, 0, -1, 0, -1, 0
+
+        # Set "base" value
+        magick_number = 58139534.88372093
+        required_steps = round(total_images * magick_number * config.learning_rate, -2)
+        if is_person:
+            num_class_images = round(total_images * 12, -1)
         else:
-            for x in Path(concept["instance_data_dir"]).iterdir():
-                if is_image(x, pil_feats):
-                    total_images += 1
+            num_class_images = 0
+            required_steps = round(required_steps * 1.5, -2)
 
-    if total_images == 0:
-        print("No training images found, can't do math.")
-        return "No training images found, can't do math.", 1000, 100, False, 0, "constant"
+        c_idx = 0
 
-    # Set "base" value
-    magick_number = 58139534.88372093
-    required_steps = round(total_images * magick_number * learning_rate, -2)
-    if is_person:
-        num_class_images = round(total_images * 12, -1)
-    else:
-        num_class_images = 0
-        required_steps = round(required_steps * 1.5, -2)
-
-    # Ensure we don't over-train?
-    if total_steps >= required_steps:
-        required_steps = 0
-    else:
-        required_steps = required_steps - total_steps
-    msg = f"Wizard completed, using {required_steps} lifetime steps and {num_class_images} class images."
-    return msg, required_steps, num_class_images
+        for _ in concepts:
+            num_images = image_counts[c_idx]
+            if num_images == max_images:
+                c_steps = -1
+            else:
+                c_steps = round(num_images * magick_number * config.learning_rate, -2)
+            if is_person:
+                c_class_images = round(num_images * 12, -1)
+            else:
+                c_class_images = 0
+            if c_idx < 3:
+                class_steps.append(c_steps)
+                class_concepts.append(c_class_images)
+            c_idx += 1
+        c1_steps = class_steps[0] if len(class_steps) > 0 else -1
+        c2_steps = class_steps[1] if len(class_steps) > 1 else -1
+        c3_steps = class_steps[2] if len(class_steps) > 2 else -1
+        c1_class = class_concepts[0] if len(class_concepts) > 0 else 0
+        c2_class = class_concepts[1] if len(class_concepts) > 1 else 0
+        c3_class = class_concepts[2] if len(class_concepts) > 2 else 0
+        # Ensure we don't over-train?
+        if total_steps >= required_steps:
+            required_steps = 0
+        else:
+            required_steps = required_steps - total_steps
+        status = f"Wizard completed, using {required_steps} lifetime steps and {num_class_images} class images."
+    return status, required_steps, c1_steps, c1_class, c2_steps, c2_class, c3_steps, c3_class
 
 
 def performance_wizard():
@@ -272,7 +299,6 @@ def performance_wizard():
         use_8bit_adam = True
         mixed_precision = "fp16"
         msg += "<br>Xformers detected, enabling 8Bit Adam and setting mixed precision to 'fp16'"
-        print()
 
     if use_cpu:
         msg += "<br>Detected less than 10GB of VRAM, setting CPU training to true."
@@ -338,72 +364,46 @@ def is_image(path: Path, feats=None):
 
 
 def load_params(model_dir):
-    data = DreamboothConfig().from_file(model_dir)
+    data = from_file(model_dir)
+    msg = ""
+    if data is None:
+        print("Can't load config!")
+        msg = "Please specify a model to load."
 
-    target_values = ["half_model",
-                     "use_concepts",
-                     "pretrained_vae_name_or_path",
-                     "instance_data_dir",
-                     "class_data_dir",
-                     "instance_prompt",
-                     "class_prompt",
-                     "file_prompt_contents",
-                     "instance_token",
-                     "class_token",
-                     "save_sample_prompt",
-                     "save_sample_negative_prompt",
-                     "n_save_sample",
-                     "seed",
-                     "save_guidance_scale",
-                     "save_infer_steps",
-                     "num_class_images",
-                     "resolution",
-                     "center_crop",
-                     "train_text_encoder",
-                     "train_batch_size",
-                     "sample_batch_size",
-                     "num_train_epochs",
-                     "max_train_steps",
-                     "gradient_accumulation_steps",
-                     "gradient_checkpointing",
-                     "learning_rate",
-                     "scale_lr",
-                     "lr_scheduler",
-                     "lr_warmup_steps",
-                     "attention",
-                     "use_8bit_adam",
-                     "adam_beta1",
-                     "adam_beta2",
-                     "adam_weight_decay",
-                     "adam_epsilon",
-                     "max_grad_norm",
-                     "save_preview_every",
-                     "save_embedding_every",
-                     "mixed_precision",
-                     "not_cache_latents",
-                     "concepts_list",
-                     "use_cpu",
-                     "pad_tokens",
-                     "max_token_length",
-                     "hflip",
-                     "use_ema",
-                     "class_negative_prompt",
-                     "class_guidance_scale",
-                     "class_infer_steps",
-                     "shuffle_after_epoch"
-                     ]
-
-    values = []
-    for target in target_values:
-        if target in data.__dict__:
-            value = data.__dict__[target]
-            if target == "max_token_length":
-                value = str(value)
-            values.append(value)
+    concepts = []
+    ui_dict = {}
+    for key in data.__dict__:
+        value = data.__dict__[key]
+        if key == "concepts_list":
+            concepts = value
         else:
-            values.append(None)
-    values.append(f"Loaded params from {model_dir}.")
-    return values
+            if key == "pretrained_model_name_or_path":
+                key = "model_path"
+            ui_dict[f"db_{key}"] = value
+            msg = "Loaded config."
+
+    ui_concepts = concepts if concepts is not None else []
+    if len(ui_concepts) < 3:
+        while len(ui_concepts) < 3:
+            ui_concepts.append(Concept())
+    c_idx = 1
+    for ui_concept in ui_concepts:
+        if c_idx > 3:
+            break
+
+        for key in sorted(ui_concept):
+            ui_dict[f"c{c_idx}_{key}"] = ui_concept[key]
+        c_idx += 1
+    ui_dict["db_status"] = msg
+    ui_keys = ["db_adam_beta1", "db_adam_beta2", "db_adam_epsilon", "db_adam_weight_decay", "db_attention", "db_center_crop", "db_concepts_path", "db_gradient_accumulation_steps", "db_gradient_checkpointing", "db_half_model", "db_hflip", "db_learning_rate", "db_lr_scheduler", "db_lr_warmup_steps", "db_max_grad_norm", "db_max_token_length", "db_max_train_steps", "db_mixed_precision", "db_model_path", "db_not_cache_latents", "db_num_train_epochs", "db_pad_tokens", "db_pretrained_vae_name_or_path", "db_prior_loss_weight", "db_resolution", "db_revision", "db_sample_batch_size", "db_save_embedding_every", "db_save_preview_every", "db_scale_lr", "db_scheduler", "db_src", "db_train_batch_size", "db_train_text_encoder", "db_use_8bit_adam", "db_use_concepts", "db_use_cpu", "db_use_ema", "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps", "c1_class_negative_prompt", "c1_class_prompt", "c1_class_token", "c1_file_prompt_contents", "c1_instance_data_dir", "c1_instance_prompt", "c1_instance_token", "c1_max_steps", "c1_n_save_sample", "c1_num_class_images", "c1_sample_seed", "c1_save_guidance_scale", "c1_save_infer_steps", "c1_save_sample_negative_prompt", "c1_save_sample_prompt", "c2_class_data_dir", "c2_class_guidance_scale", "c2_class_infer_steps", "c2_class_negative_prompt", "c2_class_prompt", "c2_class_token", "c2_file_prompt_contents", "c2_instance_data_dir", "c2_instance_prompt", "c2_instance_token", "c2_max_steps", "c2_n_save_sample", "c2_num_class_images", "c2_sample_seed", "c2_save_guidance_scale", "c2_save_infer_steps", "c2_save_sample_negative_prompt", "c2_save_sample_prompt", "c3_class_data_dir", "c3_class_guidance_scale", "c3_class_infer_steps", "c3_class_negative_prompt", "c3_class_prompt", "c3_class_token", "c3_file_prompt_contents", "c3_instance_data_dir", "c3_instance_prompt", "c3_instance_token", "c3_max_steps", "c3_n_save_sample", "c3_num_class_images", "c3_sample_seed", "c3_save_guidance_scale", "c3_save_infer_steps", "c3_save_sample_negative_prompt", "c3_save_sample_prompt", "db_status"]
+    output = []
+    for key in ui_keys:
+        if key in ui_dict:
+            output.append(ui_dict[key])
+        else:
+            output.append(None)
+    print(f"Returning {output}")
+    return output
 
 
 def get_db_models():
@@ -418,157 +418,33 @@ def get_db_models():
     return output
 
 
-def start_training(model_dir,
-                   half_model,
-                   use_concepts,
-                   pretrained_vae_name_or_path,
-                   instance_data_dir,
-                   class_data_dir,
-                   instance_prompt,
-                   class_prompt,
-                   file_prompt_contents,
-                   instance_token,
-                   class_token,
-                   save_sample_prompt,
-                   save_sample_negative_prompt,
-                   n_save_sample,
-                   seed,
-                   save_guidance_scale,
-                   save_infer_steps,
-                   num_class_images,
-                   resolution,
-                   center_crop,
-                   train_text_encoder,
-                   train_batch_size,
-                   sample_batch_size,
-                   num_train_epochs,
-                   max_train_steps,
-                   gradient_accumulation_steps,
-                   gradient_checkpointing,
-                   learning_rate,
-                   scale_lr,
-                   lr_scheduler,
-                   lr_warmup_steps,
-                   attention,
-                   use_8bit_adam,
-                   adam_beta1,
-                   adam_beta2,
-                   adam_weight_decay,
-                   adam_epsilon,
-                   max_grad_norm,
-                   save_preview_every,  # Replaces save_interval, save_min_steps
-                   save_embedding_every,
-                   mixed_precision,
-                   not_cache_latents,
-                   concepts_list,
-                   use_cpu,
-                   pad_tokens,
-                   max_token_length,
-                   hflip,
-                   use_ema,
-                   class_negative_prompt,
-                   class_guidance_scale,
-                   class_infer_steps,
-                   shuffle_after_epoch
-                   ):
+def start_training(model_dir):
     global mem_record
     if model_dir == "" or model_dir is None:
         print("Invalid model name.")
         return "Create or select a model first.", ""
-    config = DreamboothConfig(model_dir)
-    config.from_ui(model_dir,
-                   half_model,
-                   use_concepts,
-                   pretrained_vae_name_or_path,
-                   instance_data_dir,
-                   class_data_dir,
-                   instance_prompt,
-                   class_prompt,
-                   file_prompt_contents,
-                   instance_token,
-                   class_token,
-                   save_sample_prompt,
-                   save_sample_negative_prompt,
-                   n_save_sample,
-                   seed,
-                   save_guidance_scale,
-                   save_infer_steps,
-                   num_class_images,
-                   resolution,
-                   center_crop,
-                   train_text_encoder,
-                   train_batch_size,
-                   sample_batch_size,
-                   num_train_epochs,
-                   max_train_steps,
-                   gradient_accumulation_steps,
-                   gradient_checkpointing,
-                   learning_rate,
-                   scale_lr,
-                   lr_scheduler,
-                   lr_warmup_steps,
-                   attention,
-                   use_8bit_adam,
-                   adam_beta1,
-                   adam_beta2,
-                   adam_weight_decay,
-                   adam_epsilon,
-                   max_grad_norm,
-                   save_preview_every,  # Replaces save_interval, save_min_steps
-                   save_embedding_every,
-                   mixed_precision,
-                   not_cache_latents,
-                   concepts_list,
-                   use_cpu,
-                   pad_tokens,
-                   max_token_length,
-                   hflip,
-                   use_ema,
-                   class_negative_prompt,
-                   class_guidance_scale,
-                   class_infer_steps,
-                   shuffle_after_epoch
-                   )
-
-    concepts, msg = build_concepts(config)
-
-    if concepts is not None:
-        config.concepts_list = concepts
-    else:
-        print(f"Unable to build concepts: {msg}")
-        return config, "Unable to load concepts."
-
-    # Disable prior preservation if no class prompt and no sample images
-    if config.num_class_images == 0:
-        config.with_prior_preservation = False
-
-    # Ensure we have a max token length set
-    if config.max_token_length is None or config.max_token_length == 0:
-        config.max_token_length = 75
+    config = from_file(model_dir)
 
     # Clear pretrained VAE Name if applicable
     if config.pretrained_vae_name_or_path == "":
         config.pretrained_vae_name_or_path = None
 
-    config.save()
     msg = None
-    if attention == "xformers":
-        if mixed_precision == "no":
+    if config.attention == "xformers":
+        if config.mixed_precision == "no":
             msg = "Using xformers, please set mixed precision to 'fp16' to continue."
         if not shared.cmd_opts.xformers and not shared.cmd_opts.force_enable_xformers:
             msg = "Xformers is not enabled, please relaunch using the --xformers command-line argument to continue."
-    if use_cpu:
-        if use_8bit_adam or mixed_precision != "no":
+    if config.use_cpu:
+        if config.use_8bit_adam or config.mixed_precision != "no":
             msg = "CPU Training detected, please disable 8Bit Adam and set mixed precision to 'no' to continue."
-    if not isset(instance_data_dir) and not isset(concepts_list):
-        msg = "No instance data specified."
-    if not isset(instance_prompt) and not isset(concepts_list):
-        msg = "No instance prompt specified."
+    if not len(config.concepts_list):
+        msg = "Please configure some concepts."
     if not os.path.exists(config.pretrained_model_name_or_path):
         msg = "Invalid training data directory."
-    if isset(pretrained_vae_name_or_path) and not os.path.exists(pretrained_vae_name_or_path):
+    if isset(config.pretrained_vae_name_or_path) and not os.path.exists(config.pretrained_vae_name_or_path):
         msg = "Invalid Pretrained VAE Path."
-    if resolution <= 0:
+    if config.resolution <= 0:
         msg = "Invalid resolution."
 
     if msg:

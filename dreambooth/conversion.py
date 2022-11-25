@@ -26,7 +26,7 @@ import modules.sd_models
 from modules import paths, shared
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import get_db_models, printm, reload_system_models, \
     unload_system_models
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, from_file
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -816,7 +816,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
     map_location = shared.device
     # Set up our base directory for the model and sanitize our file name
     new_model_name = "".join(x for x in new_model_name if x.isalnum())
-    config = DreamboothConfig(new_model_name, scheduler_type, checkpoint_path, 0)
+    config = DreamboothConfig(new_model_name, scheduler=scheduler_type, src=checkpoint_path)
     config.save()
     shared.state.job_no = 0
     pipe = None
@@ -970,7 +970,7 @@ def compile_checkpoint(model_name, vae_path, half_checkpoint):
         if ckpt_dir is not None:
             models_path = ckpt_dir
 
-        config = DreamboothConfig().from_file(model_name)
+        config = from_file(model_name)
         total_steps = config["revision"]
         if total_steps == 0:
             return "Please train the model first.", ""

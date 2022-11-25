@@ -13,8 +13,7 @@ dreambooth_skip_install = os.environ.get('DREAMBOOTH_SKIP_INSTALL', False)
 if not dreambooth_skip_install:
     name = "Dreambooth"
     req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
-    print(f"Installing requirements for Dreambooth")
-    run(f'"{sys.executable}" -m pip install -r "{req_file}"', f"Checking {name} requirements.",
+    run(f'"{sys.executable}" -m pip install -r "{req_file}"', f"Checking {name} requirements...",
         f"Couldn't install {name} requirements.")
 
     # I think we only need to bump torch version to cu116 on Windows, as we're using prebuilt B&B Binaries...
@@ -69,7 +68,6 @@ try:
     print(f"[{'*' if not vis_flag else '!'}] Torch vision version is {torchvision_ver}.")
     print(f"[{'*' if transformers_ver == transformers_rec else '!'}] Transformers version is {transformers_ver}.")
     print(f"[{'*' if has_xformers else '-'}] Xformers Installed")
-    print(f"")
 except:
     pass
 # Check for "different" B&B Files and copy only if necessary

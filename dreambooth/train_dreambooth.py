@@ -1,6 +1,5 @@
 # From shivam shiaro's repo, with "minimal" modification to hopefully allow for smoother updating?
 import argparse
-import gc
 import hashlib
 import itertools
 import logging
@@ -15,16 +14,13 @@ from typing import Optional
 import torch
 import torch.nn.functional as F
 import torch.utils.checkpoint
-from PIL import Image
 from accelerate import Accelerator
-from accelerate.utils import set_seed
 from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, EulerAncestralDiscreteScheduler, \
     StableDiffusionPipeline, UNet2DConditionModel
 from diffusers.optimization import get_scheduler
 from diffusers.utils import logging as dl
 from huggingface_hub import HfFolder, whoami
 from torch.utils.data import Dataset
-from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
@@ -32,7 +28,7 @@ from extensions.sd_dreambooth_extension.dreambooth import xattention
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import dumb_safety, save_checkpoint, list_features, \
-    is_image, printm, cleanup
+    is_image, printm, cleanup, isset
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, EMAModel, \
     encode_hidden_state
 from modules import shared
@@ -46,6 +42,8 @@ except:
 
 pil_features = list_features()
 mem_record = {}
+with_prior = False
+
 # End custom stuff
 
 torch.backends.cudnn.benchmark = True
@@ -342,12 +340,6 @@ def parse_args(input_args=None):
         default="default",
         help="Type of attention to use."
     )
-    parser.add_argument(
-        "--shuffle_after_epoch",
-        action="store_true",
-        type=bool,
-        help="Whether or not to shuffle and recache training dataset each epoch."
-    )
 
     if input_args is not None:
         args = parser.parse_args(input_args)
@@ -359,130 +351,6 @@ def parse_args(input_args=None):
         args.local_rank = env_local_rank
 
     return args
-
-
-class DreamBoothDataset(Dataset):
-    """
-    A dataset to prepare the instance and class images with the prompts for fine-tuning the model.
-    It pre-processes the images and the tokenizes prompts.
-    """
-
-    def __init__(
-            self,
-            concepts_list,
-            tokenizer,
-            file_prompt_contents,
-            with_prior_preservation=True,
-            size=512,
-            center_crop=False,
-            num_class_images=None,
-            pad_tokens=False,
-            hflip=False,
-            max_token_length=75,
-            shuffle=False
-    ):
-        self.size = size
-        self.center_crop = center_crop
-        self.tokenizer = tokenizer
-        self.with_prior_preservation = with_prior_preservation
-        self.pad_tokens = pad_tokens
-        self.shuffle = shuffle
-        self.file_prompt_contents = file_prompt_contents
-        self.instance_images_path = []
-        self.class_images_path = []
-        self.class_images_randomizer_stack = []
-
-        self.max_token_length = max_token_length
-        self.tokenizer_max_length = self.tokenizer.model_max_length if max_token_length == 75 else max_token_length + 2
-        self.text_getter = FilenameTextGetter()
-        for concept in concepts_list:
-            inst_img_path = [(x, concept["instance_prompt"], concept["instance_token"], concept["class_token"],
-                              self.text_getter.read_text(x)) for x in
-                             Path(concept["instance_data_dir"]).iterdir() if is_image(x, pil_features)]
-            self.instance_images_path.extend(inst_img_path)
-
-            if with_prior_preservation:
-                class_img_path = [(x, concept["class_prompt"], concept["instance_token"], concept["class_token"],
-                                   self.text_getter.read_text(x)) for x in
-                                  Path(concept["class_data_dir"]).iterdir() if is_image(x, pil_features)]
-                self.class_images_path.extend(class_img_path[:num_class_images])
-
-        random.shuffle(self.instance_images_path)
-        self.num_instance_images = len(self.instance_images_path)
-        self.num_class_images = len(self.class_images_path)
-        self._length = max(self.num_class_images, self.num_instance_images)
-
-        self.image_transforms = transforms.Compose(
-            [
-                transforms.RandomHorizontalFlip(0.5 * hflip),
-                transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
-                transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
-                transforms.ToTensor(),
-                transforms.Normalize([0.5], [0.5]),
-            ]
-        )
-
-    def tokenize(self, text):
-        if not self.pad_tokens:
-            input_ids = self.tokenizer(text, padding="do_not_pad", truncation=True,
-                                       max_length=self.tokenizer.model_max_length).input_ids
-            return input_ids
-
-        input_ids = self.tokenizer(text, padding="max_length", truncation=True, max_length=self.tokenizer_max_length,
-                                   return_tensors="pt").input_ids
-        if self.tokenizer_max_length > self.tokenizer.model_max_length:
-            input_ids = input_ids.squeeze(0)
-            iids_list = []
-            for i in range(1, self.tokenizer_max_length - self.tokenizer.model_max_length + 2,
-                           self.tokenizer.model_max_length - 2):
-                iid = (input_ids[0].unsqueeze(0),
-                       input_ids[i:i + self.tokenizer.model_max_length - 2],
-                       input_ids[-1].unsqueeze(0))
-                iid = torch.cat(iid)
-                iids_list.append(iid)
-            input_ids = torch.stack(iids_list)  # 3,77
-
-        return input_ids
-
-    def __len__(self):
-        return self._length
-
-    def _get_random_class_image_index(self):
-        if len(self.class_images_randomizer_stack) == 0:
-            self.class_images_randomizer_stack = [x for x in range(self.num_class_images)]
-        random_index = random.randint(0, len(self.class_images_randomizer_stack) - 1)
-        result = self.class_images_randomizer_stack.pop(random_index)
-        return result
-
-    def __getitem__(self, index):
-        example = {}
-        instance_path, instance_prompt, instance_token, class_token, instance_text = self.instance_images_path[
-            index % self.num_instance_images]
-        instance_image = Image.open(instance_path)
-        if not instance_image.mode == "RGB":
-            instance_image = instance_image.convert("RGB")
-        example["instance_images"] = self.image_transforms(instance_image)
-        example["instance_prompt"] = self.text_getter.create_text(instance_prompt,
-                                                                  instance_text, instance_token, class_token,
-                                                                  self.file_prompt_contents,
-                                                                  False)
-        example["instance_prompt_ids"] = self.tokenize(example["instance_prompt"])
-
-        if self.with_prior_preservation:
-            if self.shuffle:
-                idx = self._get_random_class_image_index()
-            else:
-                idx = index % self.num_class_images
-            class_path, class_prompt, instance_token, class_token, class_text = self.class_images_path[idx]
-            class_image = Image.open(class_path)
-            if not class_image.mode == "RGB":
-                class_image = class_image.convert("RGB")
-            example["class_images"] = self.image_transforms(class_image)
-            example["class_prompt"] = self.text_getter.create_text(class_prompt, class_text, instance_token,
-                                                                   class_token, self.file_prompt_contents)
-            example["class_prompt_ids"] = self.tokenize(example["class_prompt"])
-
-        return example
 
 
 class PromptDataset(Dataset):
@@ -521,14 +389,18 @@ class PromptDataset(Dataset):
 
 
 class LatentsDataset(Dataset):
-    def __init__(self, latents_cache, text_encoder_cache):
+    def __init__(self, latents_cache, text_encoder_cache, concepts_cache):
         self.latents_cache = latents_cache
         self.text_encoder_cache = text_encoder_cache
+        self.concepts_cache = concepts_cache
+        self.current_index = 0
+        self.concepts_index = 0
 
     def __len__(self):
         return len(self.latents_cache)
 
     def __getitem__(self, index):
+        self.concepts_index = self.concepts_cache[index]
         return self.latents_cache[index], self.text_encoder_cache[index]
 
 
@@ -559,6 +431,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 
 
 def main(args: DreamboothConfig, memory_record):
+    global with_prior
     args.tokenizer_name = None
     global mem_record
     mem_record = memory_record
@@ -599,25 +472,11 @@ def main(args: DreamboothConfig, memory_record):
         shared.state.textinfo = msg
         args.train_text_encoder = False
 
-    if args.seed is not None and args.seed != -1 and args.seed != "":
-        set_seed(args.seed)
-
-    if args.concepts_list is None:
-        args.concepts_list = [
-            {
-                "instance_prompt": args.instance_prompt,
-                "class_prompt": args.class_prompt,
-                "sample_prompt": args.save_sample_prompt,
-                "negative_prompt": args.save_sample_negative_prompt,
-                "instance_data_dir": args.instance_data_dir,
-                "class_data_dir": args.class_data_dir
-            }
-        ]
-
-    if args.with_prior_preservation:
-        pipeline = None
+    concept_pipeline = None
+    for concept in args.concepts_list:
         text_getter = FilenameTextGetter()
-        for concept in args.concepts_list:
+        with_prior = concept.num_class_images > 0
+        if with_prior:
             class_images_dir = Path(concept["class_data_dir"])
             class_images_dir.mkdir(parents=True, exist_ok=True)
             cur_class_images = 0
@@ -626,13 +485,13 @@ def main(args: DreamboothConfig, memory_record):
                 iterfiles += 1
                 if is_image(x, pil_features):
                     cur_class_images += 1
-            if cur_class_images < args.num_class_images:
-                num_new_images = args.num_class_images - cur_class_images
+            if cur_class_images < concept.num_class_images:
+                num_new_images = concept.num_class_images - cur_class_images
                 shared.state.textinfo = f"Generating {num_new_images} class images for training..."
 
                 torch_dtype = torch.float16 if accelerator.device.type == "cuda" else torch.float32
-                if pipeline is None:
-                    pipeline = StableDiffusionPipeline.from_pretrained(
+                if concept_pipeline is None:
+                    concept_pipeline = StableDiffusionPipeline.from_pretrained(
                         args.pretrained_model_name_or_path,
                         vae=AutoencoderKL.from_pretrained(
                             args.pretrained_vae_name_or_path or args.pretrained_model_name_or_path,
@@ -644,18 +503,18 @@ def main(args: DreamboothConfig, memory_record):
                         safety_checker=None,
                         revision=args.revision
                     )
-                    pipeline.safety_checker = dumb_safety
-                    pipeline.set_progress_bar_config(disable=True)
-                    pipeline.to(accelerator.device)
+                    concept_pipeline.safety_checker = dumb_safety
+                    concept_pipeline.set_progress_bar_config(disable=True)
+                    concept_pipeline.to(accelerator.device)
 
                 shared.state.job_count = num_new_images
                 shared.state.job_no = 0
-                save_txt = "[filewords]" in concept["class_prompt"]
-                filename_texts = [text_getter.read_text(x) for x in Path(concept["instance_data_dir"]).iterdir() if
+                save_txt = "[filewords]" in concept.class_prompt
+                filename_texts = [text_getter.read_text(x) for x in Path(concept.instance_data_dir).iterdir() if
                                   is_image(x, pil_features)]
-                sample_dataset = PromptDataset(concept["class_prompt"], num_new_images, filename_texts,
-                                               args.file_prompt_contents, concept["class_token"],
-                                               concept["instance_token"])
+                sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts,
+                                               concept.file_prompt_contents, concept.class_token,
+                                               concept.instance_token)
                 with accelerator.autocast(), torch.inference_mode():
                     generated_images = 0
                     s_len = sample_dataset.__len__() - 1
@@ -666,11 +525,12 @@ def main(args: DreamboothConfig, memory_record):
                             shared.state.textinfo = "Training canceled."
                             return args, mem_record
                         example = sample_dataset.__getitem__(random.randrange(0, s_len))
-                        images = pipeline(example["prompt"], num_inference_steps=args.class_infer_steps,
-                                          guidance_scale=args.class_guidance_scale,
-                                          scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085, beta_end=0.012),
-                                          negative_prompt=args.class_negative_prompt,
-                                          num_images_per_prompt=args.sample_batch_size).images
+                        images = concept_pipeline(example["prompt"], num_inference_steps=concept.class_infer_steps,
+                                                  guidance_scale=concept.class_guidance_scale,
+                                                  scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
+                                                                                            beta_end=0.012),
+                                                  negative_prompt=concept.class_negative_prompt,
+                                                  num_images_per_prompt=args.sample_batch_size).images
 
                         for i, image in enumerate(images):
                             if shared.state.interrupted:
@@ -694,9 +554,10 @@ def main(args: DreamboothConfig, memory_record):
                             pbar.update()
                     del pbar
                 del sample_dataset
-        del pipeline
-        del text_getter
-        cleanup()
+
+    del concept_pipeline
+    del text_getter
+    cleanup()
 
     # Load the tokenizer
     if args.tokenizer_name:
@@ -810,17 +671,13 @@ def main(args: DreamboothConfig, memory_record):
     train_dataset = SuperDataset(
         concepts_list=args.concepts_list,
         tokenizer=tokenizer,
-        with_prior_preservation=args.with_prior_preservation,
         size=args.resolution,
         center_crop=args.center_crop,
-        num_class=args.num_class_images,
         lifetime_steps=args.revision,
         pad_tokens=args.pad_tokens,
         hflip=args.hflip,
         max_token_length=args.max_token_length,
-        shuffle=False,
-        file_prompt_contents=args.file_prompt_contents,
-        max_steps=args.max_train_steps
+        max_train_steps=args.max_train_steps
     )
 
     if train_dataset.__len__ == 0:
@@ -836,7 +693,7 @@ def main(args: DreamboothConfig, memory_record):
 
         # Concat class and instance examples for prior preservation.
         # We do this to avoid doing two forward passes.
-        if args.with_prior_preservation:
+        if with_prior:
             input_ids += [ex["class_prompt_ids"] for ex in examples]
             pixel_values += [ex["class_images"] for ex in examples]
 
@@ -861,7 +718,6 @@ def main(args: DreamboothConfig, memory_record):
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
     )
-
     # Move text_encoder and VAE to GPU.
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
     # as these models are only used for inference, keeping weights in full precision is not required.
@@ -870,6 +726,7 @@ def main(args: DreamboothConfig, memory_record):
         text_encoder.to(accelerator.device, dtype=weight_dtype)
 
     def cache_latents(shuffle, td=None, tdl=None, enc_vae=None):
+        global with_prior
         if td is not None:
             del td
         if tdl is not None:
@@ -882,24 +739,24 @@ def main(args: DreamboothConfig, memory_record):
         dataset = SuperDataset(
             concepts_list=args.concepts_list,
             tokenizer=tokenizer,
-            with_prior_preservation=args.with_prior_preservation,
             size=args.resolution,
             center_crop=args.center_crop,
             lifetime_steps=args.revision,
-            num_class=args.num_class_images,
             pad_tokens=args.pad_tokens,
             hflip=args.hflip,
             max_token_length=args.max_token_length,
-            file_prompt_contents=args.file_prompt_contents,
             shuffle=shuffle,
-            max_steps=args.max_train_steps
+            max_train_steps=args.max_train_steps
         )
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
         )
         latents_cache = []
         text_encoder_cache = []
+        concepts_cache = []
         for d_batch in tqdm(dataloader, desc="Caching latents"):
+            c_concept = args.concepts_list[dataset.concepts_index]
+            with_prior = c_concept.num_class_images > 0
             with torch.no_grad():
                 d_batch["pixel_values"] = d_batch["pixel_values"].to(accelerator.device, non_blocking=True,
                                                                      dtype=weight_dtype)
@@ -909,7 +766,8 @@ def main(args: DreamboothConfig, memory_record):
                     text_encoder_cache.append(d_batch["input_ids"])
                 else:
                     text_encoder_cache.append(text_encoder(d_batch["input_ids"])[0])
-        dataset = LatentsDataset(latents_cache, text_encoder_cache)
+                concepts_cache.append(dataset.concepts_index)
+        dataset = LatentsDataset(latents_cache, text_encoder_cache, concepts_cache)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda x: x, shuffle=True)
         if enc_vae is not None:
             del enc_vae
@@ -940,7 +798,6 @@ def main(args: DreamboothConfig, memory_record):
     if args.use_ema:
         ema_unet = EMAModel(unet.parameters())
         ema_unet.to(accelerator.device, dtype=weight_dtype)
-        # ema_unet.to(accelerator.device)
         if args.train_text_encoder and text_encoder is not None:
             unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
                 unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler
@@ -976,14 +833,13 @@ def main(args: DreamboothConfig, memory_record):
     # Train!
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
     stats = f"CPU: {args.use_cpu} Adam: {use_adam}, Prec: {args.mixed_precision}, " \
-            f"Prior: {args.with_prior_preservation}, Grad: {args.gradient_checkpointing}, " \
-            f"TextTr: {args.train_text_encoder} EM: {args.use_ema}, LR: {args.learning_rate}"
+            f"Grad: {args.gradient_checkpointing}, TextTr: {args.train_text_encoder} EM: {args.use_ema}, " \
+            f"LR: {args.learning_rate}"
 
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(train_dataset)}")
     logger.info(f"  Num batches each epoch = {len(train_dataloader)}")
     logger.info(f"  Num Epochs = {args.num_train_epochs}")
-    logger.info(f"  Shuffle After Epoch = {args.shuffle_after_epoch}")
     logger.info(f"  Instantaneous batch size per device = {args.train_batch_size}")
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
@@ -1027,35 +883,33 @@ def main(args: DreamboothConfig, memory_record):
                         logger.debug(f"Exception saving checkpoint/model: {e}")
                         traceback.print_exc()
                         pass
-                save_dir = args.output_dir
-                if args.save_sample_prompt is not None and save_img:
+                save_dir = args.model_dir
+                if save_img:
                     shared.state.textinfo = f"Saving preview image at step {args.revision}..."
                     try:
-                        seed = args.seed
-                        # I feel like this might not actually be necessary...but what the heck.
-                        if seed is None or seed == '' or seed == -1:
-                            seed = int(random.randrange(21474836147))
-                        g_cuda = torch.Generator(device=accelerator.device).manual_seed(seed)
                         s_pipeline.set_progress_bar_config(disable=True)
                         sample_dir = os.path.join(save_dir, "samples")
                         os.makedirs(sample_dir, exist_ok=True)
-                        pc = args.file_prompt_contents
                         with accelerator.autocast(), torch.inference_mode():
                             for c in args.concepts_list:
-                                sample_prompt = args.save_sample_prompt
-                                negative_prompt = args.save_sample_negative_prompt
-                                if "sample_prompt" in c:
-                                    sample_prompt = c["sample_prompt"]
-                                if "negative_prompt" in c:
-                                    negative_prompt = c["negative_prompt"]
+                                seed = c.sample_seed
+                                # I feel like this might not actually be necessary...but what the heck.
+                                if seed is None or seed == '' or seed == -1:
+                                    seed = int(random.randrange(21474836147))
+                                g_cuda = torch.Generator(device=accelerator.device).manual_seed(seed)
+
+                                pc = c.file_prompt_contents
+
+                                sample_prompt = c.save_sample_prompt
+                                negative_prompt = c.save_sample_negative_prompt
                                 if sample_prompt is None or sample_prompt == "":
                                     sample_prompt = c["instance_prompt"]
                                 if "[filewords]" in sample_prompt:
                                     random_example = gen_dataset.__getitem__(
                                         random.randrange(0, gen_dataset.__len__() - 1))
                                     random_prompt = random_example["instance_prompt"]
-                                    if "class_token" in c and "instance_token" in c:
-                                        class_token = c["class_token"]
+                                    if isset(c.class_token) and isset(c.instance_token):
+                                        class_token = c.class_token
                                         class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}",
                                                         class_token]
                                         if "Instance" not in pc and "Class" in pc:
@@ -1063,14 +917,14 @@ def main(args: DreamboothConfig, memory_record):
                                                 if token in random_prompt:
                                                     random_prompt = random_prompt.replace(
                                                         token,
-                                                        f"{c['instance_token']} {class_token}"
+                                                        f"{c.instance_token} {class_token}"
                                                     )
                                                     break
                                     sample_prompt = sample_prompt.replace("[filewords]", random_prompt)
 
-                                for si in tqdm(range(args.n_save_sample), desc="Generating samples"):
-                                    s_image = s_pipeline(sample_prompt, num_inference_steps=args.save_infer_steps,
-                                                         guidance_scale=args.save_guidance_scale,
+                                for si in tqdm(range(c.n_save_sample), desc="Generating samples"):
+                                    s_image = s_pipeline(sample_prompt, num_inference_steps=c.save_infer_steps,
+                                                         guidance_scale=c.save_guidance_scale,
                                                          scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
                                                                                                    beta_end=0.012),
                                                          negative_prompt=negative_prompt,
@@ -1094,7 +948,7 @@ def main(args: DreamboothConfig, memory_record):
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
     global_step = 0
-    lifetime_step = args.total_steps
+    lifetime_step = args.revision
     shared.state.job_count = args.max_train_steps
     shared.state.job_no = global_step
     shared.state.textinfo = f"Training step: {global_step}/{args.max_train_steps}"
@@ -1110,6 +964,8 @@ def main(args: DreamboothConfig, memory_record):
                 text_encoder.train()
             for step, batch in enumerate(train_dataloader):
                 with accelerator.accumulate(unet):
+                    concept_index = train_dataset.concepts_index
+                    concept = args.concepts_list[concept_index]
                     # Convert images to latent space
                     with torch.no_grad():
                         if not args.not_cache_latents:
@@ -1148,7 +1004,7 @@ def main(args: DreamboothConfig, memory_record):
                     # Predict the noise residual
                     noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
-                    if args.with_prior_preservation:
+                    if concept.num_class_images > 0:
                         # Chunk the noise and noise_pred into two parts and compute the loss on each part separately.
                         noise_pred, noise_pred_prior = torch.chunk(noise_pred, 2, dim=0)
                         noise, noise_prior = torch.chunk(noise, 2, dim=0)
@@ -1165,13 +1021,6 @@ def main(args: DreamboothConfig, memory_record):
                         loss = F.mse_loss(noise_pred.float(), noise.float(), reduction="mean")
 
                     accelerator.backward(loss)
-                    # if accelerator.sync_gradients:
-                    #     params_to_clip = (
-                    #         itertools.chain(unet.parameters(), text_encoder.parameters())
-                    #         if args.train_text_encoder
-                    #         else unet.parameters()
-                    #     )
-                    #     accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
                     optimizer.step()
                     lr_scheduler.step()
                     optimizer.zero_grad(set_to_none=True)
@@ -1229,15 +1078,10 @@ def main(args: DreamboothConfig, memory_record):
         except Exception as m:
             printm(f"Exception while training: {m}")
             traceback.print_exc()
-            training_complete = True
             break
         if shared.state.interrupted:
             training_complete = True
-        if not training_complete:
-            if args.shuffle_after_epoch:
-                train_dataset, train_dataloader = cache_latents(args.shuffle_after_epoch >= epoch, train_dataset,
-                                                                train_dataloader, vae)
-        else:
+        if training_complete:
             break
 
     cleanup_memory()
