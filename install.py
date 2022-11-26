@@ -1,4 +1,5 @@
 import filecmp
+import importlib.util
 import os
 import shutil
 import sys
@@ -8,11 +9,56 @@ from launch import run
 
 from modules.paths import script_path
 
+if sys.version_info < (3, 8):
+    import importlib_metadata
+else:
+    import importlib.metadata as importlib_metadata
+
+req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
+
+
+def check_versions():
+    global req_file
+    reqs = open(req_file, 'r')
+    lines = reqs.readlines()
+    reqs_dict = {}
+    for line in lines:
+        splits = line.split("==")
+        if len(splits) == 2:
+            key = splits[0]
+            if "torch" not in key:
+                reqs_dict[key] = splits[1].replace("\n", "").strip()
+    if os.name == "nt":
+        reqs_dict["torch"] = "1.12.1+cu116"
+        reqs_dict["torchvision"] = "0.13.1+cu116"
+
+    checks = ["bitsandbytes", "diffusers", "transformers", "torch", "torchvision", "xformers"]
+    for check in checks:
+        check_ver = "N/A"
+        status = "[*]"
+        try:
+            check_available = importlib.util.find_spec(check) is not None
+            if check_available:
+                check_ver = importlib_metadata.version(check)
+            if check in reqs_dict:
+                req_version = reqs_dict[check]
+                if str(check_ver) == str(req_version):
+                    status = "[✓]"
+                else:
+                    status = "[!]"
+        except importlib_metadata.PackageNotFoundError:
+            check_available = False
+        if not check_available:
+            status = "[!]"
+            print(f"{status} {check} NOT installed.")
+        else:
+            print(f"{status} {check} version {check_ver} installed.")
+
 
 dreambooth_skip_install = os.environ.get('DREAMBOOTH_SKIP_INSTALL', False)
+
 if not dreambooth_skip_install:
-    name = "Dreambooth"
-    req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
+    name = "Dreambooth"    
     run(f'"{sys.executable}" -m pip install -r "{req_file}"', f"Checking {name} requirements...",
         f"Couldn't install {name} requirements.")
 
@@ -30,46 +76,7 @@ base_dir = os.path.dirname(os.path.realpath(__file__))
 repo = git.Repo(base_dir)
 revision = repo.rev_parse("HEAD")
 print(f"Dreambooth revision is {revision}")
-
-try:
-    import diffusers
-    import torch
-    import torchvision
-    import transformers
-    from diffusers.utils.import_utils import is_xformers_available
-    diffusers_ver = diffusers.__version__
-    diffusers_rec = "0.7.2"
-    torch_ver = torch.__version__
-    torch_rec = "1.12.1+cu116"
-    torchvision_ver = torchvision.__version__
-    torchvision_rec = "0.13.1+cu116"
-    transformers_ver = transformers.__version__
-    transformers_rec = "4.21.0"
-    torch_flag = False
-    vis_flag = False
-    if os.name == "nt":
-        if torch_rec != torch_ver:
-            torch_flag = True
-        if torchvision_ver != torchvision_rec:
-            vis_flag = True
-
-    has_xformers = False
-    try:
-        args = sys.argv
-        if is_xformers_available():
-            import xformers
-            import xformers.ops
-            has_xformers = True
-    except:
-        pass
-
-    print(f"[{'*' if diffusers_rec == diffusers_ver else '!'}] Diffusers version is {diffusers_ver}.")
-    print(f"[{'*' if not torch_flag else '!'}] Torch version is {torch_ver}.")
-    print(f"[{'*' if not vis_flag else '!'}] Torch vision version is {torchvision_ver}.")
-    print(f"[{'*' if transformers_ver == transformers_rec else '!'}] Transformers version is {transformers_ver}.")
-    print(f"[{'*' if has_xformers else '-'}] Xformers Installed")
-except:
-    pass
+check_versions()
 # Check for "different" B&B Files and copy only if necessary
 if os.name == "nt":
     python = sys.executable

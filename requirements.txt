@@ -30,5 +30,6 @@ tensorboard==2.11.0
 timm==0.6.7
 torch
 torchdiffeq==0.2.3
+torchsde==0.2.5
 tqdm==4.64.1
 transformers==4.21.0
