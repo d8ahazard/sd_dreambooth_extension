@@ -77,6 +77,8 @@ def on_ui_tabs():
                             db_save_preview_every = gr.Number(
                                 label='Save Preview(s) Frequency', value=500,
                                 precision=0)
+                            db_train_text_encoder_steps = gr.Number(
+                                label='Stop Training Text Encoder After', value=-1, precision=0)
 
                         with gr.Column():
                             gr.HTML(value="Learning Rate")
@@ -226,6 +228,7 @@ def on_ui_tabs():
                 db_src,
                 db_train_batch_size,
                 db_train_text_encoder,
+                db_train_text_encoder_steps,
                 db_use_8bit_adam,
                 db_use_concepts,
                 db_use_cpu,
@@ -327,6 +330,7 @@ def on_ui_tabs():
                 db_src,
                 db_train_batch_size,
                 db_train_text_encoder,
+                db_train_text_encoder_steps,
                 db_use_8bit_adam,
                 db_use_concepts,
                 db_use_cpu,

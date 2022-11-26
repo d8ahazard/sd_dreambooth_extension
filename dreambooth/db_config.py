@@ -43,6 +43,7 @@ class DreamboothConfig:
                  src: str = "",
                  train_batch_size: int = 1,
                  train_text_encoder: bool = True,
+                 train_text_encoder_steps=-1,
                  use_8bit_adam: bool = True,
                  use_concepts: bool = False,
                  use_cpu: bool = False,
@@ -152,6 +153,7 @@ class DreamboothConfig:
         self.src = src
         self.train_batch_size = train_batch_size
         self.train_text_encoder = train_text_encoder
+        self.train_text_encoder_steps = train_text_encoder_steps
         self.use_8bit_adam = use_8bit_adam
         self.use_concepts = use_concepts
         self.use_cpu = use_cpu

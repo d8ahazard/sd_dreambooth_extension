@@ -439,6 +439,13 @@ def main(args: DreamboothConfig, memory_record):
     args.max_token_length = int(args.max_token_length)
     if not args.pad_tokens and args.max_token_length > 75:
         logger.debug("Cannot raise token length limit above 75 when pad_tokens=False")
+    if args.train_text_encoder:
+        if args.train_text_encoder_steps != -1 and args.train_text_encoder_steps <= args.revision:
+            print("Disabling text encoder training.")
+            args.train_text_encoder = False
+            args.pad_tokens = False
+    else:
+        args.pad_tokens = False
 
     if args.attention == "xformers":
         xattention.replace_unet_cross_attn_to_xformers()
@@ -846,10 +853,10 @@ def main(args: DreamboothConfig, memory_record):
     logger.info(f"  Total optimization steps = {args.max_train_steps}")
     printm(f"  Training settings: {stats}")
 
-    def save_weights():
+    def save_weights(freeze_encoder=False):
         # Create the pipeline using the trained modules and save it.
         if accelerator.is_main_process:
-            if args.train_text_encoder:
+            if args.train_text_encoder or freeze_encoder:
                 text_enc_model = accelerator.unwrap_model(text_encoder)
             else:
                 text_enc_model = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path,
@@ -942,6 +949,8 @@ def main(args: DreamboothConfig, memory_record):
             del s_pipeline
             del scheduler
             del text_enc_model
+            if freeze_encoder:
+                del text_encoder
             cleanup()
 
     # Only show the progress bar once on each machine.
@@ -1034,7 +1043,7 @@ def main(args: DreamboothConfig, memory_record):
                     allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                     cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
                     logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0],
-                            "vram": f"{allocated}/{cached}"}
+                            "vram": f"{allocated}/{cached}GB"}
                     progress_bar.set_postfix(**logs)
                     accelerator.log(logs, step=global_step)
 
@@ -1042,7 +1051,7 @@ def main(args: DreamboothConfig, memory_record):
                 global_step += 1
                 args.revision += 1
                 shared.state.job_no = global_step
-
+                freeze_weights = False
                 training_complete = global_step >= args.max_train_steps or shared.state.interrupted
                 if global_step > 0:
                     save_img = args.save_preview_every and not global_step % args.save_preview_every
@@ -1050,8 +1059,27 @@ def main(args: DreamboothConfig, memory_record):
                     if training_complete:
                         save_img = True
                         save_model = True
+                    if args.train_text_encoder and args.train_text_encoder_steps > -1:
+                        if args.train_text_encoder_steps <= args.revision:
+                            # Actually stop training the text encoder?
+                            args.train_text_encoder = False
+                            freeze_weights = True
+                            # If we're not already going to save the model, just save the encoder here
+                            if not save_img and not save_model and accelerator.is_main_process:
+                                logger.info(" Freezing the text_encoder...")
+                                out_dir = os.path.join(args.pretrained_model_name_or_path, "text_encoder")
+                                pipeline = StableDiffusionPipeline.from_pretrained(
+                                    args.pretrained_model_name_or_path,
+                                    unet=accelerator.unwrap_model(unet),
+                                    text_encoder=accelerator.unwrap_model(text_encoder),
+                                )
+                                pipeline.to(accelerator.device)
+                                pipeline.text_encoder.save_pretrained(out_dir)
+                                del pipeline
+                                del text_encoder
+                                cleanup_memory()
                     if save_img or save_model:
-                        save_weights()
+                        save_weights(freeze_weights)
                         args.save()
                 if shared.state.interrupted:
                     training_complete = True
