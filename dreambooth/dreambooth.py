@@ -10,10 +10,8 @@ from typing import Optional
 import torch
 import torch.utils.checkpoint
 from PIL import features
-from accelerate.logging import get_logger
 from diffusers import StableDiffusionPipeline, EulerAncestralDiscreteScheduler
 from diffusers.utils import logging as dl
-from diffusers.utils.import_utils import is_xformers_available
 from huggingface_hub import HfFolder, whoami
 from six import StringIO
 
@@ -301,7 +299,7 @@ def performance_wizard():
 
     has_xformers = False
     try:
-        if (shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers) and is_xformers_available():
+        if shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers:
             import xformers
             import xformers.ops
             has_xformers = shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers
