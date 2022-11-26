@@ -216,7 +216,7 @@ def training_wizard(
             return "No training images found, can't do math.", 1000, -1, 0, -1, 0, -1, 0
 
         # Set "base" value
-        magick_number = 58139534.88372093
+        magick_number = 50000000
         required_steps = round(total_images * magick_number * config.learning_rate, -2)
         if is_person:
             num_class_images = round(total_images * 12, -1)
@@ -482,7 +482,7 @@ def start_training(model_dir):
     if msg:
         shared.state.textinfo = msg
         print(msg)
-        return msg, msg
+        return msg, msg, 0, ""
 
     # Clear memory and do "stuff" only after we've ensured all the things are right
     print("Starting Dreambooth training...")
@@ -502,7 +502,7 @@ def start_training(model_dir):
     res = f"Training {'interrupted' if shared.state.interrupted else 'finished'}. " \
           f"Total lifetime steps: {total_steps} \n"
     print(f"Returning result: {res}")
-    return res, "", total_steps
+    return res, "", total_steps, ""
 
 
 def get_full_repo_name(model_id: str, organization: Optional[str] = None, token: Optional[str] = None):

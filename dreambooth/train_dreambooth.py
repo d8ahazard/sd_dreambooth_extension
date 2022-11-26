@@ -754,7 +754,7 @@ def main(args: DreamboothConfig, memory_record):
         latents_cache = []
         text_encoder_cache = []
         concepts_cache = []
-        for d_batch in tqdm(dataloader, desc="Caching latents",display=False):
+        for d_batch in tqdm(dataloader, desc="Caching latents", disable=True):
             c_concept = args.concepts_list[dataset.concepts_index]
             with_prior = c_concept.num_class_images > 0
             with torch.no_grad():

@@ -66,7 +66,6 @@ class SuperDataset(Dataset):
                 max_steps = concept.max_steps
                 # Ensure we don't over-train our concept
                 if lifetime_steps >= max_steps:
-                    print(f"Excluding concept {instance_prompt}")
                     max_steps = 0
                 else:
                     max_steps -= lifetime_steps
@@ -95,7 +94,6 @@ class SuperDataset(Dataset):
 
         # We do this above when creating the dict of instance images
         self._length = total_images
-        print(f"Total images: {self._length}")
 
         self.image_transforms = transforms.Compose(
             [

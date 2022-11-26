@@ -814,7 +814,7 @@ def convert_text_enc_state_dict(text_enc_dict):
 
 
 def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type="ddim", new_model_url="",
-                       new_model_token="", extract_ema=False, model_v2=False):
+                       new_model_token="", model_v2=False):
     print("Extracting checkpoint...")
     shared.state.job_count = 8
     unload_system_models()
@@ -923,7 +923,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
             shared.state.textinfo = "Created unet config..."
             shared.state.job_no = 3
             converted_unet_checkpoint = convert_ldm_unet_checkpoint(checkpoint, unet_config, path=checkpoint_path,
-                                                                    extract_ema=extract_ema)
+                                                                    extract_ema=False)
             shared.state.textinfo = "Converted unet checkpoint..."
             shared.state.job_no = 4
             unet = UNet2DConditionModel(**unet_config)
