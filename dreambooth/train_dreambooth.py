@@ -754,7 +754,7 @@ def main(args: DreamboothConfig, memory_record):
         latents_cache = []
         text_encoder_cache = []
         concepts_cache = []
-        for d_batch in tqdm(dataloader, desc="Caching latents"):
+        for d_batch in tqdm(dataloader, desc="Caching latents",display=False):
             c_concept = args.concepts_list[dataset.concepts_index]
             with_prior = c_concept.num_class_images > 0
             with torch.no_grad():
@@ -1073,6 +1073,8 @@ def main(args: DreamboothConfig, memory_record):
                     break
             training_complete = global_step >= args.max_train_steps or shared.state.interrupted
             accelerator.wait_for_everyone()
+            if not args.not_cache_latents:
+                train_dataset, train_dataloader = cache_latents(False, vae)
             if training_complete:
                 break
         except Exception as m:
