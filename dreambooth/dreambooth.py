@@ -285,9 +285,9 @@ def performance_wizard():
             not_cache_latents = False
             train_text_encoder = True
             use_ema = True
-        if 16 > gb >= 12:
-            train_text_encoder = True
-            use_ema = True
+        if 16 > gb >= 10:
+            train_text_encoder = False
+            use_ema = False
         if gb < 10:
             use_cpu = True
             use_8bit_adam = False
