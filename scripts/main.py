@@ -23,7 +23,7 @@ def on_ui_tabs():
                 with gr.Row():
                     db_model_name = gr.Dropdown(label='Model', choices=sorted(get_db_models()))
                     create_refresh_button(db_model_name, get_db_models, lambda: {
-                            "choices": sorted(get_db_models())},
+                        "choices": sorted(get_db_models())},
                                           "refresh_db_models")
                 db_half_model = gr.Checkbox(label="Half Model", value=False)
                 with gr.Row():
@@ -52,9 +52,12 @@ def on_ui_tabs():
                         db_new_model_url = gr.Textbox(label="Model Path", value="runwayml/stable-diffusion-v1-5")
                         db_new_model_token = gr.Textbox(label="HuggingFace Token", value="")
                     with gr.Row() as local_row:
-                        src_checkpoint = gr.Dropdown(label='Source Checkpoint',
-                                                     choices=sorted(sd_models.checkpoints_list.keys()))
-                    diff_type = gr.Dropdown(label='Scheduler', choices=["ddim", "pndm", "lms"], value="ddim")
+                        db_new_model_src = gr.Dropdown(label='Source Checkpoint',
+                                                       choices=sorted(sd_models.checkpoints_list.keys()))
+                        db_new_model_v2 = gr.Checkbox(label='V2 Checkpoint', value=False, visible=False)
+                    db_new_model_scheduler = gr.Dropdown(label='Scheduler', choices=["pndm", "lms", "euler",
+                                                                                     "euler-ancestral", "dpm", "ddim"],
+                                                         value="euler-ancestral")
 
                     with gr.Row():
                         with gr.Column(scale=3):
@@ -417,7 +420,7 @@ def on_ui_tabs():
         db_generate_sample.click(
             fn=wrap_gradio_gpu_call(generate_sample_img, extra_outputs=[gr.update()]),
             _js="db_save_start_progress",
-            inputs=[db_model_name],
+            inputs=db_model_name,
             outputs=[db_status]
         )
 
@@ -430,21 +433,25 @@ def on_ui_tabs():
         db_performance_wizard.click(
             fn=performance_wizard,
             _js="db_save_start_progress",
-            inputs=[db_model_name],
+            inputs=[],
             outputs=[
                 db_status,
+                db_attention,
                 db_gradient_checkpointing,
                 db_mixed_precision,
                 db_not_cache_latents,
+                db_sample_batch_size,
+                db_train_batch_size,
                 db_train_text_encoder,
                 db_use_8bit_adam,
                 db_use_cpu,
-                db_use_ema
+                db_use_ema,
             ]
         )
 
         db_train_wizard_person.click(
             fn=save_and_execute(training_wizard_person, extra_outputs=[gr.update()], wrap_gpu=False),
+            _js = "db_save",
             inputs=[
                 db_model_name
             ],
@@ -462,7 +469,7 @@ def on_ui_tabs():
 
         db_train_wizard_object.click(
             fn=save_and_execute(training_wizard, extra_outputs=[gr.update()], wrap_gpu=False),
-            _js="db_save_start_progress",
+            _js = "db_save",
             inputs=[
                 db_model_name
             ],
@@ -495,10 +502,11 @@ def on_ui_tabs():
             _js="db_start_progress",
             inputs=[
                 db_new_model_name,
-                src_checkpoint,
-                diff_type,
+                db_new_model_src,
+                db_new_model_scheduler,
                 db_new_model_url,
-                db_new_model_token
+                db_new_model_token,
+                db_new_model_v2
             ],
             outputs=[
                 db_model_name,
@@ -506,7 +514,7 @@ def on_ui_tabs():
                 db_revision,
                 db_scheduler,
                 db_status,
-                db_outcome,
+                db_src
             ]
         )
 
@@ -517,9 +525,9 @@ def on_ui_tabs():
                 db_model_name
             ],
             outputs=[
-                db_revision,
                 db_status,
                 db_outcome,
+                db_revision
             ]
         )
 

@@ -5,6 +5,25 @@ function db_start_progress(){
     return args_to_array(arguments);
 }
 
+function db_save() {
+    console.log("Save click?");
+    btn = gradioApp().getElementById("db_save_config");
+    if(btn!=null) {
+        btn.click();
+    } else {
+        console.log("Can't find btn, trying for btn2");
+        let btn2 = document.getElementById("db_save_config");
+        if (btn2 != null) {
+            btn2.click();
+        } else {
+            console.log("Can't find button2 either.")
+        }
+    }
+    gradioApp().querySelector('#db_error').innerHTML='';
+    gradioApp().querySelector('#db_status').innerHTML='';
+    return args_to_array(arguments);
+}
+
 function db_save_start_progress(){
     console.log("Save click?");
     btn = gradioApp().getElementById("db_save_config");

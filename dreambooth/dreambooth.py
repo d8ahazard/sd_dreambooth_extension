@@ -12,6 +12,7 @@ import torch.utils.checkpoint
 from PIL import features
 from accelerate.logging import get_logger
 from diffusers import StableDiffusionPipeline, EulerAncestralDiscreteScheduler
+from diffusers.utils import logging as dl
 from diffusers.utils.import_utils import is_xformers_available
 from huggingface_hub import HfFolder, whoami
 from six import StringIO
@@ -27,8 +28,13 @@ try:
 except:
     cmd_dreambooth_models_path = None
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
+# define a Handler which writes DEBUG messages or higher to the sys.stderr
+console = logging.StreamHandler()
+console.setLevel(logging.DEBUG)
+logger.addHandler(console)
 logger.setLevel(logging.DEBUG)
+dl.set_verbosity_error()
 
 mem_record = {}
 
@@ -42,6 +48,8 @@ def log_memory():
 
 def generate_sample_img(model_dir: str):
     print("Gensample?")
+    if model_dir is None or model_dir == "":
+        return "Please select a model."
     config = from_file(model_dir)
     unload_system_models()
     model_path = config.pretrained_model_name_or_path
@@ -52,10 +60,11 @@ def generate_sample_img(model_dir: str):
         pipeline = StableDiffusionPipeline.from_pretrained(model_path, safety_checker=None)
         pipeline = pipeline.to(shared.device)
         with devices.autocast(), torch.inference_mode():
+            pil_features = list_features()
             save_dir = os.path.join(shared.sd_path, "outputs", "dreambooth")
             for concept in config.concepts_list:
                 save_sample_prompt = concept.save_sample_prompt
-                db_model_path = concept.working_dir
+                db_model_path = config.working_dir
                 if save_sample_prompt is None:
                     msg = "Please provide a sample prompt."
                     print(msg)
@@ -170,12 +179,8 @@ def training_wizard(
     config = from_file(model_dir)
 
     # Configure generic outputs
-    status = ""
-    max_train_steps = 1000
     class_steps = []
     class_concepts = []
-    c1_steps = c2_steps = c3_steps = -1
-    c1_class = c2_class = c3_class = 0
     if config is None:
         status = "Unable to load config."
         return status, 1000, -1, 0, -1, 0, -1, 0
@@ -251,33 +256,40 @@ def training_wizard(
 
 
 def performance_wizard():
-    num_class_images = 0
-    train_batch_size = 1
-    sample_batch_size = 1
-    not_cache_latents = True
+    status = ""
+    attention = "flash_attention"
     gradient_checkpointing = True
-    use_ema = False
-    train_text_encoder = False
     mixed_precision = 'fp16'
-    use_cpu = False
+    not_cache_latents = True
+    sample_batch_size = 1
+    train_batch_size = 1
+    train_text_encoder = False
     use_8bit_adam = True
+    use_cpu = False
+    use_ema = False
     gb = 0
     try:
         t = torch.cuda.get_device_properties(0).total_memory
         gb = math.ceil(t / 1073741824)
         print(f"Total VRAM: {gb}")
         if gb >= 24:
-            train_batch_size = 2
+            attention = "default"
+            gradient_checkpointing = False
+            mixed_precision = 'no'
+            not_cache_latents = False
             sample_batch_size = 4
+            train_batch_size = 2
             train_text_encoder = True
             use_ema = True
             use_8bit_adam = False
-            gradient_checkpointing = False
-        if 24 > gb >= 10:
+        if 24 > gb >= 16:
+            attention = "xformers"
+            not_cache_latents = False
             train_text_encoder = True
-            use_ema = False
-            gradient_checkpointing = True
-            not_cache_latents = True
+            use_ema = True
+        if 16 > gb >= 12:
+            train_text_encoder = True
+            use_ema = True
         if gb < 10:
             use_cpu = True
             use_8bit_adam = False
@@ -302,8 +314,8 @@ def performance_wizard():
 
     if use_cpu:
         msg += "<br>Detected less than 10GB of VRAM, setting CPU training to true."
-    return msg, num_class_images, train_batch_size, sample_batch_size, not_cache_latents, gradient_checkpointing, \
-           use_ema, train_text_encoder, mixed_precision, use_cpu, use_8bit_adam
+    return status, attention, gradient_checkpointing, mixed_precision, not_cache_latents, sample_batch_size, \
+        train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema
 
 
 def printm(msg="", reset=False):
@@ -329,7 +341,7 @@ def printm(msg="", reset=False):
     return output
 
 
-def dumb_safety(images, clip_input):
+def dumb_safety(images, _):
     return images, False
 
 
@@ -341,7 +353,6 @@ def list_features():
     # Create buffer for pilinfo() to write into rather than stdout
     buffer = StringIO()
     features.pilinfo(out=buffer)
-    global pil_features
     pil_features = []
     # Parse and analyse lines
     for line in buffer.getvalue().splitlines():
@@ -349,7 +360,7 @@ def list_features():
             ext_list = line.split(": ")[1]
             extensions = ext_list.split(", ")
             for extension in extensions:
-                if not extension in pil_features:
+                if extension not in pil_features:
                     pil_features.append(extension)
     return pil_features
 
@@ -395,7 +406,28 @@ def load_params(model_dir):
             ui_dict[f"c{c_idx}_{key}"] = ui_concept[key]
         c_idx += 1
     ui_dict["db_status"] = msg
-    ui_keys = ["db_adam_beta1", "db_adam_beta2", "db_adam_epsilon", "db_adam_weight_decay", "db_attention", "db_center_crop", "db_concepts_path", "db_gradient_accumulation_steps", "db_gradient_checkpointing", "db_half_model", "db_hflip", "db_learning_rate", "db_lr_scheduler", "db_lr_warmup_steps", "db_max_grad_norm", "db_max_token_length", "db_max_train_steps", "db_mixed_precision", "db_model_path", "db_not_cache_latents", "db_num_train_epochs", "db_pad_tokens", "db_pretrained_vae_name_or_path", "db_prior_loss_weight", "db_resolution", "db_revision", "db_sample_batch_size", "db_save_embedding_every", "db_save_preview_every", "db_scale_lr", "db_scheduler", "db_src", "db_train_batch_size", "db_train_text_encoder", "db_use_8bit_adam", "db_use_concepts", "db_use_cpu", "db_use_ema", "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps", "c1_class_negative_prompt", "c1_class_prompt", "c1_class_token", "c1_file_prompt_contents", "c1_instance_data_dir", "c1_instance_prompt", "c1_instance_token", "c1_max_steps", "c1_n_save_sample", "c1_num_class_images", "c1_sample_seed", "c1_save_guidance_scale", "c1_save_infer_steps", "c1_save_sample_negative_prompt", "c1_save_sample_prompt", "c2_class_data_dir", "c2_class_guidance_scale", "c2_class_infer_steps", "c2_class_negative_prompt", "c2_class_prompt", "c2_class_token", "c2_file_prompt_contents", "c2_instance_data_dir", "c2_instance_prompt", "c2_instance_token", "c2_max_steps", "c2_n_save_sample", "c2_num_class_images", "c2_sample_seed", "c2_save_guidance_scale", "c2_save_infer_steps", "c2_save_sample_negative_prompt", "c2_save_sample_prompt", "c3_class_data_dir", "c3_class_guidance_scale", "c3_class_infer_steps", "c3_class_negative_prompt", "c3_class_prompt", "c3_class_token", "c3_file_prompt_contents", "c3_instance_data_dir", "c3_instance_prompt", "c3_instance_token", "c3_max_steps", "c3_n_save_sample", "c3_num_class_images", "c3_sample_seed", "c3_save_guidance_scale", "c3_save_infer_steps", "c3_save_sample_negative_prompt", "c3_save_sample_prompt", "db_status"]
+    ui_keys = ["db_adam_beta1", "db_adam_beta2", "db_adam_epsilon", "db_adam_weight_decay", "db_attention",
+               "db_center_crop", "db_concepts_path", "db_gradient_accumulation_steps", "db_gradient_checkpointing",
+               "db_half_model", "db_hflip", "db_learning_rate", "db_lr_scheduler", "db_lr_warmup_steps",
+               "db_max_grad_norm", "db_max_token_length", "db_max_train_steps", "db_mixed_precision", "db_model_path",
+               "db_not_cache_latents", "db_num_train_epochs", "db_pad_tokens", "db_pretrained_vae_name_or_path",
+               "db_prior_loss_weight", "db_resolution", "db_revision", "db_sample_batch_size",
+               "db_save_embedding_every", "db_save_preview_every", "db_scale_lr", "db_scheduler", "db_src",
+               "db_train_batch_size", "db_train_text_encoder", "db_use_8bit_adam", "db_use_concepts", "db_use_cpu",
+               "db_use_ema", "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps",
+               "c1_class_negative_prompt", "c1_class_prompt", "c1_class_token", "c1_file_prompt_contents",
+               "c1_instance_data_dir", "c1_instance_prompt", "c1_instance_token", "c1_max_steps", "c1_n_save_sample",
+               "c1_num_class_images", "c1_sample_seed", "c1_save_guidance_scale", "c1_save_infer_steps",
+               "c1_save_sample_negative_prompt", "c1_save_sample_prompt", "c2_class_data_dir",
+               "c2_class_guidance_scale", "c2_class_infer_steps", "c2_class_negative_prompt", "c2_class_prompt",
+               "c2_class_token", "c2_file_prompt_contents", "c2_instance_data_dir", "c2_instance_prompt",
+               "c2_instance_token", "c2_max_steps", "c2_n_save_sample", "c2_num_class_images", "c2_sample_seed",
+               "c2_save_guidance_scale", "c2_save_infer_steps", "c2_save_sample_negative_prompt",
+               "c2_save_sample_prompt", "c3_class_data_dir", "c3_class_guidance_scale", "c3_class_infer_steps",
+               "c3_class_negative_prompt", "c3_class_prompt", "c3_class_token", "c3_file_prompt_contents",
+               "c3_instance_data_dir", "c3_instance_prompt", "c3_instance_token", "c3_max_steps", "c3_n_save_sample",
+               "c3_num_class_images", "c3_sample_seed", "c3_save_guidance_scale", "c3_save_infer_steps",
+               "c3_save_sample_negative_prompt", "c3_save_sample_prompt", "db_status"]
     output = []
     for key in ui_keys:
         if key in ui_dict:
@@ -470,7 +502,7 @@ def start_training(model_dir):
     res = f"Training {'interrupted' if shared.state.interrupted else 'finished'}. " \
           f"Total lifetime steps: {total_steps} \n"
     print(f"Returning result: {res}")
-    return res, ""
+    return res, "", total_steps
 
 
 def get_full_repo_name(model_id: str, organization: Optional[str] = None, token: Optional[str] = None):

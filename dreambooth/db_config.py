@@ -245,11 +245,12 @@ def from_file(model_name):
     """
     if model_name == "" or model_name is None:
         return None
+    if isinstance(model_name, list):
+        model_name = model_name[0]
     model_name = images.sanitize_filename_part(model_name, True)
     models_path = shared.cmd_opts.dreambooth_models_path
     if models_path == "" or models_path is None:
         models_path = os.path.join(shared.models_path, "dreambooth")
-
     working_dir = os.path.join(models_path, model_name, "working")
     config_file = os.path.join(models_path, model_name, "db_config.json")
     try:
@@ -279,7 +280,7 @@ def from_file(model_name):
                 concept = Concept(input_dict=concept_dict)
 
             concepts = []
-            if config.concepts_list:
+            if "concepts_list" in config.__dict__:
                 if not len(config.concepts_list) and has_old_concept:
                     concepts.append(concept)
                 else:
