@@ -1,4 +1,44 @@
-function start_training_dreambooth(){
+function db_start_progress(){
+    requestProgress('db');
+    gradioApp().querySelector('#db_error').innerHTML='';
+    gradioApp().querySelector('#db_status').innerHTML='';
+    return args_to_array(arguments);
+}
+
+function db_save() {
+    console.log("Save click?");
+    btn = gradioApp().getElementById("db_save_config");
+    if(btn!=null) {
+        btn.click();
+    } else {
+        console.log("Can't find btn, trying for btn2");
+        let btn2 = document.getElementById("db_save_config");
+        if (btn2 != null) {
+            btn2.click();
+        } else {
+            console.log("Can't find button2 either.")
+        }
+    }
+    gradioApp().querySelector('#db_error').innerHTML='';
+    gradioApp().querySelector('#db_status').innerHTML='';
+    return args_to_array(arguments);
+}
+
+function db_save_start_progress(){
+    console.log("Save click?");
+    btn = gradioApp().getElementById("db_save_config");
+    if(btn!=null) {
+        btn.click();
+    } else {
+        console.log("Can't find btn, trying for btn2");
+        let btn2 = document.getElementById("db_save_config");
+        if (btn2 != null) {
+            btn2.click();
+        } else {
+            console.log("Can't find button2 either.")
+        }
+    }
+    console.log("Saving console.")
     requestProgress('db');
     gradioApp().querySelector('#db_error').innerHTML='';
     gradioApp().querySelector('#db_status').innerHTML='';
@@ -19,7 +59,6 @@ new_titles = {
     "Adam Epsilon": "",
     "Adam Weight Decay": "Weight decay for the Adam optimizer, duh.",
     "Apply Horizontal Flip": "Randomly decide to flip images horizontally.",
-    "Auto-Adjust (WIP)": "Attempt to automatically set training parameters based on total VRAM. Still under development.",
     "Batch Size": "How many images to process at once per training step?",
     "Cancel": "Cancel training.",
     "Center Crop": "If an image is too large, crop it from the center.",
@@ -57,6 +96,8 @@ new_titles = {
     "Name": "The name of the model to create.",
     "Number of Samples to Generate": "How many samples to generate per subject.",
     "Pad Tokens": "Pad the input images token lenght to this amount. You probably want to do this.",
+    "Performance Wizard (WIP)": "Attempt to automatically set training parameters based on total VRAM. Still under development.",
+    "Prior Loss Weight": "Prior loss weight.",
     "Resolution": "The resolution of input images. You probably want to pre-process them to match this.",
     "Sample Cfg Scale": "The Classifier-Free Guidance Scale to use for preview images.",
     "Sample Image Negative Prompt": "A negative prompt to use when generating preview images.",

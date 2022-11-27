@@ -17,6 +17,7 @@
 """ Conversion script for the LDM checkpoints. """
 import gc
 import os
+import shutil
 import traceback
 
 import gradio as gr
@@ -24,8 +25,9 @@ import torch
 
 import modules.sd_models
 from modules import paths, shared
-from extensions.sd_dreambooth_extension.dreambooth.dreambooth import get_db_models, printm
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.dreambooth import get_db_models, printm, reload_system_models, \
+    unload_system_models
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, from_file
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -42,6 +44,9 @@ except ImportError:
 from diffusers import (
     AutoencoderKL,
     DDIMScheduler,
+    DPMSolverMultistepScheduler,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
     LDMTextToImagePipeline,
     LMSDiscreteScheduler,
     PNDMScheduler,
@@ -217,7 +222,7 @@ def renew_vae_attention_paths(old_list, n_shave_prefix_segments=0):
 
 
 def assign_to_checkpoint(
-    paths, checkpoint, old_checkpoint, attention_paths_to_split=None, additional_replacements=None, config=None
+        paths, checkpoint, old_checkpoint, attention_paths_to_split=None, additional_replacements=None, config=None
 ):
     """
     This does the final conversion step: take locally converted weights and apply a global renaming
@@ -284,6 +289,7 @@ def create_unet_diffusers_config(original_config):
     """
     Creates a config for the diffusers based on the config of the LDM model.
     """
+    model_params = original_config.model.params
     unet_params = original_config.model.params.unet_config.params
 
     block_out_channels = [unet_params.model_channels * mult for mult in unet_params.channel_mult]
@@ -303,7 +309,7 @@ def create_unet_diffusers_config(original_config):
         resolution //= 2
 
     config = dict(
-        sample_size=unet_params.image_size,
+        sample_size=model_params.image_size,
         in_channels=unet_params.in_channels,
         out_channels=unet_params.out_channels,
         down_block_types=tuple(down_block_types),
@@ -752,22 +758,21 @@ for i in range(4):
         vae_conversion_map.append((sd_downsample_prefix, hf_downsample_prefix))
 
         hf_upsample_prefix = f"up_blocks.{i}.upsamplers.0."
-        sd_upsample_prefix = f"up.{3-i}.upsample."
+        sd_upsample_prefix = f"up.{3 - i}.upsample."
         vae_conversion_map.append((sd_upsample_prefix, hf_upsample_prefix))
 
     # up_blocks have three resnets
     # also, up blocks in hf are numbered in reverse from sd
     for j in range(3):
         hf_up_prefix = f"decoder.up_blocks.{i}.resnets.{j}."
-        sd_up_prefix = f"decoder.up.{3-i}.block.{j}."
+        sd_up_prefix = f"decoder.up.{3 - i}.block.{j}."
         vae_conversion_map.append((sd_up_prefix, hf_up_prefix))
 
 # this part accounts for mid blocks in both the encoder and the decoder
 for i in range(2):
     hf_mid_res_prefix = f"mid_block.resnets.{i}."
-    sd_mid_res_prefix = f"mid.block_{i+1}."
+    sd_mid_res_prefix = f"mid.block_{i + 1}."
     vae_conversion_map.append((sd_mid_res_prefix, hf_mid_res_prefix))
-
 
 vae_conversion_map_attn = [
     # (stable-diffusion, HF Diffusers)
@@ -809,19 +814,21 @@ def convert_text_enc_state_dict(text_enc_dict):
 
 
 def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type="ddim", new_model_url="",
-                       new_model_token="", extract_ema=False):
+                       new_model_token="", model_v2=False):
+    print("Extracting checkpoint...")
     shared.state.job_count = 8
-    if shared.sd_model is not None:
-        shared.sd_model.to('cpu')
+    unload_system_models()
     map_location = shared.device
     # Set up our base directory for the model and sanitize our file name
     new_model_name = "".join(x for x in new_model_name if x.isalnum())
-    config = DreamboothConfig().create_new(new_model_name, scheduler_type, checkpoint_path, 0)
-    new_model_dir = create_output_dir(new_model_name, config)
-    # Create folder for the 'extracted' diffusion model.
-    out_dir = os.path.join(new_model_dir, "working")
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
+    config = DreamboothConfig(new_model_name, scheduler=scheduler_type, src=checkpoint_path)
+    config.save()
+    model_path = config.pretrained_model_name_or_path
+    revision = config.revision
+    model_scheduler = scheduler_type
+    status = ""
+    src = config.src
+
     shared.state.job_no = 0
     pipe = None
     try:
@@ -829,7 +836,11 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
             print(f"Trying to create {new_model_name} from hugginface.co/{new_model_url}")
             pipe = StableDiffusionPipeline.from_pretrained(new_model_url, use_auth_token=new_model_token)
         else:
-            cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "v1-inference.yaml")
+            if model_v2:
+                cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "v2-inference.yaml")
+                print(f"Using the v2 config file: {cfg_file}")
+            else:
+                cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "v1-inference.yaml")
             original_config = OmegaConf.load(cfg_file)
             checkpoint_info = modules.sd_models.get_closet_checkpoint_match(checkpoint_path)
 
@@ -864,7 +875,8 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
                     print("Couldn't load checkpoint, canceling.")
                     dirs = get_db_models()
                     return gr.Dropdown.update(
-                        choices=sorted(dirs)), f"Created working directory for {new_model_name} at {out_dir}.", ""
+                        choices=sorted(
+                            dirs)), f"Created working directory for {new_model_name} at {config.pretrained_model_name_or_path}.", "", ""
 
             shared.state.textinfo = "Loaded state dict..."
             shared.state.job_no = 1
@@ -881,7 +893,19 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
                     skip_prk_steps=True,
                 )
             elif scheduler_type == "lms":
-                scheduler = LMSDiscreteScheduler(beta_start=beta_start, beta_end=beta_end, beta_schedule="scaled_linear")
+                scheduler = LMSDiscreteScheduler(beta_start=beta_start, beta_end=beta_end,
+                                                 beta_schedule="scaled_linear")
+            elif scheduler_type == "euler":
+                scheduler = EulerDiscreteScheduler(beta_start=beta_start, beta_end=beta_end,
+                                                   beta_schedule="scaled_linear")
+            elif scheduler_type == "euler-ancestral":
+                scheduler = EulerAncestralDiscreteScheduler(
+                    beta_start=beta_start, beta_end=beta_end, beta_schedule="scaled_linear"
+                )
+            elif scheduler_type == "dpm":
+                scheduler = DPMSolverMultistepScheduler(
+                    beta_start=beta_start, beta_end=beta_end, beta_schedule="scaled_linear"
+                )
             elif scheduler_type == "ddim":
                 scheduler = DDIMScheduler(
                     beta_start=beta_start,
@@ -899,7 +923,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
             shared.state.textinfo = "Created unet config..."
             shared.state.job_no = 3
             converted_unet_checkpoint = convert_ldm_unet_checkpoint(checkpoint, unet_config, path=checkpoint_path,
-                                                                    extract_ema=extract_ema)
+                                                                    extract_ema=False)
             shared.state.textinfo = "Converted unet checkpoint..."
             shared.state.job_no = 4
             unet = UNet2DConditionModel(**unet_config)
@@ -935,14 +959,17 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
                 text_config = create_ldm_bert_config(original_config)
                 text_model = convert_ldm_bert_checkpoint(checkpoint, text_config)
                 tokenizer = BertTokenizerFast.from_pretrained("bert-base-uncased")
-                pipe = LDMTextToImagePipeline(vqvae=vae, bert=text_model, tokenizer=tokenizer, unet=unet, scheduler=scheduler)
+                pipe = LDMTextToImagePipeline(vqvae=vae, bert=text_model, tokenizer=tokenizer, unet=unet,
+                                              scheduler=scheduler)
     except Exception as e:
         print(f"Exception with the conversion: {e}")
         traceback.print_exc()
+        del pipe
+        pipe = None
 
     if pipe is not None:
         pipe = pipe.to(map_location)
-        pipe.save_pretrained(out_dir)
+        pipe.save_pretrained(config.pretrained_model_name_or_path)
         shared.state.textinfo = "Pretrained saved..."
         shared.state.job_no = 8
         del pipe
@@ -958,12 +985,24 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
         gc.collect()
     except:
         pass
-    if shared.sd_model is not None:
-        shared.sd_model.to(shared.device)
-    printm("Extraction completed.")
+    extraction_successful = True
+    required_dirs = ["feature_extractor", "safety_checker", "scheduler", "text_encoder", "tokenizer", "unet", "vae"]
+    for r_dir in required_dirs:
+        full_path = os.path.join(config.pretrained_model_name_or_path, r_dir)
+        if not os.path.exists(full_path):
+            print(f"Unable to find working dir, extraction likely failed: {r_dir}")
+            extraction_successful = False
+    if not extraction_successful:
+        print("Extraction failed, removing model directory.")
+        status = "Extraction failed."
+        shutil.rmtree(config.model_dir, ignore_errors=True)
+    else:
+        status = "Checkpoint successfully extracted."
+    reload_system_models()
+    printm("Extraction completed.", True)
     dirs = get_db_models()
-
-    return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), f"Created working directory for {new_model_name} at {out_dir}.", ""
+    return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), model_path, revision, model_scheduler,\
+        status, src
 
 
 def compile_checkpoint(model_name, vae_path, half_checkpoint):
@@ -975,11 +1014,13 @@ def compile_checkpoint(model_name, vae_path, half_checkpoint):
         if ckpt_dir is not None:
             models_path = ckpt_dir
 
-        config = DreamboothConfig().from_file(model_name)
+        config = from_file(model_name)
         total_steps = config["revision"]
         if total_steps == 0:
             return "Please train the model first.", ""
-        src_path = os.path.join(os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path, "dreambooth", model_name, "working")
+        src_path = os.path.join(
+            os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path,
+            "dreambooth", model_name, "working")
         out_file = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
         try:
             diff_to_sd(src_path, vae_path, out_file, half)
@@ -1031,14 +1072,3 @@ def diff_to_sd(model_path, vae_path, checkpoint_name, half=False):
         pass
     gc.collect()  # Python thing
     torch.cuda.empty_cache()  # PyTorch thing
-
-
-def create_output_dir(new_model, config_data):
-    print(f"Creating dreambooth model folder: {new_model}")
-    models_dir = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
-    model_dir = os.path.join(models_dir, "dreambooth", new_model)
-    output_dir = os.path.join(model_dir, "working")
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    config_data.save()
-    return model_dir
