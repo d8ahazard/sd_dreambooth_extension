@@ -1,20 +1,42 @@
 [
     {
-        "instance_prompt":      "photo of zwx dog",
-        "class_prompt":         "photo of a dog",
-        "sample_prompt":        "photo of zwx at the beach",
-        "negative_prompt":      "blurry",
-        "instance_data_dir":    "../../../data/alvan",
-        "class_data_dir":       "../../../data/dog"
-    },
-    {
-        "instance_prompt": "[filewords]",
-        "class_prompt": "[filewords]",
-        "sample_prompt": "photo of mypik at the beach",
-        "negative_prompt": "blurry",
-        "instance_data_dir": "E:\\images\\data\\mypik",
-        "class_data_dir": "E:\\images\\data\\man",
-        "instance_token": "mypik",
-        "class_token": "a man, man"
-    }
+            "max_steps": -1,
+            "instance_data_dir": "E:\\dev\\sd_db\\clothes_samples\\bossdyn",
+            "class_data_dir": "E:\\dev\\sd_db\\pants",
+            "file_prompt_contents": "Description",
+            "instance_prompt": "a man wearing bossdyn pants",
+            "class_prompt": "a man wearing pants",
+            "save_sample_prompt": "a man wearing bossdyn pants",
+            "instance_token": "",
+            "class_token": "",
+            "num_class_images": 20,
+            "class_negative_prompt": "",
+            "class_guidance_scale": 7.5,
+            "class_infer_steps": 40,
+            "save_sample_negative_prompt": "",
+            "n_save_sample": 1,
+            "sample_seed": -1,
+            "save_guidance_scale": 7.5,
+            "save_infer_steps": 40
+        },
+        {
+            "max_steps": -1,
+            "instance_data_dir": "E:\\dev\\sd_db\\clothes_samples\\capocor",
+            "class_data_dir": "E:\\dev\\sd_db\\jacket",
+            "file_prompt_contents": "Description",
+            "instance_prompt": "a person wearing copocor jacket",
+            "class_prompt": "a person wearing a jacket",
+            "save_sample_prompt": "a man wearing capocor jacket",
+            "instance_token": "",
+            "class_token": "",
+            "num_class_images": 20,
+            "class_negative_prompt": "",
+            "class_guidance_scale": 7.5,
+            "class_infer_steps": 40,
+            "save_sample_negative_prompt": "",
+            "n_save_sample": 1,
+            "sample_seed": -1,
+            "save_guidance_scale": 7.5,
+            "save_infer_steps": 40
+        }
 ]
