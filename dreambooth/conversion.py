@@ -1005,25 +1005,32 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
         status, src
 
 
-def compile_checkpoint(model_name, vae_path, half_checkpoint):
+def compile_checkpoint(model_name):
+    shared.state.textinfo = "Compiling checkpoint."
+    shared.state.job_no = 0
+    shared.state.job_count = 2
+    print(f"Compiling checkpoint: {model_name}")
     msg = ""
     try:
-        half = half_checkpoint
         ckpt_dir = shared.cmd_opts.ckpt_dir
+        vae_path = None
         models_path = os.path.join(paths.models_path, "Stable-diffusion")
         if ckpt_dir is not None:
             models_path = ckpt_dir
 
         config = from_file(model_name)
-        total_steps = config["revision"]
+        half = config.half_model
+        total_steps = config.revision
         if total_steps == 0:
-            return "Please train the model first.", ""
+            shared.state.textinfo = "You should probably train the model first...compiling..."
+        shared.state.job_no = 1
         src_path = os.path.join(
             os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path,
             "dreambooth", model_name, "working")
         out_file = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
         try:
             diff_to_sd(src_path, vae_path, out_file, half)
+            shared.state.job_no = 2
             msg = f"Saved checkpoint to {out_file}"
         except Exception as e:
             msg = f"Exception generating checkpoint: {e}"

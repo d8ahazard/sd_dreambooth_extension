@@ -177,6 +177,7 @@ def on_ui_tabs():
                     with gr.Column():
                         db_generate_sample = gr.Button(value="Generate Sample Image")
                         db_log_memory = gr.Button(value="Log Memory")
+                        db_train_imagic_only = gr.Checkbox(label="Train Imagic Only", value=False)
 
             with gr.Column(variant="panel"):
                 db_status = gr.HTML(elem_id="db_status", value="")
@@ -454,8 +455,8 @@ def on_ui_tabs():
         )
 
         db_train_wizard_person.click(
-            fn=save_and_execute(training_wizard_person, extra_outputs=[gr.update()], wrap_gpu=False),
-            _js = "db_save",
+            fn=wrap_gradio_call(training_wizard_person, extra_outputs=[gr.update()]),
+            _js="db_save",
             inputs=[
                 db_model_name
             ],
@@ -472,8 +473,8 @@ def on_ui_tabs():
         )
 
         db_train_wizard_object.click(
-            fn=save_and_execute(training_wizard, extra_outputs=[gr.update()], wrap_gpu=False),
-            _js = "db_save",
+            fn=wrap_gradio_call(training_wizard, extra_outputs=[gr.update()]),
+            _js="db_save",
             inputs=[
                 db_model_name
             ],
@@ -523,10 +524,11 @@ def on_ui_tabs():
         )
 
         db_train_model.click(
-            fn=save_and_execute(dreambooth.start_training, extra_outputs=[gr.update()], wrap_gpu=True),
+            fn=wrap_gradio_gpu_call(dreambooth.start_training, extra_outputs=[gr.update()]),
             _js="db_save_start_progress",
             inputs=[
-                db_model_name
+                db_model_name,
+                db_train_imagic_only
             ],
             outputs=[
                 db_status,

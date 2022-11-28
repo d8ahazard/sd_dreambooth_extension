@@ -43,7 +43,7 @@ except:
 pil_features = list_features()
 mem_record = {}
 with_prior = False
-
+text_encoder = None
 # End custom stuff
 
 torch.backends.cudnn.benchmark = True
@@ -432,6 +432,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 
 def main(args: DreamboothConfig, memory_record):
     global with_prior
+    text_encoder = None
     args.tokenizer_name = None
     global mem_record
     mem_record = memory_record
@@ -591,6 +592,7 @@ def main(args: DreamboothConfig, memory_record):
         revision=args.revision,
         torch_dtype=torch.float32
     )
+
     printm("Loaded model.")
 
     def create_vae():
@@ -647,12 +649,14 @@ def main(args: DreamboothConfig, memory_record):
     noise_scheduler = DDPMScheduler.from_config(args.pretrained_model_name_or_path, subfolder="scheduler")
 
     def cleanup_memory():
+        global text_encoder
         try:
             printm("CLEANUP: ")
             if unet:
                 del unet
             if text_encoder:
                 del text_encoder
+                text_encoder = None
             if tokenizer:
                 del tokenizer
             if optimizer:
@@ -854,9 +858,10 @@ def main(args: DreamboothConfig, memory_record):
     printm(f"  Training settings: {stats}")
 
     def save_weights(freeze_encoder=False):
+        global text_encoder
         # Create the pipeline using the trained modules and save it.
         if accelerator.is_main_process:
-            if args.train_text_encoder or freeze_encoder:
+            if (args.train_text_encoder or freeze_encoder) and text_encoder is not None:
                 text_enc_model = accelerator.unwrap_model(text_encoder)
             else:
                 text_enc_model = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path,
@@ -876,6 +881,7 @@ def main(args: DreamboothConfig, memory_record):
                 revision=args.revision,
                 safety_checker=None
             )
+
             s_pipeline = s_pipeline.to(accelerator.device)
             with accelerator.autocast(), torch.inference_mode():
                 if save_model:
@@ -949,8 +955,9 @@ def main(args: DreamboothConfig, memory_record):
             del s_pipeline
             del scheduler
             del text_enc_model
-            if freeze_encoder:
+            if freeze_encoder and text_encoder is not None:
                 del text_encoder
+                text_encoder = None
             cleanup()
 
     # Only show the progress bar once on each machine.
@@ -1076,7 +1083,9 @@ def main(args: DreamboothConfig, memory_record):
                                 pipeline.to(accelerator.device)
                                 pipeline.text_encoder.save_pretrained(out_dir)
                                 del pipeline
-                                del text_encoder
+                                if text_encoder is not None:
+                                    del text_encoder
+                                    text_encoder = None
                                 cleanup_memory()
                     if save_img or save_model:
                         save_weights(freeze_weights)
