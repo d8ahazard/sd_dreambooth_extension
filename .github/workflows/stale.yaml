@@ -14,6 +14,6 @@ jobs:
           stale-issue-message: 'This issue is stale because it has been open 5 days with no activity. Remove stale label or comment or this will be closed in 5 days'
           days-before-stale: 5
           days-before-close: 5
-          exempt-issue-labels: 'blocked,must,should,keep'
+          exempt-issue-labels: 'blocked,must,should,keep,enhancement'
       - name: Print outputs
         run: echo ${{ join(steps.stale.outputs.*, ',') }}
