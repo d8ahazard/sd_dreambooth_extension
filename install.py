@@ -36,7 +36,7 @@ def check_versions():
     checks = ["bitsandbytes", "diffusers", "transformers", "torch", "torchvision", "xformers"]
     for check in checks:
         check_ver = "N/A"
-        status = "[*]"
+        status = "[ ]"
         try:
             check_available = importlib.util.find_spec(check) is not None
             if check_available:
@@ -44,7 +44,7 @@ def check_versions():
             if check in reqs_dict:
                 req_version = reqs_dict[check]
                 if str(check_ver) == str(req_version):
-                    status = "[X]"
+                    status = "[+]"
                 else:
                     status = "[!]"
         except importlib_metadata.PackageNotFoundError:

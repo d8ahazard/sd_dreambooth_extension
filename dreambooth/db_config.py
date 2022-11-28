@@ -43,6 +43,7 @@ class DreamboothConfig:
                  src: str = "",
                  train_batch_size: int = 1,
                  train_text_encoder: bool = True,
+                 train_text_encoder_steps=-1,
                  use_8bit_adam: bool = True,
                  use_concepts: bool = False,
                  use_cpu: bool = False,
@@ -152,6 +153,7 @@ class DreamboothConfig:
         self.src = src
         self.train_batch_size = train_batch_size
         self.train_text_encoder = train_text_encoder
+        self.train_text_encoder_steps = train_text_encoder_steps
         self.use_8bit_adam = use_8bit_adam
         self.use_concepts = use_concepts
         self.use_cpu = use_cpu
@@ -204,17 +206,17 @@ class DreamboothConfig:
                 c_count = 0
                 for concept in concepts:
                     if concept.is_valid():
-                        if concept.num_class_images > 0:
-                            if concept.class_data_dir == "" or concept.class_data_dir is None:
-                                class_dir = os.path.join(model_dir, f"classifiers_{c_count}")
-                                if not os.path.exists(class_dir):
-                                    os.makedirs(class_dir)
-                                concept.class_data_dir = class_dir
+                        if concept.class_data_dir == "" or concept.class_data_dir is None or concept.class_data_dir == shared.script_path:
+                            class_dir = os.path.join(model_dir, f"classifiers_{c_count}")
+                            if not os.path.exists(class_dir):
+                                os.makedirs(class_dir)
+                            concept.class_data_dir = class_dir
                         self.concepts_list.append(concept)
                     c_count += 1
         else:
             if len(concepts_list):
                 self.concepts_list = concepts_list
+
 
     def save(self):
         """
@@ -287,6 +289,12 @@ def from_file(model_name):
                     for concept_dict in config.concepts_list:
                         concept = Concept(input_dict=concept_dict)
                         concepts.append(concept)
+            c_idx = 0
+            for concept in concepts:
+                if "class_data_dir" not in concept.__dict__ or concept.class_data_dir == "" \
+                        or concept.class_data_dir is None:
+                    concept.class_data_dir = os.path.join(config.model_dir, f"classifiers_{c_idx}")
+                    c_idx += 1
             config.concepts_list = concepts
             if config.revision == "" or config.revision is None:
                 config.revision = 0
