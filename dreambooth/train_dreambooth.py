@@ -27,12 +27,11 @@ from transformers import CLIPTextModel, CLIPTokenizer
 from extensions.sd_dreambooth_extension.dreambooth import xattention
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.dreambooth import dumb_safety, save_checkpoint, list_features, \
-    is_image, printm, cleanup, isset
+from extensions.sd_dreambooth_extension.dreambooth.dreambooth import save_checkpoint, list_features, \
+    is_image, printm, cleanup, sanitize_name
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, EMAModel, \
     encode_hidden_state
 from modules import shared
-from modules.images import sanitize_filename_part
 
 # Custom stuff
 try:
@@ -43,7 +42,7 @@ except:
 pil_features = list_features()
 mem_record = {}
 with_prior = False
-text_encoder = None
+
 # End custom stuff
 
 torch.backends.cudnn.benchmark = True
@@ -394,13 +393,13 @@ class LatentsDataset(Dataset):
         self.text_encoder_cache = text_encoder_cache
         self.concepts_cache = concepts_cache
         self.current_index = 0
-        self.concepts_index = 0
+        self.current_concept = 0
 
     def __len__(self):
         return len(self.latents_cache)
 
     def __getitem__(self, index):
-        self.concepts_index = self.concepts_cache[index]
+        self.current_concept = self.concepts_cache[index]
         return self.latents_cache[index], self.text_encoder_cache[index]
 
 
@@ -430,7 +429,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
-def main(args: DreamboothConfig, memory_record):
+def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict, str]:
     global with_prior
     text_encoder = None
     args.tokenizer_name = None
@@ -440,13 +439,6 @@ def main(args: DreamboothConfig, memory_record):
     args.max_token_length = int(args.max_token_length)
     if not args.pad_tokens and args.max_token_length > 75:
         logger.debug("Cannot raise token length limit above 75 when pad_tokens=False")
-    if args.train_text_encoder:
-        if args.train_text_encoder_steps != -1 and args.train_text_encoder_steps <= args.revision:
-            print("Disabling text encoder training.")
-            args.train_text_encoder = False
-            args.pad_tokens = False
-    else:
-        args.pad_tokens = False
 
     if args.attention == "xformers":
         xattention.replace_unet_cross_attn_to_xformers()
@@ -461,14 +453,21 @@ def main(args: DreamboothConfig, memory_record):
     elif args.mixed_precision == "bf16":
         weight_dtype = torch.bfloat16
 
-    accelerator = Accelerator(
-        gradient_accumulation_steps=args.gradient_accumulation_steps,
-        mixed_precision=args.mixed_precision,
-        log_with="tensorboard",
-        logging_dir=logging_dir,
-        cpu=args.use_cpu
-    )
-
+    try:
+        accelerator = Accelerator(
+            gradient_accumulation_steps=args.gradient_accumulation_steps,
+            mixed_precision=args.mixed_precision,
+            log_with="tensorboard",
+            logging_dir=logging_dir,
+            cpu=args.use_cpu
+        )
+    except Exception as e:
+        if "AcceleratorState" in e:
+            msg = "Change in precision detected, please restart the webUI entirely to use new precision."
+        else:
+            msg = f"Exception initializing accelerator: {e}"
+        print(msg)
+        return args, mem_record, msg
     # Currently, it's not possible to do gradient accumulation when training two models with accelerate.accumulate
     # This will be enabled soon in accelerate. For now, we don't allow gradient accumulation when training two models.
     # TODO (patil-suraj): Remove this check when gradient accumulation with two models is enabled in accelerate.
@@ -508,10 +507,10 @@ def main(args: DreamboothConfig, memory_record):
                             torch_dtype=torch_dtype
                         ),
                         torch_dtype=torch_dtype,
-                        safety_checker=None,
+                        requires_safety_checker=False,
                         revision=args.revision
                     )
-                    concept_pipeline.safety_checker = dumb_safety
+
                     concept_pipeline.set_progress_bar_config(disable=True)
                     concept_pipeline.to(accelerator.device)
 
@@ -531,7 +530,7 @@ def main(args: DreamboothConfig, memory_record):
                         if shared.state.interrupted:
                             logger.debug("Generation canceled.")
                             shared.state.textinfo = "Training canceled."
-                            return args, mem_record
+                            return args, mem_record, "Training canceled."
                         example = sample_dataset.__getitem__(random.randrange(0, s_len))
                         images = concept_pipeline(example["prompt"], num_inference_steps=concept.class_infer_steps,
                                                   guidance_scale=concept.class_guidance_scale,
@@ -544,7 +543,7 @@ def main(args: DreamboothConfig, memory_record):
                             if shared.state.interrupted:
                                 logger.debug("Generation canceled.")
                                 shared.state.textinfo = "Training canceled."
-                                return args, mem_record
+                                return args, mem_record, "Training canceled."
                             hash_image = hashlib.sha1(image.tobytes()).hexdigest()
                             image_filename = class_images_dir / f"{generated_images + cur_class_images}-" \
                                                                 f"{hash_image}.jpg"
@@ -649,14 +648,12 @@ def main(args: DreamboothConfig, memory_record):
     noise_scheduler = DDPMScheduler.from_config(args.pretrained_model_name_or_path, subfolder="scheduler")
 
     def cleanup_memory():
-        global text_encoder
         try:
             printm("CLEANUP: ")
             if unet:
                 del unet
             if text_encoder:
                 del text_encoder
-                text_encoder = None
             if tokenizer:
                 del tokenizer
             if optimizer:
@@ -687,8 +684,7 @@ def main(args: DreamboothConfig, memory_record):
         lifetime_steps=args.revision,
         pad_tokens=args.pad_tokens,
         hflip=args.hflip,
-        max_token_length=args.max_token_length,
-        max_train_steps=args.max_train_steps
+        max_token_length=args.max_token_length
     )
 
     if train_dataset.__len__ == 0:
@@ -696,7 +692,7 @@ def main(args: DreamboothConfig, memory_record):
         logger.debug(msg)
         shared.state.textinfo = msg
         cleanup_memory()
-        return args, mem_record
+        return args, mem_record, msg
 
     def collate_fn(examples):
         input_ids = [ex["instance_prompt_ids"] for ex in examples]
@@ -736,7 +732,7 @@ def main(args: DreamboothConfig, memory_record):
     if not args.train_text_encoder:
         text_encoder.to(accelerator.device, dtype=weight_dtype)
 
-    def cache_latents(shuffle, td=None, tdl=None, enc_vae=None):
+    def cache_latents(td=None, tdl=None, enc_vae=None, orig_dataset=None):
         global with_prior
         if td is not None:
             del td
@@ -747,18 +743,20 @@ def main(args: DreamboothConfig, memory_record):
         if enc_vae is None:
             enc_vae = create_vae()
 
-        dataset = SuperDataset(
-            concepts_list=args.concepts_list,
-            tokenizer=tokenizer,
-            size=args.resolution,
-            center_crop=args.center_crop,
-            lifetime_steps=args.revision,
-            pad_tokens=args.pad_tokens,
-            hflip=args.hflip,
-            max_token_length=args.max_token_length,
-            shuffle=shuffle,
-            max_train_steps=args.max_train_steps
-        )
+        if orig_dataset is not None:
+            dataset = SuperDataset(
+                concepts_list=args.concepts_list,
+                tokenizer=tokenizer,
+                size=args.resolution,
+                center_crop=args.center_crop,
+                lifetime_steps=args.revision,
+                pad_tokens=args.pad_tokens,
+                hflip=args.hflip,
+                max_token_length=args.max_token_length
+            )
+        else:
+            dataset = gen_dataset
+
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
         )
@@ -766,7 +764,7 @@ def main(args: DreamboothConfig, memory_record):
         text_encoder_cache = []
         concepts_cache = []
         for d_batch in tqdm(dataloader, desc="Caching latents", disable=True):
-            c_concept = args.concepts_list[dataset.concepts_index]
+            c_concept = args.concepts_list[dataset.current_concept]
             with_prior = c_concept.num_class_images > 0
             with torch.no_grad():
                 d_batch["pixel_values"] = d_batch["pixel_values"].to(accelerator.device, non_blocking=True,
@@ -777,7 +775,7 @@ def main(args: DreamboothConfig, memory_record):
                     text_encoder_cache.append(d_batch["input_ids"])
                 else:
                     text_encoder_cache.append(text_encoder(d_batch["input_ids"])[0])
-                concepts_cache.append(dataset.concepts_index)
+                concepts_cache.append(dataset.current_concept)
         dataset = LatentsDataset(latents_cache, text_encoder_cache, concepts_cache)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda x: x, shuffle=True)
         if enc_vae is not None:
@@ -789,7 +787,7 @@ def main(args: DreamboothConfig, memory_record):
     gen_dataset = train_dataset
 
     if not args.not_cache_latents:
-        train_dataset, train_dataloader = cache_latents(False, vae)
+        train_dataset, train_dataloader = cache_latents(enc_vae=vae, orig_dataset=gen_dataset)
     cleanup()
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
@@ -857,11 +855,10 @@ def main(args: DreamboothConfig, memory_record):
     logger.info(f"  Total optimization steps = {args.max_train_steps}")
     printm(f"  Training settings: {stats}")
 
-    def save_weights(freeze_encoder=False):
-        global text_encoder
+    def save_weights():
         # Create the pipeline using the trained modules and save it.
         if accelerator.is_main_process:
-            if (args.train_text_encoder or freeze_encoder) and text_encoder is not None:
+            if args.train_text_encoder:
                 text_enc_model = accelerator.unwrap_model(text_encoder)
             else:
                 text_enc_model = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path,
@@ -879,7 +876,8 @@ def main(args: DreamboothConfig, memory_record):
                 scheduler=scheduler,
                 torch_dtype=torch.float16,
                 revision=args.revision,
-                safety_checker=None
+                safety_checker=None,
+                requires_safety_checker=None
             )
 
             s_pipeline = s_pipeline.to(accelerator.device)
@@ -888,8 +886,7 @@ def main(args: DreamboothConfig, memory_record):
                     shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
                     try:
                         s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
-                        save_checkpoint(args.model_name, args.pretrained_vae_name_or_path, args.revision,
-                                        args.half_model)
+                        save_checkpoint(args.model_name, args.revision)
                         if args.use_ema:
                             ema_unet.restore(unet.parameters())
                     except Exception as e:
@@ -904,47 +901,23 @@ def main(args: DreamboothConfig, memory_record):
                         sample_dir = os.path.join(save_dir, "samples")
                         os.makedirs(sample_dir, exist_ok=True)
                         with accelerator.autocast(), torch.inference_mode():
-                            for c in args.concepts_list:
-                                seed = c.sample_seed
-                                # I feel like this might not actually be necessary...but what the heck.
+                            prompts = gen_dataset.get_sample_prompts()
+                            for c in prompts:
+                                seed = c.seed
                                 if seed is None or seed == '' or seed == -1:
                                     seed = int(random.randrange(21474836147))
                                 g_cuda = torch.Generator(device=accelerator.device).manual_seed(seed)
 
-                                pc = c.file_prompt_contents
-
-                                sample_prompt = c.save_sample_prompt
-                                negative_prompt = c.save_sample_negative_prompt
-                                if sample_prompt is None or sample_prompt == "":
-                                    sample_prompt = c["instance_prompt"]
-                                if "[filewords]" in sample_prompt:
-                                    random_example = gen_dataset.__getitem__(
-                                        random.randrange(0, gen_dataset.__len__() - 1))
-                                    random_prompt = random_example["instance_prompt"]
-                                    if isset(c.class_token) and isset(c.instance_token):
-                                        class_token = c.class_token
-                                        class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}",
-                                                        class_token]
-                                        if "Instance" not in pc and "Class" in pc:
-                                            for token in class_tokens:
-                                                if token in random_prompt:
-                                                    random_prompt = random_prompt.replace(
-                                                        token,
-                                                        f"{c.instance_token} {class_token}"
-                                                    )
-                                                    break
-                                    sample_prompt = sample_prompt.replace("[filewords]", random_prompt)
-
-                                for si in tqdm(range(c.n_save_sample), desc="Generating samples"):
-                                    s_image = s_pipeline(sample_prompt, num_inference_steps=c.save_infer_steps,
-                                                         guidance_scale=c.save_guidance_scale,
+                                for si in tqdm(range(c.n_samples), desc="Generating samples"):
+                                    s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
+                                                         guidance_scale=c.scale,
                                                          scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
                                                                                                    beta_end=0.012),
-                                                         negative_prompt=negative_prompt,
+                                                         negative_prompt=c.negative_prompt,
                                                          generator=g_cuda).images[0]
                                     shared.state.current_image = s_image
-                                    shared.state.textinfo = sample_prompt
-                                    sanitized_prompt = sanitize_filename_part(sample_prompt, replace_spaces=False)
+                                    shared.state.textinfo = c.prompt
+                                    sanitized_prompt = sanitize_name(c.prompt)
                                     s_image.save(
                                         os.path.join(sample_dir, f"{sanitized_prompt}{args.revision}-{si}.png"))
                     except Exception as e:
@@ -955,9 +928,6 @@ def main(args: DreamboothConfig, memory_record):
             del s_pipeline
             del scheduler
             del text_enc_model
-            if freeze_encoder and text_encoder is not None:
-                del text_encoder
-                text_encoder = None
             cleanup()
 
     # Only show the progress bar once on each machine.
@@ -971,6 +941,7 @@ def main(args: DreamboothConfig, memory_record):
     loss_avg = AverageMeter()
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
     training_complete = False
+    msg = ""
     for epoch in range(args.num_train_epochs):
         if training_complete:
             break
@@ -980,8 +951,6 @@ def main(args: DreamboothConfig, memory_record):
                 text_encoder.train()
             for step, batch in enumerate(train_dataloader):
                 with accelerator.accumulate(unet):
-                    concept_index = train_dataset.concepts_index
-                    concept = args.concepts_list[concept_index]
                     # Convert images to latent space
                     with torch.no_grad():
                         if not args.not_cache_latents:
@@ -1020,6 +989,12 @@ def main(args: DreamboothConfig, memory_record):
                     # Predict the noise residual
                     noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
+                    # Get the target for loss depending on the prediction type
+                    # if noise_scheduler.config.prediction_type == "v_prediction":
+                    #    noise_scheduler.get_velocity = xattention.get_velocity
+                    #    noise = noise_scheduler.get_velocity(latents, noise, timesteps)
+                    concept_index = train_dataset.current_concept
+                    concept = args.concepts_list[concept_index]
                     if concept.num_class_images > 0:
                         # Chunk the noise and noise_pred into two parts and compute the loss on each part separately.
                         noise_pred, noise_pred_prior = torch.chunk(noise_pred, 2, dim=0)
@@ -1058,7 +1033,7 @@ def main(args: DreamboothConfig, memory_record):
                 global_step += 1
                 args.revision += 1
                 shared.state.job_no = global_step
-                freeze_weights = False
+
                 training_complete = global_step >= args.max_train_steps or shared.state.interrupted
                 if global_step > 0:
                     save_img = args.save_preview_every and not global_step % args.save_preview_every
@@ -1066,29 +1041,8 @@ def main(args: DreamboothConfig, memory_record):
                     if training_complete:
                         save_img = True
                         save_model = True
-                    if args.train_text_encoder and args.train_text_encoder_steps > -1:
-                        if args.train_text_encoder_steps <= args.revision:
-                            # Actually stop training the text encoder?
-                            args.train_text_encoder = False
-                            freeze_weights = True
-                            # If we're not already going to save the model, just save the encoder here
-                            if not save_img and not save_model and accelerator.is_main_process:
-                                logger.info(" Freezing the text_encoder...")
-                                out_dir = os.path.join(args.pretrained_model_name_or_path, "text_encoder")
-                                pipeline = StableDiffusionPipeline.from_pretrained(
-                                    args.pretrained_model_name_or_path,
-                                    unet=accelerator.unwrap_model(unet),
-                                    text_encoder=accelerator.unwrap_model(text_encoder),
-                                )
-                                pipeline.to(accelerator.device)
-                                pipeline.text_encoder.save_pretrained(out_dir)
-                                del pipeline
-                                if text_encoder is not None:
-                                    del text_encoder
-                                    text_encoder = None
-                                cleanup_memory()
                     if save_img or save_model:
-                        save_weights(freeze_weights)
+                        save_weights()
                         args.save()
                 if shared.state.interrupted:
                     training_complete = True
@@ -1111,11 +1065,13 @@ def main(args: DreamboothConfig, memory_record):
             training_complete = global_step >= args.max_train_steps or shared.state.interrupted
             accelerator.wait_for_everyone()
             if not args.not_cache_latents:
-                train_dataset, train_dataloader = cache_latents(False, vae)
+                train_dataset, train_dataloader = cache_latents(enc_vae=vae, orig_dataset=gen_dataset)
             if training_complete:
+                msg = f"Training completed, total steps: {args.revision}"
                 break
         except Exception as m:
-            printm(f"Exception while training: {m}")
+            msg = f"Exception while training: {m}"
+            printm(msg)
             traceback.print_exc()
             break
         if shared.state.interrupted:
@@ -1125,4 +1081,4 @@ def main(args: DreamboothConfig, memory_record):
 
     cleanup_memory()
     accelerator.end_training()
-    return args, mem_record
+    return args, mem_record, msg

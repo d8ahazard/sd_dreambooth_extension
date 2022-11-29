@@ -18,9 +18,7 @@ from transformers import CLIPTextModel
 
 from extensions.sd_dreambooth_extension.dreambooth import conversion
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, Concept
-from extensions.sd_dreambooth_extension.dreambooth.xattention import save_pretrained
 from modules import paths, shared, devices, sd_models, generation_parameters_copypaste
-from modules.images import sanitize_filename_part
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -37,7 +35,9 @@ dl.set_verbosity_error()
 
 mem_record = {}
 
-StableDiffusionPipeline.save_pretrained = save_pretrained
+
+def sanitize_name(name):
+    return "".join(x for x in name if (x.isalnum() or x in "._- "))
 
 
 def log_memory():
@@ -64,7 +64,9 @@ def generate_sample_img(model_dir: str):
             text_encoder=text_enc_model,
             torch_dtype=torch.float16,
             revision=config.revision,
-            safety_checker=None
+            safety_checker=None,
+			feature_extractor=None,
+			requires_safety_checker=False
         )
         pipeline = pipeline.to(shared.device)
         pil_features = list_features()
@@ -117,7 +119,7 @@ def generate_sample_img(model_dir: str):
 
                 shared.state.current_image = image
                 shared.state.textinfo = save_sample_prompt
-                sanitized_prompt = sanitize_filename_part(save_sample_prompt, replace_spaces=False)
+                sanitized_prompt = sanitize_name(save_sample_prompt)
                 image.save(os.path.join(sample_dir, f"{str(file_count).zfill(3)}-{sanitized_prompt}.png"))
     except:
         print("Exception generating sample!")
@@ -415,27 +417,27 @@ def load_params(model_dir):
     ui_dict["db_status"] = msg
     ui_keys = ["db_adam_beta1", "db_adam_beta2", "db_adam_epsilon", "db_adam_weight_decay", "db_attention",
                "db_center_crop", "db_concepts_path", "db_gradient_accumulation_steps", "db_gradient_checkpointing",
-               "db_half_model", "db_hflip", "db_learning_rate", "db_lr_scheduler", "db_lr_warmup_steps",
+               "db_half_model", "db_has_ema", "db_hflip", "db_learning_rate", "db_lr_scheduler", "db_lr_warmup_steps",
                "db_max_grad_norm", "db_max_token_length", "db_max_train_steps", "db_mixed_precision", "db_model_path",
                "db_not_cache_latents", "db_num_train_epochs", "db_pad_tokens", "db_pretrained_vae_name_or_path",
                "db_prior_loss_weight", "db_resolution", "db_revision", "db_sample_batch_size",
                "db_save_embedding_every", "db_save_preview_every", "db_scale_lr", "db_scheduler", "db_src",
-               "db_train_batch_size", "db_train_text_encoder", "db_train_text_encoder_steps",
-               "db_use_8bit_adam", "db_use_concepts", "db_use_cpu",
-               "db_use_ema", "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps",
+               "db_train_batch_size", "db_train_text_encoder", "db_use_8bit_adam", "db_use_concepts", "db_use_cpu",
+               "db_use_ema", "db_v2", "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps",
                "c1_class_negative_prompt", "c1_class_prompt", "c1_class_token", "c1_file_prompt_contents",
                "c1_instance_data_dir", "c1_instance_prompt", "c1_instance_token", "c1_max_steps", "c1_n_save_sample",
                "c1_num_class_images", "c1_sample_seed", "c1_save_guidance_scale", "c1_save_infer_steps",
-               "c1_save_sample_negative_prompt", "c1_save_sample_prompt", "c2_class_data_dir",
+               "c1_save_sample_negative_prompt", "c1_save_sample_prompt", "c1_save_sample_template", "c2_class_data_dir",
                "c2_class_guidance_scale", "c2_class_infer_steps", "c2_class_negative_prompt", "c2_class_prompt",
                "c2_class_token", "c2_file_prompt_contents", "c2_instance_data_dir", "c2_instance_prompt",
                "c2_instance_token", "c2_max_steps", "c2_n_save_sample", "c2_num_class_images", "c2_sample_seed",
                "c2_save_guidance_scale", "c2_save_infer_steps", "c2_save_sample_negative_prompt",
-               "c2_save_sample_prompt", "c3_class_data_dir", "c3_class_guidance_scale", "c3_class_infer_steps",
-               "c3_class_negative_prompt", "c3_class_prompt", "c3_class_token", "c3_file_prompt_contents",
-               "c3_instance_data_dir", "c3_instance_prompt", "c3_instance_token", "c3_max_steps", "c3_n_save_sample",
-               "c3_num_class_images", "c3_sample_seed", "c3_save_guidance_scale", "c3_save_infer_steps",
-               "c3_save_sample_negative_prompt", "c3_save_sample_prompt", "db_status"]
+               "c2_save_sample_prompt", "c2_save_sample_template", "c3_class_data_dir", "c3_class_guidance_scale",
+               "c3_class_infer_steps", "c3_class_negative_prompt", "c3_class_prompt", "c3_class_token",
+               "c3_file_prompt_contents", "c3_instance_data_dir", "c3_instance_prompt", "c3_instance_token",
+               "c3_max_steps", "c3_n_save_sample", "c3_num_class_images", "c3_sample_seed", "c3_save_guidance_scale",
+               "c3_save_infer_steps", "c3_save_sample_negative_prompt", "c3_save_sample_prompt",
+               "c3_save_sample_template", "db_status"]
     output = []
     for key in ui_keys:
         if key in ui_dict:
@@ -498,12 +500,14 @@ def start_training(model_dir: str, imagic_only: bool):
     total_steps = config.revision
     if imagic_only:
         shared.state.textinfo = "Initializing imagic training..."
+        print(shared.state.textinfo)
         from extensions.sd_dreambooth_extension.dreambooth.train_imagic import train_imagic
         mem_record = train_imagic(config, mem_record)
     else:
         shared.state.textinfo = "Initializing dreambooth training..."
+        print(shared.state.textinfo)
         from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
-        config, mem_record = main(config, mem_record)
+        config, mem_record, msg = main(config, mem_record)
         if config.revision != total_steps:
             config.save()
     total_steps = config.revision
@@ -528,7 +532,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
-def save_checkpoint(model_name: str, vae_path: str, total_steps: int, use_half: bool = False):
+def save_checkpoint(model_name: str, total_steps: int):
     print(f"Successfully trained model for a total of {total_steps} steps, converting to ckpt.")
     ckpt_dir = shared.cmd_opts.ckpt_dir
     models_path = os.path.join(paths.models_path, "Stable-diffusion")
@@ -538,5 +542,5 @@ def save_checkpoint(model_name: str, vae_path: str, total_steps: int, use_half: 
         os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path, "dreambooth",
         model_name, "working")
     out_file = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
-    conversion.diff_to_sd(src_path, vae_path, out_file, use_half)
+    conversion.compile_checkpoint(model_name)
     sd_models.list_models()

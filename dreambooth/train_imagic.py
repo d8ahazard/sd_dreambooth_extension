@@ -282,6 +282,8 @@ def train_imagic(args: DreamboothConfig, mem_record):
     def train_loop(pbar, optim):
         loss_avg = AverageMeter()
         for step in pbar:
+            if shared.state.interrupted:
+                break
             shared.state.job_no += 1
             with accelerator.accumulate(unet):
                 noise = torch.randn_like(init_latents)

@@ -24,10 +24,10 @@ import gradio as gr
 import torch
 
 import modules.sd_models
-from modules import paths, shared
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, from_file
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import get_db_models, printm, reload_system_models, \
     unload_system_models
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, from_file
+from modules import paths, shared
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -54,8 +54,7 @@ from diffusers import (
     UNet2DConditionModel
 )
 from diffusers.pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBertConfig, LDMBertModel
-from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
-from transformers import AutoFeatureExtractor, BertTokenizerFast, CLIPTextModel, CLIPTokenizer
+from transformers import BertTokenizerFast, CLIPTextModel, CLIPTokenizer
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -371,7 +370,7 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
     """
     Takes a state dict and a config, and returns a converted checkpoint.
     """
-
+    has_ema = False
     # extract state_dict for UNet
     unet_state_dict = {}
     keys = list(checkpoint.keys())
@@ -379,6 +378,7 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
     if sum(k.startswith("model_ema") for k in keys) > 100:
         print(f"Checkpoint {path} has both EMA and non-EMA weights.")
         if extract_ema:
+            has_ema = True
             print(
                 "In this conversion only the EMA weights are extracted. If you want to instead extract the non-EMA"
                 " weights (useful to continue fine-tuning), please make sure to remove the `--extract_ema` flag."
@@ -529,7 +529,7 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
 
                 new_checkpoint[new_path] = unet_state_dict[old_path]
 
-    return new_checkpoint
+    return new_checkpoint, has_ema
 
 
 def convert_ldm_vae_checkpoint(checkpoint, config):
@@ -541,23 +541,22 @@ def convert_ldm_vae_checkpoint(checkpoint, config):
         if key.startswith(vae_key):
             vae_state_dict[key.replace(vae_key, "")] = checkpoint.get(key)
 
-    new_checkpoint = {}
-    new_checkpoint["encoder.conv_in.weight"] = vae_state_dict["encoder.conv_in.weight"]
-    new_checkpoint["encoder.conv_in.bias"] = vae_state_dict["encoder.conv_in.bias"]
-    new_checkpoint["encoder.conv_out.weight"] = vae_state_dict["encoder.conv_out.weight"]
-    new_checkpoint["encoder.conv_out.bias"] = vae_state_dict["encoder.conv_out.bias"]
-    new_checkpoint["encoder.conv_norm_out.weight"] = vae_state_dict["encoder.norm_out.weight"]
-    new_checkpoint["encoder.conv_norm_out.bias"] = vae_state_dict["encoder.norm_out.bias"]
-    new_checkpoint["decoder.conv_in.weight"] = vae_state_dict["decoder.conv_in.weight"]
-    new_checkpoint["decoder.conv_in.bias"] = vae_state_dict["decoder.conv_in.bias"]
-    new_checkpoint["decoder.conv_out.weight"] = vae_state_dict["decoder.conv_out.weight"]
-    new_checkpoint["decoder.conv_out.bias"] = vae_state_dict["decoder.conv_out.bias"]
-    new_checkpoint["decoder.conv_norm_out.weight"] = vae_state_dict["decoder.norm_out.weight"]
-    new_checkpoint["decoder.conv_norm_out.bias"] = vae_state_dict["decoder.norm_out.bias"]
-    new_checkpoint["quant_conv.weight"] = vae_state_dict["quant_conv.weight"]
-    new_checkpoint["quant_conv.bias"] = vae_state_dict["quant_conv.bias"]
-    new_checkpoint["post_quant_conv.weight"] = vae_state_dict["post_quant_conv.weight"]
-    new_checkpoint["post_quant_conv.bias"] = vae_state_dict["post_quant_conv.bias"]
+    new_checkpoint = {"encoder.conv_in.weight": vae_state_dict["encoder.conv_in.weight"],
+                      "encoder.conv_in.bias": vae_state_dict["encoder.conv_in.bias"],
+                      "encoder.conv_out.weight": vae_state_dict["encoder.conv_out.weight"],
+                      "encoder.conv_out.bias": vae_state_dict["encoder.conv_out.bias"],
+                      "encoder.conv_norm_out.weight": vae_state_dict["encoder.norm_out.weight"],
+                      "encoder.conv_norm_out.bias": vae_state_dict["encoder.norm_out.bias"],
+                      "decoder.conv_in.weight": vae_state_dict["decoder.conv_in.weight"],
+                      "decoder.conv_in.bias": vae_state_dict["decoder.conv_in.bias"],
+                      "decoder.conv_out.weight": vae_state_dict["decoder.conv_out.weight"],
+                      "decoder.conv_out.bias": vae_state_dict["decoder.conv_out.bias"],
+                      "decoder.conv_norm_out.weight": vae_state_dict["decoder.norm_out.weight"],
+                      "decoder.conv_norm_out.bias": vae_state_dict["decoder.norm_out.bias"],
+                      "quant_conv.weight": vae_state_dict["quant_conv.weight"],
+                      "quant_conv.bias": vae_state_dict["quant_conv.bias"],
+                      "post_quant_conv.weight": vae_state_dict["post_quant_conv.weight"],
+                      "post_quant_conv.bias": vae_state_dict["post_quant_conv.bias"]}
 
     # Retrieves the keys for the encoder down blocks only
     num_down_blocks = len({".".join(layer.split(".")[:3]) for layer in vae_state_dict if "encoder.down" in layer})
@@ -738,6 +737,7 @@ def convert_unet_state_dict(unet_state_dict):
     new_state_dict = {v: unet_state_dict[k] for k, v in mapping.items()}
     return new_state_dict
 
+
 vae_conversion_map = [
     # (stable-diffusion, HF Diffusers)
     ("nin_shortcut", "conv_shortcut"),
@@ -814,7 +814,7 @@ def convert_text_enc_state_dict(text_enc_dict):
 
 
 def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type="ddim", new_model_url="",
-                       new_model_token="", model_v2=False):
+                       new_model_token="", extract_ema=False):
     print("Extracting checkpoint...")
     shared.state.job_count = 8
     unload_system_models()
@@ -826,17 +826,15 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
     model_path = config.pretrained_model_name_or_path
     revision = config.revision
     model_scheduler = scheduler_type
-    status = ""
     src = config.src
 
     shared.state.job_no = 0
-    pipe = None
     try:
         if new_model_url != "" and new_model_token != "":
             print(f"Trying to create {new_model_name} from hugginface.co/{new_model_url}")
             pipe = StableDiffusionPipeline.from_pretrained(new_model_url, use_auth_token=new_model_token)
         else:
-            if model_v2:
+            if False:
                 cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "v2-inference.yaml")
                 print(f"Using the v2 config file: {cfg_file}")
             else:
@@ -869,6 +867,9 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
                 print("State dict not found in the usual spot, trying something else.")
                 try:
                     checkpoint = torch.load(checkpoint_info.filename, map_location=map_location)
+                    if "global_step" in checkpoint:
+                        config.revision = checkpoint["global_step"]
+                        config.save()
                     if "state_dict" in checkpoint:
                         checkpoint = checkpoint["state_dict"]
                 except:
@@ -922,8 +923,9 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
             unet_config = create_unet_diffusers_config(original_config)
             shared.state.textinfo = "Created unet config..."
             shared.state.job_no = 3
-            converted_unet_checkpoint = convert_ldm_unet_checkpoint(checkpoint, unet_config, path=checkpoint_path,
-                                                                    extract_ema=False)
+            converted_unet_checkpoint, has_ema = convert_ldm_unet_checkpoint(checkpoint, unet_config,
+                                                                             path=checkpoint_path,
+                                                                             extract_ema=extract_ema)
             shared.state.textinfo = "Converted unet checkpoint..."
             shared.state.job_no = 4
             unet = UNet2DConditionModel(**unet_config)
@@ -944,16 +946,15 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
             if text_model_type == "FrozenCLIPEmbedder":
                 text_model = convert_ldm_clip_checkpoint(checkpoint)
                 tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
-                safety_checker = StableDiffusionSafetyChecker.from_pretrained("CompVis/stable-diffusion-safety-checker")
-                feature_extractor = AutoFeatureExtractor.from_pretrained("CompVis/stable-diffusion-safety-checker")
                 pipe = StableDiffusionPipeline(
                     vae=vae,
                     text_encoder=text_model,
                     tokenizer=tokenizer,
                     unet=unet,
                     scheduler=scheduler,
-                    safety_checker=safety_checker,
-                    feature_extractor=feature_extractor,
+                    safety_checker=None,
+                    feature_extractor=None,
+                    requires_safety_checker=False
                 )
             else:
                 text_config = create_ldm_bert_config(original_config)
@@ -986,7 +987,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
     except:
         pass
     extraction_successful = True
-    required_dirs = ["feature_extractor", "safety_checker", "scheduler", "text_encoder", "tokenizer", "unet", "vae"]
+    required_dirs = ["scheduler", "text_encoder", "tokenizer", "unet", "vae"]
     for r_dir in required_dirs:
         full_path = os.path.join(config.pretrained_model_name_or_path, r_dir)
         if not os.path.exists(full_path):
@@ -1001,8 +1002,8 @@ def extract_checkpoint(new_model_name: str, checkpoint_path: str, scheduler_type
     reload_system_models()
     printm("Extraction completed.", True)
     dirs = get_db_models()
-    return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), model_path, revision, model_scheduler,\
-        status, src
+    return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), model_path, revision, model_scheduler, \
+           src, has_ema, status
 
 
 def compile_checkpoint(model_name):
@@ -1029,7 +1030,7 @@ def compile_checkpoint(model_name):
             "dreambooth", model_name, "working")
         out_file = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
         try:
-            diff_to_sd(src_path, vae_path, out_file, half)
+            diff_to_sd(src_path, vae_path, out_file, config.revision, half)
             shared.state.job_no = 2
             msg = f"Saved checkpoint to {out_file}"
         except Exception as e:
@@ -1042,7 +1043,7 @@ def compile_checkpoint(model_name):
     return msg, ""
 
 
-def diff_to_sd(model_path, vae_path, checkpoint_name, half=False):
+def diff_to_sd(model_path, vae_path, checkpoint_name, revision, half=False):
     unet_path = os.path.join(model_path, "unet", "diffusion_pytorch_model.bin")
     if vae_path == "" or vae_path is None:
         vae_path = os.path.join(model_path, "vae", "diffusion_pytorch_model.bin")
@@ -1065,10 +1066,10 @@ def diff_to_sd(model_path, vae_path, checkpoint_name, half=False):
     text_enc_dict = {"cond_stage_model.transformer." + k: v for k, v in text_enc_dict.items()}
 
     # Put together new checkpoint
-    state_dict = {**unet_state_dict, **vae_state_dict, **text_enc_dict}
+    state_dict = {**unet_state_dict, **text_enc_dict, **vae_state_dict}
     if half:
         state_dict = {k: v.half() for k, v in state_dict.items()}
-    state_dict = {"state_dict": state_dict}
+    state_dict = {"state_dict": state_dict, "global_step": revision}
     torch.save(state_dict, checkpoint_name)
     try:
         del unet_state_dict

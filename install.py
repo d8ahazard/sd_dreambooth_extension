@@ -28,6 +28,8 @@ def check_versions():
         if len(splits) == 2:
             key = splits[0]
             if "torch" not in key:
+                if "diffusers" in key:
+                    key = "diffusers"
                 reqs_dict[key] = splits[1].replace("\n", "").strip()
     if os.name == "nt":
         reqs_dict["torch"] = "1.12.1+cu116"
@@ -41,12 +43,12 @@ def check_versions():
             check_available = importlib.util.find_spec(check) is not None
             if check_available:
                 check_ver = importlib_metadata.version(check)
-            if check in reqs_dict:
-                req_version = reqs_dict[check]
-                if str(check_ver) == str(req_version):
-                    status = "[+]"
-                else:
-                    status = "[!]"
+                if check in reqs_dict:
+                    req_version = reqs_dict[check]
+                    if str(check_ver) == str(req_version):
+                        status = "[+]"
+                    else:
+                        status = "[!]"
         except importlib_metadata.PackageNotFoundError:
             check_available = False
         if not check_available:

@@ -37,6 +37,12 @@ def on_ui_tabs():
                 with gr.Row():
                     gr.HTML(value="Model Revision:")
                     db_revision = gr.HTML(elem_id="db_revision")
+                with gr.Row(visible=False):
+                    gr.HTML(value="V2 Model:")
+                    db_v2 = gr.HTML(elem_id="db_v2")
+                with gr.Row():
+                    gr.HTML(value="Has EMA:")
+                    db_has_ema = gr.HTML(elem_id="db_has_ema")
                 with gr.Row():
                     gr.HTML(value="Source Checkpoint:")
                     db_src = gr.HTML()
@@ -55,6 +61,7 @@ def on_ui_tabs():
                         db_new_model_src = gr.Dropdown(label='Source Checkpoint',
                                                        choices=sorted(sd_models.checkpoints_list.keys()))
                         db_new_model_v2 = gr.Checkbox(label='V2 Checkpoint', value=False, visible=False)
+                        db_new_model_extract_ema = gr.Checkbox(label='Extract EMA Weights', value=False)
                     db_new_model_scheduler = gr.Dropdown(label='Scheduler', choices=["pndm", "lms", "euler",
                                                                                      "euler-ancestral", "dpm", "ddim"],
                                                          value="euler-ancestral")
@@ -77,8 +84,6 @@ def on_ui_tabs():
                             db_save_preview_every = gr.Number(
                                 label='Save Preview(s) Frequency', value=500,
                                 precision=0)
-                            db_train_text_encoder_steps = gr.Number(
-                                label='Stop Training Text Encoder After', value=-1, precision=0)
 
                         with gr.Column():
                             gr.HTML(value="Learning Rate")
@@ -152,7 +157,7 @@ def on_ui_tabs():
                         with gr.Tab("Concept 1"):
                             c1_max_steps, \
                             c1_instance_data_dir, c1_class_data_dir, c1_file_prompt_contents, c1_instance_prompt, \
-                            c1_class_prompt, c1_num_class_images, c1_save_sample_prompt, c1_instance_token, \
+                            c1_class_prompt, c1_num_class_images, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token, \
                             c1_class_token, c1_num_class_images, c1_class_negative_prompt, c1_class_guidance_scale, \
                             c1_class_infer_steps, c1_save_sample_negative_prompt, c1_n_save_sample, c1_sample_seed, \
                             c1_save_guidance_scale, c1_save_infer_steps = build_concept_panel()
@@ -160,7 +165,7 @@ def on_ui_tabs():
                         with gr.Tab("Concept 2"):
                             c2_max_steps, \
                             c2_instance_data_dir, c2_class_data_dir, c2_file_prompt_contents, c2_instance_prompt, \
-                            c2_class_prompt, c2_num_class_images, c2_save_sample_prompt, c2_instance_token, \
+                            c2_class_prompt, c2_num_class_images, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token, \
                             c2_class_token, c2_num_class_images, c2_class_negative_prompt, c2_class_guidance_scale, \
                             c2_class_infer_steps, c2_save_sample_negative_prompt, c2_n_save_sample, c2_sample_seed, \
                             c2_save_guidance_scale, c2_save_infer_steps = build_concept_panel()
@@ -168,7 +173,7 @@ def on_ui_tabs():
                         with gr.Tab("Concept 3"):
                             c3_max_steps, \
                             c3_instance_data_dir, c3_class_data_dir, c3_file_prompt_contents, c3_instance_prompt, \
-                            c3_class_prompt, c3_num_class_images, c3_save_sample_prompt, c3_instance_token, \
+                            c3_class_prompt, c3_num_class_images, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token, \
                             c3_class_token, c3_num_class_images, c3_class_negative_prompt, c3_class_guidance_scale, \
                             c3_class_infer_steps, c3_save_sample_negative_prompt, c3_n_save_sample, c3_sample_seed, \
                             c3_save_guidance_scale, c3_save_infer_steps = build_concept_panel()
@@ -229,7 +234,6 @@ def on_ui_tabs():
                 db_src,
                 db_train_batch_size,
                 db_train_text_encoder,
-                db_train_text_encoder_steps,
                 db_use_8bit_adam,
                 db_use_concepts,
                 db_use_cpu,
@@ -252,6 +256,7 @@ def on_ui_tabs():
                 c1_save_infer_steps,
                 c1_save_sample_negative_prompt,
                 c1_save_sample_prompt,
+                c1_save_sample_template,
                 c2_class_data_dir,
                 c2_class_guidance_scale,
                 c2_class_infer_steps,
@@ -270,6 +275,7 @@ def on_ui_tabs():
                 c2_save_infer_steps,
                 c2_save_sample_negative_prompt,
                 c2_save_sample_prompt,
+                c2_save_sample_template,
                 c3_class_data_dir,
                 c3_class_guidance_scale,
                 c3_class_infer_steps,
@@ -287,7 +293,8 @@ def on_ui_tabs():
                 c3_save_guidance_scale,
                 c3_save_infer_steps,
                 c3_save_sample_negative_prompt,
-                c3_save_sample_prompt
+                c3_save_sample_prompt,
+                c3_save_sample_template
             ]
         )
 
@@ -307,6 +314,7 @@ def on_ui_tabs():
                 db_gradient_accumulation_steps,
                 db_gradient_checkpointing,
                 db_half_model,
+                db_has_ema,
                 db_hflip,
                 db_learning_rate,
                 db_lr_scheduler,
@@ -331,11 +339,11 @@ def on_ui_tabs():
                 db_src,
                 db_train_batch_size,
                 db_train_text_encoder,
-                db_train_text_encoder_steps,
                 db_use_8bit_adam,
                 db_use_concepts,
                 db_use_cpu,
                 db_use_ema,
+                db_v2,
                 c1_class_data_dir,
                 c1_class_guidance_scale,
                 c1_class_infer_steps,
@@ -354,6 +362,7 @@ def on_ui_tabs():
                 c1_save_infer_steps,
                 c1_save_sample_negative_prompt,
                 c1_save_sample_prompt,
+                c1_save_sample_template,
                 c2_class_data_dir,
                 c2_class_guidance_scale,
                 c2_class_infer_steps,
@@ -372,6 +381,7 @@ def on_ui_tabs():
                 c2_save_infer_steps,
                 c2_save_sample_negative_prompt,
                 c2_save_sample_prompt,
+                c2_save_sample_template,
                 c3_class_data_dir,
                 c3_class_guidance_scale,
                 c3_class_infer_steps,
@@ -390,6 +400,7 @@ def on_ui_tabs():
                 c3_save_infer_steps,
                 c3_save_sample_negative_prompt,
                 c3_save_sample_prompt,
+                c3_save_sample_template,
                 db_status
             ]
         )
@@ -503,7 +514,7 @@ def on_ui_tabs():
         )
 
         db_create_model.click(
-            fn=wrap_gradio_gpu_call(conversion.extract_checkpoint, extra_outputs=[gr.update()]),
+            fn=wrap_gradio_gpu_call(conversion.extract_checkpoint),
             _js="db_start_progress",
             inputs=[
                 db_new_model_name,
@@ -511,15 +522,10 @@ def on_ui_tabs():
                 db_new_model_scheduler,
                 db_new_model_url,
                 db_new_model_token,
-                db_new_model_v2
+                db_new_model_extract_ema
             ],
             outputs=[
-                db_model_name,
-                db_model_path,
-                db_revision,
-                db_scheduler,
-                db_status,
-                db_src
+                db_model_name, db_model_path, db_revision, db_scheduler, db_src, db_has_ema, db_status
             ]
         )
 
@@ -568,6 +574,7 @@ def build_concept_panel():
                                         placeholder="Leave blank to use instance prompt. "
                                                     "Optionally use [filewords] to base "
                                                     "sample captions on instance images.")
+        sample_template = gr.Textbox(label="Sample Prompt Template File", placeholder="Enter the path to a txt file containing sample prompts.")
         save_sample_negative_prompt = gr.Textbox(label="Sample Image Negative Prompt")
 
     with gr.Column():
@@ -594,7 +601,7 @@ def build_concept_panel():
         save_infer_steps = gr.Number(label="Sample Steps", value=40, min=10, max=200, precision=0)
     return [max_steps, instance_data_dir, class_data_dir, file_prompt_contents, instance_prompt, class_prompt,
             num_class_images,
-            save_sample_prompt, instance_token, class_token, num_class_images, class_negative_prompt,
+            save_sample_prompt, sample_template, instance_token, class_token, num_class_images, class_negative_prompt,
             class_guidance_scale, class_infer_steps, save_sample_negative_prompt, n_save_sample, sample_seed,
             save_guidance_scale, save_infer_steps]
 
