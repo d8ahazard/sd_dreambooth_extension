@@ -431,7 +431,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 
 
 def main(args: DreamboothConfig, memory_record):
-    global with_prior
+    global with_prior, text_encoder
     text_encoder = None
     args.tokenizer_name = None
     global mem_record
