@@ -1063,25 +1063,13 @@ def main(args: DreamboothConfig, memory_record):
                     if training_complete:
                         save_img = True
                         save_model = True
+                        
                     if args.train_text_encoder and args.train_text_encoder_steps > -1:
                         if args.train_text_encoder_steps <= args.revision and not freeze_weights:
                             # Actually stop training the text encoder?
                             freeze_weights = True
                             text_encoder.requires_grad_(False)
 
-                            # If we're not already going to save the model, just save the encoder here
-                            if not save_img and not save_model and accelerator.is_main_process:
-                                logger.info(" Freezing the text_encoder...")
-                                out_dir = os.path.join(args.pretrained_model_name_or_path, "text_encoder")
-                                pipeline = StableDiffusionPipeline.from_pretrained(
-                                    args.pretrained_model_name_or_path,
-                                    unet=accelerator.unwrap_model(unet),
-                                    text_encoder=accelerator.unwrap_model(text_encoder),
-                                )
-                                pipeline.to(accelerator.device)
-                                pipeline.text_encoder.save_pretrained(out_dir)
-                                del pipeline
-                                cleanup_memory(keep_encoder=True)
                     if save_img or save_model:
                         save_weights()
                         args.save()
