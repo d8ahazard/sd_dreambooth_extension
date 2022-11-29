@@ -738,7 +738,6 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
             del td
         if tdl is not None:
             del tdl
-        cleanup()
 
         if enc_vae is None:
             enc_vae = create_vae()
@@ -780,7 +779,7 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda x: x, shuffle=True)
         if enc_vae is not None:
             del enc_vae
-        cleanup()
+            cleanup()
         return dataset, dataloader
 
     # Store our original uncached dataset for preview generation
@@ -792,7 +791,7 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
-    if args.max_train_steps is None:
+    if args.max_train_steps is None or args.max_train_steps < 1:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
         overrode_max_train_steps = True
 

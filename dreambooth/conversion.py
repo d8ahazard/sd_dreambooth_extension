@@ -1069,7 +1069,7 @@ def diff_to_sd(model_path, vae_path, checkpoint_name, revision, half=False):
     state_dict = {**unet_state_dict, **text_enc_dict, **vae_state_dict}
     if half:
         state_dict = {k: v.half() for k, v in state_dict.items()}
-    state_dict = {"state_dict": state_dict, "global_step": revision}
+    state_dict = {"global_step": revision, "state_dict": state_dict}
     torch.save(state_dict, checkpoint_name)
     try:
         del unet_state_dict
