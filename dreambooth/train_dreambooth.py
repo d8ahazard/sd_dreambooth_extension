@@ -648,13 +648,13 @@ def main(args: DreamboothConfig, memory_record):
 
     noise_scheduler = DDPMScheduler.from_config(args.pretrained_model_name_or_path, subfolder="scheduler")
 
-    def cleanup_memory():
+    def cleanup_memory(keep_encoder=False):
         global text_encoder
         try:
             printm("CLEANUP: ")
             if unet:
                 del unet
-            if text_encoder:
+            if text_encoder and not keep_encoder:
                 del text_encoder
                 text_encoder = None
             if tokenizer:
@@ -857,11 +857,11 @@ def main(args: DreamboothConfig, memory_record):
     logger.info(f"  Total optimization steps = {args.max_train_steps}")
     printm(f"  Training settings: {stats}")
 
-    def save_weights(freeze_encoder=False):
+    def save_weights():
         global text_encoder
         # Create the pipeline using the trained modules and save it.
         if accelerator.is_main_process:
-            if (args.train_text_encoder or freeze_encoder) and text_encoder is not None:
+            if args.train_text_encoder and text_encoder is not None:
                 text_enc_model = accelerator.unwrap_model(text_encoder)
             else:
                 text_enc_model = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path,
@@ -955,9 +955,6 @@ def main(args: DreamboothConfig, memory_record):
             del s_pipeline
             del scheduler
             del text_enc_model
-            if freeze_encoder and text_encoder is not None:
-                del text_encoder
-                text_encoder = None
             cleanup()
 
     # Only show the progress bar once on each machine.
@@ -971,6 +968,7 @@ def main(args: DreamboothConfig, memory_record):
     loss_avg = AverageMeter()
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
     training_complete = False
+    freeze_weights = False
     for epoch in range(args.num_train_epochs):
         if training_complete:
             break
@@ -1058,7 +1056,6 @@ def main(args: DreamboothConfig, memory_record):
                 global_step += 1
                 args.revision += 1
                 shared.state.job_no = global_step
-                freeze_weights = False
                 training_complete = global_step >= args.max_train_steps or shared.state.interrupted
                 if global_step > 0:
                     save_img = args.save_preview_every and not global_step % args.save_preview_every
@@ -1067,10 +1064,11 @@ def main(args: DreamboothConfig, memory_record):
                         save_img = True
                         save_model = True
                     if args.train_text_encoder and args.train_text_encoder_steps > -1:
-                        if args.train_text_encoder_steps <= args.revision:
+                        if args.train_text_encoder_steps <= args.revision and not freeze_weights:
                             # Actually stop training the text encoder?
-                            args.train_text_encoder = False
                             freeze_weights = True
+                            text_encoder.requires_grad_(False)
+
                             # If we're not already going to save the model, just save the encoder here
                             if not save_img and not save_model and accelerator.is_main_process:
                                 logger.info(" Freezing the text_encoder...")
@@ -1083,12 +1081,9 @@ def main(args: DreamboothConfig, memory_record):
                                 pipeline.to(accelerator.device)
                                 pipeline.text_encoder.save_pretrained(out_dir)
                                 del pipeline
-                                if text_encoder is not None:
-                                    del text_encoder
-                                    text_encoder = None
-                                cleanup_memory()
+                                cleanup_memory(keep_encoder=True)
                     if save_img or save_model:
-                        save_weights(freeze_weights)
+                        save_weights()
                         args.save()
                 if shared.state.interrupted:
                     training_complete = True
