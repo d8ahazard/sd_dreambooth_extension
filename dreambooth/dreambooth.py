@@ -65,8 +65,8 @@ def generate_sample_img(model_dir: str):
             torch_dtype=torch.float16,
             revision=config.revision,
             safety_checker=None,
-			feature_extractor=None,
-			requires_safety_checker=False
+            feature_extractor=None,
+            requires_safety_checker=False
         )
         pipeline = pipeline.to(shared.device)
         pil_features = list_features()
@@ -204,64 +204,78 @@ def training_wizard(
 
         # Count the total number of images in all datasets
         total_images = 0
-        image_counts = []
+        counts_list = []
         max_images = 0
+
+        # Set "base" value, which is 100 steps/image at LR of .000002
+        if is_person:
+            lr_scale = .000002 / config.learning_rate
+            class_mult = total_images * 10
+        else:
+            class_mult = 0
+            lr_scale = .0000025 / config.learning_rate
+        step_mult = 100 * lr_scale
 
         for concept in concepts:
             image_count = 0
-            if not os.path.exists(concept["instance_data_dir"]):
+            if not os.path.exists(concept.instance_data_dir):
                 print("Nonexistent instance directory.")
             else:
-                for x in Path(concept["instance_data_dir"]).iterdir():
+                for x in Path(concept.instance_data_dir).iterdir():
                     if is_image(x, pil_feats):
                         total_images += 1
                         image_count += 1
-            if image_count > max_images:
-                max_images = image_count
-            image_counts.append(image_count)
+                print(f"Image count in {concept.instance_data_dir} is {image_count}")
+                if image_count > max_images:
+                    max_images = image_count
+                c_dict = {
+                    "concept": concept,
+                    "images": image_count,
+                    "steps": round(image_count * step_mult, -2),
+                    "classifiers": round(image_count * class_mult, -2)
+                }
+                counts_list.append(c_dict)
 
         if total_images == 0:
             print("No training images found, can't do math.")
             return "No training images found, can't do math.", 1000, -1, 0, -1, 0, -1, 0
-
-        # Set "base" value
-        magick_number = 50000000
-        required_steps = round(total_images * magick_number * config.learning_rate, -2)
-        if is_person:
-            num_class_images = round(total_images * 12, -1)
+        req_steps = step_mult * total_images
+        if total_steps >= req_steps:
+            req_steps = 0
         else:
-            num_class_images = 0
-            required_steps = round(required_steps * 1.5, -2)
+            req_steps -= total_steps
+        c1_steps = -1
+        c2_steps = -1
+        c3_steps = -1
+        c1_class = 0
+        c2_class = 0
+        c3_class = 0
+        s_list = [c1_steps, c2_steps, c3_steps]
+        c_list = [c1_class, c2_class, c3_class]
+        for x in range(3):
+            if len(counts_list) < x:
+                c_dict = counts_list[x]
+                c_images = c_dict["images"]
+                c_weight = c_images / total_images
+                steps = c_dict["steps"]
+                if c_images == max_images:
+                    steps = -1
+                if req_steps * c_weight >= steps:
+                    steps = 0
+                c_dict["steps"] = steps
+                counts_list[x] = c_dict
+                s_list[x] = steps
+                c_list[x] = c_dict["classifiers"]
+        c1_steps = s_list[0]
+        c2_steps = s_list[1]
+        c3_steps = s_list[2]
+        c1_class = c_list[0]
+        c2_class = c_list[1]
+        c3_class = c_list[2]
 
-        c_idx = 0
-
-        for _ in concepts:
-            num_images = image_counts[c_idx]
-            if num_images == max_images:
-                c_steps = -1
-            else:
-                c_steps = round(num_images * magick_number * config.learning_rate, -2)
-            if is_person:
-                c_class_images = round(num_images * 12, -1)
-            else:
-                c_class_images = 0
-            if c_idx < 3:
-                class_steps.append(c_steps)
-                class_concepts.append(c_class_images)
-            c_idx += 1
-        c1_steps = class_steps[0] if len(class_steps) > 0 else -1
-        c2_steps = class_steps[1] if len(class_steps) > 1 else -1
-        c3_steps = class_steps[2] if len(class_steps) > 2 else -1
-        c1_class = class_concepts[0] if len(class_concepts) > 0 else 0
-        c2_class = class_concepts[1] if len(class_concepts) > 1 else 0
-        c3_class = class_concepts[2] if len(class_concepts) > 2 else 0
-        # Ensure we don't over-train?
-        if total_steps >= required_steps:
-            required_steps = 0
-        else:
-            required_steps = required_steps - total_steps
-        status = f"Wizard completed, using {required_steps} lifetime steps and {num_class_images} class images."
-    return status, required_steps, c1_steps, c1_class, c2_steps, c2_class, c3_steps, c3_class
+        status = f"Wizard results: {counts_list}"
+        print(status)
+    return status, req_steps, c1_steps, c1_class, c2_steps, c2_class, c3_steps, c3_class
 
 
 def performance_wizard():
@@ -324,7 +338,7 @@ def performance_wizard():
     if use_cpu:
         msg += "<br>Detected less than 10GB of VRAM, setting CPU training to true."
     return status, attention, gradient_checkpointing, mixed_precision, not_cache_latents, sample_batch_size, \
-        train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema
+           train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema
 
 
 def printm(msg="", reset=False):
@@ -427,7 +441,8 @@ def load_params(model_dir):
                "c1_class_negative_prompt", "c1_class_prompt", "c1_class_token", "c1_file_prompt_contents",
                "c1_instance_data_dir", "c1_instance_prompt", "c1_instance_token", "c1_max_steps", "c1_n_save_sample",
                "c1_num_class_images", "c1_sample_seed", "c1_save_guidance_scale", "c1_save_infer_steps",
-               "c1_save_sample_negative_prompt", "c1_save_sample_prompt", "c1_save_sample_template", "c2_class_data_dir",
+               "c1_save_sample_negative_prompt", "c1_save_sample_prompt", "c1_save_sample_template",
+               "c2_class_data_dir",
                "c2_class_guidance_scale", "c2_class_infer_steps", "c2_class_negative_prompt", "c2_class_prompt",
                "c2_class_token", "c2_file_prompt_contents", "c2_instance_data_dir", "c2_instance_prompt",
                "c2_instance_token", "c2_max_steps", "c2_n_save_sample", "c2_num_class_images", "c2_sample_seed",

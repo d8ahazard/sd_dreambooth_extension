@@ -60,7 +60,7 @@ def on_ui_tabs():
                     with gr.Row() as local_row:
                         db_new_model_src = gr.Dropdown(label='Source Checkpoint',
                                                        choices=sorted(sd_models.checkpoints_list.keys()))
-                        db_new_model_v2 = gr.Checkbox(label='V2 Checkpoint', value=False, visible=False)
+                        db_new_model_v2 = gr.Checkbox(label='V2 Checkpoint', value=False)
                         db_new_model_extract_ema = gr.Checkbox(label='Extract EMA Weights', value=False)
                     db_new_model_scheduler = gr.Dropdown(label='Scheduler', choices=["pndm", "lms", "euler",
                                                                                      "euler-ancestral", "dpm", "ddim"],
@@ -522,10 +522,11 @@ def on_ui_tabs():
                 db_new_model_scheduler,
                 db_new_model_url,
                 db_new_model_token,
-                db_new_model_extract_ema
+                db_new_model_extract_ema,
+                db_new_model_v2
             ],
             outputs=[
-                db_model_name, db_model_path, db_revision, db_scheduler, db_src, db_has_ema, db_status
+                db_model_name, db_model_path, db_revision, db_scheduler, db_src, db_has_ema, db_v2, db_status
             ]
         )
 

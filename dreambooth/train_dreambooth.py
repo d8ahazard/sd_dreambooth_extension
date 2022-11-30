@@ -16,13 +16,13 @@ import torch.nn.functional as F
 import torch.utils.checkpoint
 from accelerate import Accelerator
 from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, EulerAncestralDiscreteScheduler, \
-    StableDiffusionPipeline, UNet2DConditionModel
+    DiffusionPipeline, UNet2DConditionModel
 from diffusers.optimization import get_scheduler
 from diffusers.utils import logging as dl
 from huggingface_hub import HfFolder, whoami
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
-from transformers import CLIPTextModel, CLIPTokenizer
+from transformers import AutoTokenizer, PretrainedConfig
 
 from extensions.sd_dreambooth_extension.dreambooth import xattention
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
@@ -55,6 +55,25 @@ logger.addHandler(console)
 logger.setLevel(logging.DEBUG)
 dl.set_verbosity_error()
 
+
+def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision):
+    text_encoder_config = PretrainedConfig.from_pretrained(
+        pretrained_model_name_or_path,
+        subfolder="text_encoder",
+        revision=revision,
+    )
+    model_class = text_encoder_config.architectures[0]
+
+    if model_class == "text_encoder_cls":
+        from transformers import text_encoder_cls
+
+        return text_encoder_cls
+    elif model_class == "RobertaSeriesModelWithTransformation":
+        from diffusers.pipelines.alt_diffusion.modeling_roberta_series import RobertaSeriesModelWithTransformation
+
+        return RobertaSeriesModelWithTransformation
+    else:
+        raise ValueError(f"{model_class} is not supported.")
 
 def parse_args(input_args=None):
     parser = argparse.ArgumentParser(description="Simple example of a training script.")
@@ -498,7 +517,7 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
 
                 torch_dtype = torch.float16 if accelerator.device.type == "cuda" else torch.float32
                 if concept_pipeline is None:
-                    concept_pipeline = StableDiffusionPipeline.from_pretrained(
+                    concept_pipeline = DiffusionPipeline.from_pretrained(
                         args.pretrained_model_name_or_path,
                         vae=AutoencoderKL.from_pretrained(
                             args.pretrained_vae_name_or_path or args.pretrained_model_name_or_path,
@@ -568,19 +587,21 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
 
     # Load the tokenizer
     if args.tokenizer_name:
-        tokenizer = CLIPTokenizer.from_pretrained(
+        tokenizer = AutoTokenizer.from_pretrained(
             args.tokenizer_name,
             revision=args.revision,
         )
     else:
-        tokenizer = CLIPTokenizer.from_pretrained(
+        tokenizer = AutoTokenizer.from_pretrained(
             args.pretrained_model_name_or_path,
             subfolder="tokenizer",
             revision=args.revision,
         )
 
+    text_encoder_cls = import_model_class_from_model_name_or_path(args.pretrained_model_name_or_path, args.revision)
+
     # Load models and create wrapper for stable diffusion
-    text_encoder = CLIPTextModel.from_pretrained(
+    text_encoder = text_encoder_cls.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="text_encoder",
         revision=args.revision,
@@ -860,14 +881,14 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
             if args.train_text_encoder:
                 text_enc_model = accelerator.unwrap_model(text_encoder)
             else:
-                text_enc_model = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path,
-                                                               subfolder="text_encoder", revision=args.revision)
+                encoder_cls = import_model_class_from_model_name_or_path(args.pretrained_model_name_or_path, args.revision)
+                text_enc_model = encoder_cls.from_pretrained(args.pretrained_model_name_or_path, revision=args.revision)
             scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
                                       clip_sample=False, set_alpha_to_one=False)
             if args.use_ema:
                 ema_unet.store(unet.parameters())
                 ema_unet.copy_to(unet.parameters())
-            s_pipeline = StableDiffusionPipeline.from_pretrained(
+            s_pipeline = DiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
                 unet=accelerator.unwrap_model(unet),
                 text_encoder=text_enc_model,
@@ -989,9 +1010,9 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                     noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
                     # Get the target for loss depending on the prediction type
-                    # if noise_scheduler.config.prediction_type == "v_prediction":
-                    #    noise_scheduler.get_velocity = xattention.get_velocity
-                    #    noise = noise_scheduler.get_velocity(latents, noise, timesteps)
+                    if noise_scheduler.config.prediction_type == "v_prediction":
+                        noise = noise_scheduler.get_velocity(latents, noise, timesteps)
+
                     concept_index = train_dataset.current_concept
                     concept = args.concepts_list[concept_index]
                     if concept.num_class_images > 0:

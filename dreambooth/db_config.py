@@ -4,6 +4,7 @@ import traceback
 
 from modules import images, shared
 
+
 def sanitize_name(name):
     return "".join(x for x in name if (x.isalnum() or x in "._- "))
 
@@ -110,6 +111,7 @@ class DreamboothConfig:
                  pretrained_model_name_or_path="",
                  concepts_list=None,
                  v2=False,
+                 has_ema=False,
                  **kwargs
                  ):
         if revision == "" or revision is None:
@@ -164,6 +166,7 @@ class DreamboothConfig:
         self.use_cpu = use_cpu
         self.use_ema = use_ema
         self.v2 = v2
+        self.has_ema = has_ema
 
         if concepts_list is None:
             if self.use_concepts:
@@ -182,7 +185,8 @@ class DreamboothConfig:
             else:
                 concept1 = Concept(c1_max_steps, c1_instance_data_dir, c1_class_data_dir, c1_file_prompt_contents,
                                    c1_instance_prompt,
-                                   c1_class_prompt, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token, c1_class_token,
+                                   c1_class_prompt, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token,
+                                   c1_class_token,
                                    c1_num_class_images, c1_class_negative_prompt, c1_class_guidance_scale,
                                    c1_class_infer_steps,
                                    c1_save_sample_negative_prompt, c1_n_save_sample, c1_sample_seed,
@@ -191,7 +195,8 @@ class DreamboothConfig:
 
                 concept2 = Concept(c2_max_steps, c2_instance_data_dir, c2_class_data_dir, c2_file_prompt_contents,
                                    c2_instance_prompt,
-                                   c2_class_prompt, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token, c2_class_token,
+                                   c2_class_prompt, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token,
+                                   c2_class_token,
                                    c2_num_class_images, c2_class_negative_prompt, c2_class_guidance_scale,
                                    c2_class_infer_steps,
                                    c2_save_sample_negative_prompt, c2_n_save_sample, c2_sample_seed,
@@ -200,7 +205,8 @@ class DreamboothConfig:
 
                 concept3 = Concept(c3_max_steps, c3_instance_data_dir, c3_class_data_dir, c3_file_prompt_contents,
                                    c3_instance_prompt,
-                                   c3_class_prompt, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token, c3_class_token,
+                                   c3_class_prompt, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token,
+                                   c3_class_token,
                                    c3_num_class_images, c3_class_negative_prompt, c3_class_guidance_scale,
                                    c3_class_infer_steps,
                                    c3_save_sample_negative_prompt, c3_n_save_sample, c3_sample_seed,
@@ -223,7 +229,6 @@ class DreamboothConfig:
         else:
             if len(concepts_list):
                 self.concepts_list = concepts_list
-
 
     def save(self):
         """
@@ -266,7 +271,8 @@ def from_file(model_name):
         with open(config_file, 'r') as openfile:
             config_dict = json.load(openfile)
             concept_keys = ["instance_data_dir", "class_data_dir", "file_prompt_contents", "instance_prompt",
-                            "class_prompt", "save_sample_prompt", "save_sample_template", "instance_token", "class_token", "num_class_images",
+                            "class_prompt", "save_sample_prompt", "save_sample_template", "instance_token",
+                            "class_token", "num_class_images",
                             "class_negative_prompt", "class_guidance_scale", "class_infer_steps",
                             "save_sample_negative_prompt", "n_save_sample", "sample_seed", "save_guidance_scale",
                             "save_infer_steps"]
@@ -350,7 +356,8 @@ class Concept(dict):
             self.instance_prompt = input_dict["instance_prompt"]
             self.class_prompt = input_dict["class_prompt"]
             self.save_sample_prompt = input_dict["save_sample_prompt"]
-            self.save_sample_template = input_dict["save_sample_template"] if "save_sample_template" in input_dict else ""
+            self.save_sample_template = input_dict[
+                "save_sample_template"] if "save_sample_template" in input_dict else ""
             self.instance_token = input_dict["instance_token"]
             self.class_token = input_dict["class_token"]
             self.num_class_images = input_dict["num_class_images"]
