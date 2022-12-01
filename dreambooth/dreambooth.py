@@ -239,7 +239,7 @@ def training_wizard(
         if total_images == 0:
             print("No training images found, can't do math.")
             return "No training images found, can't do math.", 1000, -1, 0, -1, 0, -1, 0
-        req_steps = step_mult * total_images
+        req_steps = round(step_mult * total_images, -2)
         if total_steps >= req_steps:
             req_steps = 0
         else:
@@ -253,14 +253,15 @@ def training_wizard(
         s_list = [c1_steps, c2_steps, c3_steps]
         c_list = [c1_class, c2_class, c3_class]
         for x in range(3):
-            if len(counts_list) < x:
+            if x < len(counts_list):
                 c_dict = counts_list[x]
                 c_images = c_dict["images"]
                 c_weight = c_images / total_images
                 steps = c_dict["steps"]
+                print(f"Steps, req steps, cweight: {steps}, {req_steps}, {c_weight}")
                 if c_images == max_images:
                     steps = -1
-                if req_steps * c_weight >= steps:
+                if total_steps >= req_steps * c_weight:
                     steps = 0
                 c_dict["steps"] = steps
                 counts_list[x] = c_dict
@@ -456,7 +457,10 @@ def load_params(model_dir):
     output = []
     for key in ui_keys:
         if key in ui_dict:
-            output.append(ui_dict[key])
+            if key == "db_v2" or key == "db_has_ema":
+                output.append("True" if ui_dict[key] else "False")
+            else:
+                output.append(ui_dict[key])
         else:
             output.append(None)
     print(f"Returning {output}")

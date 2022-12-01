@@ -18,19 +18,19 @@ from accelerate import Accelerator
 from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, EulerAncestralDiscreteScheduler, \
     DiffusionPipeline, UNet2DConditionModel
 from diffusers.optimization import get_scheduler
+from diffusers.training_utils import EMAModel
 from diffusers.utils import logging as dl
 from huggingface_hub import HfFolder, whoami
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
-from transformers import AutoTokenizer, PretrainedConfig
+from transformers import AutoTokenizer, PretrainedConfig, CLIPTextModel
 
 from extensions.sd_dreambooth_extension.dreambooth import xattention
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import save_checkpoint, list_features, \
     is_image, printm, cleanup, sanitize_name
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, EMAModel, \
-    encode_hidden_state
+from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, encode_hidden_state
 from modules import shared
 
 # Custom stuff
@@ -59,7 +59,6 @@ dl.set_verbosity_error()
 def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision):
     text_encoder_config = PretrainedConfig.from_pretrained(
         pretrained_model_name_or_path,
-        subfolder="text_encoder",
         revision=revision,
     )
     model_class = text_encoder_config.architectures[0]
@@ -74,6 +73,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
         return RobertaSeriesModelWithTransformation
     else:
         raise ValueError(f"{model_class} is not supported.")
+
 
 def parse_args(input_args=None):
     parser = argparse.ArgumentParser(description="Simple example of a training script.")
@@ -499,11 +499,15 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
         args.train_text_encoder = False
 
     concept_pipeline = None
+    c_idx = 0
     for concept in args.concepts_list:
         text_getter = FilenameTextGetter()
         with_prior = concept.num_class_images > 0
         if with_prior:
             class_images_dir = Path(concept["class_data_dir"])
+            if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:
+                class_images_dir = os.path.join(args.model_dir, f"classifiers_{c_idx}")
+                print(f"Class image dir is not set, defaulting to {class_images_dir}")
             class_images_dir.mkdir(parents=True, exist_ok=True)
             cur_class_images = 0
             iterfiles = 0
@@ -555,6 +559,8 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                                                   guidance_scale=concept.class_guidance_scale,
                                                   scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
                                                                                             beta_end=0.012),
+                                                  height=args.resolution,
+                                                  width=args.resolution,
                                                   negative_prompt=concept.class_negative_prompt,
                                                   num_images_per_prompt=args.sample_batch_size).images
 
@@ -580,7 +586,7 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                             pbar.update()
                     del pbar
                 del sample_dataset
-
+        c_idx += 1
     del concept_pipeline
     del text_getter
     cleanup()
@@ -593,15 +599,12 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
         )
     else:
         tokenizer = AutoTokenizer.from_pretrained(
-            args.pretrained_model_name_or_path,
-            subfolder="tokenizer",
+            os.path.join(args.pretrained_model_name_or_path, "tokenizer"),
             revision=args.revision,
         )
 
-    text_encoder_cls = import_model_class_from_model_name_or_path(args.pretrained_model_name_or_path, args.revision)
-
     # Load models and create wrapper for stable diffusion
-    text_encoder = text_encoder_cls.from_pretrained(
+    text_encoder = CLIPTextModel.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="text_encoder",
         revision=args.revision,
@@ -825,8 +828,7 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
 
     # create ema, fix OOM
     if args.use_ema:
-        ema_unet = EMAModel(unet.parameters())
-        ema_unet.to(accelerator.device, dtype=weight_dtype)
+        ema_unet = EMAModel(unet, inv_gamma=1.0, power=3 / 4, max_value=0.9999, device=accelerator.device)
         if args.train_text_encoder and text_encoder is not None:
             unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
                 unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler
@@ -881,16 +883,15 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
             if args.train_text_encoder:
                 text_enc_model = accelerator.unwrap_model(text_encoder)
             else:
-                encoder_cls = import_model_class_from_model_name_or_path(args.pretrained_model_name_or_path, args.revision)
-                text_enc_model = encoder_cls.from_pretrained(args.pretrained_model_name_or_path, revision=args.revision)
+                text_enc_model = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path,
+                                                               subfolder="text_encoder",
+                                                               revision=args.revision)
             scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
                                       clip_sample=False, set_alpha_to_one=False)
-            if args.use_ema:
-                ema_unet.store(unet.parameters())
-                ema_unet.copy_to(unet.parameters())
+
             s_pipeline = DiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
-                unet=accelerator.unwrap_model(unet),
+                unet=accelerator.unwrap_model(ema_unet.averaged_model if args.use_ema else unet),
                 text_encoder=text_enc_model,
                 vae=vae if vae is not None else create_vae(),
                 scheduler=scheduler,
@@ -907,8 +908,6 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                     try:
                         s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
                         save_checkpoint(args.model_name, args.revision)
-                        if args.use_ema:
-                            ema_unet.restore(unet.parameters())
                     except Exception as e:
                         logger.debug(f"Exception saving checkpoint/model: {e}")
                         traceback.print_exc()
@@ -934,6 +933,8 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                                                          scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
                                                                                                    beta_end=0.012),
                                                          negative_prompt=c.negative_prompt,
+                                                         height=args.resolution,
+                                                         width=args.resolution,
                                                          generator=g_cuda).images[0]
                                     shared.state.current_image = s_image
                                     shared.state.textinfo = c.prompt
@@ -1039,7 +1040,7 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
 
                     # Update EMA
                     if args.use_ema and ema_unet is not None:
-                        ema_unet.step(unet.parameters())
+                        ema_unet.step(unet)
 
                 if not global_step % 10:
                     allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
@@ -1064,6 +1065,7 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                     if save_img or save_model:
                         save_weights()
                         args.save()
+                        shared.state.job_count = args.max_train_steps
                 if shared.state.interrupted:
                     training_complete = True
                 if global_step == 0 or global_step == 5:

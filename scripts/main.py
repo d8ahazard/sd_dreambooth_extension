@@ -37,7 +37,7 @@ def on_ui_tabs():
                 with gr.Row():
                     gr.HTML(value="Model Revision:")
                     db_revision = gr.HTML(elem_id="db_revision")
-                with gr.Row(visible=False):
+                with gr.Row():
                     gr.HTML(value="V2 Model:")
                     db_v2 = gr.HTML(elem_id="db_v2")
                 with gr.Row():
@@ -55,7 +55,7 @@ def on_ui_tabs():
                     db_new_model_name = gr.Textbox(label="Name")
                     db_create_from_hub = gr.Checkbox(label="Import Model from Huggingface Hub", value=False)
                     with gr.Column(visible=False) as hub_row:
-                        db_new_model_url = gr.Textbox(label="Model Path", value="runwayml/stable-diffusion-v1-5")
+                        db_new_model_url = gr.Textbox(label="Model Path", placeholder="runwayml/stable-diffusion-v1-5")
                         db_new_model_token = gr.Textbox(label="HuggingFace Token", value="")
                     with gr.Row() as local_row:
                         db_new_model_src = gr.Dropdown(label='Source Checkpoint',
@@ -520,6 +520,7 @@ def on_ui_tabs():
                 db_new_model_name,
                 db_new_model_src,
                 db_new_model_scheduler,
+                db_create_from_hub,
                 db_new_model_url,
                 db_new_model_token,
                 db_new_model_extract_ema,

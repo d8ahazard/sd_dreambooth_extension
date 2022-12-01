@@ -103,6 +103,7 @@ unet_params = {
 
 unet_v2_params = unet_params.copy()
 unet_v2_params["num_heads"] = [5, 10, 20, 20]
+unet_v2_params["attention_head_dim"] = [5, 10, 20, 20]
 unet_v2_params["context_dim"] = 1024
 
 VAE_PARAMS_Z_CHANNELS = 4
@@ -324,39 +325,39 @@ def linear_transformer_to_conv(checkpoint):
                 checkpoint[key] = checkpoint[key].unsqueeze(2).unsqueeze(2)
 
 
-def create_unet_diffusers_config(unet_params):
+def create_unet_diffusers_config(cfg_params):
     """
     Creates a config for the diffusers based on the config of the LDM model.
     """
 
-    block_out_channels = [unet_params["model_channels"] * mult for mult in unet_params["channel_mult"]]
+    block_out_channels = [cfg_params["model_channels"] * mult for mult in cfg_params["channel_mult"]]
 
     down_block_types = []
     resolution = 1
     for i in range(len(block_out_channels)):
-        block_type = "CrossAttnDownBlock2D" if resolution in unet_params["attention_resolutions"] else "DownBlock2D"
+        block_type = "CrossAttnDownBlock2D" if resolution in cfg_params["attention_resolutions"] else "DownBlock2D"
         down_block_types.append(block_type)
         if i != len(block_out_channels) - 1:
             resolution *= 2
 
     up_block_types = []
     for i in range(len(block_out_channels)):
-        block_type = "CrossAttnUpBlock2D" if resolution in unet_params["attention_resolutions"] else "UpBlock2D"
+        block_type = "CrossAttnUpBlock2D" if resolution in cfg_params["attention_resolutions"] else "UpBlock2D"
         up_block_types.append(block_type)
         resolution //= 2
 
     config = dict(
-        sample_size=unet_params["image_size"],
-        in_channels=unet_params["in_channels"],
-        out_channels=unet_params["out_channels"],
+        sample_size=cfg_params["image_size"],
+        in_channels=cfg_params["in_channels"],
+        out_channels=cfg_params["out_channels"],
         down_block_types=tuple(down_block_types),
         up_block_types=tuple(up_block_types),
         block_out_channels=tuple(block_out_channels),
-        layers_per_block=unet_params["num_res_blocks"],
-        cross_attention_dim=unet_params["context_dim"],
-        attention_head_dim=unet_params["num_heads"],
+        layers_per_block=cfg_params["num_res_blocks"],
+        cross_attention_dim=cfg_params["context_dim"],
+        attention_head_dim=cfg_params["num_heads"],
     )
-
+    print(f"Returning config: {config}")
     return config
 
 
@@ -586,7 +587,8 @@ def convert_ldm_unet_checkpoint(v2, checkpoint, config, extract_ema=False):
                 new_checkpoint[new_path] = unet_state_dict[old_path]
 
     if v2:
-        linear_transformer_to_conv(new_checkpoint)
+        pass
+        #linear_transformer_to_conv(new_checkpoint)
 
     return new_checkpoint, has_ema
 
@@ -947,7 +949,7 @@ def printi(msg, params=None):
         print(msg)
 
 
-def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim", new_model_url="", new_model_token="",
+def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim", from_hub=False, new_model_url="", new_model_token="",
                        extract_ema=False, v2=False):
     printi("Extracting checkpoint...")
     shared.state.job_count = 8
@@ -955,10 +957,13 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
     map_location = shared.device
     # Set up our base directory for the model and sanitize our file name
     new_model_name = sanitize_name(new_model_name)
-    if new_model_url == "":
+    print(f"new model URL is {new_model_url}")
+    if not from_hub:
+        print(f"YOU ARE LOCAL: {'true' if v2 else 'false'}")
         config = DreamboothConfig(new_model_name, scheduler=scheduler_type, src=ckpt_path, v2=v2)
     else:
-        config = DreamboothConfig(new_model_name, scheduler_type=scheduler_type, src=new_model_url)
+        v2 = new_model_url == "stabilityai/stable-diffusion-2"
+        config = DreamboothConfig(new_model_name, scheduler_type=scheduler_type, src=new_model_url, v2=v2)
     config.save()
     revision = config.revision
     model_scheduler = scheduler_type
@@ -971,7 +976,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         map_location = torch.device('cpu')
 
     scheduler = create_scheduler(scheduler_type)
-    if new_model_url and new_model_token:
+    if from_hub and new_model_url and new_model_token:
         print(f"Trying to create {new_model_name} from hugginface.co/{new_model_url}")
         printi("Loading model from hub.")
         pipe = StableDiffusionPipeline.from_pretrained(new_model_url, use_auth_token=new_model_token,
@@ -1001,7 +1006,9 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             state_dict = checkpoint["state_dict"]
             unet_config = create_unet_diffusers_config(unet_v2_params if v2 else unet_params)
             converted_unet_checkpoint, has_ema = convert_ldm_unet_checkpoint(v2, state_dict, unet_config, extract_ema)
-
+            if has_ema:
+                config.has_ema = True
+                config.save()
             unet = UNet2DConditionModel(**unet_config)
             info = unet.load_state_dict(converted_unet_checkpoint)
             printi("Loading Unet:", info)
@@ -1169,11 +1176,12 @@ def compile_checkpoint(model_name):
 
     ckpt_dir = shared.cmd_opts.ckpt_dir
     vae_path = None
-    models_path = os.path.join(paths.models_path, "Stable-diffusion")
+    models_path = os.path.join(shared.models_path, "Stable-diffusion")
     if ckpt_dir is not None:
         models_path = ckpt_dir
 
     config = from_file(model_name)
+    v2 = config.v2
     half = config.half_model
     total_steps = config.revision
     if total_steps == 0:
@@ -1197,10 +1205,9 @@ def compile_checkpoint(model_name):
         vae_path = os.path.join(vae_path, "diffusion_pytorch_model.bin")
     text_enc_path = os.path.join(model_path, "text_encoder", "pytorch_model.bin")
     # Convert the UNet model
-    unet_state_dict = torch.load(unet_path, map_location="cpu")
+    unet_state_dict = torch.load(unet_path, map_location="cpu", extra_handler="")
     vae_state_dict = torch.load(vae_path, map_location="cpu")
     text_encoder = torch.load(text_enc_path, map_location="cpu")
-    v2 = config.v2
     vae_state_dict = convert_vae_state_dict(vae_state_dict)
     assign_new_sd("first_stage_model.", vae_state_dict)
 
