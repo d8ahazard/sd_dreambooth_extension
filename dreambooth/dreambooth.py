@@ -45,16 +45,17 @@ def log_memory():
     return f"Current memory usage: {mem}"
 
 
-def generate_sample_img(model_dir: str):
+def generate_sample_img(model_dir: str, save_sample_prompt: str, seed: str):
     print("Gensample?")
     if model_dir is None or model_dir == "":
         return "Please select a model."
     config = from_file(model_dir)
     unload_system_models()
     model_path = config.pretrained_model_name_or_path
+    image = None
     if not os.path.exists(config.pretrained_model_name_or_path):
         print(f"Model path '{config.pretrained_model_name_or_path}' doesn't exist.")
-        return f"Can't find diffusers model at {config.pretrained_model_name_or_path}."
+        return f"Can't find diffusers model at {config.pretrained_model_name_or_path}.", None
     try:
         print(f"Loading model from {model_path}.")
         text_enc_model = CLIPTextModel.from_pretrained(config.pretrained_model_name_or_path,
@@ -71,61 +72,38 @@ def generate_sample_img(model_dir: str):
         pipeline = pipeline.to(shared.device)
         pil_features = list_features()
         save_dir = os.path.join(shared.sd_path, "outputs", "dreambooth")
-        for concept in config.concepts_list:
-            save_sample_prompt = concept.save_sample_prompt
-            db_model_path = config.model_dir
-            if save_sample_prompt is None:
-                msg = "Please provide a sample prompt."
-                print(msg)
-                return msg
-            shared.state.textinfo = f"Generating preview image for model {db_model_path}..."
-            seed = concept.sample_seed
-            # I feel like this might not actually be necessary...but what the heck.
-            if seed is None or seed == '' or seed == -1:
-                seed = int(random.randrange(21474836147))
-            g_cuda = torch.Generator(device=shared.device).manual_seed(seed)
-            sample_dir = os.path.join(save_dir, "samples")
-            os.makedirs(sample_dir, exist_ok=True)
-            file_count = 0
-            for x in Path(sample_dir).iterdir():
-                if is_image(x, pil_features):
-                    file_count += 1
-            shared.state.job_count = concept.n_save_sample
-            for n in range(concept.n_save_sample):
+        db_model_path = config.model_dir
+        if save_sample_prompt is None:
+            msg = "Please provide a sample prompt."
+            print(msg)
+            return msg, None
+        shared.state.textinfo = f"Generating preview image for model {db_model_path}..."
+        # I feel like this might not actually be necessary...but what the heck.
+        if seed is None or seed == '' or seed == -1:
+            seed = int(random.randrange(21474836147))
+        g_cuda = torch.Generator(device=shared.device).manual_seed(seed)
+        sample_dir = os.path.join(save_dir, "samples")
+        os.makedirs(sample_dir, exist_ok=True)
+        file_count = 0
+        for x in Path(sample_dir).iterdir():
+            if is_image(x, pil_features):
                 file_count += 1
-                shared.state.job_no = n
-                image = pipeline(save_sample_prompt, num_inference_steps=concept.save_infer_steps,
-                                 guidance_scale=concept.save_guidance_scale,
-                                 scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
-                                                                           beta_end=0.012),
-                                 negative_prompt=concept.save_sample_negative_prompt,
-                                 generator=g_cuda).images[0]
+        shared.state.job_count = 1
+        with torch.autocast("cuda"), torch.inference_mode():
+            image = pipeline(save_sample_prompt,
+                             num_inference_steps=60,
+                             guidance_scale=7.5,
+                             scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
+                                                                       beta_end=0.012),
+                             width=config.resolution,
+                             height=config.resolution,
+                             generator=g_cuda).images[0]
 
-                if shared.opts.enable_pnginfo:
-                    params = {
-                        "Steps": concept.save_infer_steps,
-                        "Sampler": "Euler A",
-                        "CFG scale": concept.save_guidance_scale,
-                        "Seed": concept.sample_seed
-                    }
-                    generation_params_text = ", ".join(
-                        [k if k == v else f'{k}: {generation_parameters_copypaste.quote(v)}' for k, v in
-                         params.items() if v is not None])
-
-                    negative_prompt_text = "\nNegative prompt: " + concept.save_sample_negative_prompt
-
-                    data = f"{save_sample_prompt}{negative_prompt_text}\n{generation_params_text}".strip()
-                    image.info["parameters"] = data
-
-                shared.state.current_image = image
-                shared.state.textinfo = save_sample_prompt
-                sanitized_prompt = sanitize_name(save_sample_prompt)
-                image.save(os.path.join(sample_dir, f"{str(file_count).zfill(3)}-{sanitized_prompt}.png"))
     except:
         print("Exception generating sample!")
         traceback.print_exc()
     reload_system_models()
-    return "Sample generated."
+    return "Sample generated.", image
 
 
 def cleanup():

@@ -669,7 +669,7 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
         eps=args.adam_epsilon,
     )
 
-    noise_scheduler = DDPMScheduler.from_config(args.pretrained_model_name_or_path, subfolder="scheduler")
+    noise_scheduler = DDIMScheduler.from_config(args.pretrained_model_name_or_path, subfolder="scheduler")
 
     def cleanup_memory():
         try:
@@ -886,8 +886,11 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                 text_enc_model = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path,
                                                                subfolder="text_encoder",
                                                                revision=args.revision)
+            pred_type = "epsilon"
+            if args.v2:
+                pred_type = "v_prediction"
             scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
-                                      clip_sample=False, set_alpha_to_one=False)
+                                      clip_sample=False, set_alpha_to_one=False, prediction_type=pred_type)
 
             s_pipeline = DiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
@@ -930,8 +933,6 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                                 for si in tqdm(range(c.n_samples), desc="Generating samples"):
                                     s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
                                                          guidance_scale=c.scale,
-                                                         scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
-                                                                                                   beta_end=0.012),
                                                          negative_prompt=c.negative_prompt,
                                                          height=args.resolution,
                                                          width=args.resolution,

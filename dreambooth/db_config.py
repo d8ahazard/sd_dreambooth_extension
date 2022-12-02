@@ -10,6 +10,8 @@ def sanitize_name(name):
 
 
 class DreamboothConfig:
+    v2 = False
+    scheduler = "ddim"
 
     def __init__(self,
                  model_name: str = "",
@@ -43,7 +45,6 @@ class DreamboothConfig:
                  save_embedding_every: int = 500,
                  save_preview_every: int = 500,
                  scale_lr: bool = False,
-                 scheduler: str = "ddim",
                  src: str = "",
                  train_batch_size: int = 1,
                  train_text_encoder: bool = True,
@@ -110,7 +111,8 @@ class DreamboothConfig:
                  c3_save_sample_template: str = "",
                  pretrained_model_name_or_path="",
                  concepts_list=None,
-                 v2=False,
+                 v2=None,
+                 scheduler= None,
                  has_ema=False,
                  **kwargs
                  ):
@@ -157,7 +159,6 @@ class DreamboothConfig:
         self.save_embedding_every = save_embedding_every
         self.save_preview_every = save_preview_every
         self.scale_lr = scale_lr
-        self.scheduler = scheduler
         self.src = src
         self.train_batch_size = train_batch_size
         self.train_text_encoder = train_text_encoder
@@ -165,7 +166,12 @@ class DreamboothConfig:
         self.use_concepts = use_concepts
         self.use_cpu = use_cpu
         self.use_ema = use_ema
-        self.v2 = v2
+        if scheduler is not None:
+            self.scheduler = scheduler
+
+        if v2 is not None:
+            self.v2 = v2
+
         self.has_ema = has_ema
 
         if concepts_list is None:
@@ -349,26 +355,25 @@ class Concept(dict):
             self.save_guidance_scale = save_guidance_scale
             self.save_infer_steps = save_infer_steps
         else:
-            self.max_steps = input_dict["max_steps"]
-            self.instance_data_dir = input_dict["instance_data_dir"]
-            self.class_data_dir = input_dict["class_data_dir"]
-            self.file_prompt_contents = input_dict["file_prompt_contents"]
-            self.instance_prompt = input_dict["instance_prompt"]
-            self.class_prompt = input_dict["class_prompt"]
-            self.save_sample_prompt = input_dict["save_sample_prompt"]
-            self.save_sample_template = input_dict[
-                "save_sample_template"] if "save_sample_template" in input_dict else ""
-            self.instance_token = input_dict["instance_token"]
-            self.class_token = input_dict["class_token"]
-            self.num_class_images = input_dict["num_class_images"]
-            self.class_negative_prompt = input_dict["class_negative_prompt"]
-            self.class_guidance_scale = input_dict["class_guidance_scale"]
-            self.class_infer_steps = input_dict["class_infer_steps"]
-            self.save_sample_negative_prompt = input_dict["save_sample_negative_prompt"]
-            self.n_save_sample = input_dict["n_save_sample"]
-            self.sample_seed = input_dict["sample_seed"]
-            self.save_guidance_scale = input_dict["save_guidance_scale"]
-            self.save_infer_steps = input_dict["save_infer_steps"]
+            self.max_steps = input_dict["max_steps"] if "max_steps" in input_dict else -1
+            self.instance_data_dir = input_dict["instance_data_dir"] if "instance_data_dir" in input_dict else ""
+            self.class_data_dir = input_dict["class_data_dir"] if "class_data_dir" in input_dict else ""
+            self.file_prompt_contents = input_dict["file_prompt_contents"] if "file_prompt_contents" in input_dict else "Description"
+            self.instance_prompt = input_dict["instance_prompt"] if "instance_prompt" in input_dict else ""
+            self.class_prompt = input_dict["class_prompt"] if "class_prompt" in input_dict else ""
+            self.save_sample_prompt = input_dict["save_sample_prompt"] if "save_sample_prompt" in input_dict else ""
+            self.save_sample_template = input_dict["save_sample_template"] if "save_sample_template" in input_dict else ""
+            self.instance_token = input_dict["instance_token"] if "instance_token" in input_dict else ""
+            self.class_token = input_dict["class_token"] if "class_token" in input_dict else ""
+            self.num_class_images = input_dict["num_class_images"] if "num_class_images" in input_dict else 0
+            self.class_negative_prompt = input_dict["class_negative_prompt"] if "class_negative_promt" in input_dict else ""
+            self.class_guidance_scale = input_dict["class_guidance_scale"] if "class_guidance_scale" in input_dict else 7.5
+            self.class_infer_steps = input_dict["class_infer_steps"] if "class_infer_steps" in input_dict else 60
+            self.save_sample_negative_prompt = input_dict["save_sample_negative_prompt"] if "save_sample_negative_prompt" in input_dict else ""
+            self.n_save_sample = input_dict["n_save_sample"] if "n_save_samples" in input_dict else 1
+            self.sample_seed = input_dict["sample_seed"] if "sample_seed" in input_dict else -1
+            self.save_guidance_scale = input_dict["save_guidance_scale"] if "save_guidance_scale" in input_dict else 7.5
+            self.save_infer_steps = input_dict["save_infer_steps"] if "save_infer_steps" in input_dict else 60
 
         self_dict = {
             "max_steps": self.max_steps,

@@ -181,6 +181,8 @@ def on_ui_tabs():
                 with gr.Tab("Debugging"):
                     with gr.Column():
                         db_generate_sample = gr.Button(value="Generate Sample Image")
+                        db_sample_prompt = gr.Textbox(label="Sample Prompt")
+                        db_sample_seed = gr.Textbox(label="Sample Seed")
                         db_log_memory = gr.Button(value="Log Memory")
                         db_train_imagic_only = gr.Checkbox(label="Train Imagic Only", value=False)
 
@@ -230,7 +232,6 @@ def on_ui_tabs():
                 db_save_embedding_every,
                 db_save_preview_every,
                 db_scale_lr,
-                db_scheduler,
                 db_src,
                 db_train_batch_size,
                 db_train_text_encoder,
@@ -434,10 +435,10 @@ def on_ui_tabs():
         )
 
         db_generate_sample.click(
-            fn=wrap_gradio_gpu_call(generate_sample_img, extra_outputs=[gr.update()]),
-            _js="db_save_start_progress",
-            inputs=db_model_name,
-            outputs=[db_status]
+            fn=generate_sample_img,
+            _js="db_save",
+            inputs=[db_model_name, db_sample_prompt, db_sample_seed],
+            outputs=[db_status, db_preview]
         )
 
         db_log_memory.click(
@@ -503,9 +504,10 @@ def on_ui_tabs():
 
         db_generate_checkpoint.click(
             fn=wrap_gradio_gpu_call(conversion.compile_checkpoint, extra_outputs=[gr.update()]),
-            _js="db_save_start_progress",
+            _js="db_start_progress",
             inputs=[
-                db_model_name
+                db_model_name,
+                db_half_model
             ],
             outputs=[
                 db_status,

@@ -17,6 +17,7 @@ evaluation:
 """
 
 import ctypes
+import os
 
 from .paths import determine_cuda_runtime_lib_path
 
@@ -115,7 +116,9 @@ def evaluate_cuda_setup():
     print('Welcome to bitsandbytes. For bug reports, please submit your error trace to: https://github.com/TimDettmers/bitsandbytes/issues')
     print('For effortless bug reporting copy-paste your error into this form: https://docs.google.com/forms/d/e/1FAIpQLScPB8emS3Thkp66nvqwmjTEgxp8Y9ufuWTzFyr9kJ5AoI47dQ/viewform?usp=sf_link')
     print('='*80)
-    return "libbitsandbytes_cuda116.dll"            # $$$
+    if os.name == "NT":
+        print("Using magick windows DLL!")
+        return "libbitsandbytes_cudaall.dll"            # $$$
     
     binary_name = "libbitsandbytes_cpu.so"
     #if not torch.cuda.is_available():

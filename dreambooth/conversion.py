@@ -49,7 +49,7 @@ from diffusers import (
     EulerDiscreteScheduler,
     LMSDiscreteScheduler,
     PNDMScheduler,
-    StableDiffusionPipeline,
+    DiffusionPipeline,
     UNet2DConditionModel
 )
 from transformers import CLIPTextModel, CLIPTokenizer, CLIPTextConfig
@@ -384,10 +384,18 @@ def create_vae_diffusers_config():
     return config
 
 
-def create_scheduler(scheduler_type):
+def create_scheduler(scheduler_type, v2):
     num_train_timesteps = 1000
     beta_start = 0.00085
     beta_end = 0.0120
+    pred_type = "epsilon"
+    if v2:
+        v2_schedulers = ["euler", "ddim"]
+        pred_type = "v_prediction"
+        if scheduler_type not in v2_schedulers:
+            print("V2 model detected, switching scheduler to Euler")
+            scheduler_type = "euler"
+
     if scheduler_type == "pndm":
         scheduler = PNDMScheduler(
             beta_end=beta_end,
@@ -401,7 +409,7 @@ def create_scheduler(scheduler_type):
                                          beta_schedule="scaled_linear")
     elif scheduler_type == "euler":
         scheduler = EulerDiscreteScheduler(beta_start=beta_start, beta_end=beta_end,
-                                           beta_schedule="scaled_linear")
+                                           beta_schedule="scaled_linear", prediction_type=pred_type)
     elif scheduler_type == "euler-ancestral":
         scheduler = EulerAncestralDiscreteScheduler(
             beta_start=beta_start, beta_end=beta_end, beta_schedule="scaled_linear"
@@ -417,6 +425,8 @@ def create_scheduler(scheduler_type):
             beta_schedule="scaled_linear",
             clip_sample=False,
             set_alpha_to_one=False,
+            steps_offset=1,
+            prediction_type=pred_type
         )
     else:
         print(f"Scheduler of type {scheduler_type} doesn't exist!")
@@ -588,7 +598,7 @@ def convert_ldm_unet_checkpoint(v2, checkpoint, config, extract_ema=False):
 
     if v2:
         pass
-        #linear_transformer_to_conv(new_checkpoint)
+        linear_transformer_to_conv(new_checkpoint)
 
     return new_checkpoint, has_ema
 
@@ -949,7 +959,8 @@ def printi(msg, params=None):
         print(msg)
 
 
-def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim", from_hub=False, new_model_url="", new_model_token="",
+def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim", from_hub=False, new_model_url="",
+                       new_model_token="",
                        extract_ema=False, v2=False):
     printi("Extracting checkpoint...")
     shared.state.job_count = 8
@@ -979,8 +990,8 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
     if from_hub and new_model_url and new_model_token:
         print(f"Trying to create {new_model_name} from hugginface.co/{new_model_url}")
         printi("Loading model from hub.")
-        pipe = StableDiffusionPipeline.from_pretrained(new_model_url, use_auth_token=new_model_token,
-                                                       scheduler=scheduler)
+        pipe = DiffusionPipeline.from_pretrained(new_model_url, use_auth_token=new_model_token,
+                                                 scheduler=scheduler)
         printi("Model loaded.")
         shared.state.job_no = 7
     else:
@@ -1053,7 +1064,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                 text_model = CLIPTextModel.from_pretrained("openai/clip-vit-large-patch14")
                 info = text_model.load_state_dict(converted_text_encoder_checkpoint)
             printi("Loading text encoder:", info)
-            pipe = StableDiffusionPipeline(
+            pipe = DiffusionPipeline(
                 unet=unet,
                 text_encoder=text_model,
                 vae=vae,
@@ -1165,7 +1176,7 @@ def convert_text_encoder_state_dict_to_sd_v2(checkpoint):
     return new_sd
 
 
-def compile_checkpoint(model_name):
+def compile_checkpoint(model_name, half):
     unload_system_models()
     shared.state.textinfo = "Compiling checkpoint."
     shared.state.job_no = 0
@@ -1182,7 +1193,6 @@ def compile_checkpoint(model_name):
 
     config = from_file(model_name)
     v2 = config.v2
-    half = config.half_model
     total_steps = config.revision
     if total_steps == 0:
         shared.state.textinfo = "You should probably train the model first...compiling..."
@@ -1192,6 +1202,15 @@ def compile_checkpoint(model_name):
 
     model_path = config.pretrained_model_name_or_path
     state_dict = {}
+
+    if config.src != "" and config.src is not None:
+        checkpoint_info = modules.sd_models.get_closet_checkpoint_match(config.src)
+
+        if checkpoint_info is not None:
+            if os.path.exists(checkpoint_info.filename):
+                ckpt_path = checkpoint_info[0]
+                print(f"Loading existing state dict from {ckpt_path}")
+                state_dict = load_checkpoint_with_text_encoder_conversion(ckpt_path)
 
     def assign_new_sd(prefix, sd):
         for k, v in sd.items():
@@ -1225,12 +1244,16 @@ def compile_checkpoint(model_name):
 
     if half:
         state_dict = {k: v.half() for k, v in state_dict.items()}
-    new_ckpt = {'state_dict': state_dict, 'global_step': config.revision}
+
+    #state_dict = sorted(state_dict.items())
+
+    new_ckpt = {'global_step': config.revision, 'state_dict': state_dict}
 
     torch.save(new_ckpt, out_file)
     if v2:
-        cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "configs", "v2-inference-v.yaml")
+        cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs", "v2-inference-v.yaml")
         cfg_dest = os.path.join(models_path, f"{model_name}_{total_steps}.yaml")
+        print(f"Copying config file to {cfg_dest}")
         shutil.copyfile(cfg_file, cfg_dest)
     try:
         del unet_state_dict

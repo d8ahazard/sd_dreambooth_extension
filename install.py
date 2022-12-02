@@ -65,15 +65,6 @@ if not dreambooth_skip_install:
     run(f'"{sys.executable}" -m pip install -r "{req_file}"', f"Checking {name} requirements...",
         f"Couldn't install {name} requirements.")
 
-    # I think we only need to bump torch version to cu116 on Windows, as we're using prebuilt B&B Binaries...
-    if os.name == "nt":
-        torch_cmd = os.environ.get('TORCH_COMMAND', None)
-        if torch_cmd is None:
-            print("Checking/upgrading existing torch/torchvision installation")
-            torch_cmd = "pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url " \
-                        "https://download.pytorch.org/whl/cu116 "
-        run(f'"{sys.executable}" -m {torch_cmd}', "Checking torch and torchvision versions", "Couldn't install torch")
-
 
 base_dir = os.path.dirname(os.path.realpath(__file__))
 repo = git.Repo(base_dir)
