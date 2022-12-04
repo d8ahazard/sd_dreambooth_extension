@@ -29,8 +29,9 @@ from extensions.sd_dreambooth_extension.dreambooth import xattention
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import save_checkpoint, list_features, \
-    is_image, printm, cleanup, sanitize_name
+    is_image, printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, encode_hidden_state
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_name
 from modules import shared
 
 # Custom stuff

@@ -1,9 +1,12 @@
 import gradio as gr
 
-from extensions.sd_dreambooth_extension.dreambooth import conversion, dreambooth
+from extensions.sd_dreambooth_extension.dreambooth import dreambooth
 from extensions.sd_dreambooth_extension.dreambooth.db_config import save_config
-from extensions.sd_dreambooth_extension.dreambooth.dreambooth import get_db_models, performance_wizard, \
-    training_wizard, training_wizard_person, log_memory, generate_sample_img
+from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd_bmalthais import compile_checkpoint
+from extensions.sd_dreambooth_extension.dreambooth.dreambooth import performance_wizard, \
+    training_wizard, training_wizard_person, generate_sample_img
+from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
+from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, log_memory
 from modules import script_callbacks, sd_models, shared
 from modules.ui import setup_progressbar, gr_show, wrap_gradio_call, create_refresh_button
 from webui import wrap_gradio_gpu_call
@@ -26,6 +29,7 @@ def on_ui_tabs():
                         "choices": sorted(get_db_models())},
                                           "refresh_db_models")
                 db_half_model = gr.Checkbox(label="Half Model", value=False)
+                db_use_subdir = gr.Checkbox(label="Save Checkpoint to Subdirectory", value=False)
                 with gr.Row():
                     db_train_wizard_person = gr.Button(value="Training Wizard (Person)")
                     db_train_wizard_object = gr.Button(value="Training Wizard (Object/Style)")
@@ -60,7 +64,6 @@ def on_ui_tabs():
                     with gr.Row() as local_row:
                         db_new_model_src = gr.Dropdown(label='Source Checkpoint',
                                                        choices=sorted(sd_models.checkpoints_list.keys()))
-                        db_new_model_v2 = gr.Checkbox(label='V2 Checkpoint', value=False)
                         db_new_model_extract_ema = gr.Checkbox(label='Extract EMA Weights', value=False)
                     db_new_model_scheduler = gr.Dropdown(label='Scheduler', choices=["pndm", "lms", "euler",
                                                                                      "euler-ancestral", "dpm", "ddim"],
@@ -503,11 +506,12 @@ def on_ui_tabs():
         )
 
         db_generate_checkpoint.click(
-            fn=wrap_gradio_gpu_call(conversion.compile_checkpoint, extra_outputs=[gr.update()]),
+            fn=wrap_gradio_gpu_call(compile_checkpoint, extra_outputs=[gr.update()]),
             _js="db_start_progress",
             inputs=[
                 db_model_name,
-                db_half_model
+                db_half_model,
+                db_use_subdir
             ],
             outputs=[
                 db_status,
@@ -516,7 +520,7 @@ def on_ui_tabs():
         )
 
         db_create_model.click(
-            fn=wrap_gradio_gpu_call(conversion.extract_checkpoint),
+            fn=wrap_gradio_gpu_call(extract_checkpoint),
             _js="db_start_progress",
             inputs=[
                 db_new_model_name,
@@ -525,8 +529,7 @@ def on_ui_tabs():
                 db_create_from_hub,
                 db_new_model_url,
                 db_new_model_token,
-                db_new_model_extract_ema,
-                db_new_model_v2
+                db_new_model_extract_ema
             ],
             outputs=[
                 db_model_name, db_model_path, db_revision, db_scheduler, db_src, db_has_ema, db_v2, db_status

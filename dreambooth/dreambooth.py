@@ -16,9 +16,10 @@ from huggingface_hub import HfFolder, whoami
 from six import StringIO
 from transformers import CLIPTextModel
 
-from extensions.sd_dreambooth_extension.dreambooth import conversion
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, Concept
-from modules import paths, shared, devices, sd_models, generation_parameters_copypaste
+from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
+from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, printm
+from modules import paths, shared, devices, sd_models
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -34,15 +35,6 @@ logger.setLevel(logging.DEBUG)
 dl.set_verbosity_error()
 
 mem_record = {}
-
-
-def sanitize_name(name):
-    return "".join(x for x in name if (x.isalnum() or x in "._- "))
-
-
-def log_memory():
-    mem = printm("", True)
-    return f"Current memory usage: {mem}"
 
 
 def generate_sample_img(model_dir: str, save_sample_prompt: str, seed: str):
@@ -106,33 +98,6 @@ def generate_sample_img(model_dir: str, save_sample_prompt: str, seed: str):
     return "Sample generated.", image
 
 
-def cleanup():
-    try:
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.ipc_collect()
-        gc.collect()
-    except:
-        pass
-    printm("Cleanup completed.")
-
-
-def unload_system_models():
-    if shared.sd_model is not None:
-        shared.sd_model.to("cpu")
-    for former in shared.face_restorers:
-        try:
-            former.send_model_to("cpu")
-        except:
-            pass
-    cleanup()
-    printm("", True)
-
-
-def reload_system_models():
-    if shared.sd_model is not None:
-        shared.sd_model.to(shared.device)
-    printm("Restored system models.")
 
 
 # Borrowed from https://wandb.ai/psuraj/dreambooth/reports/Training-Stable-Diffusion-with-Dreambooth
@@ -320,27 +285,6 @@ def performance_wizard():
            train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema
 
 
-def printm(msg="", reset=False):
-    global mem_record
-    try:
-        allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
-        reserved = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
-        if not mem_record:
-            mem_record = {}
-        if reset:
-            max_allocated = round(torch.cuda.max_memory_allocated(0) / 1024 ** 3, 1)
-            max_reserved = round(torch.cuda.max_memory_reserved(0) / 1024 ** 3, 1)
-            output = f" Allocated {allocated}/{max_allocated}GB \n Reserved: {reserved}/{max_reserved}GB \n"
-            torch.cuda.reset_peak_memory_stats()
-            print(output)
-            mem_record = {}
-        else:
-            mem_record[msg] = f"{allocated}/{reserved}GB"
-            output = f' {msg} \n Allocated: {allocated}GB \n Reserved: {reserved}GB \n'
-            print(output)
-    except:
-        output = "Error parsing memory stats. Do you have a NVIDIA GPU?"
-    return output
 
 
 def dumb_safety(images, clip_input):
@@ -445,18 +389,6 @@ def load_params(model_dir):
     return output
 
 
-def get_db_models():
-    model_dir = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
-    out_dir = os.path.join(model_dir, "dreambooth")
-    output = []
-    if os.path.exists(out_dir):
-        dirs = os.listdir(out_dir)
-        for found in dirs:
-            if os.path.isdir(os.path.join(out_dir, found)):
-                output.append(found)
-    return output
-
-
 def start_training(model_dir: str, imagic_only: bool):
     global mem_record
     if model_dir == "" or model_dir is None:
@@ -539,5 +471,5 @@ def save_checkpoint(model_name: str, total_steps: int):
         os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path, "dreambooth",
         model_name, "working")
     out_file = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
-    conversion.compile_checkpoint(model_name)
+    compile_checkpoint(model_name)
     sd_models.list_models()

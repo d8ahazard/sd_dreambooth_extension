@@ -2,11 +2,8 @@ import json
 import os
 import traceback
 
+from extensions.sd_dreambooth_extension.dreambooth.utils import sanitize_name
 from modules import images, shared
-
-
-def sanitize_name(name):
-    return "".join(x for x in name if (x.isalnum() or x in "._- "))
 
 
 class DreamboothConfig:

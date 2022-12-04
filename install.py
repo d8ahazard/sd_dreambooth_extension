@@ -31,11 +31,8 @@ def check_versions():
                 if "diffusers" in key:
                     key = "diffusers"
                 reqs_dict[key] = splits[1].replace("\n", "").strip()
-    if os.name == "nt":
-        reqs_dict["torch"] = "1.12.1+cu116"
-        reqs_dict["torchvision"] = "0.13.1+cu116"
 
-    checks = ["bitsandbytes", "diffusers", "transformers", "torch", "torchvision", "xformers"]
+    checks = ["bitsandbytes", "diffusers", "transformers", "xformers"]
     for check in checks:
         check_ver = "N/A"
         status = "[ ]"
