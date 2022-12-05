@@ -12,6 +12,7 @@ def sanitize_name(name):
 
 class DreamboothConfig:
     v2 = False
+    save_class_txt = False
     scheduler = "ddim"
     lifetime_revision = 0
     initial_revision = 0
