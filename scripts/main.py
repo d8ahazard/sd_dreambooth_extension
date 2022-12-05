@@ -2,11 +2,12 @@ import gradio as gr
 
 from extensions.sd_dreambooth_extension.dreambooth import dreambooth
 from extensions.sd_dreambooth_extension.dreambooth.db_config import save_config
-from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd_bmalthais import compile_checkpoint
+from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import performance_wizard, \
-    training_wizard, training_wizard_person, generate_sample_img
+    training_wizard, training_wizard_person, load_model_params
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, log_memory
+from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, log_memory, generate_sample_img, \
+    debug_prompts
 from modules import script_callbacks, sd_models, shared
 from modules.ui import setup_progressbar, gr_show, wrap_gradio_call, create_refresh_button
 from webui import wrap_gradio_gpu_call
@@ -67,7 +68,7 @@ def on_ui_tabs():
                         db_new_model_extract_ema = gr.Checkbox(label='Extract EMA Weights', value=False)
                     db_new_model_scheduler = gr.Dropdown(label='Scheduler', choices=["pndm", "lms", "euler",
                                                                                      "euler-ancestral", "dpm", "ddim"],
-                                                         value="euler-ancestral")
+                                                         value="ddim")
 
                     with gr.Row():
                         with gr.Column(scale=3):
@@ -99,10 +100,11 @@ def on_ui_tabs():
                             db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=0)
 
                         with gr.Column():
-                            gr.HTML(value="Instance Image Processing")
+                            gr.HTML(value="Image Processing")
                             db_resolution = gr.Number(label="Resolution", precision=0, value=512)
                             db_center_crop = gr.Checkbox(label="Center Crop", value=False)
                             db_hflip = gr.Checkbox(label="Apply Horizontal Flip", value=True)
+                            db_save_class_txt = gr.Checkbox(label="Save Class Captions to txt", value=False)
                         db_pretrained_vae_name_or_path = gr.Textbox(label='Pretrained VAE Name or Path',
                                                                     placeholder="Leave blank to use base model VAE.",
                                                                     value="")
@@ -183,6 +185,7 @@ def on_ui_tabs():
 
                 with gr.Tab("Debugging"):
                     with gr.Column():
+                        db_debug_prompts = gr.Button(value="Preview Prompts")
                         db_generate_sample = gr.Button(value="Generate Sample Image")
                         db_sample_prompt = gr.Textbox(label="Sample Prompt")
                         db_sample_seed = gr.Textbox(label="Sample Seed")
@@ -201,6 +204,13 @@ def on_ui_tabs():
             "one": "one",
             "two": "two"
         }
+
+        db_debug_prompts.click(
+            fn=debug_prompts,
+            inputs=[db_model_name],
+            outputs=[db_status]
+        )
+
         db_save_params.click(
             fn=save_config,
             inputs=[
@@ -215,6 +225,7 @@ def on_ui_tabs():
                 db_gradient_accumulation_steps,
                 db_gradient_checkpointing,
                 db_half_model,
+                db_has_ema,
                 db_hflip,
                 db_learning_rate,
                 db_lr_scheduler,
@@ -232,9 +243,11 @@ def on_ui_tabs():
                 db_resolution,
                 db_revision,
                 db_sample_batch_size,
+                db_save_class_txt,
                 db_save_embedding_every,
                 db_save_preview_every,
                 db_scale_lr,
+                db_scheduler,
                 db_src,
                 db_train_batch_size,
                 db_train_text_encoder,
@@ -242,6 +255,7 @@ def on_ui_tabs():
                 db_use_concepts,
                 db_use_cpu,
                 db_use_ema,
+                db_v2,
                 c1_class_data_dir,
                 c1_class_guidance_scale,
                 c1_class_infer_steps,
@@ -318,7 +332,6 @@ def on_ui_tabs():
                 db_gradient_accumulation_steps,
                 db_gradient_checkpointing,
                 db_half_model,
-                db_has_ema,
                 db_hflip,
                 db_learning_rate,
                 db_lr_scheduler,
@@ -327,27 +340,23 @@ def on_ui_tabs():
                 db_max_token_length,
                 db_max_train_steps,
                 db_mixed_precision,
-                db_model_path,
                 db_not_cache_latents,
                 db_num_train_epochs,
                 db_pad_tokens,
                 db_pretrained_vae_name_or_path,
                 db_prior_loss_weight,
                 db_resolution,
-                db_revision,
                 db_sample_batch_size,
+                db_save_class_txt,
                 db_save_embedding_every,
                 db_save_preview_every,
                 db_scale_lr,
-                db_scheduler,
-                db_src,
                 db_train_batch_size,
                 db_train_text_encoder,
                 db_use_8bit_adam,
                 db_use_concepts,
                 db_use_cpu,
                 db_use_ema,
-                db_v2,
                 c1_class_data_dir,
                 c1_class_guidance_scale,
                 c1_class_infer_steps,
@@ -425,6 +434,12 @@ def on_ui_tabs():
                 hub_row,
                 local_row
             ]
+        )
+
+        db_model_name.change(
+            fn=load_model_params,
+            inputs=[db_model_name],
+            outputs=[db_model_path, db_revision, db_v2, db_has_ema, db_src, db_scheduler, db_status]
         )
 
         db_use_concepts.change(
@@ -506,7 +521,7 @@ def on_ui_tabs():
         )
 
         db_generate_checkpoint.click(
-            fn=wrap_gradio_gpu_call(compile_checkpoint, extra_outputs=[gr.update()]),
+            fn=wrap_gradio_gpu_call(compile_checkpoint),
             _js="db_start_progress",
             inputs=[
                 db_model_name,
@@ -532,7 +547,8 @@ def on_ui_tabs():
                 db_new_model_extract_ema
             ],
             outputs=[
-                db_model_name, db_model_path, db_revision, db_scheduler, db_src, db_has_ema, db_v2, db_status
+                db_model_name, db_model_path, db_revision, db_scheduler, db_src, db_has_ema, db_v2, db_resolution,
+                db_status
             ]
         )
 
@@ -541,7 +557,8 @@ def on_ui_tabs():
             _js="db_save_start_progress",
             inputs=[
                 db_model_name,
-                db_train_imagic_only
+                db_train_imagic_only,
+                db_use_subdir
             ],
             outputs=[
                 db_status,

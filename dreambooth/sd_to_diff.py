@@ -13,11 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ Conversion script for the LDM checkpoints. """
-import gc
-import gradio as gr
 import os
+import re
 import shutil
 
+import gradio as gr
 import torch
 
 import modules.sd_models
@@ -40,7 +40,7 @@ from diffusers import (
     DPMSolverMultistepScheduler,
     EulerAncestralDiscreteScheduler,
     EulerDiscreteScheduler,
-    # HeunDiscreteScheduler, - Add after main diffusers is bumped on pypi.org
+    HeunDiscreteScheduler,
     LDMTextToImagePipeline,
     LMSDiscreteScheduler,
     PNDMScheduler,
@@ -466,7 +466,7 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
 
     # From Bmalthais
     # if v2:
-        # linear_transformer_to_conv(new_checkpoint)
+    # linear_transformer_to_conv(new_checkpoint)
     return new_checkpoint, has_ema
 
 
@@ -639,29 +639,30 @@ def convert_ldm_clip_checkpoint(checkpoint):
     return text_model
 
 
-import re
 textenc_conversion_lst = [
     ('cond_stage_model.model.positional_embedding',
-                "text_model.embeddings.position_embedding.weight"),
+     "text_model.embeddings.position_embedding.weight"),
     ('cond_stage_model.model.token_embedding.weight',
-                "text_model.embeddings.token_embedding.weight"),
+     "text_model.embeddings.token_embedding.weight"),
     ('cond_stage_model.model.ln_final.weight', 'text_model.final_layer_norm.weight'),
     ('cond_stage_model.model.ln_final.bias', 'text_model.final_layer_norm.bias')
 ]
-textenc_conversion_map = {x[0]:x[1] for x in textenc_conversion_lst}
+textenc_conversion_map = {x[0]: x[1] for x in textenc_conversion_lst}
 textenc_transformer_conversion_lst = [
-    ('resblocks.','text_model.encoder.layers.'),
-    ('ln_1','layer_norm1'),
-    ('ln_2','layer_norm2'),
-    ('.c_fc.','.fc1.'),
-    ('.c_proj.','.fc2.'),
-    ('.attn','.self_attn'),
-    ('ln_final.','transformer.text_model.final_layer_norm.'),
-    ('token_embedding.weight','transformer.text_model.embeddings.token_embedding.weight'),
-    ('positional_embedding','transformer.text_model.embeddings.position_embedding.weight')
+    ('resblocks.', 'text_model.encoder.layers.'),
+    ('ln_1', 'layer_norm1'),
+    ('ln_2', 'layer_norm2'),
+    ('.c_fc.', '.fc1.'),
+    ('.c_proj.', '.fc2.'),
+    ('.attn', '.self_attn'),
+    ('ln_final.', 'transformer.text_model.final_layer_norm.'),
+    ('token_embedding.weight', 'transformer.text_model.embeddings.token_embedding.weight'),
+    ('positional_embedding', 'transformer.text_model.embeddings.position_embedding.weight')
 ]
-protected = {re.escape(x[0]):x[1] for x in textenc_transformer_conversion_lst}
+protected = {re.escape(x[0]): x[1] for x in textenc_transformer_conversion_lst}
 textenc_pattern = re.compile("|".join(protected.keys()))
+
+
 def convert_open_clip_checkpoint(checkpoint):
     text_model = CLIPTextModel.from_pretrained("stabilityai/stable-diffusion-2", subfolder="text_encoder")
 
@@ -669,30 +670,30 @@ def convert_open_clip_checkpoint(checkpoint):
 
     text_model_dict = {}
 
-    d_model = int( checkpoint['cond_stage_model.model.text_projection'].shape[0] )
+    d_model = int(checkpoint['cond_stage_model.model.text_projection'].shape[0])
 
     text_model_dict["text_model.embeddings.position_ids"] = \
-                    text_model.text_model.embeddings.get_buffer('position_ids')
+        text_model.text_model.embeddings.get_buffer('position_ids')
 
     for key in keys:
-        if 'resblocks.23' in key:   # Diffusers drops the final layer and only uses the penultimate layer
+        if 'resblocks.23' in key:  # Diffusers drops the final layer and only uses the penultimate layer
             continue
         if key in textenc_conversion_map:
             text_model_dict[textenc_conversion_map[key]] = checkpoint[key]
         if key.startswith("cond_stage_model.model.transformer."):
-            new_key = key[len("cond_stage_model.model.transformer.") :]
+            new_key = key[len("cond_stage_model.model.transformer."):]
             if new_key.endswith(".in_proj_weight"):
                 new_key = new_key[:-len(".in_proj_weight")]
                 new_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], new_key)
-                text_model_dict[new_key+'.q_proj.weight'] = checkpoint[key][:d_model,:]
-                text_model_dict[new_key+'.k_proj.weight'] = checkpoint[key][d_model:d_model*2,:]
-                text_model_dict[new_key+'.v_proj.weight'] = checkpoint[key][d_model*2:,:]
+                text_model_dict[new_key + '.q_proj.weight'] = checkpoint[key][:d_model, :]
+                text_model_dict[new_key + '.k_proj.weight'] = checkpoint[key][d_model:d_model * 2, :]
+                text_model_dict[new_key + '.v_proj.weight'] = checkpoint[key][d_model * 2:, :]
             elif new_key.endswith(".in_proj_bias"):
                 new_key = new_key[:-len(".in_proj_bias")]
                 new_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], new_key)
-                text_model_dict[new_key+'.q_proj.bias'] = checkpoint[key][:d_model]
-                text_model_dict[new_key+'.k_proj.bias'] = checkpoint[key][d_model:d_model*2]
-                text_model_dict[new_key+'.v_proj.bias'] = checkpoint[key][d_model*2:]
+                text_model_dict[new_key + '.q_proj.bias'] = checkpoint[key][:d_model]
+                text_model_dict[new_key + '.k_proj.bias'] = checkpoint[key][d_model:d_model * 2]
+                text_model_dict[new_key + '.v_proj.bias'] = checkpoint[key][d_model * 2:]
             else:
                 new_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], new_key)
 
@@ -731,180 +732,220 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         db_config.src: The source checkpoint, if not from hub.
         db_has_ema: Whether the model had EMA weights and they were extracted. If weights were not present or
         you did not extract them and they were, this will be false.
+        db_resolution: The resolution the model trains at.
         db_v2: Is this a V2 Model?
         status
     """
-    new_model_name = sanitize_name(new_model_name)
-    print(f"new model URL is {new_model_url}")
-    shared.state.job_no = 0
-    checkpoint = None
-    map_location = shared.device
-    if shared.cmd_opts.ckptfix or shared.cmd_opts.medvram or shared.cmd_opts.lowvram:
-        printm(f"Using CPU for extraction.")
-        map_location = torch.device('cpu')
+    db_config = None
+    status = ""
+    has_ema = False
+    v2 = False
+    model_dir = ""
+    scheduler = ""
+    src = ""
+    revision = 0
 
-    # Try to determine if v1 or v2 model
-    if not from_hub:
-        checkpoint_info = modules.sd_models.get_closet_checkpoint_match(ckpt_path)
+    # Needed for V2 models so we can create the right text encoder.
 
-        if checkpoint_info is None:
-            print("Unable to find checkpoint file!")
-            shared.state.job_no = 8
-            return "", "", "", "", "", "", "", "Unable to find base checkpoint.", ""
+    reset_safe = False
+    if not shared.cmd_opts.disable_safe_unpickle:
+        reset_safe = True
+        shared.cmd_opts.disable_safe_unpickle = True
 
-        if not os.path.exists(checkpoint_info.filename):
-            print("Unable to find checkpoint file!")
-            shared.state.job_no = 8
-            return "", "", "", "", "", "", "", "Unable to find base checkpoint.", ""
+    try:
+        new_model_name = sanitize_name(new_model_name)
+        shared.state.job_no = 0
+        checkpoint = None
+        map_location = shared.device
+        if shared.cmd_opts.ckptfix or shared.cmd_opts.medvram or shared.cmd_opts.lowvram:
+            printm(f"Using CPU for extraction.")
+            map_location = torch.device('cpu')
 
-        ckpt_path = checkpoint_info[0]
+        # Try to determine if v1 or v2 model
+        if not from_hub:
+            printi("Loading model from checkpoint.")
+            checkpoint_info = modules.sd_models.get_closet_checkpoint_match(ckpt_path)
 
-        printi("Loading checkpoint...")
-        checkpoint = torch.load(ckpt_path)
-        # Todo: Decide if we should store this separately in the db_config and append it when re-compiling models.
-        # global_step = checkpoint["global_step"]
-        checkpoint = checkpoint["state_dict"]
+            if checkpoint_info is None:
+                print("Unable to find checkpoint file!")
+                shared.state.job_no = 8
+                return "", "", 0, "", "", "", "", 512, "", "Unable to find base checkpoint."
 
-        key_name = "model.diffusion_model.input_blocks.2.1.transformer_blocks.0.attn2.to_k.weight"
+            if not os.path.exists(checkpoint_info.filename):
+                print("Unable to find checkpoint file!")
+                shared.state.job_no = 8
+                return "", "", 0, "", "", "", "", 512, "", "Unable to find base checkpoint."
 
-        if key_name in checkpoint and checkpoint[key_name].shape[-1] == 1024:
-            v2 = True
+            ckpt_path = checkpoint_info[0]
+
+            printi("Loading checkpoint...")
+            checkpoint = torch.load(ckpt_path)
+            # Todo: Decide if we should store this separately in the db_config and append it when re-compiling models.
+            # global_step = checkpoint["global_step"]
+            checkpoint = checkpoint["state_dict"]
+
+            key_name = "model.diffusion_model.input_blocks.2.1.transformer_blocks.0.attn2.to_k.weight"
+
+            if key_name in checkpoint and checkpoint[key_name].shape[-1] == 1024:
+                v2 = True
+            else:
+                v2 = False
+
         else:
-            v2 = False
+            if new_model_token == "" or new_model_token is None:
+                msg = "Please provide a token to load models from the hub."
+                print(msg)
+                return "", "", 0, "", "", "", "", 512, "", msg
+            printi("Loading model from hub.")
+            v2 = new_model_url == "stabilityai/stable-diffusion-2"
 
-    else:
-        if new_model_token == "" or new_model_token is None:
-            msg = "Please provide a token to load models from the hub."
-            return msg
-        # Todo: Find out if there's a better way to do this
-        v2 = new_model_url == "stabilityai/stable-diffusion-2"
-
-    if v2:
-        prediction_type = "v_prediction"
-        image_size = 768
-        original_config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs",
-                                            "v2-inference-v.yaml")
-    else:
-        prediction_type = "epsilon"
-        image_size = 512
-        original_config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs",
-                                            "v1-inference.yaml")
-
-    db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type, v2=v2,
-                                 src=ckpt_path if not from_hub else new_model_url)
-    print(f"{'v2' if v2 else 'v1'} model loaded.")
-
-    original_config = OmegaConf.load(original_config_file)
-
-    num_train_timesteps = original_config.model.params.timesteps
-    beta_start = original_config.model.params.linear_start
-    beta_end = original_config.model.params.linear_end
-
-    scheduler = DDIMScheduler(
-        beta_end=beta_end,
-        beta_schedule="scaled_linear",
-        beta_start=beta_start,
-        num_train_timesteps=num_train_timesteps,
-        steps_offset=1,
-        clip_sample=False,
-        set_alpha_to_one=False,
-        prediction_type=prediction_type,
-    )
-
-    if v2:
-        # All of the 2.0 models use OpenCLIP and all use DDPM scheduler by default.
-        text_model_type = original_config.model.params.cond_stage_config.target.split(".")[-1]
-        if text_model_type == "FrozenOpenCLIPEmbedder":
-            scheduler_type = "ddim"
+        if v2:
+            prediction_type = "v_prediction"
+            image_size = 768
+            original_config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs",
+                                                "v2-inference-v.yaml")
         else:
-            scheduler_type = "pndm"
-    if scheduler_type == "pndm":
-        config = dict(scheduler.config)
-        config["skip_prk_steps"] = True
-        scheduler = PNDMScheduler.from_config(config)
-    elif scheduler_type == "lms":
-        scheduler = LMSDiscreteScheduler.from_config(scheduler.config)
-    # elif scheduler_type == "heun":
-    # scheduler = HeunDiscreteScheduler.from_config(scheduler.config)
-    elif scheduler_type == "euler":
-        scheduler = EulerDiscreteScheduler.from_config(scheduler.config)
-    elif scheduler_type == "euler-ancestral":
-        scheduler = EulerAncestralDiscreteScheduler.from_config(scheduler.config)
-    elif scheduler_type == "dpm":
-        scheduler = DPMSolverMultistepScheduler.from_config(scheduler.config)
-    elif scheduler_type == "ddim":
-        scheduler = scheduler
-    else:
-        raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
+            prediction_type = "epsilon"
+            image_size = 512
+            original_config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs",
+                                                "v1-inference.yaml")
 
-    if from_hub:
-        print(f"Trying to create {new_model_name} from huggingface.co/{new_model_url}")
-        printi("Loading model from hub.")
-        pipe = DiffusionPipeline.from_pretrained(new_model_url, use_auth_token=new_model_token,
-                                                 scheduler=scheduler)
-        printi("Model loaded.")
-        shared.state.job_no = 7
+        db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type, v2=v2,
+                                     src=ckpt_path if not from_hub else new_model_url, resolution=768 if v2 else 512)
+        print(f"{'v2' if v2 else 'v1'} model loaded.")
 
-    else:
-        # Convert the UNet2DConditionModel model.
-        unet_config = create_unet_diffusers_config(original_config, image_size=image_size)
-        unet = UNet2DConditionModel(**unet_config)
+        original_config = OmegaConf.load(original_config_file)
 
-        converted_unet_checkpoint, has_ema = convert_ldm_unet_checkpoint(
-            checkpoint, unet_config, path=ckpt_path, extract_ema=extract_ema
+        num_train_timesteps = original_config.model.params.timesteps
+        beta_start = original_config.model.params.linear_start
+        beta_end = original_config.model.params.linear_end
+
+        scheduler = DDIMScheduler(
+            beta_end=beta_end,
+            beta_schedule="scaled_linear",
+            beta_start=beta_start,
+            num_train_timesteps=num_train_timesteps,
+            steps_offset=1,
+            clip_sample=False,
+            set_alpha_to_one=False,
+            prediction_type=prediction_type,
         )
-        db_config.has_ema = has_ema
-        db_config.save()
-        unet.load_state_dict(converted_unet_checkpoint)
-
-        # Convert the VAE model.
-        vae_config = create_vae_diffusers_config(original_config, image_size=image_size)
-        converted_vae_checkpoint = convert_ldm_vae_checkpoint(checkpoint, vae_config)
-
-        vae = AutoencoderKL(**vae_config)
-        vae.load_state_dict(converted_vae_checkpoint)
-
-        # Convert the text model.
-        text_model_type = original_config.model.params.cond_stage_config.target.split(".")[-1]
-        if text_model_type == "FrozenOpenCLIPEmbedder":
-            text_model = convert_open_clip_checkpoint(checkpoint)
-            tokenizer = CLIPTokenizer.from_pretrained("stabilityai/stable-diffusion-2", subfolder="tokenizer")
-            pipe = StableDiffusionPipeline(
-                vae=vae,
-                text_encoder=text_model,
-                tokenizer=tokenizer,
-                unet=unet,
-                scheduler=scheduler,
-                safety_checker=None,
-                feature_extractor=None,
-                requires_safety_checker=False,
-            )
-        elif text_model_type == "FrozenCLIPEmbedder":
-            text_model = convert_ldm_clip_checkpoint(checkpoint)
-            tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
-            safety_checker = StableDiffusionSafetyChecker.from_pretrained("CompVis/stable-diffusion-safety-checker")
-            feature_extractor = AutoFeatureExtractor.from_pretrained("CompVis/stable-diffusion-safety-checker")
-            pipe = StableDiffusionPipeline(
-                vae=vae,
-                text_encoder=text_model,
-                tokenizer=tokenizer,
-                unet=unet,
-                scheduler=scheduler,
-                safety_checker=safety_checker,
-                feature_extractor=feature_extractor,
-            )
+        print("Creating scheduler...")
+        if v2:
+            # All of the 2.0 models use OpenCLIP and all use DDPM scheduler by default.
+            text_model_type = original_config.model.params.cond_stage_config.target.split(".")[-1]
+            if text_model_type == "FrozenOpenCLIPEmbedder":
+                scheduler_type = "ddim"
+            else:
+                scheduler_type = "pndm"
+            db_config.scheduler = scheduler_type
+            db_config.save()
+        if scheduler_type == "pndm":
+            config = dict(scheduler.config)
+            config["skip_prk_steps"] = True
+            scheduler = PNDMScheduler.from_config(config)
+        elif scheduler_type == "lms":
+            scheduler = LMSDiscreteScheduler.from_config(scheduler.config)
+        elif scheduler_type == "heun":
+            scheduler = HeunDiscreteScheduler.from_config(scheduler.config)
+        elif scheduler_type == "euler":
+            scheduler = EulerDiscreteScheduler.from_config(scheduler.config)
+        elif scheduler_type == "euler-ancestral":
+            scheduler = EulerAncestralDiscreteScheduler.from_config(scheduler.config)
+        elif scheduler_type == "dpm":
+            scheduler = DPMSolverMultistepScheduler.from_config(scheduler.config)
+        elif scheduler_type == "ddim":
+            scheduler = scheduler
         else:
-            text_config = create_ldm_bert_config(original_config)
-            text_model = convert_ldm_bert_checkpoint(checkpoint, text_config)
-            tokenizer = BertTokenizerFast.from_pretrained("bert-base-uncased")
-            pipe = LDMTextToImagePipeline(vqvae=vae, bert=text_model, tokenizer=tokenizer, unet=unet, scheduler=scheduler)
+            raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
 
-    if pipe is None:
-        print("Unable to create da pipe!")
-        status = "Unable to create pipeline for extraction."
+        if from_hub:
+            print(f"Trying to create {new_model_name} from huggingface.co/{new_model_url}")
+            printi("Loading model from hub.")
+            pipe = DiffusionPipeline.from_pretrained(new_model_url, use_auth_token=new_model_token,
+                                                     scheduler=scheduler, device_map=map_location)
+            printi("Model loaded.")
+            shared.state.job_no = 7
+
+        else:
+            printi("Converting unet...")
+            # Convert the UNet2DConditionModel model.
+            unet_config = create_unet_diffusers_config(original_config, image_size=image_size)
+            unet = UNet2DConditionModel(**unet_config)
+
+            converted_unet_checkpoint, has_ema = convert_ldm_unet_checkpoint(
+                checkpoint, unet_config, path=ckpt_path, extract_ema=extract_ema
+            )
+            db_config.has_ema = has_ema
+            db_config.save()
+            unet.load_state_dict(converted_unet_checkpoint)
+            printi("Converting vae...")
+            # Convert the VAE model.
+            vae_config = create_vae_diffusers_config(original_config, image_size=image_size)
+            converted_vae_checkpoint = convert_ldm_vae_checkpoint(checkpoint, vae_config)
+
+            vae = AutoencoderKL(**vae_config)
+            vae.load_state_dict(converted_vae_checkpoint)
+            printi("Converting text encoder...")
+            # Convert the text model.
+            text_model_type = original_config.model.params.cond_stage_config.target.split(".")[-1]
+            if text_model_type == "FrozenOpenCLIPEmbedder":
+                text_model = convert_open_clip_checkpoint(checkpoint)
+                tokenizer = CLIPTokenizer.from_pretrained("stabilityai/stable-diffusion-2", subfolder="tokenizer")
+                pipe = StableDiffusionPipeline(
+                    vae=vae,
+                    text_encoder=text_model,
+                    tokenizer=tokenizer,
+                    unet=unet,
+                    scheduler=scheduler,
+                    safety_checker=None,
+                    feature_extractor=None,
+                    requires_safety_checker=False,
+                )
+            elif text_model_type == "FrozenCLIPEmbedder":
+                text_model = convert_ldm_clip_checkpoint(checkpoint)
+                tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
+                safety_checker = StableDiffusionSafetyChecker.from_pretrained("CompVis/stable-diffusion-safety-checker")
+                feature_extractor = AutoFeatureExtractor.from_pretrained("CompVis/stable-diffusion-safety-checker")
+                pipe = StableDiffusionPipeline(
+                    vae=vae,
+                    text_encoder=text_model,
+                    tokenizer=tokenizer,
+                    unet=unet,
+                    scheduler=scheduler,
+                    safety_checker=safety_checker,
+                    feature_extractor=feature_extractor
+                )
+            else:
+                text_config = create_ldm_bert_config(original_config)
+                text_model = convert_ldm_bert_checkpoint(checkpoint, text_config)
+                tokenizer = BertTokenizerFast.from_pretrained("bert-base-uncased")
+                pipe = LDMTextToImagePipeline(vqvae=vae, bert=text_model, tokenizer=tokenizer, unet=unet,
+                                              scheduler=scheduler)
+    except Exception as e:
+        pipe = None
+        status = f"Exception while extracting model: {e}"
+
+    if pipe is None or db_config is None:
+        print("Pipeline or config is not set, unable to continue.")
     else:
+        printi("Saving diffusers model...")
         pipe.save_pretrained(db_config.pretrained_model_name_or_path)
         status = f"Checkpoint successfully extracted to {db_config.pretrained_model_name_or_path}"
+        model_dir = db_config.model_dir
+        revision = db_config.revision
+        scheduler = db_config.scheduler
+        src = db_config.src
+        required_dirs = ["unet", "vae", "text_encoder", "scheduler", "tokenizer"]
+        for req_dir in required_dirs:
+            full_path = os.path.join(db_config.pretrained_model_name_or_path, req_dir)
+            if not os.path.exists(full_path):
+                status = f"Missing model directory, removing model: {full_path}"
+                shutil.rmtree(db_config.model_dir, ignore_errors=False, onerror=None)
+                break
+
+    if reset_safe:
+        shared.cmd_opts.disable_safe_unpickle = False
 
     reload_system_models()
     printm(status, True)
@@ -912,10 +953,11 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
     dirs = get_db_models()
 
     return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), \
-        db_config.model_dir, \
-        db_config.revision, \
-        db_config.scheduler, \
-        db_config.src, \
-        "True" if db_config.has_ema else "False", \
-        "True" if db_config.v2 else "False", \
+        model_dir, \
+        revision, \
+        scheduler, \
+        src, \
+        "True" if has_ema else "False", \
+        "True" if v2 else "False", \
+        db_config.resolution, \
         status

@@ -3,6 +3,7 @@ import re
 
 import torch
 import torch.utils.checkpoint
+from torch.utils.data import Dataset
 from transformers import CLIPTextModel
 
 from modules import shared
@@ -69,6 +70,41 @@ class FilenameTextGetter:
         tags = filename_text.split(',')
         output = text_template.replace("[filewords]", ','.join(tags))
         return output
+
+
+class PromptDataset(Dataset):
+    """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
+
+    def __init__(self, prompt: str, num_samples: int, filename_texts, file_prompt_contents: str, class_token: str,
+                 instance_token: str):
+        self.prompt = prompt
+        self.instance_token = instance_token
+        self.class_token = class_token
+        self.num_samples = num_samples
+        self.filename_texts = filename_texts
+        self.file_prompt_contents = file_prompt_contents
+
+    def __len__(self):
+        return self.num_samples
+
+    def __getitem__(self, index):
+        example = {"filename_text": self.filename_texts[index % len(self.filename_texts)] if len(
+            self.filename_texts) > 0 else ""}
+        prompt = example["filename_text"]
+        if "Instance" in self.file_prompt_contents:
+            class_token = self.class_token
+            # If the token is already in the prompt, just remove the instance token, don't swap it
+            class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
+            for token in class_tokens:
+                if token in prompt:
+                    prompt = prompt.replace(self.instance_token, "")
+                else:
+                    prompt = prompt.replace(self.instance_token, self.class_token)
+
+        prompt = self.prompt.replace("[filewords]", prompt)
+        example["prompt"] = prompt
+        example["index"] = index
+        return example
 
 
 # Implementation from https://github.com/bmaltais/kohya_ss

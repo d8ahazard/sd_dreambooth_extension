@@ -4,7 +4,9 @@
 
 import os
 import os.path as osp
+import re
 import shutil
+import traceback
 
 import torch
 
@@ -12,10 +14,6 @@ from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, printi, unload_system_models, \
     reload_system_models
 from modules import shared
-
-# =================#
-# UNet Conversion #
-# =================#
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -42,37 +40,8 @@ unet_conversion_map_resnet = [
 ]
 
 unet_conversion_map_layer = []
-UNET_PARAMS_MODEL_CHANNELS = 320
-UNET_PARAMS_CHANNEL_MULT = [1, 2, 4, 4]
-UNET_PARAMS_ATTENTION_RESOLUTIONS = [4, 2, 1]
-UNET_PARAMS_IMAGE_SIZE = 32  # unused
-UNET_PARAMS_IN_CHANNELS = 4
-UNET_PARAMS_OUT_CHANNELS = 4
-UNET_PARAMS_NUM_RES_BLOCKS = 2
-UNET_PARAMS_CONTEXT_DIM = 768
-UNET_PARAMS_NUM_HEADS = 8
-unet_params = {
-    "model_channels": 320,
-    "channel_mult": [1, 2, 4, 4],
-    "attention_resolutions": [4, 2, 1],
-    "image_size": 32,  # unused
-    "in_channels": 4,
-    "out_channels": 4,
-    "num_res_blocks": 2,
-    "context_dim": 768,
-    "num_heads": 8
-}
-unet_v2_params = unet_params.copy()
-unet_v2_params["num_heads"] = [5, 10, 20, 20]
-unet_v2_params["attention_head_dim"] = [5, 10, 20, 20]
-unet_v2_params["context_dim"] = 1024
-VAE_PARAMS_Z_CHANNELS = 4
-VAE_PARAMS_RESOLUTION = 256
-VAE_PARAMS_IN_CHANNELS = 3
-VAE_PARAMS_OUT_CH = 3
-VAE_PARAMS_CH = 128
-VAE_PARAMS_CH_MULT = [1, 2, 4, 4]
-VAE_PARAMS_NUM_RES_BLOCKS = 2
+# hardcoded number of downblocks and resnets/attentions...
+# would need smarter logic for other networks.
 for i in range(4):
     # loop over downblocks/upblocks
 
@@ -119,15 +88,6 @@ for j in range(2):
     hf_mid_res_prefix = f"mid_block.resnets.{j}."
     sd_mid_res_prefix = f"middle_block.{2 * j}."
     unet_conversion_map_layer.append((sd_mid_res_prefix, hf_mid_res_prefix))
-
-
-def conv_transformer_to_linear(checkpoint):
-    keys = list(checkpoint.keys())
-    tf_keys = ["proj_in.weight", "proj_out.weight"]
-    for key in keys:
-        if ".".join(key.split(".")[-2:]) in tf_keys:
-            if checkpoint[key].ndim > 2:
-                checkpoint[key] = checkpoint[key][:, :, 0, 0]
 
 
 def convert_unet_state_dict(unet_state_dict):
@@ -227,139 +187,85 @@ def convert_vae_state_dict(vae_state_dict):
 
 
 # =========================#
-def convert_unet_state_dict_to_sd(v2, unet_state_dict):
-    conversion_map_layer = []
-    for q in range(4):
-        for r in range(2):
-            hfd_res_prefix = f"down_blocks.{q}.resnets.{r}."
-            sdd_res_prefix = f"input_blocks.{3 * q + r + 1}.0."
-            conversion_map_layer.append((sdd_res_prefix, hfd_res_prefix))
-            if q < 3:
-                hfd_atn_prefix = f"down_blocks.{q}.attentions.{r}."
-                sdd_atn_prefix = f"input_blocks.{3 * q + r + 1}.1."
-                conversion_map_layer.append((sdd_atn_prefix, hfd_atn_prefix))
-        for r in range(3):
-            hfu_res_prefix = f"up_blocks.{q}.resnets.{r}."
-            sdu_res_prefix = f"output_blocks.{3 * q + r}.0."
-            conversion_map_layer.append((sdu_res_prefix, hfu_res_prefix))
-            if q > 0:
-                hfu_atn_prefix = f"up_blocks.{q}.attentions.{r}."
-                sdu_atn_prefix = f"output_blocks.{3 * q + r}.1."
-                conversion_map_layer.append((sdu_atn_prefix, hfu_atn_prefix))
-        if q < 3:
-            # no downsample in down_blocks.3
-            hfd_prefix = f"down_blocks.{q}.downsamplers.0.conv."
-            sdd_prefix = f"input_blocks.{3 * (q + 1)}.0.op."
-            conversion_map_layer.append((sdd_prefix, hfd_prefix))
+# Text Encoder Conversion #
+# =========================#
 
-            # no upsample in up_blocks.3
-            hfu_prefix = f"up_blocks.{q}.upsamplers.0."
-            sdu_prefix = f"output_blocks.{3 * q + 2}.{1 if q == 0 else 2}."
-            conversion_map_layer.append((sdu_prefix, hfu_prefix))
 
-    hfm_atn_prefix = "mid_block.attentions.0."
-    sdm_atn_prefix = "middle_block.1."
-    conversion_map_layer.append((sdm_atn_prefix, hfm_atn_prefix))
 
-    for r in range(2):
-        hfm_res_prefix = f"mid_block.resnets.{r}."
-        sdm_res_prefix = f"middle_block.{2 * r}."
-        conversion_map_layer.append((sdm_res_prefix, hfm_res_prefix))
+textenc_conversion_lst = [
+    # (stable-diffusion, HF Diffusers)
+    ('resblocks.', 'text_model.encoder.layers.'),
+    ('ln_1', 'layer_norm1'),
+    ('ln_2', 'layer_norm2'),
+    ('.c_fc.', '.fc1.'),
+    ('.c_proj.', '.fc2.'),
+    ('.attn', '.self_attn'),
+    ('ln_final.', 'transformer.text_model.final_layer_norm.'),
+    ('token_embedding.weight', 'transformer.text_model.embeddings.token_embedding.weight'),
+    ('positional_embedding', 'transformer.text_model.embeddings.position_embedding.weight')
+]
+protected = {re.escape(x[1]): x[0] for x in textenc_conversion_lst}
+textenc_pattern = re.compile("|".join(protected.keys()))
 
-    # buyer beware: this is a *brittle* function,
-    # and correct output requires that all of these pieces interact in
-    # the exact order in which I have arranged them.
-    mapping = {k: k for k in unet_state_dict.keys()}
-    for sd_name, hf_name in unet_conversion_map:
-        mapping[hf_name] = sd_name
-    for k, v in mapping.items():
-        if "resnets" in k:
-            for sd_part, hf_part in unet_conversion_map_resnet:
-                v = v.replace(hf_part, sd_part)
-            mapping[k] = v
-    for k, v in mapping.items():
-        for sd_part, hf_part in conversion_map_layer:
-            v = v.replace(hf_part, sd_part)
-        mapping[k] = v
-    new_state_dict = {v: unet_state_dict[k] for k, v in mapping.items()}
+# Ordering is from https://github.com/pytorch/pytorch/blob/master/test/cpp/api/modules.cpp
+code2idx = {'q': 0, 'k': 1, 'v': 2}
 
-    if v2:
-        conv_transformer_to_linear(new_state_dict)
+
+def convert_text_enc_state_dict_v20(text_enc_dict: dict[str, torch.Tensor]):
+    new_state_dict = {}
+    capture_qkv_weight = {}
+    capture_qkv_bias = {}
+    for k, v in text_enc_dict.items():
+        if k.endswith('.self_attn.q_proj.weight') or k.endswith('.self_attn.k_proj.weight') or k.endswith(
+                '.self_attn.v_proj.weight'):
+            k_pre = k[:-len('.q_proj.weight')]
+            k_code = k[-len('q_proj.weight')]
+            if k_pre not in capture_qkv_weight:
+                capture_qkv_weight[k_pre] = [None, None, None]
+            capture_qkv_weight[k_pre][code2idx[k_code]] = v
+            continue
+
+        if k.endswith('.self_attn.q_proj.bias') or k.endswith('.self_attn.k_proj.bias') or k.endswith(
+                '.self_attn.v_proj.bias'):
+            k_pre = k[:-len('.q_proj.bias')]
+            k_code = k[-len('q_proj.bias')]
+            if k_pre not in capture_qkv_bias:
+                capture_qkv_bias[k_pre] = [None, None, None]
+            capture_qkv_bias[k_pre][code2idx[k_code]] = v
+            continue
+
+        relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k)
+        #        if relabelled_key != k:
+        #            print(f"{k} -> {relabelled_key}")
+
+        new_state_dict[relabelled_key] = v
+
+    for k_pre, tensors in capture_qkv_weight.items():
+        if None in tensors:
+            raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
+        relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
+        new_state_dict[relabelled_key + '.in_proj_weight'] = torch.cat(tensors)
+
+    for k_pre, tensors in capture_qkv_bias.items():
+        if None in tensors:
+            raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
+        relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
+        new_state_dict[relabelled_key + '.in_proj_bias'] = torch.cat(tensors)
 
     return new_state_dict
 
 
-# Text Encoder Conversion #
-# =========================#
-# pretty much a no-op
-
-
-def convert_text_enc_state_dict(text_enc_dict):
+def convert_text_enc_state_dict(text_enc_dict: dict[str, torch.Tensor]):
     return text_enc_dict
 
 
-def convert_text_encoder_state_dict_to_sd_v2(checkpoint):
-    def convert_key(conv_key):
-        if ".position_ids" in conv_key:
-            return None
-
-        # common
-        conv_key = conv_key.replace("text_model.encoder.", "transformer.")
-        conv_key = conv_key.replace("text_model.", "")
-        if "layers" in conv_key:
-            # resblocks conversion
-            conv_key = conv_key.replace(".layers.", ".resblocks.")
-            if ".layer_norm" in conv_key:
-                conv_key = conv_key.replace(".layer_norm", ".ln_")
-            elif ".mlp." in conv_key:
-                conv_key = conv_key.replace(".fc1.", ".c_fc.")
-                conv_key = conv_key.replace(".fc2.", ".c_proj.")
-            elif '.self_attn.out_proj' in conv_key:
-                conv_key = conv_key.replace(".self_attn.out_proj.", ".attn.out_proj.")
-            elif '.self_attn.' in conv_key:
-                conv_key = None
-            else:
-                raise ValueError(f"unexpected key in DiffUsers model: {conv_key}")
-        elif '.position_embedding' in conv_key:
-            conv_key = conv_key.replace("embeddings.position_embedding.weight", "positional_embedding")
-        elif '.token_embedding' in conv_key:
-            conv_key = conv_key.replace("embeddings.token_embedding.weight", "token_embedding.weight")
-        elif 'final_layer_norm' in conv_key:
-            conv_key = conv_key.replace("final_layer_norm", "ln_final")
-        return conv_key
-
-    keys = list(checkpoint.keys())
-    new_sd = {}
-    for key in keys:
-        new_key = convert_key(key)
-        if new_key is None:
-            continue
-        new_sd[new_key] = checkpoint[key]
-
-    for key in keys:
-        if 'layers' in key and 'q_proj' in key:
-            key_q = key
-            key_k = key.replace("q_proj", "k_proj")
-            key_v = key.replace("q_proj", "v_proj")
-
-            value_q = checkpoint[key_q]
-            value_k = checkpoint[key_k]
-            value_v = checkpoint[key_v]
-            value = torch.cat([value_q, value_k, value_v])
-
-            new_key = key.replace("text_model.encoder.layers.", "transformer.resblocks.")
-            new_key = new_key.replace(".self_attn.q_proj.", ".attn.in_proj_")
-            new_sd[new_key] = value
-
-    return new_sd
-
-
-def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, reload_models=False):
+def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, reload_models=True):
     """
 
     @param model_name: The model name to compile
     @param half: Use FP16 when compiling the model
     @param use_subdir: The model will be saved to a subdirectory of the checkpoints folder
+    @param reload_models: Whether to reload the system list of checkpoints.
     @return: status: What happened, path: Checkpoint path
     """
     unload_system_models()
@@ -376,57 +282,76 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
         models_path = ckpt_dir
 
     config = from_file(model_name)
-    try:
-        if "use_subdir" in config.__dict__:
-            use_subdir = config["use_subdir"]
-    except:
-        print("Yeah, we can't use dict to find config values.")
+    if "use_subdir" in config.__dict__:
+        use_subdir = config["use_subdir"]
 
     v2 = config.v2
     total_steps = config.revision
 
     if use_subdir:
         os.makedirs(os.path.join(models_path, model_name))
-        out_file = os.path.join(models_path, model_name, f"{model_name}_{total_steps}.ckpt")
+        checkpoint_path = os.path.join(models_path, model_name, f"{model_name}_{total_steps}.ckpt")
     else:
-        out_file = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
+        checkpoint_path = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
 
     model_path = config.pretrained_model_name_or_path
+
     unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")
     vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.bin")
     text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
-    printi("Converting unet...")
-    # Convert the UNet model
-    unet_state_dict = torch.load(unet_path, map_location="cpu")
-    unet_state_dict = convert_unet_state_dict(unet_state_dict)
-    #unet_state_dict = convert_unet_state_dict_to_sd(v2, unet_state_dict)
-    unet_state_dict = {"model.diffusion_model." + k: v for k, v in unet_state_dict.items()}
-    printi("Converting vae...")
-    # Convert the VAE model
-    vae_state_dict = torch.load(vae_path, map_location="cpu")
-    vae_state_dict = convert_vae_state_dict(vae_state_dict)
-    vae_state_dict = {"first_stage_model." + k: v for k, v in vae_state_dict.items()}
-    printi("Converting text encoder...")
-    # Convert the text encoder model
-    text_enc_dict = torch.load(text_enc_path, map_location="cpu")
-    text_enc_dict = convert_text_enc_state_dict(text_enc_dict)
-    #text_enc_dict = convert_text_enc_state_dict(text_enc_dict) if not v2 else convert_text_encoder_state_dict_to_sd_v2(text_enc_dict)
-    text_enc_dict = {"cond_stage_model.transformer." + k: v for k, v in text_enc_dict.items()}
-    printi("Compiling new state dict...")
-    # Put together new checkpoint
-    state_dict = {**unet_state_dict, **vae_state_dict, **text_enc_dict}
-    if half:
-        state_dict = {k: v.half() for k, v in state_dict.items()}
+    try:
+        printi("Converting unet...")
+        # Convert the UNet model
+        unet_state_dict = torch.load(unet_path, map_location="cpu")
+        unet_state_dict = convert_unet_state_dict(unet_state_dict)
+        # unet_state_dict = convert_unet_state_dict_to_sd(v2, unet_state_dict)
+        unet_state_dict = {"model.diffusion_model." + k: v for k, v in unet_state_dict.items()}
+        printi("Converting vae...")
+        # Convert the VAE model
+        vae_state_dict = torch.load(vae_path, map_location="cpu")
+        vae_state_dict = convert_vae_state_dict(vae_state_dict)
+        vae_state_dict = {"first_stage_model." + k: v for k, v in vae_state_dict.items()}
+        printi("Converting text encoder...")
+        # Convert the text encoder model
+        text_enc_dict = torch.load(text_enc_path, map_location="cpu")
 
-    state_dict = {"state_dict": state_dict}
-    new_ckpt = {'global_step': config.revision, 'state_dict': state_dict}
-    printi(f"Saving checkpoint to {out_file}...")
-    torch.save(new_ckpt, out_file)
-    if v2:
-        cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs", "v2-inference-v.yaml")
-        cfg_dest = out_file.replace(".ckpt", ".yaml")
-        print(f"Copying config file to {cfg_dest}")
-        shutil.copyfile(cfg_file, cfg_dest)
+        # Easiest way to identify v2.0 model seems to be that the text encoder (OpenCLIP) is deeper
+        is_v20_model = "text_model.encoder.layers.22.layer_norm2.bias" in text_enc_dict
+
+        if is_v20_model:
+            print("Converting text enc dict for V2 model.")
+            # Need to add the tag 'transformer' in advance, so we can knock it out from the final layer-norm
+            text_enc_dict = {"transformer." + k: v for k, v in text_enc_dict.items()}
+            text_enc_dict = convert_text_enc_state_dict_v20(text_enc_dict)
+            text_enc_dict = {"cond_stage_model.model." + k: v for k, v in text_enc_dict.items()}
+            if not config.v2:
+                config.v2 = True
+                config.save()
+                v2 = True
+        else:
+            print("Converting text enc dict for V1 model.")
+            text_enc_dict = convert_text_enc_state_dict(text_enc_dict)
+            text_enc_dict = {"cond_stage_model.transformer." + k: v for k, v in text_enc_dict.items()}
+
+        # Put together new checkpoint
+        state_dict = {**unet_state_dict, **vae_state_dict, **text_enc_dict}
+        if half:
+            print("Halving model.")
+            state_dict = {k: v.half() for k, v in state_dict.items()}
+
+        state_dict = {"global_step": config.revision, "state_dict": state_dict}
+        printi(f"Saving checkpoint to {checkpoint_path}...")
+        torch.save(state_dict, checkpoint_path)
+        if v2:
+            cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs", "v2-inference-v.yaml")
+            cfg_dest = checkpoint_path.replace(".ckpt", ".yaml")
+            print(f"Copying config file to {cfg_dest}")
+            shutil.copyfile(cfg_file, cfg_dest)
+    except Exception as e:
+        print("Exception compiling checkpoint!")
+        traceback.print_exc()
+        return f"Exception compiling: {e}", ""
+
     try:
         del unet_state_dict
         del vae_state_dict

@@ -14,7 +14,8 @@ from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.dreambooth import list_features, is_image, printm
+from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
+from extensions.sd_dreambooth_extension.dreambooth.utils import list_features, is_image
 from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import AverageMeter
 from modules import shared
 
