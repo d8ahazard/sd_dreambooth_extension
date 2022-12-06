@@ -58,7 +58,7 @@ def check_versions():
 
 base_dir = os.path.dirname(os.path.realpath(__file__))
 revision = ""
-app_revison = ""
+app_revision = ""
 
 try:
     repo = git.Repo(base_dir)
