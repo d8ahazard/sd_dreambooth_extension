@@ -289,7 +289,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
     total_steps = config.revision
 
     if use_subdir:
-        os.makedirs(os.path.join(models_path, model_name))
+        os.makedirs(os.path.join(models_path, model_name), exist_ok=True)
         checkpoint_path = os.path.join(models_path, model_name, f"{model_name}_{total_steps}.ckpt")
     else:
         checkpoint_path = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
