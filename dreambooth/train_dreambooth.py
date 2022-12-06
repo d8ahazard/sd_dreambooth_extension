@@ -461,6 +461,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                         ),
                         torch_dtype=torch_dtype,
                         requires_safety_checker=False,
+                        safety_checker=None,
                         revision=args.revision
                     )
 
