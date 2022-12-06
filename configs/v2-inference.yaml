@@ -29,7 +29,6 @@ model:
         attention_resolutions: [ 4, 2, 1 ]
         num_res_blocks: 2
         channel_mult: [ 1, 2, 4, 4 ]
-        num_heads: 8
         num_head_channels: 64 # need to fix for flash-attn
         use_spatial_transformer: True
         use_linear_in_transformer: True

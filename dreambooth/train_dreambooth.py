@@ -30,7 +30,7 @@ from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothCo
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, encode_hidden_state, \
-    PromptDataset
+    PromptDataset, EMAModel
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_name, list_features, is_image
 from modules import shared, sd_models
 
@@ -461,6 +461,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                         ),
                         torch_dtype=torch_dtype,
                         requires_safety_checker=False,
+                        safety_checker=None,
                         revision=args.revision
                     )
 
@@ -763,7 +764,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
 
     # create ema, fix OOM
     if args.use_ema:
-        ema_unet = EMAModel(unet, inv_gamma=1.0, power=3 / 4, max_value=0.9999, device=accelerator.device)
+        ema_unet = EMAModel(unet.parameters())
+        ema_unet.to(accelerator.device, dtype=weight_dtype)
         if args.train_text_encoder and text_encoder is not None:
             unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
                 unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler
@@ -826,10 +828,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                 pred_type = "v_prediction"
             scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", steps_offset=1,
                                       clip_sample=False, set_alpha_to_one=False, prediction_type=pred_type)
-
+            if args.use_ema:
+                ema_unet.store(unet.parameters())
+                ema_unet.copy_to(unet.parameters())
             s_pipeline = DiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
-                unet=accelerator.unwrap_model(ema_unet.averaged_model if args.use_ema else unet),
+                unet=accelerator.unwrap_model(unet),
                 text_encoder=text_enc_model,
                 vae=vae if vae is not None else create_vae(),
                 scheduler=scheduler,
@@ -847,6 +851,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                         s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
                         compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
                                            reload_models=False)
+                        if args.use_ema:
+                            ema_unet.restore(unet.parameters())
                     except Exception as e:
                         logger.debug(f"Exception saving checkpoint/model: {e}")
                         traceback.print_exc()
@@ -979,7 +985,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
 
                     # Update EMA
                     if args.use_ema and ema_unet is not None:
-                        ema_unet.step(unet)
+                        ema_unet.step(unet.parameters())
 
                 if not global_step % 10:
                     allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
