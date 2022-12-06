@@ -984,7 +984,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
 
                     # Update EMA
                     if args.use_ema and ema_unet is not None:
-                        ema_unet.step(unet)
+                        ema_unet.step(unet.parameters())
 
                 if not global_step % 10:
                     allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
