@@ -7,7 +7,7 @@ from extensions.sd_dreambooth_extension.dreambooth.dreambooth import performance
     training_wizard, training_wizard_person, load_model_params
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, log_memory, generate_sample_img, \
-    debug_prompts
+    debug_prompts, list_attention
 from modules import script_callbacks, sd_models, shared
 from modules.ui import setup_progressbar, gr_show, wrap_gradio_call, create_refresh_button
 from webui import wrap_gradio_gpu_call
@@ -130,7 +130,7 @@ def on_ui_tabs():
                                                                      choices=["no", "fp16", "bf16"])
                                     db_attention = gr.Dropdown(
                                         label="Memory Attention", value="default",
-                                        choices=["default", "xformers", "flash_attention"])
+                                        choices=list_attention())
 
                                     db_not_cache_latents = gr.Checkbox(label="Don't Cache Latents", value=True)
                                     db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)

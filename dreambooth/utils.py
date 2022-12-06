@@ -100,6 +100,23 @@ def unload_system_models():
     printm("", True)
 
 
+def list_attention():
+    has_xformers = False
+    try:
+        if shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers:
+            import xformers
+            import xformers.ops
+            has_xformers = shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers
+    except:
+        pass
+    pass
+
+    if has_xformers:
+        return ["default", "xformers", "flash_attention"]
+    else:
+        return ["default", "flash_attention"]
+
+
 def reload_system_models():
     if shared.sd_model is not None:
         shared.sd_model.to(shared.device)
