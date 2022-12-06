@@ -1,4 +1,3 @@
-# From shivam shiaro's repo, with "minimal" modification to hopefully allow for smoother updating?
 import argparse
 import hashlib
 import itertools
@@ -15,23 +14,25 @@ import torch
 import torch.nn.functional as F
 import torch.utils.checkpoint
 from accelerate import Accelerator
-from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, EulerAncestralDiscreteScheduler, \
-    StableDiffusionPipeline, UNet2DConditionModel
+from diffusers import AutoencoderKL, DDIMScheduler, EulerAncestralDiscreteScheduler, \
+    DiffusionPipeline, UNet2DConditionModel
 from diffusers.optimization import get_scheduler
+from diffusers.training_utils import EMAModel
 from diffusers.utils import logging as dl
 from huggingface_hub import HfFolder, whoami
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
-from transformers import CLIPTextModel, CLIPTokenizer
+from transformers import AutoTokenizer, PretrainedConfig, CLIPTextModel
 
 from extensions.sd_dreambooth_extension.dreambooth import xattention
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.dreambooth import save_checkpoint, list_features, \
-    is_image, printm, cleanup, sanitize_name
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, EMAModel, \
-    encode_hidden_state
-from modules import shared
+from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
+from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
+from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, encode_hidden_state, \
+    PromptDataset
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_name, list_features, is_image
+from modules import shared, sd_models
 
 # Custom stuff
 try:
@@ -54,6 +55,26 @@ console.setLevel(logging.DEBUG)
 logger.addHandler(console)
 logger.setLevel(logging.DEBUG)
 dl.set_verbosity_error()
+
+
+def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision):
+    text_encoder_config = PretrainedConfig.from_pretrained(
+        pretrained_model_name_or_path,
+        subfolder="text_encoder",
+        revision=revision,
+    )
+    model_class = text_encoder_config.architectures[0]
+
+    if model_class == "CLIPTextModel":
+        from transformers import CLIPTextModel
+
+        return CLIPTextModel
+    elif model_class == "RobertaSeriesModelWithTransformation":
+        from diffusers.pipelines.alt_diffusion.modeling_roberta_series import RobertaSeriesModelWithTransformation
+
+        return RobertaSeriesModelWithTransformation
+    else:
+        raise ValueError(f"{model_class} is not supported.")
 
 
 def parse_args(input_args=None):
@@ -109,54 +130,6 @@ def parse_args(input_args=None):
         help="The prompt to specify images in the same class as provided instance images.",
     )
     parser.add_argument(
-        "--save_sample_prompt",
-        type=str,
-        default=None,
-        help="The prompt used to generate sample outputs to save.",
-    )
-    parser.add_argument(
-        "--save_sample_negative_prompt",
-        type=str,
-        default=None,
-        help="The negative prompt used to generate sample outputs to save.",
-    )
-    parser.add_argument(
-        "--n_save_sample",
-        type=int,
-        default=4,
-        help="The number of samples to save.",
-    )
-    parser.add_argument(
-        "--save_guidance_scale",
-        type=float,
-        default=7.5,
-        help="CFG for save sample.",
-    )
-    parser.add_argument(
-        "--save_infer_steps",
-        type=int,
-        default=50,
-        help="The number of inference steps for save sample.",
-    )
-    parser.add_argument(
-        "--class_negative_prompt",
-        type=str,
-        default=None,
-        help="The negative prompt used to generate sample outputs to save.",
-    )
-    parser.add_argument(
-        "--class_guidance_scale",
-        type=float,
-        default=7.5,
-        help="CFG for save sample.",
-    )
-    parser.add_argument(
-        "--class_infer_steps",
-        type=int,
-        default=50,
-        help="The number of inference steps for save sample.",
-    )
-    parser.add_argument(
         "--pad_tokens",
         default=False,
         action="store_true",
@@ -174,8 +147,8 @@ def parse_args(input_args=None):
         type=int,
         default=100,
         help=(
-            "Minimal class images for prior preservation loss. If not have enough images, additional images will be"
-            " sampled with class_prompt."
+            "Minimal class images for prior preservation loss. If there are not enough images already present in"
+            " class_data_dir, additional images will be sampled with class_prompt."
         ),
     )
     parser.add_argument(
@@ -211,6 +184,7 @@ def parse_args(input_args=None):
         default=None,
         help="Total number of training steps to perform.  If provided, overrides num_train_epochs.",
     )
+    parser.add_argument("--save_steps", type=int, default=500, help="Save checkpoint every X updates steps.")
     parser.add_argument(
         "--gradient_accumulation_steps",
         type=int,
@@ -271,18 +245,15 @@ def parse_args(input_args=None):
             " *output_dir/runs/**CURRENT_DATETIME_HOSTNAME***."
         ),
     )
-    parser.add_argument("--log_interval", type=int, default=10, help="Log every N steps.")
-    parser.add_argument("--save_interval", type=int, default=10_000, help="Save weights every N steps.")
-    parser.add_argument("--save_min_steps", type=int, default=0, help="Start saving weights after N steps.")
     parser.add_argument(
         "--mixed_precision",
         type=str,
-        default="no",
+        default=None,
         choices=["no", "fp16", "bf16"],
         help=(
-            "Whether to use mixed precision. Choose"
-            "between fp16 and bf16 (bfloat16). Bf16 requires PyTorch >= 1.10."
-            "and an Nvidia Ampere GPU."
+            "Whether to use mixed precision. Choose between fp16 and bf16 (bfloat16). Bf16 requires PyTorch >="
+            " 1.10.and an Nvidia Ampere GPU.  Default to the value of accelerate config of the current system or the"
+            " flag passed with the `accelerate.launch` command. Use this argument to override the accelerate config."
         ),
     )
     parser.add_argument("--not_cache_latents", action="store_true",
@@ -349,42 +320,18 @@ def parse_args(input_args=None):
     if env_local_rank != -1 and env_local_rank != args.local_rank:
         args.local_rank = env_local_rank
 
+    if args.with_prior_preservation:
+        if args.class_data_dir is None:
+            raise ValueError("You must specify a data directory for class images.")
+        if args.class_prompt is None:
+            raise ValueError("You must specify prompt for class images.")
+    else:
+        if args.class_data_dir is not None:
+            logger.warning("You need not use --class_data_dir without --with_prior_preservation.")
+        if args.class_prompt is not None:
+            logger.warning("You need not use --class_prompt without --with_prior_preservation.")
+
     return args
-
-
-class PromptDataset(Dataset):
-    """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
-
-    def __init__(self, prompt: str, num_samples: int, filename_texts, file_prompt_contents: str, class_token: str,
-                 instance_token: str):
-        self.prompt = prompt
-        self.instance_token = instance_token
-        self.class_token = class_token
-        self.num_samples = num_samples
-        self.filename_texts = filename_texts
-        self.file_prompt_contents = file_prompt_contents
-
-    def __len__(self):
-        return self.num_samples
-
-    def __getitem__(self, index):
-        example = {"filename_text": self.filename_texts[index % len(self.filename_texts)] if len(
-            self.filename_texts) > 0 else ""}
-        prompt = example["filename_text"]
-        if "Instance" in self.file_prompt_contents:
-            class_token = self.class_token
-            # If the token is already in the prompt, just remove the instance token, don't swap it
-            class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
-            for token in class_tokens:
-                if token in prompt:
-                    prompt = prompt.replace(self.instance_token, "")
-                else:
-                    prompt = prompt.replace(self.instance_token, self.class_token)
-
-        prompt = self.prompt.replace("[filewords]", prompt)
-        example["prompt"] = prompt
-        example["index"] = index
-        return example
 
 
 class LatentsDataset(Dataset):
@@ -429,7 +376,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
-def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict, str]:
+def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothConfig, dict, str]:
     global with_prior
     text_encoder = None
     args.tokenizer_name = None
@@ -480,25 +427,31 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
         args.train_text_encoder = False
 
     concept_pipeline = None
+    c_idx = 0
+
     for concept in args.concepts_list:
+        cur_class_images = 0
+        print(f"Checking concept: {concept}")
         text_getter = FilenameTextGetter()
+        print(f"Concept requires {concept.num_class_images} images.")
         with_prior = concept.num_class_images > 0
         if with_prior:
-            class_images_dir = Path(concept["class_data_dir"])
+            class_images_dir = concept["class_data_dir"]
+            if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:
+                class_images_dir = os.path.join(args.model_dir, f"classifiers_{c_idx}")
+                print(f"Class image dir is not set, defaulting to {class_images_dir}")
+            class_images_dir = Path(class_images_dir)
             class_images_dir.mkdir(parents=True, exist_ok=True)
-            cur_class_images = 0
-            iterfiles = 0
             for x in class_images_dir.iterdir():
-                iterfiles += 1
                 if is_image(x, pil_features):
                     cur_class_images += 1
+            print(f"Class dir {class_images_dir} has {cur_class_images} images.")
             if cur_class_images < concept.num_class_images:
                 num_new_images = concept.num_class_images - cur_class_images
                 shared.state.textinfo = f"Generating {num_new_images} class images for training..."
-
                 torch_dtype = torch.float16 if accelerator.device.type == "cuda" else torch.float32
                 if concept_pipeline is None:
-                    concept_pipeline = StableDiffusionPipeline.from_pretrained(
+                    concept_pipeline = DiffusionPipeline.from_pretrained(
                         args.pretrained_model_name_or_path,
                         vae=AutoencoderKL.from_pretrained(
                             args.pretrained_vae_name_or_path or args.pretrained_model_name_or_path,
@@ -516,7 +469,6 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
 
                 shared.state.job_count = num_new_images
                 shared.state.job_no = 0
-                save_txt = "[filewords]" in concept.class_prompt
                 filename_texts = [text_getter.read_text(x) for x in Path(concept.instance_data_dir).iterdir() if
                                   is_image(x, pil_features)]
                 sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts,
@@ -534,8 +486,8 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                         example = sample_dataset.__getitem__(random.randrange(0, s_len))
                         images = concept_pipeline(example["prompt"], num_inference_steps=concept.class_infer_steps,
                                                   guidance_scale=concept.class_guidance_scale,
-                                                  scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
-                                                                                            beta_end=0.012),
+                                                  height=args.resolution,
+                                                  width=args.resolution,
                                                   negative_prompt=concept.class_negative_prompt,
                                                   num_images_per_prompt=args.sample_batch_size).images
 
@@ -544,15 +496,17 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                                 logger.debug("Generation canceled.")
                                 shared.state.textinfo = "Training canceled."
                                 return args, mem_record, "Training canceled."
-                            hash_image = hashlib.sha1(image.tobytes()).hexdigest()
+                            if args.save_class_txt:
+                                image_base = hashlib.sha1(image.tobytes()).hexdigest()
+                            else:
+                                image_base = example["prompt"]
                             image_filename = class_images_dir / f"{generated_images + cur_class_images}-" \
-                                                                f"{hash_image}.jpg"
+                                                                f"{image_base}.jpg"
                             image.save(image_filename)
-                            if save_txt:
-                                txt_filename = class_images_dir / f"{generated_images + cur_class_images}-" \
-                                                                  f"{hash_image}.txt "
+                            if args.save_class_txt:
+                                txt_filename = image_filename.replace(".jpg", ".txt")
                                 with open(txt_filename, "w", encoding="utf8") as file:
-                                    file.write(example["filename_text"][i] + "\n")
+                                    file.write(example["prompt"])
                             shared.state.job_no += 1
                             generated_images += 1
                             shared.state.textinfo = f"Class image {generated_images}/{num_new_images}, " \
@@ -561,26 +515,30 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                             pbar.update()
                     del pbar
                 del sample_dataset
-
+        c_idx += 1
     del concept_pipeline
     del text_getter
     cleanup()
 
     # Load the tokenizer
     if args.tokenizer_name:
-        tokenizer = CLIPTokenizer.from_pretrained(
+        tokenizer = AutoTokenizer.from_pretrained(
             args.tokenizer_name,
             revision=args.revision,
+            use_fast=False,
         )
     else:
-        tokenizer = CLIPTokenizer.from_pretrained(
-            args.pretrained_model_name_or_path,
-            subfolder="tokenizer",
+        tokenizer = AutoTokenizer.from_pretrained(
+            os.path.join(args.pretrained_model_name_or_path, "tokenizer"),
             revision=args.revision,
+            use_fast=False,
         )
 
+    # import correct text encoder class
+    text_encoder_cls = import_model_class_from_model_name_or_path(args.pretrained_model_name_or_path, args.revision)
+
     # Load models and create wrapper for stable diffusion
-    text_encoder = CLIPTextModel.from_pretrained(
+    text_encoder = text_encoder_cls.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="text_encoder",
         revision=args.revision,
@@ -633,6 +591,7 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
             use_adam = True
         except Exception as a:
             logger.warning(f"Exception importing 8bit adam: {a}")
+            traceback.print_exc()
 
     params_to_optimize = (
         itertools.chain(unet.parameters(), text_encoder.parameters()) if args.train_text_encoder else unet.parameters()
@@ -645,7 +604,7 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
         eps=args.adam_epsilon,
     )
 
-    noise_scheduler = DDPMScheduler.from_config(args.pretrained_model_name_or_path, subfolder="scheduler")
+    noise_scheduler = DDIMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
 
     def cleanup_memory():
         try:
@@ -723,6 +682,7 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
         return output
 
     train_dataloader = torch.utils.data.DataLoader(
+        #train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, num_workers=1
         train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
     )
     # Move text_encoder and VAE to GPU.
@@ -804,8 +764,7 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
 
     # create ema, fix OOM
     if args.use_ema:
-        ema_unet = EMAModel(unet.parameters())
-        ema_unet.to(accelerator.device, dtype=weight_dtype)
+        ema_unet = EMAModel(unet, inv_gamma=1.0, power=3 / 4, max_value=0.9999, device=accelerator.device)
         if args.train_text_encoder and text_encoder is not None:
             unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
                 unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler
@@ -861,15 +820,17 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                 text_enc_model = accelerator.unwrap_model(text_encoder)
             else:
                 text_enc_model = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path,
-                                                               subfolder="text_encoder", revision=args.revision)
-            scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
-                                      clip_sample=False, set_alpha_to_one=False)
-            if args.use_ema:
-                ema_unet.store(unet.parameters())
-                ema_unet.copy_to(unet.parameters())
-            s_pipeline = StableDiffusionPipeline.from_pretrained(
+                                                               subfolder="text_encoder",
+                                                               revision=args.revision)
+            pred_type = "epsilon"
+            if args.v2:
+                pred_type = "v_prediction"
+            scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", steps_offset=1,
+                                      clip_sample=False, set_alpha_to_one=False, prediction_type=pred_type)
+
+            s_pipeline = DiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
-                unet=accelerator.unwrap_model(unet),
+                unet=accelerator.unwrap_model(ema_unet.averaged_model if args.use_ema else unet),
                 text_encoder=text_enc_model,
                 vae=vae if vae is not None else create_vae(),
                 scheduler=scheduler,
@@ -885,9 +846,8 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                     shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
                     try:
                         s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
-                        save_checkpoint(args.model_name, args.revision)
-                        if args.use_ema:
-                            ema_unet.restore(unet.parameters())
+                        compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
+                                           reload_models=False)
                     except Exception as e:
                         logger.debug(f"Exception saving checkpoint/model: {e}")
                         traceback.print_exc()
@@ -910,9 +870,9 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                                 for si in tqdm(range(c.n_samples), desc="Generating samples"):
                                     s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
                                                          guidance_scale=c.scale,
-                                                         scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
-                                                                                                   beta_end=0.012),
                                                          negative_prompt=c.negative_prompt,
+                                                         height=args.resolution,
+                                                         width=args.resolution,
                                                          generator=g_cuda).images[0]
                                     shared.state.current_image = s_image
                                     shared.state.textinfo = c.prompt
@@ -941,6 +901,7 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
     training_complete = False
     msg = ""
+    weights_saved = False
     for epoch in range(args.num_train_epochs):
         if training_complete:
             break
@@ -949,6 +910,7 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
             if args.train_text_encoder and text_encoder is not None:
                 text_encoder.train()
             for step, batch in enumerate(train_dataloader):
+                weights_saved = False
                 with accelerator.accumulate(unet):
                     # Convert images to latent space
                     with torch.no_grad():
@@ -989,9 +951,9 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                     noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
                     # Get the target for loss depending on the prediction type
-                    # if noise_scheduler.config.prediction_type == "v_prediction":
-                    #    noise_scheduler.get_velocity = xattention.get_velocity
-                    #    noise = noise_scheduler.get_velocity(latents, noise, timesteps)
+                    if noise_scheduler.config.prediction_type == "v_prediction":
+                        noise = noise_scheduler.get_velocity(latents, noise, timesteps)
+
                     concept_index = train_dataset.current_concept
                     concept = args.concepts_list[concept_index]
                     if concept.num_class_images > 0:
@@ -1018,7 +980,7 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
 
                     # Update EMA
                     if args.use_ema and ema_unet is not None:
-                        ema_unet.step(unet.parameters())
+                        ema_unet.step(unet)
 
                 if not global_step % 10:
                     allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
@@ -1028,12 +990,8 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                     progress_bar.set_postfix(**logs)
                     accelerator.log(logs, step=global_step)
 
-                progress_bar.update(1)
-                global_step += 1
-                args.revision += 1
-                shared.state.job_no = global_step
-
                 training_complete = global_step >= args.max_train_steps or shared.state.interrupted
+
                 if global_step > 0:
                     save_img = args.save_preview_every and not global_step % args.save_preview_every
                     save_model = args.save_embedding_every and not global_step % args.save_embedding_every
@@ -1043,6 +1001,8 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                     if save_img or save_model:
                         save_weights()
                         args.save()
+                        weights_saved = True
+                        shared.state.job_count = args.max_train_steps
                 if shared.state.interrupted:
                     training_complete = True
                 if global_step == 0 or global_step == 5:
@@ -1061,11 +1021,22 @@ def main(args: DreamboothConfig, memory_record) -> tuple[DreamboothConfig, dict,
                                             f" total."
 
                     break
+
+                progress_bar.update(1)
+                global_step += 1
+                args.revision += 1
+                shared.state.job_no = global_step
+
             training_complete = global_step >= args.max_train_steps or shared.state.interrupted
             accelerator.wait_for_everyone()
             if not args.not_cache_latents:
                 train_dataset, train_dataloader = cache_latents(enc_vae=vae, orig_dataset=gen_dataset)
             if training_complete:
+                if not weights_saved:
+                    save_img = True
+                    save_model = True
+                    save_weights()
+                    args.save()
                 msg = f"Training completed, total steps: {args.revision}"
                 break
         except Exception as m:

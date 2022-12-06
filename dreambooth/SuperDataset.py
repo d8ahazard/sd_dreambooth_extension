@@ -7,8 +7,8 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 from pathlib import Path
 
-from extensions.sd_dreambooth_extension.dreambooth.db_config import Concept
-from extensions.sd_dreambooth_extension.dreambooth.dreambooth import is_image, list_features
+from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
+from extensions.sd_dreambooth_extension.dreambooth.utils import list_features, is_image
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter
 from modules import images
 
