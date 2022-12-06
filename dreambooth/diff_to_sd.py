@@ -332,6 +332,10 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
             print("Converting text enc dict for V1 model.")
             text_enc_dict = convert_text_enc_state_dict(text_enc_dict)
             text_enc_dict = {"cond_stage_model.transformer." + k: v for k, v in text_enc_dict.items()}
+            if config.v2:
+                config.v2 = False
+                config.save()
+                v2 = False
 
         # Put together new checkpoint
         state_dict = {**unet_state_dict, **vae_state_dict, **text_enc_dict}

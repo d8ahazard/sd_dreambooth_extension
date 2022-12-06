@@ -48,6 +48,7 @@ def get_db_models():
 def sanitize_name(name):
     return "".join(x for x in name if (x.isalnum() or x in "._- "))
 
+mem_record = {}
 
 def printm(msg="", reset=False):
     global mem_record

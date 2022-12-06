@@ -26,7 +26,7 @@ from transformers import AutoTokenizer, PretrainedConfig, CLIPTextModel
 
 from extensions.sd_dreambooth_extension.dreambooth import xattention
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, from_file
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, encode_hidden_state, \
@@ -739,7 +739,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda x: x, shuffle=True)
         if enc_vae is not None:
             del enc_vae
-            cleanup()
         return dataset, dataloader
 
     # Store our original uncached dataset for preview generation
@@ -989,6 +988,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                             "vram": f"{allocated}/{cached}GB"}
                     progress_bar.set_postfix(**logs)
                     accelerator.log(logs, step=global_step)
+                    loss_avg.reset()
 
                 training_complete = global_step >= args.max_train_steps or shared.state.interrupted
 
@@ -999,8 +999,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                         save_img = True
                         save_model = True
                     if save_img or save_model:
-                        save_weights()
                         args.save()
+                        save_weights()
+                        args = from_file(args.model_name)   
                         weights_saved = True
                         shared.state.job_count = args.max_train_steps
                 if shared.state.interrupted:
@@ -1035,8 +1036,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                 if not weights_saved:
                     save_img = True
                     save_model = True
-                    save_weights()
                     args.save()
+                    save_weights()
+                    args = from_file(args.model_name)   
                 msg = f"Training completed, total steps: {args.revision}"
                 break
         except Exception as m:
