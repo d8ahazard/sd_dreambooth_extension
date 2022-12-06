@@ -1045,6 +1045,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
             msg = f"Exception while training: {m}"
             printm(msg)
             traceback.print_exc()
+            mem_summary = torch.cuda.memory_summary()
+            print(mem_summary)
             break
         if shared.state.interrupted:
             training_complete = True
