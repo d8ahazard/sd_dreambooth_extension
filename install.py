@@ -57,10 +57,17 @@ def check_versions():
 
 
 base_dir = os.path.dirname(os.path.realpath(__file__))
-repo = git.Repo(base_dir)
-revision = repo.rev_parse("HEAD")
-app_repo = git.Repo(os.path.join(base_dir, "..", ".."))
-app_revision = app_repo.rev_parse("HEAD")
+revision = ""
+app_revison = ""
+
+try:
+    repo = git.Repo(base_dir)
+    revision = repo.rev_parse("HEAD")
+    app_repo = git.Repo(os.path.join(base_dir, "..", ".."))
+    app_revision = app_repo.rev_parse("HEAD")
+except:
+    pass
+
 print("")
 print("#######################################################################################################")
 print("Initializing Dreambooth")
