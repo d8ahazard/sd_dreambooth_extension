@@ -989,6 +989,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                             "vram": f"{allocated}/{cached}GB"}
                     progress_bar.set_postfix(**logs)
                     accelerator.log(logs, step=global_step)
+                    loss_avg.reset()
 
                 training_complete = global_step >= args.max_train_steps or shared.state.interrupted
 
