@@ -484,8 +484,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                         example = sample_dataset.__getitem__(random.randrange(0, s_len))
                         images = concept_pipeline(example["prompt"], num_inference_steps=concept.class_infer_steps,
                                                   guidance_scale=concept.class_guidance_scale,
-                                                  scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
-                                                                                            beta_end=0.012),
                                                   height=args.resolution,
                                                   width=args.resolution,
                                                   negative_prompt=concept.class_negative_prompt,
