@@ -133,7 +133,9 @@ def debug_prompts(model_dir):
         item = train_dataset.__getitem__(i)
         output["instance_prompts"].append(item["instance_prompt"])
         output["existing_class_prompts"].append(item["class_prompt"])
-    output["sample_prompts"] = train_dataset.get_sample_prompts()
+    sample_prompts = train_dataset.get_sample_prompts()
+    for prompt in sample_prompts:
+        output["sample_prompts"].append(prompt.prompt)
 
     for concept in config.concepts_list:
         text_getter = FilenameTextGetter()
@@ -157,7 +159,7 @@ def debug_prompts(model_dir):
             sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts,
                                            concept.file_prompt_contents, concept.class_token,
                                            concept.instance_token)
-            for i in range(sample_dataset):
+            for i in range(sample_dataset.__len__()):
                 output["new_class_prompts"].append(sample_dataset.__getitem__(i)["prompt"])
         c_idx += 1
 
