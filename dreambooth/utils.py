@@ -117,6 +117,19 @@ def list_attention():
         return ["default", "flash_attention"]
 
 
+def list_floats():
+    has_bf16 = False
+    try:
+        has_bf16 = torch.cuda.is_bf16_supported()
+    except:
+        pass
+    if has_bf16:
+        print("WE HAVE BF16")
+        return ["no", "fp16", "bf16"]
+    else:
+        return ["no", "fp16"]
+
+
 def reload_system_models():
     if shared.sd_model is not None:
         shared.sd_model.to(shared.device)

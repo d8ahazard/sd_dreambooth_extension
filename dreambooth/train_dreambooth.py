@@ -32,7 +32,7 @@ from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, encode_hidden_state, \
     PromptDataset
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_name, list_features, is_image
-from modules import shared
+from modules import shared, sd_models
 
 # Custom stuff
 try:
@@ -428,25 +428,26 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
 
     concept_pipeline = None
     c_idx = 0
+    cur_class_images = 0
+
     for concept in args.concepts_list:
+        print(f"Checking concept: {concept}")
         text_getter = FilenameTextGetter()
+        print(f"Concept requires {concept.num_class_images} images.")
         with_prior = concept.num_class_images > 0
         if with_prior:
             class_images_dir = Path(concept["class_data_dir"])
-            if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:
+            if class_images_dir == "" or class_images_dir == "." or class_images_dir is None or class_images_dir == shared.script_path:
                 class_images_dir = os.path.join(args.model_dir, f"classifiers_{c_idx}")
                 print(f"Class image dir is not set, defaulting to {class_images_dir}")
             class_images_dir.mkdir(parents=True, exist_ok=True)
-            cur_class_images = 0
-            iterfiles = 0
             for x in class_images_dir.iterdir():
-                iterfiles += 1
                 if is_image(x, pil_features):
                     cur_class_images += 1
+            print(f"Class dir {class_images_dir} has {cur_class_images} images.")
             if cur_class_images < concept.num_class_images:
                 num_new_images = concept.num_class_images - cur_class_images
                 shared.state.textinfo = f"Generating {num_new_images} class images for training..."
-
                 torch_dtype = torch.float16 if accelerator.device.type == "cuda" else torch.float32
                 if concept_pipeline is None:
                     concept_pipeline = DiffusionPipeline.from_pretrained(

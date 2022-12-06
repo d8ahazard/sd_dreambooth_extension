@@ -75,7 +75,7 @@ def training_wizard(model_dir, is_person=False):
         # Set "base" value, which is 100 steps/image at LR of .000002
         if is_person:
             lr_scale = .000002 / config.learning_rate
-            class_mult = total_images * 10
+            class_mult = 10
         else:
             class_mult = 0
             lr_scale = .0000025 / config.learning_rate
@@ -97,7 +97,7 @@ def training_wizard(model_dir, is_person=False):
                     "concept": concept,
                     "images": image_count,
                     "steps": round(image_count * step_mult, -2),
-                    "classifiers": round(image_count * class_mult, -2)
+                    "classifiers": round(image_count * class_mult)
                 }
                 counts_list.append(c_dict)
 
@@ -109,14 +109,9 @@ def training_wizard(model_dir, is_person=False):
             req_steps = 0
         else:
             req_steps -= total_steps
-        c1_steps = -1
-        c2_steps = -1
-        c3_steps = -1
-        c1_class = 0
-        c2_class = 0
-        c3_class = 0
-        s_list = [c1_steps, c2_steps, c3_steps]
-        c_list = [c1_class, c2_class, c3_class]
+
+        s_list = []
+        c_list = []
         for x in range(3):
             if x < len(counts_list):
                 c_dict = counts_list[x]
@@ -130,8 +125,9 @@ def training_wizard(model_dir, is_person=False):
                     steps = 0
                 c_dict["steps"] = steps
                 counts_list[x] = c_dict
-                s_list[x] = steps
-                c_list[x] = c_dict["classifiers"]
+                s_list.append(steps)
+                c_list.append(c_dict["classifiers"])
+                
         c1_steps = s_list[0]
         c2_steps = s_list[1]
         c3_steps = s_list[2]
@@ -190,10 +186,9 @@ def performance_wizard():
 
     has_xformers = False
     try:
-        if shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers:
-            import xformers
-            import xformers.ops
-            has_xformers = shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers
+        import xformers
+        import xformers.ops
+        has_xformers = True
     except:
         pass
     if has_xformers:
@@ -333,9 +328,7 @@ def start_training(model_dir: str, imagic_only: bool, use_subdir: bool):
     msg = None
     if config.attention == "xformers":
         if config.mixed_precision == "no":
-            msg = "Using xformers, please set mixed precision to 'fp16' to continue."
-        if not shared.cmd_opts.xformers and not shared.cmd_opts.force_enable_xformers:
-            msg = "Xformers is not enabled, please relaunch using the --xformers command-line argument to continue."
+            msg = "Using xformers, please set mixed precision to 'fp16' or 'bf16' to continue."
     if config.use_cpu:
         if config.use_8bit_adam or config.mixed_precision != "no":
             msg = "CPU Training detected, please disable 8Bit Adam and set mixed precision to 'no' to continue."

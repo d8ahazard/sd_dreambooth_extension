@@ -7,7 +7,7 @@ from extensions.sd_dreambooth_extension.dreambooth.dreambooth import performance
     training_wizard, training_wizard_person, load_model_params
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, log_memory, generate_sample_img, \
-    debug_prompts, list_attention
+    debug_prompts, list_attention, list_floats
 from modules import script_callbacks, sd_models, shared
 from modules.ui import setup_progressbar, gr_show, wrap_gradio_call, create_refresh_button
 from webui import wrap_gradio_gpu_call
@@ -127,7 +127,7 @@ def on_ui_tabs():
                                     db_use_cpu = gr.Checkbox(label="Use CPU Only (SLOW)", value=False)
                                     db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                     db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
-                                                                     choices=["no", "fp16", "bf16"])
+                                                                     choices=list_floats())
                                     db_attention = gr.Dropdown(
                                         label="Memory Attention", value="default",
                                         choices=list_attention())
