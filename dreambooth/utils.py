@@ -103,10 +103,9 @@ def unload_system_models():
 def list_attention():
     has_xformers = False
     try:
-        if shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers:
-            import xformers
-            import xformers.ops
-            has_xformers = shared.cmd_opts.xformers or shared.cmd_opts.force_enable_xformers
+        import xformers
+        import xformers.ops
+        has_xformers = True
     except:
         pass
     pass
