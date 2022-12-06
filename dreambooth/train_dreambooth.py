@@ -499,9 +499,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                             if args.save_class_txt:
                                 image_base = hashlib.sha1(image.tobytes()).hexdigest()
                             else:
-                                image_base = example["prompt"]
-                            image_filename = class_images_dir / f"{generated_images + cur_class_images}-" \
-                                                                f"{image_base}.jpg"
+                                image_base = sanitize_name(example["prompt"])
+                            image_filename = str(class_images_dir / f"{generated_images + cur_class_images}-" \
+                                                                f"{image_base}.jpg")
                             image.save(image_filename)
                             if args.save_class_txt:
                                 txt_filename = image_filename.replace(".jpg", ".txt")
