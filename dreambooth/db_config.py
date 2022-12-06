@@ -174,7 +174,11 @@ class DreamboothConfig:
         if scheduler is not None:
             self.scheduler = scheduler
 
-        if v2 is not None:
+        if v2 == 'True':
+            self.v2 = True
+        elif v2 == 'False':
+            self.v2 = False
+        else:
             self.v2 = v2
 
         self.has_ema = has_ema
