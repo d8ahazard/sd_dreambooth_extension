@@ -52,9 +52,6 @@ def training_wizard(model_dir, is_person=False):
     # Load config, get total steps
     config = from_file(model_dir)
 
-    # Configure generic outputs
-    class_steps = []
-    class_concepts = []
     if config is None:
         status = "Unable to load config."
         return status, 1000, -1, 0, -1, 0, -1, 0
@@ -127,7 +124,10 @@ def training_wizard(model_dir, is_person=False):
                 counts_list[x] = c_dict
                 s_list.append(steps)
                 c_list.append(c_dict["classifiers"])
-                
+            else:
+                s_list.append(-1)
+                c_list.append(0)
+
         c1_steps = s_list[0]
         c2_steps = s_list[1]
         c3_steps = s_list[2]
@@ -137,7 +137,7 @@ def training_wizard(model_dir, is_person=False):
 
         status = f"Wizard results: {counts_list}"
         print(status)
-    return status, req_steps, c1_steps, c1_class, c2_steps, c2_class, c3_steps, c3_class
+    return status, req_steps, 1, c1_steps, c1_class, c2_steps, c2_class, c3_steps, c3_class
 
 
 def performance_wizard():

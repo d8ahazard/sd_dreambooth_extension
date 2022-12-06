@@ -428,18 +428,19 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
 
     concept_pipeline = None
     c_idx = 0
-    cur_class_images = 0
 
     for concept in args.concepts_list:
+        cur_class_images = 0
         print(f"Checking concept: {concept}")
         text_getter = FilenameTextGetter()
         print(f"Concept requires {concept.num_class_images} images.")
         with_prior = concept.num_class_images > 0
         if with_prior:
-            class_images_dir = Path(concept["class_data_dir"])
-            if class_images_dir == "" or class_images_dir == "." or class_images_dir is None or class_images_dir == shared.script_path:
+            class_images_dir = concept["class_data_dir"]
+            if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:
                 class_images_dir = os.path.join(args.model_dir, f"classifiers_{c_idx}")
                 print(f"Class image dir is not set, defaulting to {class_images_dir}")
+            class_images_dir = Path(class_images_dir)
             class_images_dir.mkdir(parents=True, exist_ok=True)
             for x in class_images_dir.iterdir():
                 if is_image(x, pil_features):

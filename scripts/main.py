@@ -485,7 +485,7 @@ def on_ui_tabs():
         )
 
         db_train_wizard_person.click(
-            fn=wrap_gradio_call(training_wizard_person, extra_outputs=[gr.update()]),
+            fn=wrap_gradio_call(training_wizard_person),
             _js="db_save",
             inputs=[
                 db_model_name
@@ -493,6 +493,7 @@ def on_ui_tabs():
             outputs=[
                 db_status,
                 db_max_train_steps,
+                db_num_train_epochs,
                 c1_max_steps,
                 c1_num_class_images,
                 c2_max_steps,
@@ -503,7 +504,7 @@ def on_ui_tabs():
         )
 
         db_train_wizard_object.click(
-            fn=wrap_gradio_call(training_wizard, extra_outputs=[gr.update()]),
+            fn=wrap_gradio_call(training_wizard),
             _js="db_save",
             inputs=[
                 db_model_name
@@ -511,6 +512,7 @@ def on_ui_tabs():
             outputs=[
                 db_status,
                 db_max_train_steps,
+                db_num_train_epochs,
                 c1_max_steps,
                 c1_num_class_images,
                 c2_max_steps,
@@ -587,7 +589,7 @@ def build_concept_panel():
                                                 "classification/regularization images")
     with gr.Column():
         gr.HTML(value="Prompts")
-        instance_prompt = gr.Textbox(label="Instance prompt",
+        instance_prompt = gr.Textbox(label="Instance Prompt",
                                      placeholder="Optionally use [filewords] to read image "
                                                  "captions from files.")
         class_prompt = gr.Textbox(label="Class Prompt",

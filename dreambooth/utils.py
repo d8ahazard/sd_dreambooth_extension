@@ -123,7 +123,6 @@ def list_floats():
     except:
         pass
     if has_bf16:
-        print("WE HAVE BF16")
         return ["no", "fp16", "bf16"]
     else:
         return ["no", "fp16"]
