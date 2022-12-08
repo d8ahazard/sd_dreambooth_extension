@@ -2,6 +2,7 @@ import gc
 import logging
 import math
 import os
+import traceback
 from pathlib import Path
 
 import torch
@@ -382,6 +383,7 @@ def start_training(model_dir: str, imagic_only: bool, use_subdir: bool):
               f"Total lifetime steps: {total_steps} \n"
     except Exception as e:
         res = f"Exception training model: {e}"
+        traceback.print_exc()
         pass
 
     devices.torch_gc()

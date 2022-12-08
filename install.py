@@ -28,28 +28,27 @@ def check_versions():
             key = splits[0]
             reqs_dict[key] = splits[1].replace("\n", "").strip()
     # print(f"Reqs dict: {reqs_dict}")
-    reqs_dict["diffusers[torch]"] = "0.10.0.dev0"
-    checks = ["bitsandbytes", "diffusers[torch]", "transformers", "xformers", "torch", "torchvision"]
+    reqs_dict["diffusers[torch]"] = "0.10.0"
+    checks = ["bitsandbytes", "diffusers", "transformers", "xformers", "torch", "torchvision"]
+    flat_check = ["xformers", "torch", "torchvision"]
     for check in checks:
-        if check == "diffusers[torch]":
-            il_check = "diffusers"
-        else:
-            il_check = check
         check_ver = "N/A"
         status = "[ ]"
         try:
-            check_available = importlib.util.find_spec(il_check) is not None
+            check_available = importlib.util.find_spec(check) is not None
             if check_available:
-                check_ver = importlib_metadata.version(il_check)
+                check_ver = importlib_metadata.version(check)
                 if check in reqs_dict:
                     req_version = reqs_dict[check]
                     if str(check_ver) == str(req_version):
                         status = "[+]"
                     else:
                         status = "[!]"
+                if check in flat_check:
+                    status = "[+]"
         except importlib_metadata.PackageNotFoundError:
             check_available = False
-        if not check_available:
+        if not check_available and check != "xformers":
             status = "[!]"
             print(f"{status} {check} NOT installed.")
         else:

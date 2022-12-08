@@ -22,6 +22,11 @@ try:
 except:
     cmd_dreambooth_models_path = None
 
+try:
+    cmd_lora_models_path = shared.cmd_opts.lora_models_path
+except:
+    cmd_lora_models_path = None
+
 
 def printi(msg, params=None):
     shared.state.textinfo = msg
@@ -41,6 +46,18 @@ def get_db_models():
         dirs = os.listdir(out_dir)
         for found in dirs:
             if os.path.isdir(os.path.join(out_dir, found)):
+                output.append(found)
+    return output
+
+
+def get_lora_models():
+    model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else paths.models_path
+    out_dir = os.path.join(model_dir, "lora")
+    output = [""]
+    if os.path.exists(out_dir):
+        dirs = os.listdir(out_dir)
+        for found in dirs:
+            if os.path.isfile(os.path.join(out_dir, found)):
                 output.append(found)
     return output
 
