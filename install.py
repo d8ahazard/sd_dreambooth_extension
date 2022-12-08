@@ -86,19 +86,22 @@ if not dreambooth_skip_install:
 
 # Check for "different" B&B Files and copy only if necessary
 if os.name == "nt":
-    python = sys.executable
-    bnb_src = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bitsandbytes_windows")
-    bnb_dest = os.path.join(sysconfig.get_paths()["purelib"], "bitsandbytes")
-    filecmp.clear_cache()
-    copied = False
-    for file in os.listdir(bnb_src):
-        src_file = os.path.join(bnb_src, file)
-        if file == "main.py" or file == "paths.py":
-            dest = os.path.join(bnb_dest, "cuda_setup")
-        else:
-            dest = bnb_dest
-        dest_file = os.path.join(dest, file)
-        shutil.copy2(src_file, dest)
+    try:
+        python = sys.executable
+        bnb_src = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bitsandbytes_windows")
+        bnb_dest = os.path.join(sysconfig.get_paths()["purelib"], "bitsandbytes")
+        filecmp.clear_cache()
+        copied = False
+        for file in os.listdir(bnb_src):
+            src_file = os.path.join(bnb_src, file)
+            if file == "main.py" or file == "paths.py":
+                dest = os.path.join(bnb_dest, "cuda_setup")
+            else:
+                dest = bnb_dest
+            dest_file = os.path.join(dest, file)
+            shutil.copy2(src_file, dest)
+    except:
+        pass
 
 check_versions()
 print("#######################################################################################################")

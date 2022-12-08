@@ -141,10 +141,11 @@ def training_wizard(model_dir, is_person=False):
 
 
 def performance_wizard():
-    status = ""
-    attention = "flash_attention"
+    attention = "xformers"
     gradient_checkpointing = True
     mixed_precision = 'fp16'
+    if torch.cuda.is_bf16_supported():
+        mixed_precision = 'bf16'
     not_cache_latents = True
     sample_batch_size = 1
     train_batch_size = 1
@@ -153,6 +154,7 @@ def performance_wizard():
     use_cpu = False
     use_ema = False
     gb = 0
+    msg = ""
     try:
         t = torch.cuda.get_device_properties(0).total_memory
         gb = math.ceil(t / 1073741824)
@@ -180,9 +182,10 @@ def performance_wizard():
             use_8bit_adam = False
             mixed_precision = 'no'
 
-    except:
+        msg = f"Calculated training params based on {gb}GB of VRAM detected."
+    except Exception as e:
+        msg = f"An exception occurred calculating performance values: {e}"
         pass
-    msg = f"Calculated training params based on {gb}GB of VRAM detected."
 
     has_xformers = False
     try:
@@ -198,8 +201,14 @@ def performance_wizard():
 
     if use_cpu:
         msg += "<br>Detected less than 10GB of VRAM, setting CPU training to true."
-    return status, attention, gradient_checkpointing, mixed_precision, not_cache_latents, sample_batch_size, \
-           train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema
+    log_dict = {"Attention": attention, "Gradient Checkpointing": gradient_checkpointing, "Precision": mixed_precision,
+                "Cache Latents": not not_cache_latents, "Training Batch Size": train_batch_size,
+                "Class Generation Batch Size": sample_batch_size,
+                "Train Text Encoder": train_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "CPU": use_cpu}
+    for key in log_dict:
+        msg += f"<br>{key}: {log_dict[key]}"
+    return msg, attention, gradient_checkpointing, mixed_precision, not_cache_latents, sample_batch_size, \
+        train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema
 
 
 def load_params(model_dir):
@@ -262,13 +271,17 @@ def load_params(model_dir):
                "db_save_class_txt",
                "db_save_embedding_every",
                "db_save_preview_every",
+               "db_save_use_global_counts",
+               "db_save_use_epochs",
                "db_scale_lr",
                "db_train_batch_size",
                "db_train_text_encoder",
                "db_use_8bit_adam",
                "db_use_concepts",
                "db_use_cpu",
-               "db_use_ema", "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps",
+               "db_use_ema",
+               "db_use_lora",
+               "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps",
                "c1_class_negative_prompt", "c1_class_prompt", "c1_class_token", "c1_file_prompt_contents",
                "c1_instance_data_dir", "c1_instance_prompt", "c1_instance_token", "c1_max_steps", "c1_n_save_sample",
                "c1_num_class_images", "c1_sample_seed", "c1_save_guidance_scale", "c1_save_infer_steps",
