@@ -761,7 +761,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda x: x, shuffle=True)
         if enc_vae is not None:
             del enc_vae
-            cleanup()
         return dataset, dataloader
 
     # Store our original uncached dataset for preview generation
