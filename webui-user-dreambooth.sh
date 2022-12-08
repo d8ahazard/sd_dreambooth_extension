@@ -24,9 +24,6 @@ export COMMANDLINE_ARGS=""
 # script to launch to start the app
 #export LAUNCH_SCRIPT="launch.py"
 
-# install command for torch
-# export TORCH_COMMAND="pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url https://download.pytorch.org/whl/cu116"
-
 # Requirements file to use for stable-diffusion-webui + dreambooth.
 # If you changed the name of the dreambooth extension directory, change it below
 export REQS_FILE="./extensions/sd_dreambooth_extension/requirements.txt"

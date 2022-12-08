@@ -14,10 +14,8 @@ import torch
 import torch.nn.functional as F
 import torch.utils.checkpoint
 from accelerate import Accelerator
-from diffusers import AutoencoderKL, DDIMScheduler, EulerAncestralDiscreteScheduler, \
-    DiffusionPipeline, UNet2DConditionModel
+from diffusers import AutoencoderKL, DDIMScheduler, DiffusionPipeline, UNet2DConditionModel
 from diffusers.optimization import get_scheduler
-from diffusers.training_utils import EMAModel
 from diffusers.utils import logging as dl
 from huggingface_hub import HfFolder, whoami
 from torch.utils.data import Dataset
@@ -32,7 +30,9 @@ from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, encode_hidden_state, \
     PromptDataset, EMAModel
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_name, list_features, is_image
-from modules import shared, sd_models
+from extensions.sd_dreambooth_extension.lora_diffusion import inject_trainable_lora, extract_lora_ups_down, \
+    save_lora_weight
+from modules import shared
 
 # Custom stuff
 try:
@@ -382,6 +382,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
     args.tokenizer_name = None
     global mem_record
     mem_record = memory_record
+    max_train_steps = args.max_train_steps
     logging_dir = Path(args.model_dir, "logging")
     args.max_token_length = int(args.max_token_length)
     if not args.pad_tokens and args.max_token_length > 75:
@@ -502,7 +503,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                             else:
                                 image_base = sanitize_name(example["prompt"])
                             image_filename = str(class_images_dir / f"{generated_images + cur_class_images}-" \
-                                                                f"{image_base}.jpg")
+                                                                    f"{image_base}.jpg")
                             image.save(image_filename)
                             if args.save_class_txt:
                                 txt_filename = image_filename.replace(".jpg", ".txt")
@@ -575,6 +576,18 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
         if args.train_text_encoder:
             text_encoder.gradient_checkpointing_enable()
 
+    if args.use_lora:
+        unet.requires_grad_(False)
+        unet_lora_params, train_names = inject_trainable_lora(unet)
+
+        for _up, _down in extract_lora_ups_down(unet):
+            print(_up.weight)
+            print(_down.weight)
+            break
+    else:
+        unet_lora_params = None
+        train_names = None
+
     if args.scale_lr:
         args.learning_rate = (
                 args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size *
@@ -594,9 +607,17 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
             logger.warning(f"Exception importing 8bit adam: {a}")
             traceback.print_exc()
 
-    params_to_optimize = (
-        itertools.chain(unet.parameters(), text_encoder.parameters()) if args.train_text_encoder else unet.parameters()
-    )
+    if args.use_lora:
+        params_to_optimize = (
+            itertools.chain(*unet_lora_params, text_encoder.parameters())
+            if args.train_text_encoder
+            else itertools.chain(*unet_lora_params)
+        )
+    else:
+        params_to_optimize = (
+            itertools.chain(unet.parameters(),
+                            text_encoder.parameters()) if args.train_text_encoder else unet.parameters()
+        )
     optimizer = optimizer_class(
         params_to_optimize,
         lr=args.learning_rate,
@@ -683,7 +704,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
         return output
 
     train_dataloader = torch.utils.data.DataLoader(
-        #train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, num_workers=1
+        # train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, num_workers=1
         train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
     )
     # Move text_encoder and VAE to GPU.
@@ -740,6 +761,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda x: x, shuffle=True)
         if enc_vae is not None:
             del enc_vae
+            cleanup()
         return dataset, dataloader
 
     # Store our original uncached dataset for preview generation
@@ -751,15 +773,15 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
-    if args.max_train_steps is None or args.max_train_steps < 1:
-        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
+    if max_train_steps is None or max_train_steps < 1:
+        max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
         overrode_max_train_steps = True
 
     lr_scheduler = get_scheduler(
         args.lr_scheduler,
         optimizer=optimizer,
         num_warmup_steps=args.lr_warmup_steps * args.gradient_accumulation_steps,
-        num_training_steps=args.max_train_steps * args.gradient_accumulation_steps,
+        num_training_steps=max_train_steps * args.gradient_accumulation_steps,
     )
 
     # create ema, fix OOM
@@ -789,10 +811,10 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
     if overrode_max_train_steps:
-        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
+        max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
     # Afterwards we recalculate our number of training epochs
-    args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
-
+    args.num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
+    actual_train_steps = max_train_steps * args.train_batch_size
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
@@ -802,7 +824,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
     stats = f"CPU: {args.use_cpu} Adam: {use_adam}, Prec: {args.mixed_precision}, " \
             f"Grad: {args.gradient_checkpointing}, TextTr: {args.train_text_encoder} EM: {args.use_ema}, " \
-            f"LR: {args.learning_rate}"
+            f"LR: {args.learning_rate} LORA:{args.use_lora}"
 
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(train_dataset)}")
@@ -811,7 +833,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
     logger.info(f"  Instantaneous batch size per device = {args.train_batch_size}")
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
-    logger.info(f"  Total optimization steps = {args.max_train_steps}")
+    logger.info(f"  Total optimization steps = {max_train_steps}")
+    logger.info(f"  Actual steps: {actual_train_steps}")
     printm(f"  Training settings: {stats}")
 
     def save_weights():
@@ -846,17 +869,22 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
             s_pipeline = s_pipeline.to(accelerator.device)
             with accelerator.autocast(), torch.inference_mode():
                 if save_model:
-                    shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
-                    try:
-                        s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
-                        compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
-                                           reload_models=False)
-                        if args.use_ema:
-                            ema_unet.restore(unet.parameters())
-                    except Exception as e:
-                        logger.debug(f"Exception saving checkpoint/model: {e}")
-                        traceback.print_exc()
-                        pass
+                    if args.use_lora:
+                        # TODO: Update this to use weights dir?
+                        save_lora_weight(s_pipeline.unet, shared.cmd_opts.embeddings_dir +
+                                         f"/{args.model_name}_{args.revision}.pt")
+                    else:
+                        shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
+                        try:
+                            s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
+                            compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
+                                               reload_models=False)
+                            if args.use_ema:
+                                ema_unet.restore(unet.parameters())
+                        except Exception as e:
+                            logger.debug(f"Exception saving checkpoint/model: {e}")
+                            traceback.print_exc()
+                            pass
                 save_dir = args.model_dir
                 if save_img:
                     shared.state.textinfo = f"Saving preview image at step {args.revision}..."
@@ -895,13 +923,13 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
             cleanup()
 
     # Only show the progress bar once on each machine.
-    progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
+    progress_bar = tqdm(range(actual_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
     global_step = 0
     lifetime_step = args.revision
-    shared.state.job_count = args.max_train_steps
+    shared.state.job_count = max_train_steps
     shared.state.job_no = global_step
-    shared.state.textinfo = f"Training step: {global_step}/{args.max_train_steps}"
+    shared.state.textinfo = f"Training step: {global_step}/{max_train_steps}"
     loss_avg = AverageMeter()
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
     training_complete = False
@@ -999,15 +1027,19 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                 training_complete = global_step >= args.max_train_steps or shared.state.interrupted
 
                 if global_step > 0:
-                    save_img = args.save_preview_every and not global_step % args.save_preview_every
-                    save_model = args.save_embedding_every and not global_step % args.save_embedding_every
+                    if args.save_use_global_counts:
+                        save_img = args.save_preview_every and not args.revision % args.save_preview_every
+                        save_model = args.save_embedding_every and not args.revision % args.save_embedding_every
+                    else:
+                        save_img = args.save_preview_every and not global_step % args.save_preview_every
+                        save_model = args.save_embedding_every and not global_step % args.save_embedding_every
                     if training_complete:
                         save_img = False
                         save_model = True
                     if save_img or save_model:
                         args.save()
                         save_weights()
-                        args = from_file(args.model_name)   
+                        args = from_file(args.model_name)
                         weights_saved = True
                         shared.state.job_count = args.max_train_steps
                 if shared.state.interrupted:
@@ -1029,12 +1061,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
 
                     break
 
-                progress_bar.update(1)
-                global_step += 1
-                args.revision += 1
+                progress_bar.update(args.train_batch_size)
+                global_step += args.train_batch_size
+                args.revision += args.train_batch_size
                 shared.state.job_no = global_step
 
-            training_complete = global_step >= args.max_train_steps or shared.state.interrupted
+            training_complete = global_step >= actual_train_steps or shared.state.interrupted
             accelerator.wait_for_everyone()
             if not args.not_cache_latents:
                 train_dataset, train_dataloader = cache_latents(enc_vae=vae, orig_dataset=gen_dataset)
@@ -1044,7 +1076,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                     save_model = True
                     args.save()
                     save_weights()
-                    args = from_file(args.model_name)   
+                    args = from_file(args.model_name)
                 msg = f"Training completed, total steps: {args.revision}"
                 break
         except Exception as m:

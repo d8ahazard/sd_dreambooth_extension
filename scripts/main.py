@@ -80,8 +80,11 @@ def on_ui_tabs():
                     with gr.Accordion(open=True, label="Settings"):
                         with gr.Column():
                             gr.HTML(value="Intervals")
-                            db_max_train_steps = gr.Number(label='Training Steps', value=1000, precision=0)
-                            db_num_train_epochs = gr.Number(label="Training Epochs", precision=0, value=1)
+                            db_num_train_epochs = gr.Number(label="Training Steps Per Image (Epochs)", precision=0,
+                                                            value=1)
+                            db_max_train_steps = gr.Number(label='Max Training Steps', value=1000, precision=0)
+                            db_save_use_global_counts = gr.Checkbox(label='Use Lifetime Steps/Epochs When Saving')
+                            db_save_use_epochs = gr.Checkbox(label="Save Preview/Ckpt Every Epoch")
                             db_save_embedding_every = gr.Number(
                                 label='Save Checkpoint Frequency', value=500,
                                 precision=0)
@@ -125,6 +128,7 @@ def on_ui_tabs():
                                 with gr.Column():
                                     gr.HTML(value="Tuning")
                                     db_use_cpu = gr.Checkbox(label="Use CPU Only (SLOW)", value=False)
+                                    db_use_lora = gr.Checkbox(label="Use LORA", value=False)
                                     db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                     db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
                                                                      choices=list_floats())
@@ -246,6 +250,8 @@ def on_ui_tabs():
                 db_save_class_txt,
                 db_save_embedding_every,
                 db_save_preview_every,
+                db_save_use_global_counts,
+                db_save_use_epochs,
                 db_scale_lr,
                 db_scheduler,
                 db_src,
@@ -350,6 +356,8 @@ def on_ui_tabs():
                 db_save_class_txt,
                 db_save_embedding_every,
                 db_save_preview_every,
+                db_save_use_global_counts,
+                db_save_use_epochs,
                 db_scale_lr,
                 db_train_batch_size,
                 db_train_text_encoder,
@@ -467,7 +475,7 @@ def on_ui_tabs():
 
         db_performance_wizard.click(
             fn=performance_wizard,
-            _js="db_save_start_progress",
+            _js="db_save",
             inputs=[],
             outputs=[
                 db_status,
@@ -600,7 +608,8 @@ def build_concept_panel():
                                         placeholder="Leave blank to use instance prompt. "
                                                     "Optionally use [filewords] to base "
                                                     "sample captions on instance images.")
-        sample_template = gr.Textbox(label="Sample Prompt Template File", placeholder="Enter the path to a txt file containing sample prompts.")
+        sample_template = gr.Textbox(label="Sample Prompt Template File",
+                                     placeholder="Enter the path to a txt file containing sample prompts.")
         save_sample_negative_prompt = gr.Textbox(label="Sample Image Negative Prompt")
 
     with gr.Column():

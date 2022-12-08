@@ -315,8 +315,11 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
         # Convert the text encoder model
         text_enc_dict = torch.load(text_enc_path, map_location="cpu")
 
-        # Easiest way to identify v2.0 model seems to be that the text encoder (OpenCLIP) is deeper
-        is_v20_model = "text_model.encoder.layers.22.layer_norm2.bias" in text_enc_dict
+        is_v20_model = False
+
+        for k, v in text_enc_dict.items():
+            if k.endswith("ln_final.weight"):
+                is_v20_model = True
 
         if is_v20_model:
             print("Converting text enc dict for V2 model.")
@@ -343,7 +346,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
             print("Halving model.")
             state_dict = {k: v.half() for k, v in state_dict.items()}
 
-        state_dict = {"global_step": config.revision, "state_dict": state_dict}
+        state_dict = {"db_global_step": config.revision, "db_epoch": config.epoch, "state_dict": state_dict}
         printi(f"Saving checkpoint to {checkpoint_path}...")
         torch.save(state_dict, checkpoint_path)
         if v2:

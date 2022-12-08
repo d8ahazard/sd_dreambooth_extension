@@ -50,6 +50,8 @@ class DreamboothConfig:
                  save_class_txt: bool = False,
                  save_embedding_every: int = 500,
                  save_preview_every: int = 500,
+                 save_use_global_counts: bool = False,
+                 save_use_epochs: bool = False,
                  scale_lr: bool = False,
                  scheduler: str = "ddim",
                  src: str = "",
@@ -59,6 +61,7 @@ class DreamboothConfig:
                  use_concepts: bool = False,
                  use_cpu: bool = False,
                  use_ema: bool = True,
+                 use_lora: bool = False,
                  v2: bool = False,
                  c1_class_data_dir: str = "",
                  c1_class_guidance_scale: float = 7.5,
@@ -163,6 +166,8 @@ class DreamboothConfig:
         self.save_class_txt = save_class_txt
         self.save_embedding_every = save_embedding_every
         self.save_preview_every = save_preview_every
+        self.save_use_global_counts = save_use_global_counts
+        self.save_use_epochs = save_use_epochs
         self.scale_lr = scale_lr
         self.src = src
         self.train_batch_size = train_batch_size
@@ -171,6 +176,7 @@ class DreamboothConfig:
         self.use_concepts = use_concepts
         self.use_cpu = use_cpu
         self.use_ema = use_ema
+        self.use_lora = use_lora
         if scheduler is not None:
             self.scheduler = scheduler
 

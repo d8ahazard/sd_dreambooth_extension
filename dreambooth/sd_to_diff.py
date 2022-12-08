@@ -782,7 +782,20 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             checkpoint = torch.load(ckpt_path)
             # Todo: Decide if we should store this separately in the db_config and append it when re-compiling models.
             # global_step = checkpoint["global_step"]
-            checkpoint = checkpoint["state_dict"]
+            checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
+            rev_keys = ["db_global_step", "global_step"]
+            epoch_keys = ["db_epoch", "epoch"]
+            revision = 0
+            epoch = 0
+            for key in rev_keys:
+                if key in checkpoint:
+                    revision = checkpoint[key]
+                    break
+
+            for key in epoch_keys:
+                if key in checkpoint:
+                    epoch = checkpoint[key]
+                    break
 
             key_name = "model.diffusion_model.input_blocks.2.1.transformer_blocks.0.attn2.to_k.weight"
 
@@ -832,7 +845,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         )
         print("Creating scheduler...")
         if v2:
-            # All of the 2.0 models use OpenCLIP and all use DDPM scheduler by default.
+            # All the 2.0 models use OpenCLIP and all use DDIM scheduler by default.
             text_model_type = original_config.model.params.cond_stage_config.target.split(".")[-1]
             if text_model_type == "FrozenOpenCLIPEmbedder":
                 scheduler_type = "ddim"
