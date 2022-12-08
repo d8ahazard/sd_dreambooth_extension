@@ -1002,7 +1002,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                     save_img = args.save_preview_every and not global_step % args.save_preview_every
                     save_model = args.save_embedding_every and not global_step % args.save_embedding_every
                     if training_complete:
-                        save_img = True
+                        save_img = False
                         save_model = True
                     if save_img or save_model:
                         args.save()
@@ -1040,7 +1040,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                 train_dataset, train_dataloader = cache_latents(enc_vae=vae, orig_dataset=gen_dataset)
             if training_complete:
                 if not weights_saved:
-                    save_img = True
+                    save_img = False
                     save_model = True
                     args.save()
                     save_weights()
