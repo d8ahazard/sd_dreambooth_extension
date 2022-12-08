@@ -298,7 +298,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
         checkpoint_path = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
 
     model_path = config.pretrained_model_name_or_path
-    unet_path = osp.join(model_path, "diffusion_pytorch_model.bin")
+    unet_path = osp.join(model_path,"unet", "diffusion_pytorch_model.bin")
     vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.bin")
     text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
     try:
