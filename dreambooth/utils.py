@@ -95,7 +95,7 @@ def log_memory():
     return f"Current memory usage: {mem}"
 
 
-def cleanup():
+def cleanup(do_print: bool = False):
     try:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -103,7 +103,8 @@ def cleanup():
         gc.collect()
     except:
         pass
-    printm("Cleanup completed.")
+    if do_print:
+        printm("Cleanup completed.")
 
 
 def unload_system_models():

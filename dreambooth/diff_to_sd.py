@@ -270,6 +270,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
     @param use_subdir: The model will be saved to a subdirectory of the checkpoints folder
     @param reload_models: Whether to reload the system list of checkpoints.
     @param lora_path: The path to a lora pt file to merge with the unet. Auto set during training.
+    @param lora_alpha: The overall weight of the lora model when adding to unet. Default is 1.0
     @return: status: What happened, path: Checkpoint path
     """
     unload_system_models()
@@ -288,7 +289,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
     config = from_file(model_name)
     if "use_subdir" in config.__dict__:
         use_subdir = config["use_subdir"]
-
+    lora_diffusers = ""
     v2 = config.v2
     total_steps = config.revision
     if use_subdir:
@@ -303,26 +304,26 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
     text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
     try:
         printi("Converting unet...")
-        # loaded_pipeline = DiffusionPipeline.from_pretrained(model_path).to("cpu")
-        # if lora_path is not None and lora_path != "":
-        #     lora_diffusers = config.pretrained_model_name_or_path + "_lora"
-        #     os.makedirs(lora_diffusers, exist_ok=True)
-        #     if not os.path.exists(lora_path):
-        #         try:
-        #             cmd_lora_models_path = shared.cmd_opts.lora_models_path
-        #         except:
-        #             cmd_lora_models_path = None
-        #         model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else paths.models_path
-        #         lora_path = os.path.join(model_dir, "lora", lora_path)
-        #     print(f"Loading lora from {lora_path}")
-        #     if os.path.exists(lora_path):
-        #         checkpoint_path = checkpoint_path.replace(".ckpt", "_lora.ckpt")
-        #         printi("Applying lora model...")
-        #         weight_apply_lora(loaded_pipeline.unet, torch.load(lora_path), alpha=lora_alpha)
-        #         loaded_pipeline.save_pretrained(lora_diffusers)
-        #         unet_path = osp.join(lora_diffusers, "unet", "diffusion_pytorch_model.bin")
-        #
-        # del loaded_pipeline
+        loaded_pipeline = DiffusionPipeline.from_pretrained(model_path).to("cpu")
+        if lora_path is not None and lora_path != "":
+            lora_diffusers = config.pretrained_model_name_or_path + "_lora"
+            os.makedirs(lora_diffusers, exist_ok=True)
+            if not os.path.exists(lora_path):
+                try:
+                    cmd_lora_models_path = shared.cmd_opts.lora_models_path
+                except:
+                    cmd_lora_models_path = None
+                model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else paths.models_path
+                lora_path = os.path.join(model_dir, "lora", lora_path)
+            print(f"Loading lora from {lora_path}")
+            if os.path.exists(lora_path):
+                checkpoint_path = checkpoint_path.replace(".ckpt", "_lora.ckpt")
+                printi("Applying lora model...")
+                weight_apply_lora(loaded_pipeline.unet, torch.load(lora_path), alpha=lora_alpha)
+                loaded_pipeline.save_pretrained(lora_diffusers)
+                unet_path = osp.join(lora_diffusers, "unet", "diffusion_pytorch_model.bin")
+
+        del loaded_pipeline
 
         # Convert the UNet model
         unet_state_dict = torch.load(unet_path, map_location="cpu")
@@ -381,11 +382,11 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
         del vae_state_dict
         del text_enc_path
         del state_dict
-        if os.path.exists(lora_path):
-            shutil.rmtree(lora_path, True)
+        if os.path.exists(lora_diffusers):
+            shutil.rmtree(lora_diffusers, True)
     except:
         pass
-    cleanup()
+    # cleanup()
     if reload_models:
         reload_system_models()
     return "Checkpoint compiled successfully.", "Checkpoint compiled successfully."

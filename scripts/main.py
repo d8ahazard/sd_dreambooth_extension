@@ -70,8 +70,11 @@ def on_ui_tabs():
                         db_new_model_token = gr.Textbox(label="HuggingFace Token", value="")
                     with gr.Row() as local_row:
                         db_new_model_src = gr.Dropdown(label='Source Checkpoint',
-                                                       choices=sorted(sd_models.checkpoints_list.keys()))
-                        db_new_model_extract_ema = gr.Checkbox(label='Extract EMA Weights', value=False)
+                                                       choices=sorted(get_sd_models()))
+                        create_refresh_button(db_new_model_src, get_sd_models, lambda: {
+                            "choices": sorted(get_sd_models())},
+                                              "refresh_sd_models")
+                    db_new_model_extract_ema = gr.Checkbox(label='Extract EMA Weights', value=False)
                     db_new_model_scheduler = gr.Dropdown(label='Scheduler', choices=["pndm", "lms", "euler",
                                                                                      "euler-ancestral", "dpm", "ddim"],
                                                          value="ddim")
@@ -86,10 +89,10 @@ def on_ui_tabs():
                     with gr.Accordion(open=True, label="Settings"):
                         with gr.Column():
                             gr.HTML(value="Intervals")
-                            db_num_train_epochs = gr.Number(label="Training Steps Per Image (Epochs)", precision=0,
+                            db_num_train_epochs = gr.Number(label="Training Steps Per Image (Epochs)", precision=100,
                                                             value=1)
-                            db_max_train_steps = gr.Number(label='Max Training Steps', value=1000, precision=0)
-                            db_save_use_global_counts = gr.Checkbox(label='Use Lifetime Steps/Epochs When Saving')
+                            db_max_train_steps = gr.Number(label='Max Training Steps', value=0, precision=0)
+                            db_save_use_global_counts = gr.Checkbox(label='Use Lifetime Steps/Epochs When Saving', value=True)
                             db_save_use_epochs = gr.Checkbox(label="Save Preview/Ckpt Every Epoch")
                             db_save_embedding_every = gr.Number(
                                 label='Save Checkpoint Frequency', value=500,
@@ -99,28 +102,34 @@ def on_ui_tabs():
                                 precision=0)
 
                         with gr.Column():
+                            gr.HTML(value="Batch")
+                            db_train_batch_size = gr.Number(label="Batch Size", precision=0, value=1)
+                            db_sample_batch_size = gr.Number(label="Class Batch Size", precision=0, value=1)
+
+                        with gr.Column():
                             gr.HTML(value="Learning Rate")
-                            db_learning_rate = gr.Number(label='Learning Rate', value=1.72e-6)
+                            db_learning_rate = gr.Number(label='Learning Rate', value=2e-6)
                             db_scale_lr = gr.Checkbox(label="Scale Learning Rate", value=False)
                             db_lr_scheduler = gr.Dropdown(label="Learning Rate Scheduler", value="constant",
                                                           choices=["linear", "cosine", "cosine_with_restarts",
                                                                    "polynomial", "constant",
                                                                    "constant_with_warmup"])
-                            db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=0)
+                            db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=500)
 
                         with gr.Column():
                             gr.HTML(value="Image Processing")
                             db_resolution = gr.Number(label="Resolution", precision=0, value=512)
                             db_center_crop = gr.Checkbox(label="Center Crop", value=False)
                             db_hflip = gr.Checkbox(label="Apply Horizontal Flip", value=True)
-                            db_save_class_txt = gr.Checkbox(label="Save Class Captions to txt", value=False)
-                        db_pretrained_vae_name_or_path = gr.Textbox(label='Pretrained VAE Name or Path',
-                                                                    placeholder="Leave blank to use base model VAE.",
-                                                                    value="")
+                            db_save_class_txt = gr.Checkbox(label="Save Class Captions to txt", value=True)
 
-                        db_use_concepts = gr.Checkbox(label="Use Concepts List", value=False)
                         with gr.Column():
-                            gr.HTML(value="Concepts")
+                            gr.HTML(value="Miscellaneous")
+                            db_pretrained_vae_name_or_path = gr.Textbox(label='Pretrained VAE Name or Path',
+                                                                        placeholder="Leave blank to use base model VAE.",
+                                                                        value="")
+
+                            db_use_concepts = gr.Checkbox(label="Use Concepts List", value=False)
                             db_concepts_path = gr.Textbox(label="Concepts List",
                                                           placeholder="Path to JSON file with concepts to train.")
 
@@ -128,13 +137,10 @@ def on_ui_tabs():
                         with gr.Row():
                             with gr.Column():
                                 with gr.Column():
-                                    gr.HTML(value="Batch")
-                                    db_train_batch_size = gr.Number(label="Batch Size", precision=0, value=1)
-                                    db_sample_batch_size = gr.Number(label="Class Batch Size", precision=0, value=1)
-                                with gr.Column():
                                     gr.HTML(value="Tuning")
                                     db_use_cpu = gr.Checkbox(label="Use CPU Only (SLOW)", value=False)
                                     db_use_lora = gr.Checkbox(label="Use LORA", value=False)
+                                    db_use_ema = gr.Checkbox(label="Use EMA", value=False)
                                     db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                     db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
                                                                      choices=list_floats())
@@ -145,7 +151,6 @@ def on_ui_tabs():
                                     db_not_cache_latents = gr.Checkbox(label="Don't Cache Latents", value=True)
                                     db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
                                     db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
-                                    db_use_ema = gr.Checkbox(label="Train EMA", value=False)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
                                     db_max_token_length = gr.Slider(label="Max Token Length", minimum=75, maximum=300,
                                                                     step=75)
@@ -661,6 +666,15 @@ def save_and_execute(func, extra_outputs=None, wrap_gpu=False):
         return wrap_gradio_call(f, extra_outputs=extra_outputs, add_stats=False)
     else:
         return wrap_gradio_gpu_call(f, extra_outputs=extra_outputs)
+
+
+def get_sd_models():
+    sd_models.list_models()
+    sd_list = sd_models.checkpoints_list
+    names = []
+    for key in sd_list:
+        names.append(key)
+    return names
 
 
 script_callbacks.on_ui_tabs(on_ui_tabs)

@@ -382,7 +382,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
     logging_dir = Path(args.model_dir, "logging")
     args.max_token_length = int(args.max_token_length)
     if not args.pad_tokens and args.max_token_length > 75:
-        logger.debug("Cannot raise token length limit above 75 when pad_tokens=False")
+        print("Cannot raise token length limit above 75 when pad_tokens=False")
 
     if args.attention == "xformers":
         xattention.replace_unet_cross_attn_to_xformers()
@@ -419,7 +419,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
         msg = "Gradient accumulation is not supported when training the text encoder in distributed training. " \
               "Please set gradient_accumulation_steps to 1. This feature will be supported in the future. Text " \
               "encoder training will be disabled."
-        logger.debug(msg)
+        print(msg)
         shared.state.textinfo = msg
         args.train_text_encoder = False
 
@@ -477,7 +477,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                     pbar = tqdm(total=num_new_images)
                     while generated_images < num_new_images:
                         if shared.state.interrupted:
-                            logger.debug("Generation canceled.")
+                            print("Generation canceled.")
                             shared.state.textinfo = "Training canceled."
                             return args, mem_record, "Training canceled."
                         example = sample_dataset.__getitem__(random.randrange(0, s_len))
@@ -490,7 +490,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
 
                         for i, image in enumerate(images):
                             if shared.state.interrupted:
-                                logger.debug("Generation canceled.")
+                                print("Generation canceled.")
                                 shared.state.textinfo = "Training canceled."
                                 return args, mem_record, "Training canceled."
                             if args.save_class_txt:
@@ -575,7 +575,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
         unet.requires_grad_(False)
         if lora_model:
             lora_path = os.path.join(paths.models_path, "lora", lora_model)
-            weight_apply_lora(unet, torch.load(lora_path))
+            if os.path.exists(lora_path):
+                print(f"Applying lora weights: {lora_path}")
+                weight_apply_lora(unet, torch.load(lora_path))
 
         unet_lora_params, train_names = inject_trainable_lora(unet)
 
@@ -648,7 +650,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
         except:
             pass
         try:
-            cleanup()
+            cleanup(True)
         except:
             pass
         printm("Cleanup Complete.")
@@ -666,7 +668,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
 
     if train_dataset.__len__ == 0:
         msg = "Please provide a directory with actual images in it."
-        logger.debug(msg)
+        print(msg)
         shared.state.textinfo = msg
         cleanup_memory()
         return args, mem_record, msg
@@ -764,7 +766,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
 
     if not args.not_cache_latents:
         train_dataset, train_dataloader = cache_latents(enc_vae=vae, orig_dataset=gen_dataset)
-    cleanup()
+    #cleanup()
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
@@ -821,15 +823,15 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
             f"Grad: {args.gradient_checkpointing}, TextTr: {args.train_text_encoder} EM: {args.use_ema}, " \
             f"LR: {args.learning_rate} LORA:{args.use_lora}"
 
-    logger.info("***** Running training *****")
-    logger.info(f"  Num examples = {len(train_dataset)}")
-    logger.info(f"  Num batches each epoch = {len(train_dataloader)}")
-    logger.info(f"  Num Epochs = {args.num_train_epochs}")
-    logger.info(f"  Instantaneous batch size per device = {args.train_batch_size}")
-    logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
-    logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
-    logger.info(f"  Total optimization steps = {max_train_steps}")
-    logger.info(f"  Actual steps: {actual_train_steps}")
+    print("***** Running training *****")
+    print(f"  Num examples = {len(train_dataset)}")
+    print(f"  Num batches each epoch = {len(train_dataloader)}")
+    print(f"  Num Epochs = {args.num_train_epochs}")
+    print(f"  Instantaneous batch size per device = {args.train_batch_size}")
+    print(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
+    print(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
+    print(f"  Total optimization steps = {max_train_steps}")
+    print(f"  Actual steps: {actual_train_steps}")
     printm(f"  Training settings: {stats}")
 
     def save_weights():
@@ -850,6 +852,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
             if args.use_ema:
                 ema_unet.store(unet.parameters())
                 ema_unet.copy_to(unet.parameters())
+
             s_pipeline = DiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
                 unet=accelerator.unwrap_model(unet),
@@ -861,10 +864,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                 safety_checker=None,
                 requires_safety_checker=None
             )
-            # Hot, nasty speed
-            s_pipeline.enable_sequential_cpu_offload()
-            s_pipeline.enable_attention_slicing()
+
             s_pipeline = s_pipeline.to(accelerator.device)
+
             with accelerator.autocast(), torch.inference_mode():
                 if save_model:
                     try:
@@ -878,7 +880,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                             out_file = os.path.join(model_dir, "lora")
                             os.makedirs(out_file, exist_ok=True)
                             out_file = os.path.join(out_file, f"{args.model_name}_{args.revision}.pt")
-                            print(f"Saving lora weights at step {args.revision}")
+                            print(f"\nSaving lora weights at step {args.revision}")
                             save_lora_weight(s_pipeline.unet, out_file)
 
                             del s_pipeline.unet
@@ -900,7 +902,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                         if args.use_ema:
                             ema_unet.restore(unet.parameters())
                     except Exception as e:
-                        logger.debug(f"Exception saving checkpoint/model: {e}")
+                        print(f"Exception saving checkpoint/model: {e}")
                         traceback.print_exc()
                         pass
                 save_dir = args.model_dir
@@ -932,16 +934,16 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                                         os.path.join(sample_dir, f"{sanitized_prompt}{args.revision}-{si}.png"))
                                 del g_cuda
                     except Exception as e:
-                        logger.debug(f"Exception with the stupid image again: {e}")
+                        print(f"Exception with the stupid image again: {e}")
                         traceback.print_exc()
                         pass
-            logger.debug(f"[*] Weights saved at {save_dir}")
+            print(f"[*] Weights saved at {save_dir}")
             del s_pipeline
             del scheduler
             del text_enc_model
             if g_cuda:
                 del g_cuda
-            cleanup()
+            #cleanup()
 
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(actual_train_steps), disable=not accelerator.is_local_main_process)
@@ -956,6 +958,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
     training_complete = False
     msg = ""
     weights_saved = False
+    last_step = global_step
     for epoch in range(args.num_train_epochs):
         if training_complete:
             break
@@ -1036,7 +1039,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                     if args.use_ema and ema_unet is not None:
                         ema_unet.step(unet.parameters())
 
-                if not global_step % 10:
+                if not global_step % 2:
                     allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                     cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
                     logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0],
@@ -1071,7 +1074,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                                         f" {args.revision}/{actual_train_steps + lifetime_step} lifetime"
 
                 if training_complete:
-                    logger.debug("Training complete.")
+                    print("Training complete.")
                     if shared.state.interrupted:
                         state = "cancelled"
                     else:
@@ -1083,6 +1086,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                     break
 
                 progress_bar.update(args.train_batch_size)
+                last_step = global_step
                 global_step += args.train_batch_size
                 args.revision += args.train_batch_size
                 shared.state.job_no = global_step

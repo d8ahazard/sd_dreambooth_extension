@@ -117,7 +117,6 @@ new_titles = {
     "Shuffle After Epoch": "When enabled, will shuffle the dataset after the first epoch. Will enable text encoder training and latent caching (More VRAM).",
     "Source Checkpoint": "The source checkpoint to extract for training.",
     "Total Number of Class/Reg Images": "Total number of classification/regularization images to use. If no images exist, they will be generated. Set to 0 to disable prior preservation.",
-    "Train EMA": "Enabling this will provide better results and editability, but cost more VRAM.",
     "Train Text Encoder": "Enabling this will provide better results and editability, but cost more VRAM.",
     "Train": "Start training.",
     "Train Imagic Only": "Uses Imagic for training instead of full dreambooth, useful for training with a single instance image.",
@@ -128,6 +127,7 @@ new_titles = {
     "Use CPU Only (SLOW)": "Guess what - this will be incredibly slow, but it will work for < 8GB GPUs.",
     "Use Concepts List": "Train multiple concepts from a JSON file or string.",
     "Use Lifetime Steps/Epochs When Saving": "When checked, will save preview images and checkpoints using lifetime steps/epochs, versus current training steps.",
+    "Use EMA": "Enabling this will provide better results and editability, but cost more VRAM.",
     "Use LORA": "Uses Low-rank Adaptation for Fast Text-to-Image Diffusion Fine-tuning. Uses less VRAM, saves a .pt file instead of a full checkpoint"
 }
 
