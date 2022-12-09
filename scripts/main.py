@@ -434,6 +434,18 @@ def on_ui_tabs():
             outputs=[hub_row],
         )
 
+        db_use_lora.change(
+            fn=lambda x: False if x else db_use_lora,
+            inputs=[db_use_lora],
+            outputs=[db_use_ema],
+        )
+
+        db_use_ema.change(
+            fn=lambda x: False if x else db_use_ema,
+            inputs=[db_use_ema],
+            outputs=[db_use_lora],
+        )
+
         db_create_from_hub.change(
             fn=lambda x: {
                 hub_row: gr_show(x is True),
