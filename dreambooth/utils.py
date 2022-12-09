@@ -178,7 +178,8 @@ def debug_prompts(model_dir):
     for i in range(train_dataset.__len__()):
         item = train_dataset.__getitem__(i)
         output["instance_prompts"].append(item["instance_prompt"])
-        output["existing_class_prompts"].append(item["class_prompt"])
+        if "class_prompt" in item:
+            output["existing_class_prompts"].append(item["class_prompt"])
     sample_prompts = train_dataset.get_sample_prompts()
     for prompt in sample_prompts:
         output["sample_prompts"].append(prompt.prompt)
