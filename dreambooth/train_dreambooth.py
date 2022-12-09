@@ -378,6 +378,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 
 
 def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> tuple[DreamboothConfig, dict, str]:
+
     global with_prior
     text_encoder = None
     args.tokenizer_name = None
