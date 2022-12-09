@@ -32,7 +32,7 @@ from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import Filenam
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_name, list_features, is_image
 from extensions.sd_dreambooth_extension.lora_diffusion import inject_trainable_lora, extract_lora_ups_down, \
     save_lora_weight
-from modules import shared
+from modules import shared, paths
 
 # Custom stuff
 try:
@@ -868,22 +868,32 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
             s_pipeline = s_pipeline.to(accelerator.device)
             with accelerator.autocast(), torch.inference_mode():
                 if save_model:
-                    if args.use_lora:
-                        # TODO: Update this to use weights dir?
-                        save_lora_weight(s_pipeline.unet, shared.cmd_opts.embeddings_dir +
-                                         f"/{args.model_name}_{args.revision}.pt")
-                    else:
-                        shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
-                        try:
+                    try:
+                        if args.use_lora:
+                            try:
+                                cmd_lora_models_path = shared.cmd_opts.lora_models_path
+                            except:
+                                cmd_lora_models_path = None
+                            model_dir = os.path.dirname(
+                                cmd_lora_models_path) if cmd_lora_models_path else paths.models_path
+                            out_file = os.path.join(model_dir, "lora")
+                            os.makedirs(out_file, exist_ok=True)
+                            out_file = os.path.join(out_file, f"{args.model_name}_{args.revision}.pt")
+                            print(f"Saving lora weights at step {args.revision}")
+                            save_lora_weight(s_pipeline.unet, out_file)
+                        else:
+                            out_file = None
+                            shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
                             s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
-                            compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
-                                               reload_models=False)
-                            if args.use_ema:
-                                ema_unet.restore(unet.parameters())
-                        except Exception as e:
-                            logger.debug(f"Exception saving checkpoint/model: {e}")
-                            traceback.print_exc()
-                            pass
+
+                        compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
+                                           reload_models=False, lora_path=out_file)
+                        if args.use_ema:
+                            ema_unet.restore(unet.parameters())
+                    except Exception as e:
+                        logger.debug(f"Exception saving checkpoint/model: {e}")
+                        traceback.print_exc()
+                        pass
                 save_dir = args.model_dir
                 if save_img:
                     shared.state.textinfo = f"Saving preview image at step {args.revision}..."
@@ -1023,7 +1033,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                     accelerator.log(logs, step=args.revision)
                     loss_avg.reset()
 
-                training_complete = global_step >= args.max_train_steps or shared.state.interrupted
+                training_complete = global_step >= actual_train_steps or shared.state.interrupted
 
                 if global_step > 0:
                     if args.save_use_global_counts:
@@ -1040,13 +1050,13 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                         save_weights()
                         args = from_file(args.model_name)
                         weights_saved = True
-                        shared.state.job_count = args.max_train_steps
+                        shared.state.job_count = actual_train_steps
                 if shared.state.interrupted:
                     training_complete = True
                 if global_step == 0 or global_step == 5:
                     printm(f"Step {global_step} completed.")
-                shared.state.textinfo = f"Training, step {global_step}/{args.max_train_steps} current," \
-                                        f" {args.revision}/{args.max_train_steps + lifetime_step} lifetime"
+                shared.state.textinfo = f"Training, step {global_step}/{actual_train_steps} current," \
+                                        f" {args.revision}/{actual_train_steps + lifetime_step} lifetime"
 
                 if training_complete:
                     logger.debug("Training complete.")
@@ -1055,7 +1065,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                     else:
                         state = "complete"
 
-                    shared.state.textinfo = f"Training {state} {global_step}/{args.max_train_steps}, {args.revision}" \
+                    shared.state.textinfo = f"Training {state} {global_step}/{actual_train_steps}, {args.revision}" \
                                             f" total."
 
                     break

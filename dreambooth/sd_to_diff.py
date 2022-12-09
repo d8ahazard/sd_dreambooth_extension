@@ -667,11 +667,12 @@ def convert_open_clip_checkpoint(checkpoint):
     text_model = CLIPTextModel.from_pretrained("stabilityai/stable-diffusion-2", subfolder="text_encoder")
 
     keys = list(checkpoint.keys())
-
+    print(f"OpenClipKeys: {keys}")
     text_model_dict = {}
-
-    d_model = int(checkpoint['cond_stage_model.model.text_projection'].shape[0])
-
+    if 'cond_stage_model.model.text_projection' in checkpoint:
+        d_model = int(checkpoint['cond_stage_model.model.text_projection'].shape[0])
+    else:
+        d_model = 1024
     text_model_dict["text_model.embeddings.position_ids"] = \
         text_model.text_model.embeddings.get_buffer('position_ids')
 
@@ -740,10 +741,12 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
     status = ""
     has_ema = False
     v2 = False
+    is_512 = False
     model_dir = ""
     scheduler = ""
     src = ""
     revision = 0
+    epoch = 0
 
     # Needed for V2 models so we can create the right text encoder.
 
@@ -785,8 +788,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
             rev_keys = ["db_global_step", "global_step"]
             epoch_keys = ["db_epoch", "epoch"]
-            revision = 0
-            epoch = 0
+
             for key in rev_keys:
                 if key in checkpoint:
                     revision = checkpoint[key]
@@ -800,6 +802,9 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             key_name = "model.diffusion_model.input_blocks.2.1.transformer_blocks.0.attn2.to_k.weight"
 
             if key_name in checkpoint and checkpoint[key_name].shape[-1] == 1024:
+                if revision == 875000 or revision == 220000:
+                    print(f"Model revision is {revision}, assuming v2, 512 model.")
+                    is_512 = True
                 v2 = True
             else:
                 v2 = False
@@ -812,7 +817,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             printi("Loading model from hub.")
             v2 = new_model_url == "stabilityai/stable-diffusion-2"
 
-        if v2:
+        if v2 and not is_512:
             prediction_type = "v_prediction"
             image_size = 768
             original_config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs",
@@ -820,11 +825,17 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         else:
             prediction_type = "epsilon"
             image_size = 512
-            original_config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs",
-                                                "v1-inference.yaml")
+            if v2:
+                original_config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs",
+                                                    "v2-inference.yaml")
+            else:
+                original_config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs",
+                                                    "v1-inference.yaml")
 
         db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type, v2=v2,
                                      src=ckpt_path if not from_hub else new_model_url, resolution=768 if v2 else 512)
+        db_config.lifetime_revision = revision
+        db_config.epoch = epoch
         print(f"{'v2' if v2 else 'v1'} model loaded.")
 
         original_config = OmegaConf.load(original_config_file)

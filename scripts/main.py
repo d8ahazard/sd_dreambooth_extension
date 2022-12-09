@@ -7,7 +7,7 @@ from extensions.sd_dreambooth_extension.dreambooth.dreambooth import performance
     training_wizard, training_wizard_person, load_model_params
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, log_memory, generate_sample_img, \
-    debug_prompts, list_attention, list_floats
+    debug_prompts, list_attention, list_floats, get_lora_models
 from modules import script_callbacks, sd_models, shared
 from modules.ui import setup_progressbar, gr_show, wrap_gradio_call, create_refresh_button
 from webui import wrap_gradio_gpu_call
@@ -29,6 +29,12 @@ def on_ui_tabs():
                     create_refresh_button(db_model_name, get_db_models, lambda: {
                         "choices": sorted(get_db_models())},
                                           "refresh_db_models")
+                with gr.Row():
+                    db_lora_model_name = gr.Dropdown(label='Lora Model', choices=sorted(get_lora_models()))
+                    create_refresh_button(db_lora_model_name, get_lora_models, lambda: {
+                        "choices": sorted(get_lora_models())},
+                                          "refresh_lora_models")
+                db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1)
                 db_half_model = gr.Checkbox(label="Half Model", value=False)
                 db_use_subdir = gr.Checkbox(label="Save Checkpoint to Subdirectory", value=False)
                 with gr.Row():
@@ -538,7 +544,9 @@ def on_ui_tabs():
             inputs=[
                 db_model_name,
                 db_half_model,
-                db_use_subdir
+                db_use_subdir,
+                db_lora_model_name,
+                db_lora_weight
             ],
             outputs=[
                 db_status,
@@ -569,6 +577,7 @@ def on_ui_tabs():
             _js="db_save_start_progress",
             inputs=[
                 db_model_name,
+                db_lora_model_name,
                 db_train_imagic_only,
                 db_use_subdir
             ],

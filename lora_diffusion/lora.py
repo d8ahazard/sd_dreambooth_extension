@@ -1,11 +1,4 @@
-import math
-from typing import Callable, Dict, List, Optional, Tuple
-
-import numpy as np
-import PIL
 import torch
-import torch.nn.functional as F
-
 import torch.nn as nn
 
 
@@ -25,12 +18,14 @@ class LoraInjectedLinear(nn.Module):
 
 
 def inject_trainable_lora(
-    model: nn.Module, target_replace_module: List[str] = ["CrossAttention", "Attention"]
+    model: nn.Module, target_replace_module=None
 ):
     """
     inject lora into model, and returns lora parameter groups.
     """
 
+    if target_replace_module is None:
+        target_replace_module = ["CrossAttention", "Attention"]
     require_grad_params = []
     names = []
 
@@ -68,8 +63,10 @@ def inject_trainable_lora(
     return require_grad_params, names
 
 
-def extract_lora_ups_down(model, target_replace_module=["CrossAttention", "Attention"]):
+def extract_lora_ups_down(model, target_replace_module=None):
 
+    if target_replace_module is None:
+        target_replace_module = ["CrossAttention", "Attention"]
     loras = []
 
     for _module in model.modules():
@@ -91,6 +88,15 @@ def save_lora_weight(model, path="./lora.pt"):
     torch.save(weights, path)
 
 
+def get_lora_weight(model):
+    weights = []
+    for _up, _down in extract_lora_ups_down(model):
+        weights.append(_up.weight)
+        weights.append(_down.weight)
+
+    return weights
+
+
 def save_lora_as_json(model, path="./lora.json"):
     weights = []
     for _up, _down in extract_lora_ups_down(model):
@@ -104,9 +110,10 @@ def save_lora_as_json(model, path="./lora.json"):
 
 
 def weight_apply_lora(
-    model, loras, target_replace_module=["CrossAttention", "Attention"], alpha=1.0
+    model, loras, target_replace_module=None, alpha=1.0
 ):
-
+    if target_replace_module is None:
+        target_replace_module = ["CrossAttention", "Attention"]
     for _module in model.modules():
         if _module.__class__.__name__ in target_replace_module:
             for _child_module in _module.modules():
@@ -125,8 +132,10 @@ def weight_apply_lora(
 
 
 def monkeypatch_lora(
-    model, loras, target_replace_module=["CrossAttention", "Attention"]
+    model, loras, target_replace_module=None
 ):
+    if target_replace_module is None:
+        target_replace_module = ["CrossAttention", "Attention"]
     for _module in model.modules():
         if _module.__class__.__name__ in target_replace_module:
             for name, _child_module in _module.named_modules():

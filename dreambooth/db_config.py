@@ -16,6 +16,7 @@ class DreamboothConfig:
     scheduler = "ddim"
     lifetime_revision = 0
     initial_revision = 0
+    epoch = 0
 
     def __init__(self,
                  model_name: str = "",
