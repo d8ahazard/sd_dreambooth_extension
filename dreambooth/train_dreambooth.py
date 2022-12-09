@@ -32,6 +32,7 @@ from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import Filenam
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_name, list_features, is_image
 from extensions.sd_dreambooth_extension.lora_diffusion import inject_trainable_lora, extract_lora_ups_down, \
     save_lora_weight
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
 from modules import shared, paths
 
 # Custom stuff
@@ -376,7 +377,8 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
-def main(args: DreamboothConfig, lora_model_name, memory_record, use_subdir) -> tuple[DreamboothConfig, dict, str]:
+def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> tuple[DreamboothConfig, dict, str]:
+
     global with_prior
     text_encoder = None
     args.tokenizer_name = None
@@ -462,6 +464,7 @@ def main(args: DreamboothConfig, lora_model_name, memory_record, use_subdir) -> 
                         ),
                         torch_dtype=torch_dtype,
                         requires_safety_checker=False,
+                        safety_checker=None,
                         revision=args.revision
                     )
 
@@ -577,12 +580,17 @@ def main(args: DreamboothConfig, lora_model_name, memory_record, use_subdir) -> 
 
     if args.use_lora:
         unet.requires_grad_(False)
+        if lora_model:
+            lora_path = os.path.join(paths.models_path, "lora", lora_model)
+            weight_apply_lora(unet, torch.load(lora_path))
+
         unet_lora_params, train_names = inject_trainable_lora(unet)
 
         for _up, _down in extract_lora_ups_down(unet):
             print(_up.weight)
             print(_down.weight)
             break
+        
     else:
         unet_lora_params = None
         train_names = None
@@ -760,7 +768,6 @@ def main(args: DreamboothConfig, lora_model_name, memory_record, use_subdir) -> 
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda x: x, shuffle=True)
         if enc_vae is not None:
             del enc_vae
-            cleanup()
         return dataset, dataloader
 
     # Store our original uncached dataset for preview generation
@@ -839,6 +846,7 @@ def main(args: DreamboothConfig, lora_model_name, memory_record, use_subdir) -> 
     def save_weights():
         # Create the pipeline using the trained modules and save it.
         if accelerator.is_main_process:
+            g_cuda = None
             if args.train_text_encoder:
                 text_enc_model = accelerator.unwrap_model(text_encoder)
             else:
@@ -881,10 +889,20 @@ def main(args: DreamboothConfig, lora_model_name, memory_record, use_subdir) -> 
                             out_file = os.path.join(out_file, f"{args.model_name}_{args.revision}.pt")
                             print(f"Saving lora weights at step {args.revision}")
                             save_lora_weight(s_pipeline.unet, out_file)
+
+                            del s_pipeline.unet
+
+                            s_pipeline.unet = UNet2DConditionModel.from_pretrained(
+                                args.pretrained_model_name_or_path,
+                                subfolder="unet",
+                                revision=args.revision,
+                                torch_dtype=torch.float32
+                            )
                         else:
                             out_file = None
-                            shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
-                            s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
+
+                        shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
+                        s_pipeline.save_pretrained(args.pretrained_model_name_or_path)                               
 
                         compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
                                            reload_models=False, lora_path=out_file)
@@ -929,6 +947,8 @@ def main(args: DreamboothConfig, lora_model_name, memory_record, use_subdir) -> 
             del s_pipeline
             del scheduler
             del text_enc_model
+            if g_cuda:
+                del g_cuda
             cleanup()
 
     # Only show the progress bar once on each machine.
@@ -1030,7 +1050,7 @@ def main(args: DreamboothConfig, lora_model_name, memory_record, use_subdir) -> 
                     logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0],
                             "vram": f"{allocated}/{cached}GB"}
                     progress_bar.set_postfix(**logs)
-                    accelerator.log(logs, step=global_step)
+                    accelerator.log(logs, step=args.revision)
                     loss_avg.reset()
 
                 training_complete = global_step >= actual_train_steps or shared.state.interrupted
@@ -1043,7 +1063,7 @@ def main(args: DreamboothConfig, lora_model_name, memory_record, use_subdir) -> 
                         save_img = args.save_preview_every and not global_step % args.save_preview_every
                         save_model = args.save_embedding_every and not global_step % args.save_embedding_every
                     if training_complete:
-                        save_img = True
+                        save_img = False
                         save_model = True
                     if save_img or save_model:
                         args.save()
@@ -1081,7 +1101,7 @@ def main(args: DreamboothConfig, lora_model_name, memory_record, use_subdir) -> 
                 train_dataset, train_dataloader = cache_latents(enc_vae=vae, orig_dataset=gen_dataset)
             if training_complete:
                 if not weights_saved:
-                    save_img = True
+                    save_img = False
                     save_model = True
                     args.save()
                     save_weights()
@@ -1092,6 +1112,8 @@ def main(args: DreamboothConfig, lora_model_name, memory_record, use_subdir) -> 
             msg = f"Exception while training: {m}"
             printm(msg)
             traceback.print_exc()
+            mem_summary = torch.cuda.memory_summary()
+            print(mem_summary)
             break
         if shared.state.interrupted:
             training_complete = True
