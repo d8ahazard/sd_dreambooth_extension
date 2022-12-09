@@ -882,10 +882,20 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                             out_file = os.path.join(out_file, f"{args.model_name}_{args.revision}.pt")
                             print(f"Saving lora weights at step {args.revision}")
                             save_lora_weight(s_pipeline.unet, out_file)
+
+                            del s_pipeline.unet
+
+                            s_pipeline.unet = UNet2DConditionModel.from_pretrained(
+                                args.pretrained_model_name_or_path,
+                                subfolder="unet",
+                                revision=args.revision,
+                                torch_dtype=torch.float32
+                            )
                         else:
                             out_file = None
-                            shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
-                            s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
+
+                        shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
+                        s_pipeline.save_pretrained(args.pretrained_model_name_or_path)                               
 
                         compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
                                            reload_models=False, lora_path=out_file)
