@@ -303,7 +303,7 @@ def save_image(image, parent_directory:str, name:str, revision:Union[str,int] = 
         image_path = truncate_file_path(parent_directory, f"{revision}{name}", extension)    
         image_path_parent_directory = str(Path(image_path).parent.absolute())
         
-        if parent_directory != image_path_parent_directory:
+        if str(parent_directory) != image_path_parent_directory:
             raise e
         
         image.save(image_path)
