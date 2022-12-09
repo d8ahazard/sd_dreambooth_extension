@@ -303,26 +303,26 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
     text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
     try:
         printi("Converting unet...")
-        loaded_pipeline = DiffusionPipeline.from_pretrained(model_path).to("cpu")
-        if lora_path is not None and lora_path != "":
-            lora_diffusers = config.pretrained_model_name_or_path + "_lora"
-            os.makedirs(lora_diffusers, exist_ok=True)
-            if not os.path.exists(lora_path):
-                try:
-                    cmd_lora_models_path = shared.cmd_opts.lora_models_path
-                except:
-                    cmd_lora_models_path = None
-                model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else paths.models_path
-                lora_path = os.path.join(model_dir, "lora", lora_path)
-            print(f"Loading lora from {lora_path}")
-            if os.path.exists(lora_path):
-                checkpoint_path = checkpoint_path.replace(".ckpt", "_lora.ckpt")
-                printi("Applying lora model...")
-                weight_apply_lora(loaded_pipeline.unet, torch.load(lora_path), alpha=lora_alpha)
-                loaded_pipeline.save_pretrained(lora_diffusers)
-                unet_path = osp.join(lora_diffusers, "unet", "diffusion_pytorch_model.bin")
-
-        del loaded_pipeline
+        # loaded_pipeline = DiffusionPipeline.from_pretrained(model_path).to("cpu")
+        # if lora_path is not None and lora_path != "":
+        #     lora_diffusers = config.pretrained_model_name_or_path + "_lora"
+        #     os.makedirs(lora_diffusers, exist_ok=True)
+        #     if not os.path.exists(lora_path):
+        #         try:
+        #             cmd_lora_models_path = shared.cmd_opts.lora_models_path
+        #         except:
+        #             cmd_lora_models_path = None
+        #         model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else paths.models_path
+        #         lora_path = os.path.join(model_dir, "lora", lora_path)
+        #     print(f"Loading lora from {lora_path}")
+        #     if os.path.exists(lora_path):
+        #         checkpoint_path = checkpoint_path.replace(".ckpt", "_lora.ckpt")
+        #         printi("Applying lora model...")
+        #         weight_apply_lora(loaded_pipeline.unet, torch.load(lora_path), alpha=lora_alpha)
+        #         loaded_pipeline.save_pretrained(lora_diffusers)
+        #         unet_path = osp.join(lora_diffusers, "unet", "diffusion_pytorch_model.bin")
+        #
+        # del loaded_pipeline
 
         # Convert the UNet model
         unet_state_dict = torch.load(unet_path, map_location="cpu")
