@@ -577,6 +577,7 @@ def on_ui_tabs():
             _js="db_save_start_progress",
             inputs=[
                 db_model_name,
+                db_lora_model_name,
                 db_train_imagic_only,
                 db_use_subdir
             ],
