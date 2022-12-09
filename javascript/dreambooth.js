@@ -83,6 +83,8 @@ new_titles = {
     "Learning Rate": "The rate at which the model learns. Default is 0.000005. Use a lower value like 0.000002 or 0.000001 for more complex subjects...like people.",
     "Load Params": "Load last saved training parameters for the model..",
     "Log Memory": "Log the current GPU memory usage.",
+    "Lora Model": "The Lora model to load for continued fine-tuning or checkpoint generation.",
+    "Lora Weight": "What percentage of the lora weights should be applied to the unet when training or creating a checkpoint",
     "Maximum Training Steps": "The max number of steps to train this image for. Set to -1 to train for the general number of max steps",
     "Max Grad Norms": "Max Gradient norms.",
     "Max Token Length": "Maximum token length to respect. You probably want to leave this at 75.",
