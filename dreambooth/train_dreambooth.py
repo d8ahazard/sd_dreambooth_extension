@@ -32,6 +32,7 @@ from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import Filenam
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_name, list_features, is_image
 from extensions.sd_dreambooth_extension.lora_diffusion import inject_trainable_lora, extract_lora_ups_down, \
     save_lora_weight
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
 from modules import shared, paths
 
 # Custom stuff
@@ -376,7 +377,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
-def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothConfig, dict, str]:
+def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> tuple[DreamboothConfig, dict, str]:
     global with_prior
     text_encoder = None
     args.tokenizer_name = None
@@ -578,12 +579,17 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
 
     if args.use_lora:
         unet.requires_grad_(False)
+        if lora_model:
+            lora_path = os.path.join(paths.models_path, "lora", lora_model)
+            weight_apply_lora(unet, torch.load(lora_path))
+
         unet_lora_params, train_names = inject_trainable_lora(unet)
 
         for _up, _down in extract_lora_ups_down(unet):
             print(_up.weight)
             print(_down.weight)
             break
+        
     else:
         unet_lora_params = None
         train_names = None
