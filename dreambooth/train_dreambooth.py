@@ -839,6 +839,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
     def save_weights():
         # Create the pipeline using the trained modules and save it.
         if accelerator.is_main_process:
+            g_cuda = None
             if args.train_text_encoder:
                 text_enc_model = accelerator.unwrap_model(text_encoder)
             else:
@@ -929,6 +930,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
             del s_pipeline
             del scheduler
             del text_enc_model
+            if g_cuda:
+                del g_cuda
             cleanup()
 
     # Only show the progress bar once on each machine.
