@@ -328,7 +328,7 @@ def load_model_params(model_dir):
                ""
 
 
-def start_training(model_dir: str, lora_model_name: str, imagic_only: bool, use_subdir: bool):
+def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic_only: bool, use_subdir: bool):
     global mem_record
     if model_dir == "" or model_dir is None:
         print("Invalid model name.")
@@ -375,7 +375,7 @@ def start_training(model_dir: str, lora_model_name: str, imagic_only: bool, use_
             shared.state.textinfo = "Initializing dreambooth training..."
             print(shared.state.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
-            config, mem_record, msg = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name)
+            config, mem_record, msg = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name, lora_alpha=lora_alpha)
             if config.revision != total_steps:
                 config.save()
         total_steps = config.revision

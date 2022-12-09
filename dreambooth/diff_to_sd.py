@@ -193,7 +193,6 @@ def convert_vae_state_dict(vae_state_dict):
 # =========================#
 
 
-
 textenc_conversion_lst = [
     # (stable-diffusion, HF Diffusers)
     ('resblocks.', 'text_model.encoder.layers.'),
@@ -261,8 +260,8 @@ def convert_text_enc_state_dict(text_enc_dict: dict[str, torch.Tensor]):
     return text_enc_dict
 
 
-def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, reload_models=True, lora_path=None,
-                       lora_alpha=1):
+def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1,
+                       reload_models=True):
     """
 
     @param model_name: The model name to compile
@@ -299,7 +298,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
         checkpoint_path = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
 
     model_path = config.pretrained_model_name_or_path
-    unet_path = osp.join(model_path,"unet", "diffusion_pytorch_model.bin")
+    unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")
     vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.bin")
     text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
     try:

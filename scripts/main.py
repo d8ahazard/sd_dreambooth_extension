@@ -121,7 +121,8 @@ def on_ui_tabs():
                             db_resolution = gr.Number(label="Resolution", precision=0, value=512)
                             db_center_crop = gr.Checkbox(label="Center Crop", value=False)
                             db_hflip = gr.Checkbox(label="Apply Horizontal Flip", value=True)
-                            db_save_class_txt = gr.Checkbox(label="Save Class Captions to txt", value=True)
+                            db_save_class_txt = gr.Checkbox(label="Save Class Captions to txt", value=True,
+                                                            visible=False)
 
                         with gr.Column():
                             gr.HTML(value="Miscellaneous")
@@ -589,6 +590,7 @@ def on_ui_tabs():
             inputs=[
                 db_model_name,
                 db_lora_model_name,
+                db_lora_weight,
                 db_train_imagic_only,
                 db_use_subdir
             ],

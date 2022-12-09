@@ -371,7 +371,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
-def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> tuple[DreamboothConfig, dict, str]:
+def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lora_alpha=1) -> tuple[DreamboothConfig, dict, str]:
 
     global with_prior
     text_encoder = None
@@ -493,10 +493,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                                 print("Generation canceled.")
                                 shared.state.textinfo = "Training canceled."
                                 return args, mem_record, "Training canceled."
-                            if args.save_class_txt:
-                                image_base = hashlib.sha1(image.tobytes()).hexdigest()
-                            else:
-                                image_base = sanitize_name(example["prompt"])
+
+                            image_base = hashlib.sha1(image.tobytes()).hexdigest()
                             image_filename = str(class_images_dir / f"{generated_images + cur_class_images}-" \
                                                                     f"{image_base}.jpg")
                             image.save(image_filename)
@@ -577,7 +575,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
             lora_path = os.path.join(paths.models_path, "lora", lora_model)
             if os.path.exists(lora_path):
                 print(f"Applying lora weights: {lora_path}")
-                weight_apply_lora(unet, torch.load(lora_path))
+                weight_apply_lora(unet, torch.load(lora_path), lora_alpha)
 
         unet_lora_params, train_names = inject_trainable_lora(unet)
 
@@ -890,7 +888,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                                 subfolder="unet",
                                 revision=args.revision,
                                 torch_dtype=torch.float32
-                            )
+                            ).to(accelerator.device)
                         else:
                             out_file = None
 
