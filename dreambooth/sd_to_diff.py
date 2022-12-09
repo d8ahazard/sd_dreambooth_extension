@@ -667,7 +667,6 @@ def convert_open_clip_checkpoint(checkpoint):
     text_model = CLIPTextModel.from_pretrained("stabilityai/stable-diffusion-2", subfolder="text_encoder")
 
     keys = list(checkpoint.keys())
-    print(f"OpenClipKeys: {keys}")
     text_model_dict = {}
     if 'cond_stage_model.model.text_projection' in checkpoint:
         d_model = int(checkpoint['cond_stage_model.model.text_projection'].shape[0])
@@ -741,7 +740,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
     status = ""
     has_ema = False
     v2 = False
-    is_512 = False
+    is_512 = True
     model_dir = ""
     scheduler = ""
     src = ""
@@ -805,6 +804,8 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                 if revision == 875000 or revision == 220000:
                     print(f"Model revision is {revision}, assuming v2, 512 model.")
                     is_512 = True
+                else:
+                    is_512 = False
                 v2 = True
             else:
                 v2 = False
@@ -833,7 +834,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                                                     "v1-inference.yaml")
 
         db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type, v2=v2,
-                                     src=ckpt_path if not from_hub else new_model_url, resolution=768 if v2 else 512)
+                                     src=ckpt_path if not from_hub else new_model_url, resolution=512 if is_512 else 768)
         db_config.lifetime_revision = revision
         db_config.epoch = epoch
         print(f"{'v2' if v2 else 'v1'} model loaded.")
