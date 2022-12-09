@@ -5,7 +5,7 @@ import random
 import traceback
 from io import StringIO
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import torch
 from PIL import features
@@ -293,7 +293,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
     else:
         return f"{organization}/{model_id}"
     
-def save_image(image, parent_directory:str, name:str, revision:str|int = "", extension:str = "png"):
+def save_image(image, parent_directory:str, name:str, revision:Union[str,int] = "", extension:str = "png"):
     try:
         image_path = f"{revision}{name}.{extension}"
         image_path = os.path.join(parent_directory, image_path)
