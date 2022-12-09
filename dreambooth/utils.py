@@ -292,3 +292,23 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{username}/{model_id}"
     else:
         return f"{organization}/{model_id}"
+    
+def save_image(image, parent_directory:str, name:str, revision:str|int = "", extension:str = "png"):
+    try:
+        image_path = f"{revision}{name}.{extension}"
+        image_path = os.path.join(parent_directory, image_path)
+        image.save(image_path)
+        
+    except Exception as e: # Attempt to instead save file with a max path length of exactly 260 characters by truncating image name
+        image_path = truncate_file_path(parent_directory, f"{revision}{name}", extension)    
+        image_path_parent_directory = str(Path(image_path).parent.absolute())
+        
+        if parent_directory != image_path_parent_directory:
+            raise e
+        
+        image.save(image_path)
+        
+def truncate_file_path(parent_directory:str, file_name:str, extension:str, max_length:int = 260):
+    path = os.path.join(parent_directory, file_name)[:max_length - len(f".{extension}")]
+    path = f"{path}.{extension}"
+    return path

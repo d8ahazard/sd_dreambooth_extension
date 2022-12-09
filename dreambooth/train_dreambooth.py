@@ -31,7 +31,8 @@ from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_che
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, encode_hidden_state, \
     PromptDataset, EMAModel
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_name, list_features, is_image
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_name, list_features, is_image, \
+    save_image, truncate_file_path
 from modules import shared, sd_models
 
 # Custom stuff
@@ -497,28 +498,33 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                                 logger.debug("Generation canceled.")
                                 shared.state.textinfo = "Training canceled."
                                 return args, mem_record, "Training canceled."
+                            
                             if args.save_class_txt:
                                 image_base = hashlib.sha1(image.tobytes()).hexdigest()
                             else:
                                 image_base = sanitize_name(example["prompt"])
-                            image_filename = str(class_images_dir / f"{generated_images + cur_class_images}-" \
-                                                                f"{image_base}.jpg")
-                            image.save(image_filename)
+                                
+                            save_image(image, class_images_dir, image_base, f"{generated_images + cur_class_images}-")
+                            
                             if args.save_class_txt:
-                                txt_filename = image_filename.replace(".jpg", ".txt")
+                                txt_filename = truncate_file_path(str(class_images_dir), f"{generated_images + cur_class_images}-{image_base}", "txt")
                                 with open(txt_filename, "w", encoding="utf8") as file:
                                     file.write(example["prompt"])
+                                    
                             shared.state.job_no += 1
                             generated_images += 1
                             shared.state.textinfo = f"Class image {generated_images}/{num_new_images}, " \
                                                     f"Prompt: '{example['prompt']}'"
+                                                    
                             shared.state.current_image = image
                             pbar.update()
+                            
                     del pbar
                 del sample_dataset
         c_idx += 1
     del concept_pipeline
     del text_getter
+    
     cleanup()
 
     # Load the tokenizer
@@ -831,6 +837,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
             if args.use_ema:
                 ema_unet.store(unet.parameters())
                 ema_unet.copy_to(unet.parameters())
+                
             s_pipeline = DiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
                 unet=accelerator.unwrap_model(unet),
@@ -840,26 +847,31 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                 torch_dtype=torch.float16,
                 revision=args.revision,
                 safety_checker=None,
-                requires_safety_checker=None
+                requires_safety_checker=False
             )
 
             s_pipeline = s_pipeline.to(accelerator.device)
             with accelerator.autocast(), torch.inference_mode():
                 if save_model:
                     shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
+                    
                     try:
                         s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
                         compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
                                            reload_models=False)
                         if args.use_ema:
                             ema_unet.restore(unet.parameters())
+                            
                     except Exception as e:
                         logger.debug(f"Exception saving checkpoint/model: {e}")
                         traceback.print_exc()
                         pass
+                
                 save_dir = args.model_dir
+                
                 if save_img:
                     shared.state.textinfo = f"Saving preview image at step {args.revision}..."
+                    
                     try:
                         s_pipeline.set_progress_bar_config(disable=True)
                         sample_dir = os.path.join(save_dir, "samples")
@@ -881,17 +893,21 @@ def main(args: DreamboothConfig, memory_record, use_subdir) -> tuple[DreamboothC
                                                          generator=g_cuda).images[0]
                                     shared.state.current_image = s_image
                                     shared.state.textinfo = c.prompt
+                                    
                                     sanitized_prompt = sanitize_name(c.prompt)
-                                    s_image.save(
-                                        os.path.join(sample_dir, f"{sanitized_prompt}{args.revision}-{si}.png"))
+                                    save_image(s_image, sample_dir, sanitized_prompt, f"{args.revision}-{si}-")
+
                     except Exception as e:
-                        logger.debug(f"Exception with the stupid image again: {e}")
-                        traceback.print_exc()
-                        pass
+                            logger.debug(f"Exception with the stupid image again: {e}")
+                            traceback.print_exc()
+                            pass
+                        
             logger.debug(f"[*] Weights saved at {save_dir}")
+            
             del s_pipeline
             del scheduler
             del text_enc_model
+            
             cleanup()
 
     # Only show the progress bar once on each machine.
