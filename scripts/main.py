@@ -171,7 +171,7 @@ def on_ui_tabs():
                     with gr.Column(variant="panel"):
                         with gr.Tab("Concept 1"):
                             c1_max_steps, \
-                            c1_instance_data_dir, c1_class_data_dir, c1_file_prompt_contents, c1_instance_prompt, \
+                            c1_instance_data_dir, c1_class_data_dir, c1_instance_prompt, \
                             c1_class_prompt, c1_num_class_images, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token, \
                             c1_class_token, c1_num_class_images, c1_class_negative_prompt, c1_class_guidance_scale, \
                             c1_class_infer_steps, c1_save_sample_negative_prompt, c1_n_save_sample, c1_sample_seed, \
@@ -179,7 +179,7 @@ def on_ui_tabs():
 
                         with gr.Tab("Concept 2"):
                             c2_max_steps, \
-                            c2_instance_data_dir, c2_class_data_dir, c2_file_prompt_contents, c2_instance_prompt, \
+                            c2_instance_data_dir, c2_class_data_dir, c2_instance_prompt, \
                             c2_class_prompt, c2_num_class_images, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token, \
                             c2_class_token, c2_num_class_images, c2_class_negative_prompt, c2_class_guidance_scale, \
                             c2_class_infer_steps, c2_save_sample_negative_prompt, c2_n_save_sample, c2_sample_seed, \
@@ -187,7 +187,7 @@ def on_ui_tabs():
 
                         with gr.Tab("Concept 3"):
                             c3_max_steps, \
-                            c3_instance_data_dir, c3_class_data_dir, c3_file_prompt_contents, c3_instance_prompt, \
+                            c3_instance_data_dir, c3_class_data_dir, c3_instance_prompt, \
                             c3_class_prompt, c3_num_class_images, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token, \
                             c3_class_token, c3_num_class_images, c3_class_negative_prompt, c3_class_guidance_scale, \
                             c3_class_infer_steps, c3_save_sample_negative_prompt, c3_n_save_sample, c3_sample_seed, \
@@ -275,7 +275,6 @@ def on_ui_tabs():
                 c1_class_negative_prompt,
                 c1_class_prompt,
                 c1_class_token,
-                c1_file_prompt_contents,
                 c1_instance_data_dir,
                 c1_instance_prompt,
                 c1_instance_token,
@@ -294,7 +293,6 @@ def on_ui_tabs():
                 c2_class_negative_prompt,
                 c2_class_prompt,
                 c2_class_token,
-                c2_file_prompt_contents,
                 c2_instance_data_dir,
                 c2_instance_prompt,
                 c2_instance_token,
@@ -313,7 +311,6 @@ def on_ui_tabs():
                 c3_class_negative_prompt,
                 c3_class_prompt,
                 c3_class_token,
-                c3_file_prompt_contents,
                 c3_instance_data_dir,
                 c3_instance_prompt,
                 c3_instance_token,
@@ -379,7 +376,6 @@ def on_ui_tabs():
                 c1_class_negative_prompt,
                 c1_class_prompt,
                 c1_class_token,
-                c1_file_prompt_contents,
                 c1_instance_data_dir,
                 c1_instance_prompt,
                 c1_instance_token,
@@ -398,7 +394,6 @@ def on_ui_tabs():
                 c2_class_negative_prompt,
                 c2_class_prompt,
                 c2_class_token,
-                c2_file_prompt_contents,
                 c2_instance_data_dir,
                 c2_instance_prompt,
                 c2_instance_token,
@@ -417,7 +412,6 @@ def on_ui_tabs():
                 c3_class_negative_prompt,
                 c3_class_prompt,
                 c3_class_token,
-                c3_file_prompt_contents,
                 c3_instance_data_dir,
                 c3_instance_prompt,
                 c3_instance_token,
@@ -607,6 +601,13 @@ def build_concept_panel():
                                     placeholder="(Optional) Path to directory with "
                                                 "classification/regularization images")
     with gr.Column():
+        gr.HTML(value="Filewords")
+        instance_token = gr.Textbox(label='Instance Token',
+                                    placeholder="When using [filewords], this is the subject to use when building prompts.")
+        class_token = gr.Textbox(label='Class Token',
+                                 placeholder="When using [filewords], this is the class to use when building prompts.")
+
+    with gr.Column():
         gr.HTML(value="Prompts")
         instance_prompt = gr.Textbox(label="Instance Prompt",
                                      placeholder="Optionally use [filewords] to read image "
@@ -624,19 +625,6 @@ def build_concept_panel():
         save_sample_negative_prompt = gr.Textbox(label="Sample Image Negative Prompt")
 
     with gr.Column():
-        gr.HTML(value="Filewords")
-        file_prompt_contents = gr.Dropdown(label="Existing Prompt Contents",
-                                           value="Description",
-                                           choices=["Description",
-                                                    "Instance Token + Description",
-                                                    "Class Token + Description",
-                                                    "Instance Token + Class Token + Description"])
-        instance_token = gr.Textbox(label='Instance Token',
-                                    placeholder="When using [filewords], this is the subject to use when building prompts.")
-        class_token = gr.Textbox(label='Class Token',
-                                 placeholder="When using [filewords], this is the class to use when building prompts.")
-
-    with gr.Column():
         gr.HTML("Image Generation")
         num_class_images = gr.Number(label='Total Number of Class/Reg Images', value=0, precision=0)
         class_guidance_scale = gr.Number(label="Classification CFG Scale", value=7.5, max=12, min=1, precision=2)
@@ -645,7 +633,7 @@ def build_concept_panel():
         sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
         save_guidance_scale = gr.Number(label="Sample CFG Scale", value=7.5, max=12, min=1, precision=2)
         save_infer_steps = gr.Number(label="Sample Steps", value=40, min=10, max=200, precision=0)
-    return [max_steps, instance_data_dir, class_data_dir, file_prompt_contents, instance_prompt, class_prompt,
+    return [max_steps, instance_data_dir, class_data_dir, instance_prompt, class_prompt,
             num_class_images,
             save_sample_prompt, sample_template, instance_token, class_token, num_class_images, class_negative_prompt,
             class_guidance_scale, class_infer_steps, save_sample_negative_prompt, n_save_sample, sample_seed,

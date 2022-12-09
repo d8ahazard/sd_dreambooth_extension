@@ -202,8 +202,7 @@ def debug_prompts(model_dir):
             num_new_images = concept.num_class_images - cur_class_images
             filename_texts = [text_getter.read_text(x) for x in Path(concept.instance_data_dir).iterdir() if
                               is_image(x, pil_features)]
-            sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts,
-                                           concept.file_prompt_contents, concept.class_token,
+            sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts, concept.class_token,
                                            concept.instance_token)
             for i in range(sample_dataset.__len__()):
                 output["new_class_prompts"].append(sample_dataset.__getitem__(i)["prompt"])

@@ -287,12 +287,6 @@ def parse_args(input_args=None):
         help="Generate half-precision checkpoints (Saves space, minor difference in output)",
     )
     parser.add_argument(
-        "--file_prompt_contents",
-        type=str,
-        default="Description",
-        help="The contents of existing prompts in instance images/txt."
-    )
-    parser.add_argument(
         "--instance_token",
         type=str,
         default="",
@@ -475,8 +469,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                 shared.state.job_no = 0
                 filename_texts = [text_getter.read_text(x) for x in Path(concept.instance_data_dir).iterdir() if
                                   is_image(x, pil_features)]
-                sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts,
-                                               concept.file_prompt_contents, concept.class_token,
+                sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts, concept.class_token,
                                                concept.instance_token)
                 with accelerator.autocast(), torch.inference_mode():
                     generated_images = 0
@@ -868,7 +861,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                 safety_checker=None,
                 requires_safety_checker=None
             )
-
+            # Hot, nasty speed
+            s_pipeline.enable_sequential_cpu_offload()
+            s_pipeline.enable_attention_slicing()
             s_pipeline = s_pipeline.to(accelerator.device)
             with accelerator.autocast(), torch.inference_mode():
                 if save_model:
@@ -896,9 +891,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                             )
                         else:
                             out_file = None
-                            # If we save the unet with lora weights in it, it breaks reloading weights later
-                            shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
-                            s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
+
+                        shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
+                        s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
 
                         compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
                                            reload_models=False, lora_path=out_file)
@@ -935,6 +930,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                                     sanitized_prompt = sanitize_name(c.prompt)
                                     s_image.save(
                                         os.path.join(sample_dir, f"{sanitized_prompt}{args.revision}-{si}.png"))
+                                del g_cuda
                     except Exception as e:
                         logger.debug(f"Exception with the stupid image again: {e}")
                         traceback.print_exc()
