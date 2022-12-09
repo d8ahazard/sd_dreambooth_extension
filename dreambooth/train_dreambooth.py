@@ -586,14 +586,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
 
         unet_lora_params, train_names = inject_trainable_lora(unet)
 
-        for _up, _down in extract_lora_ups_down(unet):
-            print(_up.weight)
-            print(_down.weight)
-            break
-        
     else:
         unet_lora_params = None
-        train_names = None
 
     if args.scale_lr:
         args.learning_rate = (
@@ -656,6 +650,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                 del vae
             if ema_unet:
                 del ema_unet
+            if unet_lora_params:
+                del unet_lora_params
         except:
             pass
         try:
@@ -900,9 +896,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None) -> 
                             )
                         else:
                             out_file = None
-
-                        shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
-                        s_pipeline.save_pretrained(args.pretrained_model_name_or_path)                               
+                            # If we save the unet with lora weights in it, it breaks reloading weights later
+                            shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
+                            s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
 
                         compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
                                            reload_models=False, lora_path=out_file)
