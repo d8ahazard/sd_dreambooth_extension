@@ -14,6 +14,12 @@ from webui import wrap_gradio_gpu_call
 
 
 def on_ui_tabs():
+    show_lora = False
+    try:
+        show_lora = shared.cmd_opts.test_lora
+    except:
+        pass
+
     with gr.Blocks() as dreambooth_interface:
         with gr.Row(equal_height=True):
             db_save_params = gr.Button(value="Save Params", elem_id="db_save_config")
@@ -29,12 +35,12 @@ def on_ui_tabs():
                     create_refresh_button(db_model_name, get_db_models, lambda: {
                         "choices": sorted(get_db_models())},
                                           "refresh_db_models")
-                with gr.Row():
+                with gr.Row(visible=show_lora):
                     db_lora_model_name = gr.Dropdown(label='Lora Model', choices=sorted(get_lora_models()))
                     create_refresh_button(db_lora_model_name, get_lora_models, lambda: {
                         "choices": sorted(get_lora_models())},
                                           "refresh_lora_models")
-                db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1)
+                db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1, visible=show_lora)
                 db_half_model = gr.Checkbox(label="Half Model", value=False)
                 db_use_subdir = gr.Checkbox(label="Save Checkpoint to Subdirectory", value=False)
                 with gr.Row():
@@ -140,7 +146,7 @@ def on_ui_tabs():
                                 with gr.Column():
                                     gr.HTML(value="Tuning")
                                     db_use_cpu = gr.Checkbox(label="Use CPU Only (SLOW)", value=False)
-                                    db_use_lora = gr.Checkbox(label="Use LORA", value=False)
+                                    db_use_lora = gr.Checkbox(label="Use LORA", value=False, visible=show_lora)
                                     db_use_ema = gr.Checkbox(label="Use EMA", value=False)
                                     db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                     db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
