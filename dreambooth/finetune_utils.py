@@ -1,5 +1,6 @@
 import gc
 import os
+import random
 import re
 from typing import Iterable
 
@@ -16,9 +17,10 @@ class FilenameTextGetter:
 
     re_numbers_at_start = re.compile(r"^[-\d]+\s*")
 
-    def __init__(self):
+    def __init__(self, shuffle_tags=False):
         self.re_word = re.compile(shared.opts.dataset_filename_word_regex) if len(
             shared.opts.dataset_filename_word_regex) > 0 else None
+        self.shuffle_tags = shuffle_tags
 
     def read_text(self, img_path):
         text_filename = os.path.splitext(img_path)[0] + ".txt"
@@ -69,6 +71,8 @@ class FilenameTextGetter:
                         filename_text = f"{instance_token} {class_token}, {filename_text}"
 
         tags = filename_text.split(',')
+        if self.shuffle_tags:
+            random.shuffle(tags)
         output = text_template.replace("[filewords]", ','.join(tags))
         return output
 

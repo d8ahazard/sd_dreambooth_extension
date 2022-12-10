@@ -429,7 +429,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     for concept in args.concepts_list:
         cur_class_images = 0
         print(f"Checking concept: {concept}")
-        text_getter = FilenameTextGetter()
+        text_getter = FilenameTextGetter(args.shuffle_tags)
         print(f"Concept requires {concept.num_class_images} images.")
         with_prior = concept.num_class_images > 0
         if with_prior:
@@ -661,7 +661,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         lifetime_steps=args.revision,
         pad_tokens=args.pad_tokens,
         hflip=args.hflip,
-        max_token_length=args.max_token_length
+        max_token_length=args.max_token_length,
+        shuffle_tags=args.shuffle_tags
     )
 
     if train_dataset.__len__ == 0:
@@ -729,7 +730,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 lifetime_steps=args.revision,
                 pad_tokens=args.pad_tokens,
                 hflip=args.hflip,
-                max_token_length=args.max_token_length
+                max_token_length=args.max_token_length,
+                shuffle_tags=args.shuffle_tags
             )
         else:
             dataset = gen_dataset

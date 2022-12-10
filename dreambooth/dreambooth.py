@@ -275,6 +275,7 @@ def load_params(model_dir):
                "db_save_use_global_counts",
                "db_save_use_epochs",
                "db_scale_lr",
+               "db_shuffle_tags",
                "db_train_batch_size",
                "db_train_text_encoder",
                "db_use_8bit_adam",

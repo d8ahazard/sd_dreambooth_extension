@@ -102,7 +102,8 @@ class SuperDataset(Dataset):
             pad_tokens=False,
             hflip=False,
             max_token_length=75,
-            lifetime_steps=-1
+            lifetime_steps=-1,
+            shuffle_tags=False
     ):
         self.concepts = []
         self.size = size
@@ -111,7 +112,7 @@ class SuperDataset(Dataset):
         self.pad_tokens = pad_tokens
         self.max_token_length = max_token_length
         self.tokenizer_max_length = self.tokenizer.model_max_length if max_token_length == 75 else max_token_length + 2
-        self.text_getter = FilenameTextGetter()
+        self.text_getter = FilenameTextGetter(shuffle_tags)
         self.lifetime_steps = lifetime_steps
         self.current_concept = 0
 
