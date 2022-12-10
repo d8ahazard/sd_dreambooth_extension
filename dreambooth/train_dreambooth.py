@@ -889,7 +889,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                 args.pretrained_model_name_or_path,
                                 subfolder="unet",
                                 revision=args.revision,
-                                torch_dtype=torch.float32
+                                torch_dtype=torch.float16
                             ).to(accelerator.device)
                         else:
                             out_file = None
