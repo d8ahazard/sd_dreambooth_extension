@@ -939,8 +939,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             del s_pipeline
             del scheduler
             del text_enc_model
-            if g_cuda:
-                del g_cuda
+            if not save_img:
+                if g_cuda:
+                    del g_cuda
             #cleanup()
 
     # Only show the progress bar once on each machine.
