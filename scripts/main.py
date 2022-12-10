@@ -335,7 +335,8 @@ def on_ui_tabs():
                 c3_save_sample_negative_prompt,
                 c3_save_sample_prompt,
                 c3_save_sample_template
-            ]
+            ],
+            outputs=[]
         )
 
         db_load_params.click(
