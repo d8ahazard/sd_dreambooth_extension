@@ -7,13 +7,19 @@ from extensions.sd_dreambooth_extension.dreambooth.dreambooth import performance
     training_wizard, training_wizard_person, load_model_params
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, log_memory, generate_sample_img, \
-    debug_prompts, list_attention, list_floats
+    debug_prompts, list_attention, list_floats, get_lora_models
 from modules import script_callbacks, sd_models, shared
 from modules.ui import setup_progressbar, gr_show, wrap_gradio_call, create_refresh_button
 from webui import wrap_gradio_gpu_call
 
 
 def on_ui_tabs():
+    show_lora = False
+    try:
+        show_lora = shared.cmd_opts.test_lora
+    except:
+        pass
+
     with gr.Blocks() as dreambooth_interface:
         with gr.Row(equal_height=True):
             db_save_params = gr.Button(value="Save Params", elem_id="db_save_config")
@@ -29,6 +35,12 @@ def on_ui_tabs():
                     create_refresh_button(db_model_name, get_db_models, lambda: {
                         "choices": sorted(get_db_models())},
                                           "refresh_db_models")
+                with gr.Row(visible=show_lora):
+                    db_lora_model_name = gr.Dropdown(label='Lora Model', choices=sorted(get_lora_models()))
+                    create_refresh_button(db_lora_model_name, get_lora_models, lambda: {
+                        "choices": sorted(get_lora_models())},
+                                          "refresh_lora_models")
+                db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1, visible=show_lora)
                 db_half_model = gr.Checkbox(label="Half Model", value=False)
                 db_use_subdir = gr.Checkbox(label="Save Checkpoint to Subdirectory", value=False)
                 with gr.Row():
@@ -64,8 +76,11 @@ def on_ui_tabs():
                         db_new_model_token = gr.Textbox(label="HuggingFace Token", value="")
                     with gr.Row() as local_row:
                         db_new_model_src = gr.Dropdown(label='Source Checkpoint',
-                                                       choices=sorted(sd_models.checkpoints_list.keys()))
-                        db_new_model_extract_ema = gr.Checkbox(label='Extract EMA Weights', value=False)
+                                                       choices=sorted(get_sd_models()))
+                        create_refresh_button(db_new_model_src, get_sd_models, lambda: {
+                            "choices": sorted(get_sd_models())},
+                                              "refresh_sd_models")
+                    db_new_model_extract_ema = gr.Checkbox(label='Extract EMA Weights', value=False)
                     db_new_model_scheduler = gr.Dropdown(label='Scheduler', choices=["pndm", "lms", "euler",
                                                                                      "euler-ancestral", "dpm", "ddim"],
                                                          value="ddim")
@@ -80,8 +95,11 @@ def on_ui_tabs():
                     with gr.Accordion(open=True, label="Settings"):
                         with gr.Column():
                             gr.HTML(value="Intervals")
-                            db_max_train_steps = gr.Number(label='Training Steps', value=1000, precision=0)
-                            db_num_train_epochs = gr.Number(label="Training Epochs", precision=0, value=1)
+                            db_num_train_epochs = gr.Number(label="Training Steps Per Image (Epochs)", precision=100,
+                                                            value=1)
+                            db_max_train_steps = gr.Number(label='Max Training Steps', value=0, precision=0)
+                            db_save_use_global_counts = gr.Checkbox(label='Use Lifetime Steps/Epochs When Saving', value=True)
+                            db_save_use_epochs = gr.Checkbox(label="Save Preview/Ckpt Every Epoch")
                             db_save_embedding_every = gr.Number(
                                 label='Save Checkpoint Frequency', value=500,
                                 precision=0)
@@ -90,28 +108,35 @@ def on_ui_tabs():
                                 precision=0)
 
                         with gr.Column():
+                            gr.HTML(value="Batch")
+                            db_train_batch_size = gr.Number(label="Batch Size", precision=0, value=1)
+                            db_sample_batch_size = gr.Number(label="Class Batch Size", precision=0, value=1)
+
+                        with gr.Column():
                             gr.HTML(value="Learning Rate")
-                            db_learning_rate = gr.Number(label='Learning Rate', value=1.72e-6)
+                            db_learning_rate = gr.Number(label='Learning Rate', value=2e-6)
                             db_scale_lr = gr.Checkbox(label="Scale Learning Rate", value=False)
                             db_lr_scheduler = gr.Dropdown(label="Learning Rate Scheduler", value="constant",
                                                           choices=["linear", "cosine", "cosine_with_restarts",
                                                                    "polynomial", "constant",
                                                                    "constant_with_warmup"])
-                            db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=0)
+                            db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=500)
 
                         with gr.Column():
                             gr.HTML(value="Image Processing")
                             db_resolution = gr.Number(label="Resolution", precision=0, value=512)
                             db_center_crop = gr.Checkbox(label="Center Crop", value=False)
                             db_hflip = gr.Checkbox(label="Apply Horizontal Flip", value=True)
-                            db_save_class_txt = gr.Checkbox(label="Save Class Captions to txt", value=False)
-                        db_pretrained_vae_name_or_path = gr.Textbox(label='Pretrained VAE Name or Path',
-                                                                    placeholder="Leave blank to use base model VAE.",
-                                                                    value="")
+                            db_save_class_txt = gr.Checkbox(label="Save Class Captions to txt", value=True,
+                                                            visible=False)
 
-                        db_use_concepts = gr.Checkbox(label="Use Concepts List", value=False)
                         with gr.Column():
-                            gr.HTML(value="Concepts")
+                            gr.HTML(value="Miscellaneous")
+                            db_pretrained_vae_name_or_path = gr.Textbox(label='Pretrained VAE Name or Path',
+                                                                        placeholder="Leave blank to use base model VAE.",
+                                                                        value="")
+
+                            db_use_concepts = gr.Checkbox(label="Use Concepts List", value=False)
                             db_concepts_path = gr.Textbox(label="Concepts List",
                                                           placeholder="Path to JSON file with concepts to train.")
 
@@ -119,12 +144,10 @@ def on_ui_tabs():
                         with gr.Row():
                             with gr.Column():
                                 with gr.Column():
-                                    gr.HTML(value="Batch")
-                                    db_train_batch_size = gr.Number(label="Batch Size", precision=0, value=1)
-                                    db_sample_batch_size = gr.Number(label="Class Batch Size", precision=0, value=1)
-                                with gr.Column():
                                     gr.HTML(value="Tuning")
                                     db_use_cpu = gr.Checkbox(label="Use CPU Only (SLOW)", value=False)
+                                    db_use_lora = gr.Checkbox(label="Use LORA", value=False, visible=show_lora)
+                                    db_use_ema = gr.Checkbox(label="Use EMA", value=False)
                                     db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                     db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
                                                                      choices=list_floats())
@@ -135,7 +158,6 @@ def on_ui_tabs():
                                     db_not_cache_latents = gr.Checkbox(label="Don't Cache Latents", value=True)
                                     db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
                                     db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
-                                    db_use_ema = gr.Checkbox(label="Train EMA", value=False)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
                                     db_max_token_length = gr.Slider(label="Max Token Length", minimum=75, maximum=300,
                                                                     step=75)
@@ -161,7 +183,7 @@ def on_ui_tabs():
                     with gr.Column(variant="panel"):
                         with gr.Tab("Concept 1"):
                             c1_max_steps, \
-                            c1_instance_data_dir, c1_class_data_dir, c1_file_prompt_contents, c1_instance_prompt, \
+                            c1_instance_data_dir, c1_class_data_dir, c1_instance_prompt, \
                             c1_class_prompt, c1_num_class_images, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token, \
                             c1_class_token, c1_num_class_images, c1_class_negative_prompt, c1_class_guidance_scale, \
                             c1_class_infer_steps, c1_save_sample_negative_prompt, c1_n_save_sample, c1_sample_seed, \
@@ -169,7 +191,7 @@ def on_ui_tabs():
 
                         with gr.Tab("Concept 2"):
                             c2_max_steps, \
-                            c2_instance_data_dir, c2_class_data_dir, c2_file_prompt_contents, c2_instance_prompt, \
+                            c2_instance_data_dir, c2_class_data_dir, c2_instance_prompt, \
                             c2_class_prompt, c2_num_class_images, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token, \
                             c2_class_token, c2_num_class_images, c2_class_negative_prompt, c2_class_guidance_scale, \
                             c2_class_infer_steps, c2_save_sample_negative_prompt, c2_n_save_sample, c2_sample_seed, \
@@ -177,7 +199,7 @@ def on_ui_tabs():
 
                         with gr.Tab("Concept 3"):
                             c3_max_steps, \
-                            c3_instance_data_dir, c3_class_data_dir, c3_file_prompt_contents, c3_instance_prompt, \
+                            c3_instance_data_dir, c3_class_data_dir, c3_instance_prompt, \
                             c3_class_prompt, c3_num_class_images, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token, \
                             c3_class_token, c3_num_class_images, c3_class_negative_prompt, c3_class_guidance_scale, \
                             c3_class_infer_steps, c3_save_sample_negative_prompt, c3_n_save_sample, c3_sample_seed, \
@@ -246,6 +268,8 @@ def on_ui_tabs():
                 db_save_class_txt,
                 db_save_embedding_every,
                 db_save_preview_every,
+                db_save_use_global_counts,
+                db_save_use_epochs,
                 db_scale_lr,
                 db_scheduler,
                 db_src,
@@ -255,6 +279,7 @@ def on_ui_tabs():
                 db_use_concepts,
                 db_use_cpu,
                 db_use_ema,
+                db_use_lora,
                 db_v2,
                 c1_class_data_dir,
                 c1_class_guidance_scale,
@@ -262,7 +287,6 @@ def on_ui_tabs():
                 c1_class_negative_prompt,
                 c1_class_prompt,
                 c1_class_token,
-                c1_file_prompt_contents,
                 c1_instance_data_dir,
                 c1_instance_prompt,
                 c1_instance_token,
@@ -281,7 +305,6 @@ def on_ui_tabs():
                 c2_class_negative_prompt,
                 c2_class_prompt,
                 c2_class_token,
-                c2_file_prompt_contents,
                 c2_instance_data_dir,
                 c2_instance_prompt,
                 c2_instance_token,
@@ -300,7 +323,6 @@ def on_ui_tabs():
                 c3_class_negative_prompt,
                 c3_class_prompt,
                 c3_class_token,
-                c3_file_prompt_contents,
                 c3_instance_data_dir,
                 c3_instance_prompt,
                 c3_instance_token,
@@ -313,7 +335,8 @@ def on_ui_tabs():
                 c3_save_sample_negative_prompt,
                 c3_save_sample_prompt,
                 c3_save_sample_template
-            ]
+            ],
+            outputs=[]
         )
 
         db_load_params.click(
@@ -350,6 +373,8 @@ def on_ui_tabs():
                 db_save_class_txt,
                 db_save_embedding_every,
                 db_save_preview_every,
+                db_save_use_global_counts,
+                db_save_use_epochs,
                 db_scale_lr,
                 db_train_batch_size,
                 db_train_text_encoder,
@@ -357,13 +382,13 @@ def on_ui_tabs():
                 db_use_concepts,
                 db_use_cpu,
                 db_use_ema,
+                db_use_lora,
                 c1_class_data_dir,
                 c1_class_guidance_scale,
                 c1_class_infer_steps,
                 c1_class_negative_prompt,
                 c1_class_prompt,
                 c1_class_token,
-                c1_file_prompt_contents,
                 c1_instance_data_dir,
                 c1_instance_prompt,
                 c1_instance_token,
@@ -382,7 +407,6 @@ def on_ui_tabs():
                 c2_class_negative_prompt,
                 c2_class_prompt,
                 c2_class_token,
-                c2_file_prompt_contents,
                 c2_instance_data_dir,
                 c2_instance_prompt,
                 c2_instance_token,
@@ -401,7 +425,6 @@ def on_ui_tabs():
                 c3_class_negative_prompt,
                 c3_class_prompt,
                 c3_class_token,
-                c3_file_prompt_contents,
                 c3_instance_data_dir,
                 c3_instance_prompt,
                 c3_instance_token,
@@ -422,6 +445,18 @@ def on_ui_tabs():
             fn=lambda x: gr_show(x),
             inputs=[db_create_from_hub],
             outputs=[hub_row],
+        )
+
+        db_use_lora.change(
+            fn=lambda x: False if x else db_use_lora,
+            inputs=[db_use_lora],
+            outputs=[db_use_ema],
+        )
+
+        db_use_ema.change(
+            fn=lambda x: False if x else db_use_ema,
+            inputs=[db_use_ema],
+            outputs=[db_use_lora],
         )
 
         db_create_from_hub.change(
@@ -467,7 +502,7 @@ def on_ui_tabs():
 
         db_performance_wizard.click(
             fn=performance_wizard,
-            _js="db_save_start_progress",
+            _js="db_save",
             inputs=[],
             outputs=[
                 db_status,
@@ -528,7 +563,9 @@ def on_ui_tabs():
             inputs=[
                 db_model_name,
                 db_half_model,
-                db_use_subdir
+                db_use_subdir,
+                db_lora_model_name,
+                db_lora_weight
             ],
             outputs=[
                 db_status,
@@ -559,6 +596,8 @@ def on_ui_tabs():
             _js="db_save_start_progress",
             inputs=[
                 db_model_name,
+                db_lora_model_name,
+                db_lora_weight,
                 db_train_imagic_only,
                 db_use_subdir
             ],
@@ -588,6 +627,13 @@ def build_concept_panel():
                                     placeholder="(Optional) Path to directory with "
                                                 "classification/regularization images")
     with gr.Column():
+        gr.HTML(value="Filewords")
+        instance_token = gr.Textbox(label='Instance Token',
+                                    placeholder="When using [filewords], this is the subject to use when building prompts.")
+        class_token = gr.Textbox(label='Class Token',
+                                 placeholder="When using [filewords], this is the class to use when building prompts.")
+
+    with gr.Column():
         gr.HTML(value="Prompts")
         instance_prompt = gr.Textbox(label="Instance Prompt",
                                      placeholder="Optionally use [filewords] to read image "
@@ -600,21 +646,9 @@ def build_concept_panel():
                                         placeholder="Leave blank to use instance prompt. "
                                                     "Optionally use [filewords] to base "
                                                     "sample captions on instance images.")
-        sample_template = gr.Textbox(label="Sample Prompt Template File", placeholder="Enter the path to a txt file containing sample prompts.")
+        sample_template = gr.Textbox(label="Sample Prompt Template File",
+                                     placeholder="Enter the path to a txt file containing sample prompts.")
         save_sample_negative_prompt = gr.Textbox(label="Sample Image Negative Prompt")
-
-    with gr.Column():
-        gr.HTML(value="Filewords")
-        file_prompt_contents = gr.Dropdown(label="Existing Prompt Contents",
-                                           value="Description",
-                                           choices=["Description",
-                                                    "Instance Token + Description",
-                                                    "Class Token + Description",
-                                                    "Instance Token + Class Token + Description"])
-        instance_token = gr.Textbox(label='Instance Token',
-                                    placeholder="When using [filewords], this is the subject to use when building prompts.")
-        class_token = gr.Textbox(label='Class Token',
-                                 placeholder="When using [filewords], this is the class to use when building prompts.")
 
     with gr.Column():
         gr.HTML("Image Generation")
@@ -625,7 +659,7 @@ def build_concept_panel():
         sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
         save_guidance_scale = gr.Number(label="Sample CFG Scale", value=7.5, max=12, min=1, precision=2)
         save_infer_steps = gr.Number(label="Sample Steps", value=40, min=10, max=200, precision=0)
-    return [max_steps, instance_data_dir, class_data_dir, file_prompt_contents, instance_prompt, class_prompt,
+    return [max_steps, instance_data_dir, class_data_dir, instance_prompt, class_prompt,
             num_class_images,
             save_sample_prompt, sample_template, instance_token, class_token, num_class_images, class_negative_prompt,
             class_guidance_scale, class_infer_steps, save_sample_negative_prompt, n_save_sample, sample_seed,
@@ -641,6 +675,15 @@ def save_and_execute(func, extra_outputs=None, wrap_gpu=False):
         return wrap_gradio_call(f, extra_outputs=extra_outputs, add_stats=False)
     else:
         return wrap_gradio_gpu_call(f, extra_outputs=extra_outputs)
+
+
+def get_sd_models():
+    sd_models.list_models()
+    sd_list = sd_models.checkpoints_list
+    names = []
+    for key in sd_list:
+        names.append(key)
+    return names
 
 
 script_callbacks.on_ui_tabs(on_ui_tabs)

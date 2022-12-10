@@ -37,22 +37,21 @@ class FilenameTextGetter:
         filename_text = filename_text.replace("\\", "")  # work with \(franchies\)
         return filename_text
 
-    def create_text(self, text_template, filename_text, instance_token, class_token, file_prompt_contents,
-                    is_class=True):
+    def create_text(self, text_template, filename_text, instance_token, class_token, is_class=True):
         # If we are creating text for a class image and it has our instance token in it, remove/replace it
         class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
         if instance_token != "" and class_token != "":
-            if is_class and "Instance" in file_prompt_contents:
-                if "Class" in file_prompt_contents:
+            if is_class and instance_token in filename_text:
+                if class_token in filename_text:
                     filename_text = filename_text.replace(instance_token, "")
                     filename_text = filename_text.replace("  ", " ")
                 else:
                     filename_text = filename_text.replace(instance_token, class_token)
 
             if not is_class:
-                if "Class" in file_prompt_contents:
+                if class_token in filename_text:
                     # Do nothing if we already have class and instance in string
-                    if "Instance" in file_prompt_contents:
+                    if instance_token in filename_text:
                         pass
                     # Otherwise, substitute class tokens for the base token
                     else:
@@ -63,7 +62,7 @@ class FilenameTextGetter:
                     filename_text = filename_text.replace(class_token, f"{instance_token} {class_token}")
                 else:
                     # If class is not in the string, check if instance is
-                    if "Instance" in file_prompt_contents:
+                    if instance_token in filename_text:
                         filename_text = filename_text.replace(instance_token, f"{instance_token} {class_token}")
                     else:
                         # Description only, insert both at the front?
@@ -77,14 +76,13 @@ class FilenameTextGetter:
 class PromptDataset(Dataset):
     """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
 
-    def __init__(self, prompt: str, num_samples: int, filename_texts, file_prompt_contents: str, class_token: str,
+    def __init__(self, prompt: str, num_samples: int, filename_texts, class_token: str,
                  instance_token: str):
         self.prompt = prompt
         self.instance_token = instance_token
         self.class_token = class_token
         self.num_samples = num_samples
         self.filename_texts = filename_texts
-        self.file_prompt_contents = file_prompt_contents
 
     def __len__(self):
         return self.num_samples
@@ -93,7 +91,7 @@ class PromptDataset(Dataset):
         example = {"filename_text": self.filename_texts[index % len(self.filename_texts)] if len(
             self.filename_texts) > 0 else ""}
         prompt = example["filename_text"]
-        if "Instance" in self.file_prompt_contents:
+        if self.instance_token in prompt:
             class_token = self.class_token
             # If the token is already in the prompt, just remove the instance token, don't swap it
             class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
@@ -107,6 +105,8 @@ class PromptDataset(Dataset):
         example["prompt"] = prompt
         example["index"] = index
         return example
+
+
 class EMAModel:
     """
     Exponential Moving Average of models weights
@@ -199,6 +199,7 @@ class EMAModel:
 # Implementation from https://github.com/bmaltais/kohya_ss
 def encode_hidden_state(text_encoder: CLIPTextModel, input_ids, pad_tokens, b_size, max_token_length,
                         tokenizer_max_length):
+
     if pad_tokens:
         input_ids = input_ids.reshape((-1, tokenizer_max_length))  # batch_size*3, 77
 

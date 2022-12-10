@@ -3,7 +3,7 @@ import os
 
 class Concept(dict):
     def __init__(self, max_steps: int = -1, instance_data_dir: str = "", class_data_dir: str = "",
-                 file_prompt_contents: str = "Description", instance_prompt: str = "", class_prompt: str = "",
+                 instance_prompt: str = "", class_prompt: str = "",
                  save_sample_prompt: str = "", save_sample_template: str = "", instance_token: str = "",
                  class_token: str = "", num_class_images: int = 0, class_negative_prompt: str = "",
                  class_guidance_scale: float = 7.5, class_infer_steps: int = 60, save_sample_negative_prompt: str = "",
@@ -13,7 +13,6 @@ class Concept(dict):
             self.max_steps = max_steps
             self.instance_data_dir = instance_data_dir
             self.class_data_dir = class_data_dir
-            self.file_prompt_contents = file_prompt_contents
             self.instance_prompt = instance_prompt
             self.class_prompt = class_prompt
             self.save_sample_prompt = save_sample_prompt
@@ -33,7 +32,6 @@ class Concept(dict):
             self.max_steps = input_dict["max_steps"] if "max_steps" in input_dict else -1
             self.instance_data_dir = input_dict["instance_data_dir"] if "instance_data_dir" in input_dict else ""
             self.class_data_dir = input_dict["class_data_dir"] if "class_data_dir" in input_dict else ""
-            self.file_prompt_contents = input_dict["file_prompt_contents"] if "file_prompt_contents" in input_dict else "Description"
             self.instance_prompt = input_dict["instance_prompt"] if "instance_prompt" in input_dict else ""
             self.class_prompt = input_dict["class_prompt"] if "class_prompt" in input_dict else ""
             self.save_sample_prompt = input_dict["save_sample_prompt"] if "save_sample_prompt" in input_dict else ""
@@ -54,7 +52,6 @@ class Concept(dict):
             "max_steps": self.max_steps,
             "instance_data_dir": self.instance_data_dir,
             "class_data_dir": self.class_data_dir,
-            "file_prompt_contents": self.file_prompt_contents,
             "instance_prompt": self.instance_prompt,
             "class_prompt": self.class_prompt,
             "save_sample_prompt": self.save_sample_prompt,

@@ -20,7 +20,6 @@ class DreamboothParameters(BaseModel):
     db_class_data_dir: Optional[str] = ""
     db_instance_prompt: Optional[str] = ""
     db_class_prompt: Optional[str] = ""
-    db_file_prompt_contents: str = "Description"
     db_instance_token: str = ""
     db_class_token: str = ""
     db_save_sample_prompt: Optional[str] = ""
