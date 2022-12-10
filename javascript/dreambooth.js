@@ -1,3 +1,20 @@
+// Save our current training params before doing a thing
+function save_config(){
+    let btn = gradioApp().getElementById("db_save_config");
+    if(btn!=null) {
+        btn.click();
+    } else {
+        console.log("Can't find btn, trying for btn2");
+        let btn2 = document.getElementById("db_save_config");
+        if (btn2 != null) {
+            btn2.click();
+        } else {
+            console.log("Can't find button2 either.")
+        }
+    }
+}
+
+// Start progress bar without saving
 function db_start_progress(){
     requestProgress('db');
     gradioApp().querySelector('#db_error').innerHTML='';
@@ -5,46 +22,22 @@ function db_start_progress(){
     return args_to_array(arguments);
 }
 
+// Save, don't touch progress or status bars...
 function db_save() {
-    console.log("Save click?");
-    btn = gradioApp().getElementById("db_save_config");
-    if(btn!=null) {
-        btn.click();
-    } else {
-        console.log("Can't find btn, trying for btn2");
-        let btn2 = document.getElementById("db_save_config");
-        if (btn2 != null) {
-            btn2.click();
-        } else {
-            console.log("Can't find button2 either.")
-        }
-    }
-    gradioApp().querySelector('#db_error').innerHTML='';
-    gradioApp().querySelector('#db_status').innerHTML='';
+    save_config()
     return args_to_array(arguments);
 }
 
+// Save and start progress bar, clear statuses, etc.
 function db_save_start_progress(){
-    console.log("Save click?");
-    btn = gradioApp().getElementById("db_save_config");
-    if(btn!=null) {
-        btn.click();
-    } else {
-        console.log("Can't find btn, trying for btn2");
-        let btn2 = document.getElementById("db_save_config");
-        if (btn2 != null) {
-            btn2.click();
-        } else {
-            console.log("Can't find button2 either.")
-        }
-    }
-    console.log("Saving console.")
+    save_config();
     requestProgress('db');
     gradioApp().querySelector('#db_error').innerHTML='';
     gradioApp().querySelector('#db_status').innerHTML='';
     return args_to_array(arguments);
 }
 
+// Do a thing when the UI updates
 onUiUpdate(function(){
     check_progressbar('db', 'db_progressbar', 'db_progress_span', '', 'db_interrupt', 'db_preview', 'db_gallery')
 });
@@ -90,9 +83,12 @@ new_titles = {
     "Learning Rate": "The rate at which the model learns. Default is 0.000005. Use a lower value like 0.000002 or 0.000001 for more complex subjects...like people.",
     "Load Params": "Load last saved training parameters for the model..",
     "Log Memory": "Log the current GPU memory usage.",
+    "Lora Model": "The Lora model to load for continued fine-tuning or checkpoint generation.",
+    "Lora Weight": "What percentage of the lora weights should be applied to the unet when training or creating a checkpoint",
     "Maximum Training Steps": "The max number of steps to train this image for. Set to -1 to train for the general number of max steps",
     "Max Grad Norms": "Max Gradient norms.",
     "Max Token Length": "Maximum token length to respect. You probably want to leave this at 75.",
+    "Max Training Steps": "Total number of training steps to perform. If provided, overrides 'Training Steps Per Image (Epochs)'. Set to 0 to use Steps Per Image.",
     "Memory Attention": "The type of memory attention to use. Selecting 'xformers' requires the --xformers command line argument.",
     "Mixed Precision": "You probably want this to be 'fp16'. If using xformers, you definitely want this to be 'fp16'.",
     "Model Path": "The URL to the model on huggingface. Should be in the format of 'developer/model_name'.",
@@ -113,6 +109,7 @@ new_titles = {
     "Sample Steps": "The number of steps to use when generating classifier/regularization images.",
     "Save Checkpoint to Subdirectory": "When enabled, checkpoints will be saved to a subdirectory in the selected checkpoints folder.",
     "Save Params": "Save the current training parameters to the model config file.",
+    "Save Preview/Ckpt Every Epoch": "When enabled, save frequencies below are based on number of epochs. When disabled, frequencies are based on number of training steps.",
     "Save Checkpoint Frequency": "Save a checkpoint every N steps. ",
     "Save Preview(s) Frequency": "Generate preview images every N steps.",
     "Scale Learning Rate": "Scale the learning rate by the number of GPUs, gradient accumulation steps, and batch size.",
@@ -120,17 +117,18 @@ new_titles = {
     "Shuffle After Epoch": "When enabled, will shuffle the dataset after the first epoch. Will enable text encoder training and latent caching (More VRAM).",
     "Source Checkpoint": "The source checkpoint to extract for training.",
     "Total Number of Class/Reg Images": "Total number of classification/regularization images to use. If no images exist, they will be generated. Set to 0 to disable prior preservation.",
-    "Train EMA": "Enabling this will provide better results and editability, but cost more VRAM.",
     "Train Text Encoder": "Enabling this will provide better results and editability, but cost more VRAM.",
-    "Training Epochs": "Set this or number of steps to train for, not both. Epochs = 'The number of steps to run per image.'",
     "Train": "Start training.",
     "Train Imagic Only": "Uses Imagic for training instead of full dreambooth, useful for training with a single instance image.",
-    "Training Steps": "Total number of training steps to perform. If provided, overrides num_train_epochs.",
+    "Training Steps Per Image (Epochs)": "Set this or number of steps to train for, not both. Epochs = 'The number of steps to run per image.'",
     "Training Wizard (Object/Style)": "Calculate training parameters for a non-human subject based on number of instance images and set larning rate. Disables prior preservation.",
     "Training Wizard (Person)": "Calculate training parameters for a human subject based on number of instance images and set learning rate. Enables prior preservation.",
     "Use 8bit Adam": "Enable this to save VRAM.",
     "Use CPU Only (SLOW)": "Guess what - this will be incredibly slow, but it will work for < 8GB GPUs.",
-    "Use Concepts List": "Train multiple concepts from a JSON file or string."
+    "Use Concepts List": "Train multiple concepts from a JSON file or string.",
+    "Use Lifetime Steps/Epochs When Saving": "When checked, will save preview images and checkpoints using lifetime steps/epochs, versus current training steps.",
+    "Use EMA": "Enabling this will provide better results and editability, but cost more VRAM.",
+    "Use LORA": "Uses Low-rank Adaptation for Fast Text-to-Image Diffusion Fine-tuning. Uses less VRAM, saves a .pt file instead of a full checkpoint"
 }
 
 ex_titles = Object.assign({}, ex_titles, new_titles);

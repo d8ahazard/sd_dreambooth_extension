@@ -22,6 +22,11 @@ try:
 except:
     cmd_dreambooth_models_path = None
 
+try:
+    cmd_lora_models_path = shared.cmd_opts.lora_models_path
+except:
+    cmd_lora_models_path = None
+
 
 def printi(msg, params=None):
     shared.state.textinfo = msg
@@ -41,6 +46,18 @@ def get_db_models():
         dirs = os.listdir(out_dir)
         for found in dirs:
             if os.path.isdir(os.path.join(out_dir, found)):
+                output.append(found)
+    return output
+
+
+def get_lora_models():
+    model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else paths.models_path
+    out_dir = os.path.join(model_dir, "lora")
+    output = [""]
+    if os.path.exists(out_dir):
+        dirs = os.listdir(out_dir)
+        for found in dirs:
+            if os.path.isfile(os.path.join(out_dir, found)):
                 output.append(found)
     return output
 
@@ -78,7 +95,7 @@ def log_memory():
     return f"Current memory usage: {mem}"
 
 
-def cleanup():
+def cleanup(do_print: bool = False):
     try:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -86,7 +103,8 @@ def cleanup():
         gc.collect()
     except:
         pass
-    printm("Cleanup completed.")
+    if do_print:
+        printm("Cleanup completed.")
 
 
 def unload_system_models():
@@ -161,7 +179,8 @@ def debug_prompts(model_dir):
     for i in range(train_dataset.__len__()):
         item = train_dataset.__getitem__(i)
         output["instance_prompts"].append(item["instance_prompt"])
-        output["existing_class_prompts"].append(item["class_prompt"])
+        if "class_prompt" in item:
+            output["existing_class_prompts"].append(item["class_prompt"])
     sample_prompts = train_dataset.get_sample_prompts()
     for prompt in sample_prompts:
         output["sample_prompts"].append(prompt.prompt)
@@ -185,8 +204,7 @@ def debug_prompts(model_dir):
             num_new_images = concept.num_class_images - cur_class_images
             filename_texts = [text_getter.read_text(x) for x in Path(concept.instance_data_dir).iterdir() if
                               is_image(x, pil_features)]
-            sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts,
-                                           concept.file_prompt_contents, concept.class_token,
+            sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts, concept.class_token,
                                            concept.instance_token)
             for i in range(sample_dataset.__len__()):
                 output["new_class_prompts"].append(sample_dataset.__getitem__(i)["prompt"])

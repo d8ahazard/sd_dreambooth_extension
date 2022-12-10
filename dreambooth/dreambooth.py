@@ -2,6 +2,7 @@ import gc
 import logging
 import math
 import os
+import traceback
 from pathlib import Path
 
 import torch
@@ -141,10 +142,11 @@ def training_wizard(model_dir, is_person=False):
 
 
 def performance_wizard():
-    status = ""
-    attention = "flash_attention"
+    attention = "xformers"
     gradient_checkpointing = True
     mixed_precision = 'fp16'
+    if torch.cuda.is_bf16_supported():
+        mixed_precision = 'bf16'
     not_cache_latents = True
     sample_batch_size = 1
     train_batch_size = 1
@@ -153,6 +155,7 @@ def performance_wizard():
     use_cpu = False
     use_ema = False
     gb = 0
+    msg = ""
     try:
         t = torch.cuda.get_device_properties(0).total_memory
         gb = math.ceil(t / 1073741824)
@@ -180,9 +183,10 @@ def performance_wizard():
             use_8bit_adam = False
             mixed_precision = 'no'
 
-    except:
+        msg = f"Calculated training params based on {gb}GB of VRAM detected."
+    except Exception as e:
+        msg = f"An exception occurred calculating performance values: {e}"
         pass
-    msg = f"Calculated training params based on {gb}GB of VRAM detected."
 
     has_xformers = False
     try:
@@ -198,8 +202,14 @@ def performance_wizard():
 
     if use_cpu:
         msg += "<br>Detected less than 10GB of VRAM, setting CPU training to true."
-    return status, attention, gradient_checkpointing, mixed_precision, not_cache_latents, sample_batch_size, \
-           train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema
+    log_dict = {"Attention": attention, "Gradient Checkpointing": gradient_checkpointing, "Precision": mixed_precision,
+                "Cache Latents": not not_cache_latents, "Training Batch Size": train_batch_size,
+                "Class Generation Batch Size": sample_batch_size,
+                "Train Text Encoder": train_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "CPU": use_cpu}
+    for key in log_dict:
+        msg += f"<br>{key}: {log_dict[key]}"
+    return msg, attention, gradient_checkpointing, mixed_precision, not_cache_latents, sample_batch_size, \
+        train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema
 
 
 def load_params(model_dir):
@@ -262,25 +272,29 @@ def load_params(model_dir):
                "db_save_class_txt",
                "db_save_embedding_every",
                "db_save_preview_every",
+               "db_save_use_global_counts",
+               "db_save_use_epochs",
                "db_scale_lr",
                "db_train_batch_size",
                "db_train_text_encoder",
                "db_use_8bit_adam",
                "db_use_concepts",
                "db_use_cpu",
-               "db_use_ema", "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps",
-               "c1_class_negative_prompt", "c1_class_prompt", "c1_class_token", "c1_file_prompt_contents",
+               "db_use_ema",
+               "db_use_lora",
+               "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps",
+               "c1_class_negative_prompt", "c1_class_prompt", "c1_class_token",
                "c1_instance_data_dir", "c1_instance_prompt", "c1_instance_token", "c1_max_steps", "c1_n_save_sample",
                "c1_num_class_images", "c1_sample_seed", "c1_save_guidance_scale", "c1_save_infer_steps",
                "c1_save_sample_negative_prompt", "c1_save_sample_prompt", "c1_save_sample_template",
                "c2_class_data_dir",
                "c2_class_guidance_scale", "c2_class_infer_steps", "c2_class_negative_prompt", "c2_class_prompt",
-               "c2_class_token", "c2_file_prompt_contents", "c2_instance_data_dir", "c2_instance_prompt",
+               "c2_class_token", "c2_instance_data_dir", "c2_instance_prompt",
                "c2_instance_token", "c2_max_steps", "c2_n_save_sample", "c2_num_class_images", "c2_sample_seed",
                "c2_save_guidance_scale", "c2_save_infer_steps", "c2_save_sample_negative_prompt",
                "c2_save_sample_prompt", "c2_save_sample_template", "c3_class_data_dir", "c3_class_guidance_scale",
                "c3_class_infer_steps", "c3_class_negative_prompt", "c3_class_prompt", "c3_class_token",
-               "c3_file_prompt_contents", "c3_instance_data_dir", "c3_instance_prompt", "c3_instance_token",
+               "c3_instance_data_dir", "c3_instance_prompt", "c3_instance_token",
                "c3_max_steps", "c3_n_save_sample", "c3_num_class_images", "c3_sample_seed", "c3_save_guidance_scale",
                "c3_save_infer_steps", "c3_save_sample_negative_prompt", "c3_save_sample_prompt",
                "c3_save_sample_template", "db_status"]
@@ -314,7 +328,7 @@ def load_model_params(model_dir):
                ""
 
 
-def start_training(model_dir: str, imagic_only: bool, use_subdir: bool):
+def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic_only: bool, use_subdir: bool):
     global mem_record
     if model_dir == "" or model_dir is None:
         print("Invalid model name.")
@@ -361,7 +375,7 @@ def start_training(model_dir: str, imagic_only: bool, use_subdir: bool):
             shared.state.textinfo = "Initializing dreambooth training..."
             print(shared.state.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
-            config, mem_record, msg = main(config, mem_record, use_subdir=use_subdir)
+            config, mem_record, msg = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name, lora_alpha=lora_alpha)
             if config.revision != total_steps:
                 config.save()
         total_steps = config.revision
@@ -369,6 +383,7 @@ def start_training(model_dir: str, imagic_only: bool, use_subdir: bool):
               f"Total lifetime steps: {total_steps} \n"
     except Exception as e:
         res = f"Exception training model: {e}"
+        traceback.print_exc()
         pass
 
     devices.torch_gc()

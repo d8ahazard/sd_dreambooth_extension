@@ -16,6 +16,8 @@ class DreamboothConfig:
     scheduler = "ddim"
     lifetime_revision = 0
     initial_revision = 0
+    epoch = 0
+    resolution = 512
 
     def __init__(self,
                  model_name: str = "",
@@ -50,6 +52,8 @@ class DreamboothConfig:
                  save_class_txt: bool = False,
                  save_embedding_every: int = 500,
                  save_preview_every: int = 500,
+                 save_use_global_counts: bool = False,
+                 save_use_epochs: bool = False,
                  scale_lr: bool = False,
                  scheduler: str = "ddim",
                  src: str = "",
@@ -59,6 +63,7 @@ class DreamboothConfig:
                  use_concepts: bool = False,
                  use_cpu: bool = False,
                  use_ema: bool = True,
+                 use_lora: bool = False,
                  v2: bool = False,
                  c1_class_data_dir: str = "",
                  c1_class_guidance_scale: float = 7.5,
@@ -66,7 +71,6 @@ class DreamboothConfig:
                  c1_class_negative_prompt: str = "",
                  c1_class_prompt: str = "",
                  c1_class_token: str = "",
-                 c1_file_prompt_contents: str = "Description",
                  c1_instance_data_dir: str = "",
                  c1_instance_prompt: str = "",
                  c1_instance_token: str = "",
@@ -85,7 +89,6 @@ class DreamboothConfig:
                  c2_class_negative_prompt: str = "",
                  c2_class_prompt: str = "",
                  c2_class_token: str = "",
-                 c2_file_prompt_contents: str = "Description",
                  c2_instance_data_dir: str = "",
                  c2_instance_prompt: str = "",
                  c2_instance_token: str = "",
@@ -104,7 +107,6 @@ class DreamboothConfig:
                  c3_class_negative_prompt: str = "",
                  c3_class_prompt: str = "",
                  c3_class_token: str = "",
-                 c3_file_prompt_contents: str = "Description",
                  c3_instance_data_dir: str = "",
                  c3_instance_prompt: str = "",
                  c3_instance_token: str = "",
@@ -163,6 +165,8 @@ class DreamboothConfig:
         self.save_class_txt = save_class_txt
         self.save_embedding_every = save_embedding_every
         self.save_preview_every = save_preview_every
+        self.save_use_global_counts = save_use_global_counts
+        self.save_use_epochs = save_use_epochs
         self.scale_lr = scale_lr
         self.src = src
         self.train_batch_size = train_batch_size
@@ -171,6 +175,7 @@ class DreamboothConfig:
         self.use_concepts = use_concepts
         self.use_cpu = use_cpu
         self.use_ema = use_ema
+        self.use_lora = use_lora
         if scheduler is not None:
             self.scheduler = scheduler
 
@@ -198,7 +203,7 @@ class DreamboothConfig:
                 else:
                     print("Please provide a valid concepts path.")
             else:
-                concept1 = Concept(c1_max_steps, c1_instance_data_dir, c1_class_data_dir, c1_file_prompt_contents,
+                concept1 = Concept(c1_max_steps, c1_instance_data_dir, c1_class_data_dir,
                                    c1_instance_prompt,
                                    c1_class_prompt, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token,
                                    c1_class_token,
@@ -208,7 +213,7 @@ class DreamboothConfig:
                                    c1_save_guidance_scale,
                                    c1_save_infer_steps)
 
-                concept2 = Concept(c2_max_steps, c2_instance_data_dir, c2_class_data_dir, c2_file_prompt_contents,
+                concept2 = Concept(c2_max_steps, c2_instance_data_dir, c2_class_data_dir,
                                    c2_instance_prompt,
                                    c2_class_prompt, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token,
                                    c2_class_token,
@@ -218,7 +223,7 @@ class DreamboothConfig:
                                    c2_save_guidance_scale,
                                    c2_save_infer_steps)
 
-                concept3 = Concept(c3_max_steps, c3_instance_data_dir, c3_class_data_dir, c3_file_prompt_contents,
+                concept3 = Concept(c3_max_steps, c3_instance_data_dir, c3_class_data_dir,
                                    c3_instance_prompt,
                                    c3_class_prompt, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token,
                                    c3_class_token,
@@ -286,14 +291,14 @@ def from_file(model_name):
     try:
         with open(config_file, 'r') as openfile:
             config_dict = json.load(openfile)
-            concept_keys = ["instance_data_dir", "class_data_dir", "file_prompt_contents", "instance_prompt",
+            concept_keys = ["instance_data_dir", "class_data_dir", "instance_prompt",
                             "class_prompt", "save_sample_prompt", "save_sample_template", "instance_token",
                             "class_token", "num_class_images",
                             "class_negative_prompt", "class_guidance_scale", "class_infer_steps",
                             "save_sample_negative_prompt", "n_save_sample", "sample_seed", "save_guidance_scale",
                             "save_infer_steps"]
             skip_keys = ["seed", "shuffle_after_epoch", "total_steps", "output_dir", "with_prior_preservation",
-                         "negative_prompt"]
+                         "negative_prompt", "file_prompt_contents"]
             concept_dict = {}
             has_old_concept = False
             # Ensure we aren't using any old keys

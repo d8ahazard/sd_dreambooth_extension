@@ -152,7 +152,7 @@ class SuperDataset(Dataset):
                     if is_image(file, pil_features):
                         file_text = self.text_getter.read_text(file)
                         file_prompt = self.text_getter.create_text(instance_prompt, file_text, instance_token, 
-                                                                   class_token, concept.file_prompt_contents, False)
+                                                                   class_token, False)
                         prompt_tokens = self.tokenize(file_prompt)
                         instance_data.append(TrainingData(file, file_prompt, prompt_tokens))
                 # Create a dictionary for each concept, one with the images, and another with the max training steps
@@ -164,7 +164,7 @@ class SuperDataset(Dataset):
                         if is_image(file, pil_features):
                             file_text = self.text_getter.read_text(file)
                             file_prompt = self.text_getter.create_text(class_prompt, file_text, instance_token,
-                                                                       class_token, concept.file_prompt_contents, True)
+                                                                       class_token, True)
                             prompt_tokens = self.tokenize(file_prompt)
                             class_data.append(TrainingData(file, file_prompt, prompt_tokens))
                             random.shuffle(class_data)

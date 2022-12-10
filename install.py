@@ -28,28 +28,27 @@ def check_versions():
             key = splits[0]
             reqs_dict[key] = splits[1].replace("\n", "").strip()
     # print(f"Reqs dict: {reqs_dict}")
-    reqs_dict["diffusers[torch]"] = "0.10.0.dev0"
-    checks = ["bitsandbytes", "diffusers[torch]", "transformers", "xformers", "torch", "torchvision"]
+    reqs_dict["diffusers[torch]"] = "0.10.0"
+    checks = ["bitsandbytes", "diffusers", "transformers", "xformers", "torch", "torchvision"]
+    flat_check = ["xformers", "torch", "torchvision"]
     for check in checks:
-        if check == "diffusers[torch]":
-            il_check = "diffusers"
-        else:
-            il_check = check
         check_ver = "N/A"
         status = "[ ]"
         try:
-            check_available = importlib.util.find_spec(il_check) is not None
+            check_available = importlib.util.find_spec(check) is not None
             if check_available:
-                check_ver = importlib_metadata.version(il_check)
+                check_ver = importlib_metadata.version(check)
                 if check in reqs_dict:
                     req_version = reqs_dict[check]
                     if str(check_ver) == str(req_version):
                         status = "[+]"
                     else:
                         status = "[!]"
+                if check in flat_check:
+                    status = "[+]"
         except importlib_metadata.PackageNotFoundError:
             check_available = False
-        if not check_available:
+        if not check_available and check != "xformers":
             status = "[!]"
             print(f"{status} {check} NOT installed.")
         else:
@@ -86,19 +85,22 @@ if not dreambooth_skip_install:
 
 # Check for "different" B&B Files and copy only if necessary
 if os.name == "nt":
-    python = sys.executable
-    bnb_src = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bitsandbytes_windows")
-    bnb_dest = os.path.join(sysconfig.get_paths()["purelib"], "bitsandbytes")
-    filecmp.clear_cache()
-    copied = False
-    for file in os.listdir(bnb_src):
-        src_file = os.path.join(bnb_src, file)
-        if file == "main.py" or file == "paths.py":
-            dest = os.path.join(bnb_dest, "cuda_setup")
-        else:
-            dest = bnb_dest
-        dest_file = os.path.join(dest, file)
-        shutil.copy2(src_file, dest)
+    try:
+        python = sys.executable
+        bnb_src = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bitsandbytes_windows")
+        bnb_dest = os.path.join(sysconfig.get_paths()["purelib"], "bitsandbytes")
+        filecmp.clear_cache()
+        copied = False
+        for file in os.listdir(bnb_src):
+            src_file = os.path.join(bnb_src, file)
+            if file == "main.py" or file == "paths.py":
+                dest = os.path.join(bnb_dest, "cuda_setup")
+            else:
+                dest = bnb_dest
+            dest_file = os.path.join(dest, file)
+            shutil.copy2(src_file, dest)
+    except:
+        pass
 
 check_versions()
 print("#######################################################################################################")

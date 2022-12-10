@@ -9,11 +9,13 @@ import shutil
 import traceback
 
 import torch
+from diffusers import DiffusionPipeline
 
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, printi, unload_system_models, \
     reload_system_models
-from modules import shared
+from extensions.sd_dreambooth_extension.lora_diffusion import weight_apply_lora
+from modules import shared, paths
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -191,7 +193,6 @@ def convert_vae_state_dict(vae_state_dict):
 # =========================#
 
 
-
 textenc_conversion_lst = [
     # (stable-diffusion, HF Diffusers)
     ('resblocks.', 'text_model.encoder.layers.'),
@@ -259,19 +260,22 @@ def convert_text_enc_state_dict(text_enc_dict: dict[str, torch.Tensor]):
     return text_enc_dict
 
 
-def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, reload_models=True):
+def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1,
+                       reload_models=True):
     """
 
     @param model_name: The model name to compile
     @param half: Use FP16 when compiling the model
     @param use_subdir: The model will be saved to a subdirectory of the checkpoints folder
     @param reload_models: Whether to reload the system list of checkpoints.
+    @param lora_path: The path to a lora pt file to merge with the unet. Auto set during training.
+    @param lora_alpha: The overall weight of the lora model when adding to unet. Default is 1.0
     @return: status: What happened, path: Checkpoint path
     """
     unload_system_models()
     shared.state.textinfo = "Compiling checkpoint."
     shared.state.job_no = 0
-    shared.state.job_count = 6
+    shared.state.job_count = 7
     printi(f"Compiling checkpoint for {model_name}...")
     if not model_name:
         return "Select a model to compile.", "No model selected."
@@ -284,10 +288,9 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
     config = from_file(model_name)
     if "use_subdir" in config.__dict__:
         use_subdir = config["use_subdir"]
-
+    lora_diffusers = ""
     v2 = config.v2
     total_steps = config.revision
-
     if use_subdir:
         os.makedirs(os.path.join(models_path, model_name), exist_ok=True)
         checkpoint_path = os.path.join(models_path, model_name, f"{model_name}_{total_steps}.ckpt")
@@ -295,12 +298,32 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
         checkpoint_path = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
 
     model_path = config.pretrained_model_name_or_path
-
     unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")
     vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.bin")
     text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
     try:
         printi("Converting unet...")
+        loaded_pipeline = DiffusionPipeline.from_pretrained(model_path).to("cpu")
+        if lora_path is not None and lora_path != "":
+            lora_diffusers = config.pretrained_model_name_or_path + "_lora"
+            os.makedirs(lora_diffusers, exist_ok=True)
+            if not os.path.exists(lora_path):
+                try:
+                    cmd_lora_models_path = shared.cmd_opts.lora_models_path
+                except:
+                    cmd_lora_models_path = None
+                model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else paths.models_path
+                lora_path = os.path.join(model_dir, "lora", lora_path)
+            print(f"Loading lora from {lora_path}")
+            if os.path.exists(lora_path):
+                checkpoint_path = checkpoint_path.replace(".ckpt", "_lora.ckpt")
+                printi("Applying lora model...")
+                weight_apply_lora(loaded_pipeline.unet, torch.load(lora_path), alpha=lora_alpha)
+                loaded_pipeline.save_pretrained(lora_diffusers)
+                unet_path = osp.join(lora_diffusers, "unet", "diffusion_pytorch_model.bin")
+
+        del loaded_pipeline
+
         # Convert the UNet model
         unet_state_dict = torch.load(unet_path, map_location="cpu")
         unet_state_dict = convert_unet_state_dict(unet_state_dict)
@@ -315,10 +338,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
         # Convert the text encoder model
         text_enc_dict = torch.load(text_enc_path, map_location="cpu")
 
-        # Easiest way to identify v2.0 model seems to be that the text encoder (OpenCLIP) is deeper
-        is_v20_model = "text_model.encoder.layers.22.layer_norm2.bias" in text_enc_dict
-
-        if is_v20_model:
+        if v2:
             print("Converting text enc dict for V2 model.")
             # Need to add the tag 'transformer' in advance, so we can knock it out from the final layer-norm
             text_enc_dict = {"transformer." + k: v for k, v in text_enc_dict.items()}
@@ -343,7 +363,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
             print("Halving model.")
             state_dict = {k: v.half() for k, v in state_dict.items()}
 
-        state_dict = {"global_step": config.revision, "state_dict": state_dict}
+        state_dict = {"db_global_step": config.revision, "db_epoch": config.epoch, "state_dict": state_dict}
         printi(f"Saving checkpoint to {checkpoint_path}...")
         torch.save(state_dict, checkpoint_path)
         if v2:
@@ -361,9 +381,11 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, re
         del vae_state_dict
         del text_enc_path
         del state_dict
+        if os.path.exists(lora_diffusers):
+            shutil.rmtree(lora_diffusers, True)
     except:
         pass
-    cleanup()
+    # cleanup()
     if reload_models:
         reload_system_models()
     return "Checkpoint compiled successfully.", "Checkpoint compiled successfully."
