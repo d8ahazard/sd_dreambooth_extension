@@ -904,6 +904,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         os.makedirs(sample_dir, exist_ok=True)
                         with accelerator.autocast(), torch.inference_mode():
                             prompts = gen_dataset.get_sample_prompts()
+                            ci = 0
                             for c in prompts:
                                 seed = c.seed
                                 if seed is None or seed == '' or seed == -1:
@@ -919,11 +920,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                                          generator=g_cuda).images[0]
                                     shared.state.current_image = s_image
                                     shared.state.textinfo = c.prompt
-                                    image_name = os.path.join(sample_dir, f"sample_{args.revision}-{si}.png")
+                                    image_name = os.path.join(sample_dir, f"sample_{args.revision}-{ci}{si}.png")
                                     txt_name = image_name.replace(".jpg", ".txt")
                                     with open(txt_name, "w", encoding="utf8") as txt_file:
                                         txt_file.write(c.prompt)
                                     s_image.save(image_name)
+                                ci += 1
                     except Exception as e:
                         print(f"Exception with the stupid image again: {e}")
                         traceback.print_exc()
