@@ -283,7 +283,10 @@ def load_params(model_dir):
             else:
                 output.append(ui_dict[key])
         else:
-            output.append(None)
+            if 'epoch' in key:
+                output.append(0)
+            else:
+                output.append(None)
     print(f"Returning {output}")
     return output
 
