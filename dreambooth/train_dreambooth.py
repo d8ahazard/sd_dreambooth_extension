@@ -486,10 +486,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                             image_filename = str(class_images_dir / f"{generated_images + cur_class_images}-" \
                                                                     f"{image_base}.jpg")
                             image.save(image_filename)
-                            if args.save_class_txt:
-                                txt_filename = image_filename.replace(".jpg", ".txt")
-                                with open(txt_filename, "w", encoding="utf8") as file:
-                                    file.write(example["prompt"])
+                            txt_filename = image_filename.replace(".jpg", ".txt")
+                            with open(txt_filename, "w", encoding="utf8") as file:
+                                file.write(example["prompt"])
                             shared.state.job_no += 1
                             generated_images += 1
                             shared.state.textinfo = f"Class image {generated_images}/{num_new_images}, " \
