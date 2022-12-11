@@ -171,7 +171,8 @@ def debug_prompts(model_dir):
         lifetime_steps=config.revision,
         pad_tokens=config.pad_tokens,
         hflip=config.hflip,
-        max_token_length=config.max_token_length
+        max_token_length=config.max_token_length,
+        shuffle_tags=config.shuffle_tags
     )
 
     output = {"instance_prompts": [], "existing_class_prompts": [], "new_class_prompts": [], "sample_prompts": []}
@@ -186,7 +187,7 @@ def debug_prompts(model_dir):
         output["sample_prompts"].append(prompt.prompt)
 
     for concept in config.concepts_list:
-        text_getter = FilenameTextGetter()
+        text_getter = FilenameTextGetter(config.shuffle_tags)
         c_idx = 0
         class_images_dir = Path(concept["class_data_dir"])
         if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:

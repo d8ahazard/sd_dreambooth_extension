@@ -214,22 +214,25 @@ def performance_wizard():
 
 def load_params(model_dir):
     data = from_file(model_dir)
+    concepts = []
+    ui_dict = {}
     msg = ""
     if data is None:
         print("Can't load config!")
         msg = "Please specify a model to load."
-
-    concepts = []
-    ui_dict = {}
-    for key in data.__dict__:
-        value = data.__dict__[key]
-        if key == "concepts_list":
-            concepts = value
-        else:
-            if key == "pretrained_model_name_or_path":
-                key = "model_path"
-            ui_dict[f"db_{key}"] = value
-            msg = "Loaded config."
+    elif data.__dict__ is None:
+        print("Can't load config!")
+        msg = "Please check your model config."
+    else:
+        for key in data.__dict__:
+            value = data.__dict__[key]
+            if key == "concepts_list":
+                concepts = value
+            else:
+                if key == "pretrained_model_name_or_path":
+                    key = "model_path"
+                ui_dict[f"db_{key}"] = value
+                msg = "Loaded config."
 
     ui_concepts = concepts if concepts is not None else []
     if len(ui_concepts) < 3:
@@ -275,6 +278,7 @@ def load_params(model_dir):
                "db_save_use_global_counts",
                "db_save_use_epochs",
                "db_scale_lr",
+               "db_shuffle_tags",
                "db_train_batch_size",
                "db_train_text_encoder",
                "db_use_8bit_adam",

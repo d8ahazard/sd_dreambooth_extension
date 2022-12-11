@@ -57,6 +57,7 @@ class DreamboothConfig:
                  scale_lr: bool = False,
                  scheduler: str = "ddim",
                  src: str = "",
+                 shuffle_tags: bool = False,
                  train_batch_size: int = 1,
                  train_text_encoder: bool = True,
                  use_8bit_adam: bool = True,
@@ -169,6 +170,7 @@ class DreamboothConfig:
         self.save_use_epochs = save_use_epochs
         self.scale_lr = scale_lr
         self.src = src
+        self.shuffle_tags = shuffle_tags
         self.train_batch_size = train_batch_size
         self.train_text_encoder = train_text_encoder
         self.use_8bit_adam = use_8bit_adam

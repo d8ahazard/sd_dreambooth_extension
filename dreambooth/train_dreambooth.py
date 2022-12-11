@@ -288,18 +288,6 @@ def parse_args(input_args=None):
         help="Generate half-precision checkpoints (Saves space, minor difference in output)",
     )
     parser.add_argument(
-        "--instance_token",
-        type=str,
-        default="",
-        help="Instance token used to swap subjects in file prompts."
-    )
-    parser.add_argument(
-        "--class_token",
-        type=bool,
-        default=False,
-        help="Instance token used to swap subjects in file prompts."
-    )
-    parser.add_argument(
         "--attention",
         type=str,
         choices=["default", "xformers", "flash_attention"],
@@ -430,7 +418,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     for concept in args.concepts_list:
         cur_class_images = 0
         print(f"Checking concept: {concept}")
-        text_getter = FilenameTextGetter()
+        text_getter = FilenameTextGetter(args.shuffle_tags)
         print(f"Concept requires {concept.num_class_images} images.")
         with_prior = concept.num_class_images > 0
         if with_prior:
@@ -546,6 +534,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         subfolder="text_encoder",
         revision=args.revision,
     )
+
     unet = UNet2DConditionModel.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="unet",
@@ -669,7 +658,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         lifetime_steps=args.revision,
         pad_tokens=args.pad_tokens,
         hflip=args.hflip,
-        max_token_length=args.max_token_length
+        max_token_length=args.max_token_length,
+        shuffle_tags=args.shuffle_tags
     )
 
     if train_dataset.__len__ == 0:
@@ -737,7 +727,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 lifetime_steps=args.revision,
                 pad_tokens=args.pad_tokens,
                 hflip=args.hflip,
-                max_token_length=args.max_token_length
+                max_token_length=args.max_token_length,
+                shuffle_tags=args.shuffle_tags
             )
         else:
             dataset = gen_dataset

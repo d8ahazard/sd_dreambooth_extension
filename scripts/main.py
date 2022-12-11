@@ -159,6 +159,7 @@ def on_ui_tabs():
                                     db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
                                     db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
+                                    db_shuffle_tags = gr.Checkbox(label="Shuffle Tags", value=False)
                                     db_max_token_length = gr.Slider(label="Max Token Length", minimum=75, maximum=300,
                                                                     step=75)
                                 with gr.Column():
@@ -273,6 +274,7 @@ def on_ui_tabs():
                 db_scale_lr,
                 db_scheduler,
                 db_src,
+                db_shuffle_tags,
                 db_train_batch_size,
                 db_train_text_encoder,
                 db_use_8bit_adam,
@@ -376,6 +378,7 @@ def on_ui_tabs():
                 db_save_use_global_counts,
                 db_save_use_epochs,
                 db_scale_lr,
+                db_shuffle_tags,
                 db_train_batch_size,
                 db_train_text_encoder,
                 db_use_8bit_adam,
