@@ -97,7 +97,7 @@ So, if we want to train 100 steps per image, we can set this value to 100 and we
 
 *Use Lifetime Steps/Epochs When Saving* - When enabled, checkpoint and sample save frequencies will be based on the total number of steps the model has been trained on. When disabled, it will be based on the number of steps in the current training run.
 
-*Save Preview/Ckpt Every epoch* - Not currently implemented.
+*Save Preview/Ckpt Every epoch* - The save checkpoint and preview frequencies will be per epoch, not steps.
 
 *Save Checkpoint Frequency* - How frequently to save a checkpoint from the trained data.
 
