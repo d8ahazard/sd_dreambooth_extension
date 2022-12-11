@@ -13,7 +13,7 @@ from diffusers.utils import logging as dl
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, printm, \
-    isset, list_features, is_image
+    isset, list_features, is_image, get_images
 from modules import shared, devices
 
 try:
@@ -82,10 +82,9 @@ def training_wizard(model_dir, is_person=False):
             if not os.path.exists(concept.instance_data_dir):
                 print("Nonexistent instance directory.")
             else:
-                for x in Path(concept.instance_data_dir).iterdir():
-                    if is_image(x, pil_feats):
-                        total_images += 1
-                        image_count += 1
+                concept_images = get_images(concept.instance_data_dir)
+                total_images += len(concept_images)
+                image_count = len(concept_images)
                 print(f"Image count in {concept.instance_data_dir} is {image_count}")
                 if image_count > max_images:
                     max_images = image_count

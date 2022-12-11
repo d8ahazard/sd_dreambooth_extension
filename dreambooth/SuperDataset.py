@@ -8,7 +8,7 @@ from torchvision import transforms
 from pathlib import Path
 
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
-from extensions.sd_dreambooth_extension.dreambooth.utils import list_features, is_image
+from extensions.sd_dreambooth_extension.dreambooth.utils import list_features, is_image, get_images
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter
 from modules import images
 
@@ -149,28 +149,28 @@ class SuperDataset(Dataset):
             # Only append things to the dict if we still want to train them
             if max_steps > 0 or max_steps == -1:
                 instance_data = []
-                for file in Path(concept.instance_data_dir).iterdir():
-                    if is_image(file, pil_features):
-                        file_text = self.text_getter.read_text(file)
-                        file_prompt = self.text_getter.create_text(instance_prompt, file_text, instance_token, 
-                                                                   class_token, False)
-                        prompt_tokens = self.tokenize(file_prompt)
-                        instance_data.append(TrainingData(file, file_prompt, prompt_tokens))
+                concept_images = get_images(concept.instance_data_dir)
+                for file in concept_images:
+                    file_text = self.text_getter.read_text(file)
+                    file_prompt = self.text_getter.create_text(instance_prompt, file_text, instance_token,
+                                                               class_token, False)
+                    prompt_tokens = self.tokenize(file_prompt)
+                    instance_data.append(TrainingData(file, file_prompt, prompt_tokens))
                 # Create a dictionary for each concept, one with the images, and another with the max training steps
                 random.shuffle(instance_data)
 
                 class_data = []
                 if concept_with_prior:
-                    for file in Path(concept.class_data_dir).iterdir():
-                        if is_image(file, pil_features):
-                            file_text = self.text_getter.read_text(file)
-                            file_prompt = self.text_getter.create_text(class_prompt, file_text, instance_token,
-                                                                       class_token, True)
-                            prompt_tokens = self.tokenize(file_prompt)
-                            class_data.append(TrainingData(file, file_prompt, prompt_tokens))
-                            random.shuffle(class_data)
-                            if len(class_data) > num_class_images:
-                                class_data = class_data[:num_class_images]
+                    concept_images = get_images(concept.class_data_dir)
+                    for file in concept_images:
+                        file_text = self.text_getter.read_text(file)
+                        file_prompt = self.text_getter.create_text(class_prompt, file_text, instance_token,
+                                                                   class_token, True)
+                        prompt_tokens = self.tokenize(file_prompt)
+                        class_data.append(TrainingData(file, file_prompt, prompt_tokens))
+                        random.shuffle(class_data)
+                        if len(class_data) > num_class_images:
+                            class_data = class_data[:num_class_images]
 
                 # Generate sample prompts for concept
                 samples = self.generate_sample_prompts(instance_data, concept)

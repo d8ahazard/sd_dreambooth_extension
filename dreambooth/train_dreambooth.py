@@ -30,7 +30,8 @@ from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_che
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, encode_hidden_state, \
     PromptDataset, EMAModel
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_tags, list_features, is_image
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_tags, list_features, is_image, \
+    get_images
 from extensions.sd_dreambooth_extension.lora_diffusion import inject_trainable_lora, extract_lora_ups_down, \
     save_lora_weight
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
@@ -428,9 +429,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 print(f"Class image dir is not set, defaulting to {class_images_dir}")
             class_images_dir = Path(class_images_dir)
             class_images_dir.mkdir(parents=True, exist_ok=True)
-            for x in class_images_dir.iterdir():
-                if is_image(x, pil_features):
-                    cur_class_images += 1
+            class_images = get_images(class_images_dir)
+            for x in class_images:
+                cur_class_images += 1
             print(f"Class dir {class_images_dir} has {cur_class_images} images.")
             if cur_class_images < concept.num_class_images:
                 num_new_images = concept.num_class_images - cur_class_images
@@ -456,8 +457,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
                 shared.state.job_count = num_new_images
                 shared.state.job_no = 0
-                filename_texts = [text_getter.read_text(x) for x in Path(concept.instance_data_dir).iterdir() if
-                                  is_image(x, pil_features)]
+                concept_images = get_images(concept.instance_data_dir)
+                filename_texts = [text_getter.read_text(x) for x in concept_images]
                 sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts, concept.class_token,
                                                concept.instance_token)
                 with accelerator.autocast(), torch.inference_mode():

@@ -63,6 +63,23 @@ def get_lora_models():
     return output
 
 
+def get_images(image_path):
+    pil_features = list_features()
+    output = []
+    if isinstance(image_path, str):
+        image_path = Path(image_path)
+    if image_path.exists():
+        for file in image_path.iterdir():
+            if is_image(file, pil_features):
+                output.append(file)
+            if file.is_dir():
+                sub_images = get_images(file)
+                for image in sub_images:
+                    output.append(image)
+    return output
+
+
+
 def sanitize_tags(name):
     tags = name.split(",")
     name = ""
@@ -207,17 +224,12 @@ def debug_prompts(model_dir):
             class_images_dir = os.path.join(config.model_dir, f"classifiers_{c_idx}")
             print(f"Class image dir is not set, defaulting to {class_images_dir}")
         class_images_dir.mkdir(parents=True, exist_ok=True)
-        cur_class_images = 0
-        iterfiles = 0
         pil_features = list_features()
-        for x in class_images_dir.iterdir():
-            iterfiles += 1
-            if is_image(x, pil_features):
-                cur_class_images += 1
+        cur_class_images = len(get_images(class_images_dir))
         if cur_class_images < concept.num_class_images:
             num_new_images = concept.num_class_images - cur_class_images
-            filename_texts = [text_getter.read_text(x) for x in Path(concept.instance_data_dir).iterdir() if
-                              is_image(x, pil_features)]
+            instance_images = get_images(concept.instance_data_dir)
+            filename_texts = [text_getter.read_text(x) for x in instance_images]
             sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts, concept.class_token,
                                            concept.instance_token)
             for i in range(sample_dataset.__len__()):
@@ -266,9 +278,6 @@ def generate_sample_img(model_dir: str, save_sample_prompt: str, seed: str):
         sample_dir = os.path.join(save_dir, "samples")
         os.makedirs(sample_dir, exist_ok=True)
         file_count = 0
-        for x in Path(sample_dir).iterdir():
-            if is_image(x, pil_features):
-                file_count += 1
         shared.state.job_count = 1
         with torch.autocast("cuda"), torch.inference_mode():
             image = pipeline(save_sample_prompt,
