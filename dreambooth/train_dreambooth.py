@@ -396,7 +396,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             cpu=args.use_cpu
         )
     except Exception as e:
-        if "AcceleratorState" in e:
+        if "AcceleratorState" in str(e):
             msg = "Change in precision detected, please restart the webUI entirely to use new precision."
         else:
             msg = f"Exception initializing accelerator: {e}"
