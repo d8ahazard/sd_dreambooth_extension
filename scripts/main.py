@@ -98,6 +98,9 @@ def on_ui_tabs():
                             db_num_train_epochs = gr.Number(label="Training Steps Per Image (Epochs)", precision=100,
                                                             value=1)
                             db_max_train_steps = gr.Number(label='Max Training Steps', value=0, precision=0)
+                            db_epoch_pause_frequency = gr.Number(label='Pause After N Epochs', value=0, visible=False)
+                            db_epoch_pause_time = gr.Number(label='Amount of time to pause between Epochs, in Seconds',
+                                                            value=60, visible=False)
                             db_save_use_global_counts = gr.Checkbox(label='Use Lifetime Steps/Epochs When Saving', value=True)
                             db_save_use_epochs = gr.Checkbox(label="Save Preview/Ckpt Every Epoch")
                             db_save_embedding_every = gr.Number(
@@ -245,6 +248,8 @@ def on_ui_tabs():
                 db_attention,
                 db_center_crop,
                 db_concepts_path,
+                db_epoch_pause_frequency,
+                db_epoch_pause_time,
                 db_gradient_accumulation_steps,
                 db_gradient_checkpointing,
                 db_half_model,
@@ -354,6 +359,8 @@ def on_ui_tabs():
                 db_attention,
                 db_center_crop,
                 db_concepts_path,
+                db_epoch_pause_frequency,
+                db_epoch_pause_time,
                 db_gradient_accumulation_steps,
                 db_gradient_checkpointing,
                 db_half_model,
@@ -606,7 +613,6 @@ def on_ui_tabs():
             ],
             outputs=[
                 db_status,
-                db_outcome,
                 db_revision
             ]
         )

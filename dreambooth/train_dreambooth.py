@@ -939,6 +939,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     progress_bar = tqdm(range(actual_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
     global_step = 0
+    global_epoch = 0
     lifetime_step = args.revision
     shared.state.job_count = max_train_steps
     shared.state.job_no = global_step

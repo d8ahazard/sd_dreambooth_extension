@@ -1,4 +1,5 @@
 import gc
+import json
 import logging
 import math
 import os
@@ -109,6 +110,7 @@ def training_wizard(model_dir, is_person=False):
 
         status = f"Wizard results: {counts_list}"
         print(status)
+        status = f"Wizard results: {json.dumps(counts_list, indent=4)}"
     return status, 0, step_mult, -1, c1_class, -1, c2_class, -1, c3_class
 
 
@@ -116,8 +118,10 @@ def performance_wizard():
     attention = "xformers"
     gradient_checkpointing = True
     mixed_precision = 'fp16'
+    target_precision = 'fp16'
     if torch.cuda.is_bf16_supported():
         mixed_precision = 'bf16'
+        target_precision = 'bf16'
     not_cache_latents = True
     sample_batch_size = 1
     train_batch_size = 1
@@ -152,7 +156,7 @@ def performance_wizard():
             use_8bit_adam = False
             mixed_precision = 'no'
 
-        msg = f"Calculated training params based on {gb}GB of VRAM detected."
+        msg = f"Calculated training params based on {gb}GB of VRAM:"
     except Exception as e:
         msg = f"An exception occurred calculating performance values: {e}"
         pass
@@ -166,8 +170,7 @@ def performance_wizard():
         pass
     if has_xformers:
         use_8bit_adam = True
-        mixed_precision = "fp16"
-        msg += "<br>Xformers detected, enabling 8Bit Adam and setting mixed precision to 'fp16'"
+        mixed_precision = target_precision
 
     if use_cpu:
         msg += "<br>Detected less than 10GB of VRAM, setting CPU training to true."
@@ -223,6 +226,8 @@ def load_params(model_dir):
                "db_attention",
                "db_center_crop",
                "db_concepts_path",
+               "db_epoch_pause_frequency",
+               "db_epoch_pause_time",
                "db_gradient_accumulation_steps",
                "db_gradient_checkpointing",
                "db_half_model",

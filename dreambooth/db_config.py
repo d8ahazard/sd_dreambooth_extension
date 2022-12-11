@@ -28,6 +28,8 @@ class DreamboothConfig:
                  attention: str = "default",
                  center_crop: bool = True,
                  concepts_path: str = "",
+                 epoch_pause_frequency: int = 0,
+                 epoch_pause_time: int = 0,
                  gradient_accumulation_steps: int = 1,
                  gradient_checkpointing: bool = True,
                  half_model: bool = False,
@@ -141,6 +143,8 @@ class DreamboothConfig:
         self.attention = attention
         self.center_crop = center_crop
         self.concepts_path = concepts_path
+        self.epoch_pause_frequency = epoch_pause_frequency
+        self.epoch_pause_time = epoch_pause_time
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.gradient_checkpointing = gradient_checkpointing
         self.half_model = half_model
