@@ -39,8 +39,9 @@ def training_wizard_person(model_dir):
 def training_wizard(model_dir, is_person=False):
     """
     Calculate the number of steps based on our learning rate, return the following:
-    status,
-    max_train_steps,
+    db_status,
+    db_max_train_steps,
+    db_num_train_epochs,
     c1_max_steps,
     c1_num_class_images,
     c2_max_steps,
@@ -55,12 +56,8 @@ def training_wizard(model_dir, is_person=False):
 
     if config is None:
         status = "Unable to load config."
-        return status, 1000, -1, 0, -1, 0, -1, 0
+        return status, 0, 100, -1, 0, -1, 0, -1
     else:
-        rev = config.revision
-        if rev == '' or rev is None:
-            rev = 0
-        total_steps = int(rev)
         # Build concepts list using current settings
         concepts = config.concepts_list
         pil_feats = list_features()
@@ -94,51 +91,25 @@ def training_wizard(model_dir, is_person=False):
                 c_dict = {
                     "concept": concept,
                     "images": image_count,
-                    "steps": round(image_count * step_mult, -2),
                     "classifiers": round(image_count * class_mult)
                 }
                 counts_list.append(c_dict)
 
-        if total_images == 0:
-            print("No training images found, can't do math.")
-            return "No training images found, can't do math.", 1000, -1, 0, -1, 0, -1, 0
-        req_steps = round(step_mult * total_images, -2)
-        if total_steps >= req_steps:
-            req_steps = 0
-        else:
-            req_steps -= total_steps
-
-        s_list = []
         c_list = []
         for x in range(3):
             if x < len(counts_list):
                 c_dict = counts_list[x]
-                c_images = c_dict["images"]
-                c_weight = c_images / total_images
-                steps = c_dict["steps"]
-                print(f"Steps, req steps, cweight: {steps}, {req_steps}, {c_weight}")
-                if c_images == max_images:
-                    steps = -1
-                if total_steps >= req_steps * c_weight:
-                    steps = 0
-                c_dict["steps"] = steps
-                counts_list[x] = c_dict
-                s_list.append(steps)
                 c_list.append(c_dict["classifiers"])
             else:
-                s_list.append(-1)
                 c_list.append(0)
 
-        c1_steps = s_list[0]
-        c2_steps = s_list[1]
-        c3_steps = s_list[2]
         c1_class = c_list[0]
         c2_class = c_list[1]
         c3_class = c_list[2]
 
         status = f"Wizard results: {counts_list}"
         print(status)
-    return status, req_steps, 1, c1_steps, c1_class, c2_steps, c2_class, c3_steps, c3_class
+    return status, 0, step_mult, -1, c1_class, -1, c2_class, -1, c3_class
 
 
 def performance_wizard():
@@ -154,8 +125,6 @@ def performance_wizard():
     use_8bit_adam = True
     use_cpu = False
     use_ema = False
-    gb = 0
-    msg = ""
     try:
         t = torch.cuda.get_device_properties(0).total_memory
         gb = math.ceil(t / 1073741824)
@@ -209,7 +178,7 @@ def performance_wizard():
     for key in log_dict:
         msg += f"<br>{key}: {log_dict[key]}"
     return msg, attention, gradient_checkpointing, mixed_precision, not_cache_latents, sample_batch_size, \
-        train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema
+           train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema
 
 
 def load_params(model_dir):
@@ -317,7 +286,6 @@ def load_params(model_dir):
 
 def load_model_params(model_dir):
     data = from_file(model_dir)
-    msg = ""
     if data is None:
         print("Can't load config!")
         msg = f"Error loading config for model '{model_dir}'."
@@ -336,7 +304,8 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic
     global mem_record
     if model_dir == "" or model_dir is None:
         print("Invalid model name.")
-        return "Create or select a model first.", ""
+        msg = "Create or select a model first."
+        return msg, 0, msg
     config = from_file(model_dir)
 
     # Clear pretrained VAE Name if applicable
@@ -362,7 +331,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic
     if msg:
         shared.state.textinfo = msg
         print(msg)
-        return msg, msg, 0, msg
+        return msg, 0, msg
 
     # Clear memory and do "stuff" only after we've ensured all the things are right
     print("Starting Dreambooth training...")
@@ -379,7 +348,8 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic
             shared.state.textinfo = "Initializing dreambooth training..."
             print(shared.state.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
-            config, mem_record, msg = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name, lora_alpha=lora_alpha)
+            config, mem_record, msg = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name,
+                                           lora_alpha=lora_alpha)
             if config.revision != total_steps:
                 config.save()
         total_steps = config.revision
@@ -396,4 +366,4 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic
     print(f'Memory output: {mem_record}')
     reload_system_models()
     print(f"Returning result: {res}")
-    return res, res, total_steps, res
+    return res, total_steps, res
