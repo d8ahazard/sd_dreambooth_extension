@@ -63,7 +63,7 @@ def get_lora_models():
     return output
 
 
-def sanitize_name(name):
+def sanitize_tags(name):
     tags = name.split(",")
     name = ""
     for tag in tags:
@@ -71,6 +71,10 @@ def sanitize_name(name):
         tag = "".join(x for x in tag if (x.isalnum() or x in "._-"))
     name = name.replace(" ", "_")
     return "".join(x for x in name if (x.isalnum() or x in "._-,"))
+
+
+def sanitize_name(name):
+    return "".join(x for x in name if (x.isalnum() or x in "._-"))
 
 
 mem_record = {}

@@ -30,7 +30,7 @@ from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_che
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, encode_hidden_state, \
     PromptDataset, EMAModel
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_name, list_features, is_image
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_tags, list_features, is_image
 from extensions.sd_dreambooth_extension.lora_diffusion import inject_trainable_lora, extract_lora_ups_down, \
     save_lora_weight
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora

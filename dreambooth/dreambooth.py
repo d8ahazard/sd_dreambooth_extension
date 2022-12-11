@@ -97,21 +97,22 @@ def training_wizard(model_dir, is_person=False):
                 counts_list.append(c_dict)
 
         c_list = []
+        status = f"Wizard results:"
+        status += f"<br>Num Epochs: {step_mult}"
+        status += f"<br>Max Steps: {0}"
+
         for x in range(3):
             if x < len(counts_list):
                 c_dict = counts_list[x]
                 c_list.append(c_dict["classifiers"])
+                status += f"<br>Concept {x} Class Images: {c_dict['classifiers']}"
+
             else:
                 c_list.append(0)
 
-        c1_class = c_list[0]
-        c2_class = c_list[1]
-        c3_class = c_list[2]
-
-        status = f"Wizard results: {counts_list}"
         print(status)
-        status = f"Wizard results: {json.dumps(counts_list, indent=4)}"
-    return status, 0, step_mult, -1, c1_class, -1, c2_class, -1, c3_class
+
+    return status, 0, step_mult, -1, c_list[0], -1, c_list[1], -1, c_list[2]
 
 
 def performance_wizard():
@@ -135,8 +136,6 @@ def performance_wizard():
         print(f"Total VRAM: {gb}")
         if gb >= 24:
             attention = "default"
-            gradient_checkpointing = False
-            mixed_precision = 'no'
             not_cache_latents = False
             sample_batch_size = 4
             train_batch_size = 2
