@@ -28,14 +28,15 @@ except:
     cmd_lora_models_path = None
 
 
-def printi(msg, params=None):
-    shared.state.textinfo = msg
-    if shared.state.job_count > shared.state.job_no:
-        shared.state.job_no += 1
-    if params:
-        print(msg, params)
-    else:
-        print(msg)
+def printi(msg, params=None, log=True):
+    if log:
+        shared.state.textinfo = msg
+        if shared.state.job_count > shared.state.job_no:
+            shared.state.job_no += 1
+        if params:
+            print(msg, params)
+        else:
+            print(msg)
 
 
 def get_db_models():
@@ -63,9 +64,17 @@ def get_lora_models():
 
 
 def sanitize_name(name):
-    return "".join(x for x in name if (x.isalnum() or x in "._- "))
+    tags = name.split(",")
+    name = ""
+    for tag in tags:
+        tag = tag.replace(" ", "_").strip()
+        tag = "".join(x for x in tag if (x.isalnum() or x in "._-"))
+    name = name.replace(" ", "_")
+    return "".join(x for x in name if (x.isalnum() or x in "._-,"))
+
 
 mem_record = {}
+
 
 def printm(msg="", reset=False):
     global mem_record
