@@ -1,4 +1,5 @@
 import gc
+import json
 import logging
 import math
 import os
@@ -12,7 +13,7 @@ from diffusers.utils import logging as dl
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, printm, \
-    isset, list_features, is_image
+    isset, list_features, is_image, get_images
 from modules import shared, devices
 
 try:
@@ -39,8 +40,9 @@ def training_wizard_person(model_dir):
 def training_wizard(model_dir, is_person=False):
     """
     Calculate the number of steps based on our learning rate, return the following:
-    status,
-    max_train_steps,
+    db_status,
+    db_max_train_steps,
+    db_num_train_epochs,
     c1_max_steps,
     c1_num_class_images,
     c2_max_steps,
@@ -55,12 +57,8 @@ def training_wizard(model_dir, is_person=False):
 
     if config is None:
         status = "Unable to load config."
-        return status, 1000, -1, 0, -1, 0, -1, 0
+        return status, 0, 100, -1, 0, -1, 0, -1
     else:
-        rev = config.revision
-        if rev == '' or rev is None:
-            rev = 0
-        total_steps = int(rev)
         # Build concepts list using current settings
         concepts = config.concepts_list
         pil_feats = list_features()
@@ -84,69 +82,46 @@ def training_wizard(model_dir, is_person=False):
             if not os.path.exists(concept.instance_data_dir):
                 print("Nonexistent instance directory.")
             else:
-                for x in Path(concept.instance_data_dir).iterdir():
-                    if is_image(x, pil_feats):
-                        total_images += 1
-                        image_count += 1
+                concept_images = get_images(concept.instance_data_dir)
+                total_images += len(concept_images)
+                image_count = len(concept_images)
                 print(f"Image count in {concept.instance_data_dir} is {image_count}")
                 if image_count > max_images:
                     max_images = image_count
                 c_dict = {
                     "concept": concept,
                     "images": image_count,
-                    "steps": round(image_count * step_mult, -2),
                     "classifiers": round(image_count * class_mult)
                 }
                 counts_list.append(c_dict)
 
-        if total_images == 0:
-            print("No training images found, can't do math.")
-            return "No training images found, can't do math.", 1000, -1, 0, -1, 0, -1, 0
-        req_steps = round(step_mult * total_images, -2)
-        if total_steps >= req_steps:
-            req_steps = 0
-        else:
-            req_steps -= total_steps
-
-        s_list = []
         c_list = []
+        status = f"Wizard results:"
+        status += f"<br>Num Epochs: {step_mult}"
+        status += f"<br>Max Steps: {0}"
+
         for x in range(3):
             if x < len(counts_list):
                 c_dict = counts_list[x]
-                c_images = c_dict["images"]
-                c_weight = c_images / total_images
-                steps = c_dict["steps"]
-                print(f"Steps, req steps, cweight: {steps}, {req_steps}, {c_weight}")
-                if c_images == max_images:
-                    steps = -1
-                if total_steps >= req_steps * c_weight:
-                    steps = 0
-                c_dict["steps"] = steps
-                counts_list[x] = c_dict
-                s_list.append(steps)
                 c_list.append(c_dict["classifiers"])
+                status += f"<br>Concept {x} Class Images: {c_dict['classifiers']}"
+
             else:
-                s_list.append(-1)
                 c_list.append(0)
 
-        c1_steps = s_list[0]
-        c2_steps = s_list[1]
-        c3_steps = s_list[2]
-        c1_class = c_list[0]
-        c2_class = c_list[1]
-        c3_class = c_list[2]
-
-        status = f"Wizard results: {counts_list}"
         print(status)
-    return status, req_steps, 1, c1_steps, c1_class, c2_steps, c2_class, c3_steps, c3_class
+
+    return status, 0, step_mult, -1, c_list[0], -1, c_list[1], -1, c_list[2]
 
 
 def performance_wizard():
     attention = "xformers"
     gradient_checkpointing = True
     mixed_precision = 'fp16'
+    target_precision = 'fp16'
     if torch.cuda.is_bf16_supported():
         mixed_precision = 'bf16'
+        target_precision = 'bf16'
     not_cache_latents = True
     sample_batch_size = 1
     train_batch_size = 1
@@ -154,16 +129,12 @@ def performance_wizard():
     use_8bit_adam = True
     use_cpu = False
     use_ema = False
-    gb = 0
-    msg = ""
     try:
         t = torch.cuda.get_device_properties(0).total_memory
         gb = math.ceil(t / 1073741824)
         print(f"Total VRAM: {gb}")
         if gb >= 24:
             attention = "default"
-            gradient_checkpointing = False
-            mixed_precision = 'no'
             not_cache_latents = False
             sample_batch_size = 4
             train_batch_size = 2
@@ -183,7 +154,7 @@ def performance_wizard():
             use_8bit_adam = False
             mixed_precision = 'no'
 
-        msg = f"Calculated training params based on {gb}GB of VRAM detected."
+        msg = f"Calculated training params based on {gb}GB of VRAM:"
     except Exception as e:
         msg = f"An exception occurred calculating performance values: {e}"
         pass
@@ -197,8 +168,7 @@ def performance_wizard():
         pass
     if has_xformers:
         use_8bit_adam = True
-        mixed_precision = "fp16"
-        msg += "<br>Xformers detected, enabling 8Bit Adam and setting mixed precision to 'fp16'"
+        mixed_precision = target_precision
 
     if use_cpu:
         msg += "<br>Detected less than 10GB of VRAM, setting CPU training to true."
@@ -209,27 +179,30 @@ def performance_wizard():
     for key in log_dict:
         msg += f"<br>{key}: {log_dict[key]}"
     return msg, attention, gradient_checkpointing, mixed_precision, not_cache_latents, sample_batch_size, \
-        train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema
+           train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema
 
 
 def load_params(model_dir):
     data = from_file(model_dir)
+    concepts = []
+    ui_dict = {}
     msg = ""
     if data is None:
         print("Can't load config!")
         msg = "Please specify a model to load."
-
-    concepts = []
-    ui_dict = {}
-    for key in data.__dict__:
-        value = data.__dict__[key]
-        if key == "concepts_list":
-            concepts = value
-        else:
-            if key == "pretrained_model_name_or_path":
-                key = "model_path"
-            ui_dict[f"db_{key}"] = value
-            msg = "Loaded config."
+    elif data.__dict__ is None:
+        print("Can't load config!")
+        msg = "Please check your model config."
+    else:
+        for key in data.__dict__:
+            value = data.__dict__[key]
+            if key == "concepts_list":
+                concepts = value
+            else:
+                if key == "pretrained_model_name_or_path":
+                    key = "model_path"
+                ui_dict[f"db_{key}"] = value
+                msg = "Loaded config."
 
     ui_concepts = concepts if concepts is not None else []
     if len(ui_concepts) < 3:
@@ -251,6 +224,8 @@ def load_params(model_dir):
                "db_attention",
                "db_center_crop",
                "db_concepts_path",
+               "db_epoch_pause_frequency",
+               "db_epoch_pause_time",
                "db_gradient_accumulation_steps",
                "db_gradient_checkpointing",
                "db_half_model",
@@ -258,7 +233,6 @@ def load_params(model_dir):
                "db_learning_rate",
                "db_lr_scheduler",
                "db_lr_warmup_steps",
-               "db_max_grad_norm",
                "db_max_token_length",
                "db_max_train_steps",
                "db_mixed_precision",
@@ -275,6 +249,7 @@ def load_params(model_dir):
                "db_save_use_global_counts",
                "db_save_use_epochs",
                "db_scale_lr",
+               "db_shuffle_tags",
                "db_train_batch_size",
                "db_train_text_encoder",
                "db_use_8bit_adam",
@@ -306,14 +281,16 @@ def load_params(model_dir):
             else:
                 output.append(ui_dict[key])
         else:
-            output.append(None)
+            if 'epoch' in key:
+                output.append(0)
+            else:
+                output.append(None)
     print(f"Returning {output}")
     return output
 
 
 def load_model_params(model_dir):
     data = from_file(model_dir)
-    msg = ""
     if data is None:
         print("Can't load config!")
         msg = f"Error loading config for model '{model_dir}'."
@@ -332,7 +309,8 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic
     global mem_record
     if model_dir == "" or model_dir is None:
         print("Invalid model name.")
-        return "Create or select a model first.", ""
+        msg = "Create or select a model first."
+        return msg, 0, msg
     config = from_file(model_dir)
 
     # Clear pretrained VAE Name if applicable
@@ -358,7 +336,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic
     if msg:
         shared.state.textinfo = msg
         print(msg)
-        return msg, msg, 0, msg
+        return msg, 0, msg
 
     # Clear memory and do "stuff" only after we've ensured all the things are right
     print("Starting Dreambooth training...")
@@ -375,7 +353,8 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic
             shared.state.textinfo = "Initializing dreambooth training..."
             print(shared.state.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
-            config, mem_record, msg = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name, lora_alpha=lora_alpha)
+            config, mem_record, msg = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name,
+                                           lora_alpha=lora_alpha)
             if config.revision != total_steps:
                 config.save()
         total_steps = config.revision
@@ -392,4 +371,4 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic
     print(f'Memory output: {mem_record}')
     reload_system_models()
     print(f"Returning result: {res}")
-    return res, res, total_steps, res
+    return res, total_steps, res

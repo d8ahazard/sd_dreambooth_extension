@@ -1,5 +1,6 @@
 import gc
 import os
+import random
 import re
 from typing import Iterable
 
@@ -16,9 +17,10 @@ class FilenameTextGetter:
 
     re_numbers_at_start = re.compile(r"^[-\d]+\s*")
 
-    def __init__(self):
+    def __init__(self, shuffle_tags=False):
         self.re_word = re.compile(shared.opts.dataset_filename_word_regex) if len(
             shared.opts.dataset_filename_word_regex) > 0 else None
+        self.shuffle_tags = shuffle_tags
 
     def read_text(self, img_path):
         text_filename = os.path.splitext(img_path)[0] + ".txt"
@@ -69,6 +71,8 @@ class FilenameTextGetter:
                         filename_text = f"{instance_token} {class_token}, {filename_text}"
 
         tags = filename_text.split(',')
+        if self.shuffle_tags:
+            random.shuffle(tags)
         output = text_template.replace("[filewords]", ','.join(tags))
         return output
 
@@ -91,15 +95,16 @@ class PromptDataset(Dataset):
         example = {"filename_text": self.filename_texts[index % len(self.filename_texts)] if len(
             self.filename_texts) > 0 else ""}
         prompt = example["filename_text"]
-        if self.instance_token in prompt:
-            class_token = self.class_token
-            # If the token is already in the prompt, just remove the instance token, don't swap it
-            class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
-            for token in class_tokens:
-                if token in prompt:
-                    prompt = prompt.replace(self.instance_token, "")
-                else:
-                    prompt = prompt.replace(self.instance_token, self.class_token)
+        if self.instance_token != "" and self.instance_token is not None:
+            if self.instance_token in prompt and self.class_token is not None and self.class_token != "":
+                class_token = self.class_token
+                # If the token is already in the prompt, just remove the instance token, don't swap it
+                class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
+                for token in class_tokens:
+                    if token in prompt:
+                        prompt = prompt.replace(self.instance_token, "")
+                    else:
+                        prompt = prompt.replace(self.instance_token, self.class_token)
 
         prompt = self.prompt.replace("[filewords]", prompt)
         example["prompt"] = prompt

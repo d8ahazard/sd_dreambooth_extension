@@ -183,7 +183,6 @@ def convert_vae_state_dict(vae_state_dict):
     for k, v in new_state_dict.items():
         for weight_name in weights_to_convert:
             if f"mid.attn_1.{weight_name}.weight" in k:
-                print(f"Reshaping {k} for SD format")
                 new_state_dict[k] = reshape_weight_for_sd(v)
     return new_state_dict
 
@@ -236,8 +235,6 @@ def convert_text_enc_state_dict_v20(text_enc_dict: dict[str, torch.Tensor]):
             continue
 
         relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k)
-        #        if relabelled_key != k:
-        #            print(f"{k} -> {relabelled_key}")
 
         new_state_dict[relabelled_key] = v
 
@@ -261,7 +258,7 @@ def convert_text_enc_state_dict(text_enc_dict: dict[str, torch.Tensor]):
 
 
 def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1,
-                       reload_models=True):
+                       reload_models=True, log=True):
     """
 
     @param model_name: The model name to compile
@@ -270,6 +267,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     @param reload_models: Whether to reload the system list of checkpoints.
     @param lora_path: The path to a lora pt file to merge with the unet. Auto set during training.
     @param lora_alpha: The overall weight of the lora model when adding to unet. Default is 1.0
+    @param log: Whether to print messages to console/UI.
     @return: status: What happened, path: Checkpoint path
     """
     unload_system_models()
@@ -302,7 +300,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.bin")
     text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
     try:
-        printi("Converting unet...")
+        printi("Converting unet...", log=log)
         loaded_pipeline = DiffusionPipeline.from_pretrained(model_path).to("cpu")
         if lora_path is not None and lora_path != "":
             lora_diffusers = config.pretrained_model_name_or_path + "_lora"
@@ -314,7 +312,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
                     cmd_lora_models_path = None
                 model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else paths.models_path
                 lora_path = os.path.join(model_dir, "lora", lora_path)
-            print(f"Loading lora from {lora_path}")
+            printi(f"Loading lora from {lora_path}", log=log)
             if os.path.exists(lora_path):
                 checkpoint_path = checkpoint_path.replace(".ckpt", "_lora.ckpt")
                 printi("Applying lora model...")
@@ -329,17 +327,17 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
         unet_state_dict = convert_unet_state_dict(unet_state_dict)
         # unet_state_dict = convert_unet_state_dict_to_sd(v2, unet_state_dict)
         unet_state_dict = {"model.diffusion_model." + k: v for k, v in unet_state_dict.items()}
-        printi("Converting vae...")
+        printi("Converting vae...", log=log)
         # Convert the VAE model
         vae_state_dict = torch.load(vae_path, map_location="cpu")
         vae_state_dict = convert_vae_state_dict(vae_state_dict)
         vae_state_dict = {"first_stage_model." + k: v for k, v in vae_state_dict.items()}
-        printi("Converting text encoder...")
+        printi("Converting text encoder...", log=log)
         # Convert the text encoder model
         text_enc_dict = torch.load(text_enc_path, map_location="cpu")
 
         if v2:
-            print("Converting text enc dict for V2 model.")
+            printi("Converting text enc dict for V2 model.", log=log)
             # Need to add the tag 'transformer' in advance, so we can knock it out from the final layer-norm
             text_enc_dict = {"transformer." + k: v for k, v in text_enc_dict.items()}
             text_enc_dict = convert_text_enc_state_dict_v20(text_enc_dict)
@@ -349,7 +347,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
                 config.save()
                 v2 = True
         else:
-            print("Converting text enc dict for V1 model.")
+            printi("Converting text enc dict for V1 model.", log=log)
             text_enc_dict = convert_text_enc_state_dict(text_enc_dict)
             text_enc_dict = {"cond_stage_model.transformer." + k: v for k, v in text_enc_dict.items()}
             if config.v2:
@@ -360,7 +358,6 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
         # Put together new checkpoint
         state_dict = {**unet_state_dict, **vae_state_dict, **text_enc_dict}
         if half:
-            print("Halving model.")
             state_dict = {k: v.half() for k, v in state_dict.items()}
 
         state_dict = {"db_global_step": config.revision, "db_epoch": config.epoch, "state_dict": state_dict}
@@ -369,7 +366,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
         if v2:
             cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs", "v2-inference-v.yaml")
             cfg_dest = checkpoint_path.replace(".ckpt", ".yaml")
-            print(f"Copying config file to {cfg_dest}")
+            printi(f"Copying config file to {cfg_dest}", log=log)
             shutil.copyfile(cfg_file, cfg_dest)
     except Exception as e:
         print("Exception compiling checkpoint!")

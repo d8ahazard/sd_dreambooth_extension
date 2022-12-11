@@ -28,14 +28,15 @@ except:
     cmd_lora_models_path = None
 
 
-def printi(msg, params=None):
-    shared.state.textinfo = msg
-    if shared.state.job_count > shared.state.job_no:
-        shared.state.job_no += 1
-    if params:
-        print(msg, params)
-    else:
-        print(msg)
+def printi(msg, params=None, log=True):
+    if log:
+        shared.state.textinfo = msg
+        if shared.state.job_count > shared.state.job_no:
+            shared.state.job_no += 1
+        if params:
+            print(msg, params)
+        else:
+            print(msg)
 
 
 def get_db_models():
@@ -62,10 +63,39 @@ def get_lora_models():
     return output
 
 
+def get_images(image_path):
+    pil_features = list_features()
+    output = []
+    if isinstance(image_path, str):
+        image_path = Path(image_path)
+    if image_path.exists():
+        for file in image_path.iterdir():
+            if is_image(file, pil_features):
+                output.append(file)
+            if file.is_dir():
+                sub_images = get_images(file)
+                for image in sub_images:
+                    output.append(image)
+    return output
+
+
+
+def sanitize_tags(name):
+    tags = name.split(",")
+    name = ""
+    for tag in tags:
+        tag = tag.replace(" ", "_").strip()
+        tag = "".join(x for x in tag if (x.isalnum() or x in "._-"))
+    name = name.replace(" ", "_")
+    return "".join(x for x in name if (x.isalnum() or x in "._-,"))
+
+
 def sanitize_name(name):
-    return "".join(x for x in name if (x.isalnum() or x in "._- "))
+    return "".join(x for x in name if (x.isalnum() or x in "._-"))
+
 
 mem_record = {}
+
 
 def printm(msg="", reset=False):
     global mem_record
@@ -171,7 +201,8 @@ def debug_prompts(model_dir):
         lifetime_steps=config.revision,
         pad_tokens=config.pad_tokens,
         hflip=config.hflip,
-        max_token_length=config.max_token_length
+        max_token_length=config.max_token_length,
+        shuffle_tags=config.shuffle_tags
     )
 
     output = {"instance_prompts": [], "existing_class_prompts": [], "new_class_prompts": [], "sample_prompts": []}
@@ -186,24 +217,19 @@ def debug_prompts(model_dir):
         output["sample_prompts"].append(prompt.prompt)
 
     for concept in config.concepts_list:
-        text_getter = FilenameTextGetter()
+        text_getter = FilenameTextGetter(config.shuffle_tags)
         c_idx = 0
         class_images_dir = Path(concept["class_data_dir"])
         if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:
             class_images_dir = os.path.join(config.model_dir, f"classifiers_{c_idx}")
             print(f"Class image dir is not set, defaulting to {class_images_dir}")
         class_images_dir.mkdir(parents=True, exist_ok=True)
-        cur_class_images = 0
-        iterfiles = 0
         pil_features = list_features()
-        for x in class_images_dir.iterdir():
-            iterfiles += 1
-            if is_image(x, pil_features):
-                cur_class_images += 1
+        cur_class_images = len(get_images(class_images_dir))
         if cur_class_images < concept.num_class_images:
             num_new_images = concept.num_class_images - cur_class_images
-            filename_texts = [text_getter.read_text(x) for x in Path(concept.instance_data_dir).iterdir() if
-                              is_image(x, pil_features)]
+            instance_images = get_images(concept.instance_data_dir)
+            filename_texts = [text_getter.read_text(x) for x in instance_images]
             sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts, concept.class_token,
                                            concept.instance_token)
             for i in range(sample_dataset.__len__()):
@@ -252,9 +278,6 @@ def generate_sample_img(model_dir: str, save_sample_prompt: str, seed: str):
         sample_dir = os.path.join(save_dir, "samples")
         os.makedirs(sample_dir, exist_ok=True)
         file_count = 0
-        for x in Path(sample_dir).iterdir():
-            if is_image(x, pil_features):
-                file_count += 1
         shared.state.job_count = 1
         with torch.autocast("cuda"), torch.inference_mode():
             image = pipeline(save_sample_prompt,

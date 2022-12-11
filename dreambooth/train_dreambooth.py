@@ -1,10 +1,12 @@
 import argparse
 import hashlib
+import inspect
 import itertools
 import logging
 import math
 import os
 import random
+import time
 import traceback
 from contextlib import nullcontext
 from pathlib import Path
@@ -29,7 +31,8 @@ from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_che
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, encode_hidden_state, \
     PromptDataset, EMAModel
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_name, list_features, is_image
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_tags, list_features, is_image, \
+    get_images
 from extensions.sd_dreambooth_extension.lora_diffusion import inject_trainable_lora, extract_lora_ups_down, \
     save_lora_weight
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
@@ -228,7 +231,6 @@ def parse_args(input_args=None):
     parser.add_argument("--adam_beta2", type=float, default=0.999, help="The beta2 parameter for the Adam optimizer.")
     parser.add_argument("--adam_weight_decay", type=float, default=1e-2, help="Weight decay to use.")
     parser.add_argument("--adam_epsilon", type=float, default=1e-08, help="Epsilon value for the Adam optimizer")
-    parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
     parser.add_argument("--hub_token", type=str, default=None, help="The token to use to push to the Model Hub.")
     parser.add_argument(
@@ -285,18 +287,6 @@ def parse_args(input_args=None):
         type=bool,
         default=False,
         help="Generate half-precision checkpoints (Saves space, minor difference in output)",
-    )
-    parser.add_argument(
-        "--instance_token",
-        type=str,
-        default="",
-        help="Instance token used to swap subjects in file prompts."
-    )
-    parser.add_argument(
-        "--class_token",
-        type=bool,
-        default=False,
-        help="Instance token used to swap subjects in file prompts."
     )
     parser.add_argument(
         "--attention",
@@ -406,7 +396,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             cpu=args.use_cpu
         )
     except Exception as e:
-        if "AcceleratorState" in e:
+        if "AcceleratorState" in str(e):
             msg = "Change in precision detected, please restart the webUI entirely to use new precision."
         else:
             msg = f"Exception initializing accelerator: {e}"
@@ -429,7 +419,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     for concept in args.concepts_list:
         cur_class_images = 0
         print(f"Checking concept: {concept}")
-        text_getter = FilenameTextGetter()
+        text_getter = FilenameTextGetter(args.shuffle_tags)
         print(f"Concept requires {concept.num_class_images} images.")
         with_prior = concept.num_class_images > 0
         if with_prior:
@@ -439,9 +429,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 print(f"Class image dir is not set, defaulting to {class_images_dir}")
             class_images_dir = Path(class_images_dir)
             class_images_dir.mkdir(parents=True, exist_ok=True)
-            for x in class_images_dir.iterdir():
-                if is_image(x, pil_features):
-                    cur_class_images += 1
+            class_images = get_images(class_images_dir)
+            for x in class_images:
+                cur_class_images += 1
             print(f"Class dir {class_images_dir} has {cur_class_images} images.")
             if cur_class_images < concept.num_class_images:
                 num_new_images = concept.num_class_images - cur_class_images
@@ -467,8 +457,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
                 shared.state.job_count = num_new_images
                 shared.state.job_no = 0
-                filename_texts = [text_getter.read_text(x) for x in Path(concept.instance_data_dir).iterdir() if
-                                  is_image(x, pil_features)]
+                concept_images = get_images(concept.instance_data_dir)
+                filename_texts = [text_getter.read_text(x) for x in concept_images]
                 sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts, concept.class_token,
                                                concept.instance_token)
                 with accelerator.autocast(), torch.inference_mode():
@@ -498,10 +488,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                             image_filename = str(class_images_dir / f"{generated_images + cur_class_images}-" \
                                                                     f"{image_base}.jpg")
                             image.save(image_filename)
-                            if args.save_class_txt:
-                                txt_filename = image_filename.replace(".jpg", ".txt")
-                                with open(txt_filename, "w", encoding="utf8") as file:
-                                    file.write(example["prompt"])
+                            txt_filename = image_filename.replace(".jpg", ".txt")
+                            with open(txt_filename, "w", encoding="utf8") as file:
+                                file.write(example["prompt"])
                             shared.state.job_no += 1
                             generated_images += 1
                             shared.state.textinfo = f"Class image {generated_images}/{num_new_images}, " \
@@ -538,6 +527,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         subfolder="text_encoder",
         revision=args.revision,
     )
+
     unet = UNet2DConditionModel.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="unet",
@@ -661,7 +651,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         lifetime_steps=args.revision,
         pad_tokens=args.pad_tokens,
         hflip=args.hflip,
-        max_token_length=args.max_token_length
+        max_token_length=args.max_token_length,
+        shuffle_tags=args.shuffle_tags
     )
 
     if train_dataset.__len__ == 0:
@@ -729,7 +720,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 lifetime_steps=args.revision,
                 pad_tokens=args.pad_tokens,
                 hflip=args.hflip,
-                max_token_length=args.max_token_length
+                max_token_length=args.max_token_length,
+                shuffle_tags=args.shuffle_tags
             )
         else:
             dataset = gen_dataset
@@ -764,7 +756,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     if not args.not_cache_latents:
         train_dataset, train_dataloader = cache_latents(enc_vae=vae, orig_dataset=gen_dataset)
-    #cleanup()
+
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
@@ -837,7 +829,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         if accelerator.is_main_process:
             g_cuda = None
             if args.train_text_encoder:
-                text_enc_model = accelerator.unwrap_model(text_encoder)
+                text_enc_model = accelerator.unwrap_model(text_encoder, keep_fp32_wrapper=True)
             else:
                 text_enc_model = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path,
                                                                subfolder="text_encoder",
@@ -853,7 +845,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
             s_pipeline = DiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
-                unet=accelerator.unwrap_model(unet),
+                unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=True),
                 text_encoder=text_enc_model,
                 vae=vae if vae is not None else create_vae(),
                 scheduler=scheduler,
@@ -887,7 +879,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                 args.pretrained_model_name_or_path,
                                 subfolder="unet",
                                 revision=args.revision,
-                                torch_dtype=torch.float32
+                                torch_dtype=torch.float16
                             ).to(accelerator.device)
                         else:
                             out_file = None
@@ -896,7 +888,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
 
                         compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
-                                           reload_models=False, lora_path=out_file)
+                                           reload_models=False, lora_path=out_file, log=False)
                         if args.use_ema:
                             ema_unet.restore(unet.parameters())
                     except Exception as e:
@@ -912,6 +904,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         os.makedirs(sample_dir, exist_ok=True)
                         with accelerator.autocast(), torch.inference_mode():
                             prompts = gen_dataset.get_sample_prompts()
+                            ci = 0
                             for c in prompts:
                                 seed = c.seed
                                 if seed is None or seed == '' or seed == -1:
@@ -927,10 +920,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                                          generator=g_cuda).images[0]
                                     shared.state.current_image = s_image
                                     shared.state.textinfo = c.prompt
-                                    sanitized_prompt = sanitize_name(c.prompt)
-                                    s_image.save(
-                                        os.path.join(sample_dir, f"{sanitized_prompt}{args.revision}-{si}.png"))
-                                del g_cuda
+                                    image_name = os.path.join(sample_dir, f"sample_{args.revision}-{ci}{si}.png")
+                                    txt_name = image_name.replace(".jpg", ".txt")
+                                    with open(txt_name, "w", encoding="utf8") as txt_file:
+                                        txt_file.write(c.prompt)
+                                    s_image.save(image_name)
+                                ci += 1
                     except Exception as e:
                         print(f"Exception with the stupid image again: {e}")
                         traceback.print_exc()
@@ -948,6 +943,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     progress_bar = tqdm(range(actual_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
     global_step = 0
+    global_epoch = 0
     lifetime_step = args.revision
     shared.state.job_count = max_train_steps
     shared.state.job_no = global_step
@@ -957,7 +953,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     training_complete = False
     msg = ""
     weights_saved = False
-    last_step = global_step
     for epoch in range(args.num_train_epochs):
         if training_complete:
             break
@@ -1048,23 +1043,24 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     loss_avg.reset()
 
                 training_complete = global_step >= actual_train_steps or shared.state.interrupted
+                if not args.save_use_epochs:
+                    if global_step > 0:
+                        if args.save_use_global_counts:
+                            save_img = args.save_preview_every and not args.revision % args.save_preview_every
+                            save_model = args.save_embedding_every and not args.revision % args.save_embedding_every
+                        else:
+                            save_img = args.save_preview_every and not global_step % args.save_preview_every
+                            save_model = args.save_embedding_every and not global_step % args.save_embedding_every
+                        if training_complete:
+                            save_img = False
+                            save_model = True
+                        if save_img or save_model:
+                            args.save()
+                            save_weights()
+                            args = from_file(args.model_name)
+                            weights_saved = True
+                            shared.state.job_count = actual_train_steps
 
-                if global_step > 0:
-                    if args.save_use_global_counts:
-                        save_img = args.save_preview_every and not args.revision % args.save_preview_every
-                        save_model = args.save_embedding_every and not args.revision % args.save_embedding_every
-                    else:
-                        save_img = args.save_preview_every and not global_step % args.save_preview_every
-                        save_model = args.save_embedding_every and not global_step % args.save_embedding_every
-                    if training_complete:
-                        save_img = False
-                        save_model = True
-                    if save_img or save_model:
-                        args.save()
-                        save_weights()
-                        args = from_file(args.model_name)
-                        weights_saved = True
-                        shared.state.job_count = actual_train_steps
                 if shared.state.interrupted:
                     training_complete = True
                 if global_step == 0 or global_step == 5:
@@ -1112,6 +1108,40 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             break
         if shared.state.interrupted:
             training_complete = True
+
+        args.epoch += global_epoch
+        args.save()
+        global_epoch += 1
+
+        if training_complete:
+            break
+
+        if args.save_use_epochs:
+            if args.save_use_global_counts:
+                save_img = args.save_preview_every and not args.epoch % args.save_preview_every
+                save_model = args.save_embedding_every and not args.epoch % args.save_embedding_every
+            else:
+                save_img = args.save_preview_every and not global_epoch % args.save_preview_every
+                save_model = args.save_embedding_every and not global_epoch % args.save_embedding_every
+            if training_complete:
+                save_img = False
+                save_model = True
+            if save_img or save_model:
+                args.save()
+                save_weights()
+                args = from_file(args.model_name)
+                weights_saved = True
+                shared.state.job_count = actual_train_steps
+
+        if args.epoch_pause_frequency > 0 and args.epoch_pause_time > 0:
+            if not global_epoch % args.epoch_pause_frequency:
+                print(f"Giving the GPU a break for {args.epoch_pause_time} seconds.")
+                for i in range(args.epoch_pause_time):
+                    if shared.state.interrupted:
+                        training_complete = True
+                        break
+                    time.sleep(1)
+
         if training_complete:
             break
 

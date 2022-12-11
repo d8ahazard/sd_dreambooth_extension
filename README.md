@@ -11,23 +11,20 @@ To install, simply go to the "Extensions" tab in the SD Web UI, select the "Avai
 
 ![image](https://user-images.githubusercontent.com/1633844/200368737-7fe322de-00d6-4b28-a321-5e09f072d397.png)
 
+Once installed, you **must** restart the Stable-Diffusion WebUI completely. Reloading the UI will not install the necessary requirements.
 
-*For 8bit adam to run properly, it may be necessary to install the CU116 version of torch and torchvision, which can be accomplished below:*
+We also need a newer version of diffusers, as SD-WebUI uses version 0.3.0, while DB training requires >= 0.10.0. Not having the right diffusers version is the cause of the 'UNet2DConditionModel' object has no attribute 'enable_gradient_checkpointing' error message, as well as safety checker warnings.
+
+To force sd-web-ui to *only* install one set of requirements, we can specify the command line argument:
+
+set/export REQS_FILE=.\extensions\sd_dreambooth_extension\requirements.txt
+
 
 Refer to the appropriate script below for extra flags to install requirements:
 
 https://github.com/d8ahazard/sd_dreambooth_extension/blob/main/webui-user-dreambooth.bat
 https://github.com/d8ahazard/sd_dreambooth_extension/blob/main/webui-user-dreambooth.sh
 
-Setting the torch command to: 
-`TORCH_COMMAND=pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url https://download.pytorch.org/whl/cu116`
-will ensure that the proper torch version is installed when webui-user is executed, and then left alone after that, versus trying to install conflicting versions.
-
-We also need a newer version of diffusers, as SD-WebUI uses version 0.3.0, while DB training requires > 0.6.0, so we use 0.7.2. Not having the right diffusers version is the cause of the 'UNet2DConditionModel' object has no attribute 'enable_gradient_checkpointing' error message, as well as safety checker warnings.
-
-To force sd-web-ui to *only* install one set of requirements, we can specify the command line argument:
-
-set/export REQS_FILE=.\extensions\sd_dreambooth_extension\requirements.txt
 
 And last, if you wish to completely skip the "native" install routine of Dreambooth, you can set the following environment flag:
 DREAMBOOTH_SKIP_INSTALL=True
@@ -42,122 +39,255 @@ After installing via the WebUI, it is recommended to set the above flags and re-
 
 ### Create a Model
 1. Go to the Dreambooth tab.
+   
 2. Under the "Create Model" sub-tab, enter a new model name and select the source checkpoint to train from.
-    The source checkpoint will be extracted to models\dreambooth\MODELNAME\working - the original will not be touched.
-2b. Optionally, you can also specify a huggingface model directory and token to create the Dreambooth dataset from huggingface.co. 
-Model path format should be like so: 'runwayml/stable-diffusion-v1-5'
+If you want to use a model from the HF Hub instead, specify the model URL and token. URL format should be 'runwayml/stable-diffusion-v1-5'
+
+    The source checkpoint will be extracted to models\dreambooth\MODELNAME\working.
+
 3. Click "Create". This will take a minute or two, but when done, the UI should indicate that a new model directory has been set up.
 
 
-### Training (Basic Settings)
+## Various Top Buttons
 
-#### Using [filewords]
-For any instance prompt, class prompt, or sample prompt, you may optionally use the '[filewords]' flag to replace '[filewords]' in your prompt string with a prompt from an instance image (or accompanying .txt file.
+*Save Params* - Save current training parameters for the current model.
 
-To properly edit filewords prompts for the various image types, there are additional fields = "Existing Prompt Contents", "Instance Token to swap", and "Class token(s) to swap". 
+*Load Params* - Load training parameters from the currently selected model. Use this to copy params from one model to another.
 
-The instance token is the unique word used to identify the subject. The class token is one or more words or phrases used to identify the class of the subject "man","a man", etc. 
+*Generate Ckpt* - Generate a checkpoint from the currently saved weights at the current revision.
 
-By setting the value of "Existing Prompt Contents" to indicate whether our filewords prompts contain the instance token, class token, both, or none. We can then use this information to properly swap out or append words when generating preview or class images, without having to edit any existing caption structure. 
+*Cancel* - Cancels training after the current step.
 
-#### No, really, training
-
-1. After creating a new model, select the new model name from the "Model" dropdown at the very top.
-2. Select the "Train Model" sub-tab.
-3. Fill in the paramters as described below:
+*Train* - Starts training.
 
 
-*Training steps* - How many total training steps to complete. According to [this guide](https://github.com/nitrosocke/dreambooth-training-guide), you should train for appx 100 steps per sample image. So, if you have 40 instance/sample images, you would train for 4k steps. This is, of course, a rough approximation, and other values will have an effect on final output fidelity.
+## Model Section
+
+*Model* - The model to use. Training parameters will not be automatically loaded to the UI when changing models.
+
+*Half Model* - Enable this to save the model using half precision. Results in a smaller checkpoint with little noticeable difference in image output.
+
+*Save Checkpoint to Subdirectory* - Save the checkpoint to a subdirectory using the model name.
+
+*Training Wizard (Person)* - Uses the selected learning rate and number of instance images to calculate the required number of epochs and classification images.
+
+*Training Wizard (Object/Style)* - Uses the selected learning rate and number of instance images to calculate the required number of epochs. No class images will be generated.
+
+*Performance Wizard (WIP)* - Tries to set the optimal training parameters based on the amount of VRAM for your GPU. Probably not perfect, but at least a good starting point.
+
+
+## Training Parameters
+
+
+### Intervals
+
+This section contains parameters related to when things happen during training.
+
+
+*Training Steps Per Image (Epochs)* - As the name would imply, an epoch is one training run over the entire set of instance images. 
+So, if we want to train 100 steps per image, we can set this value to 100 and we're ready to go. No math required.
+
+*Max Training Steps* - I honestly don't even know why we ever used this value, as it's confusing and requires more math. Set this value to 0 to use epochs. Setting it to any value > 0 will ignore epoch value and stop training after this many steps.
+
+*Pause After N Epochs* - When set to a value higher than 0, training will pause for the time specified.
+
+*Amount of time to pause between Epochs, in Seconds* - How long to pause between "N" epochs when N is greater than zero, in seconds.
 
 *Use Concepts* - Whether to use a JSON file or string with multiple concepts, or the individual settings below.
 
-*Concepts List* - The path to a JSON file or a JSON string containing multiple concepts. See [here](https://raw.githubusercontent.com/d8ahazard/sd_dreambooth_extension/main/dreambooth/concepts_list.json) for an example.
+*Use Lifetime Steps/Epochs When Saving* - When enabled, checkpoint and sample save frequencies will be based on the total number of steps the model has been trained on. When disabled, it will be based on the number of steps in the current training run.
 
-*Instance Prompt* - A short descriptor of your subject using a UNIQUE keyword and a classifier word. If training a dog, your instance prompt could be "photo of zkz dog".
-The key here is that "zkz" is not a word that might overlap with something in the real world "fluff", and "dog" is a generic word to describe your subject. This is only necessary if using prior preservation.
-You can use `[filewords]` in the instance prompt.
+*Save Preview/Ckpt Every epoch* - The save checkpoint and preview frequencies will be per epoch, not steps.
 
-*Dataset Directory* - The path to the directory where the images described in Instance Prompt are kept. *REQUIRED*
+*Save Checkpoint Frequency* - How frequently to save a checkpoint from the trained data.
 
-*Class Prompt* - A keyword indicating what type of "thing" your subject is. If your instance prompt is "photo of zkz dog", your class prompt would be "photo of a dog". 
-Leave this blank to disable prior preservation training. You can use '[filewords]' in the class prompt.
-
-*Classification dataset directory* - The path to the directory where the images described in Class Prompt are kept. If a class prompt is specified and this is left blank, 
-images will be generated to /models/dreambooth/MODELNAME/classifiers/
-
-*Existing prompt contents* - Whether existing file captions contain the class, subject, both, or none.
-
-*Instance token to swap* - The unique word for your subject. 'sks', 'xyz', etc. NOT 'a photo of sks' or 'sks person', JUST 'sks'. Used with [filewords] to build prompts to generate sample and class images if [filewords] specified in their respective prompts.
-
-*Class token to swap* - Similar to 'Instance token to swap', with the distinction of being able to accept either a single token, or a comma-separated list of tokens. 
-
-For example, if an image caption is 'a photo of a woman' or 'a photo of a man and a woman', you can use 'a woman, woman' here, and both captions will be updated to 'a photo of sks woman' and 'a photo of a man and sks woman' for training and sample generation, but left as-is when generating classification images.
-
-*Total number of classification/reg images to use* - Leave at 0 to disable prior preservation. Set to anyting greater than 0 to reveal the relevant class image settings.
-
-*Classification Image Negative Prompt* - A negative prompt to use when generating class images. This is "universal", and applies to all concepts.
-
-*Classification CFG Scale* - The CFG scale to use when generating class images.
-
-*Classification Steps* - How many steps to use when generating class images. Scheduler is Euler A. 
-
-*Learning rate* - You probably don't want to touch this.
-
-*Resolution* - The resolution to train images at. You probably want to keep this number at 512 or lower unless your GPU is insane. Lowering this (and the resolution of training images) 
-may help with lower-VRAM GPUs.
-
-*Save a checkpoint every N steps* - How frequently to save a checkpoint from the trained data. I should probably change the default of this to 1000.
-
-*Generate a preview image every N steps* - How frequently will an image be generated as an example of training progress.
-
-*Preview image prompt* - The prompt to use to generate preview image. Leave blank to use the instance prompt.
-
-*Preview image negative prompt* - Like above, but negative. Leave blank to do nothing. :P
-
-*Number of samples to generate* - Self explainatory?
-
-*Sample guidance scale* - Like CFG Scale in Txt2Image/Img2Img, used for generating preview.
-
-*Sample steps* - Same as sample guidance scale, but the number of steps to run to generate preview. 
+*Save Preview(s) Frequency* - How frequently will an image be generated as an example of training progress.
 
 
-### Advanced Settings
+### Batch
 
 *Batch size* - How many training steps to process simultaneously. You probably want to leave this at 1.
 
 *Class batch size* - How many classification images to generate simultaneously. Set this to whatever you can safely process at once using Txt2Image, or just leave it alone.
 
+
+### Learning Rate
+
+This section contains parameters related to the learning rate.
+
+*Learning rate* - The strength at which training impacts the new model. A higher learning rate requires less training steps, but can cause over-fitting more easily. Recommended between .000006 and .00000175
+
+*Scale Learning Rate* - Adjusts the learning rate over time. 
+
+*Learning Rate Scheduler* - The scheduler used with the learning rate.
+
+*Learning Rate Warmup Steps* - How many steps to run before scaling the learning rate. I think.
+
+
+### Image Processing
+
+Here, you'll find settings related to the handling of images.
+
+*Resolution* - The resolution your instance images are set to. This should probably be 512 or 768. Using a resolution higher than 512 will result in more vram usage.
+
+*Center Crop* - Enable this to automatically use "dumb cropping" when input images are larger than the specified resolution.
+
+*Apply Horizontal Flip* - When enabled, instance images will be randomly flipped horizontally during training. This can allow for better editability, but may require a larger number of training steps, as we're effectively increasing our dataset size.
+
+
+### Miscellaneous
+
+Other random stuff that doesn't fit well into any other category.
+
+*Pretrained VAE Name or Path* - Enter the full path to an existing vae .bin file, and it will be used instead of the VAE from the source checkpoint.
+
+*Use Concepts List* - Enable this to ignore the concepts tab and load training data from a JSON file instead.
+
+*Concepts List* - The path to a json file containing the concepts to train.
+
+
+## Advanced Settings
+
+Here you will find more performance-related settings. Changing these will likely impact the amount of VRAM required for training.
+
+
+### Tuning
+
 *Use CPU Only* - As indicated, this is more of a last resort if you can't get it to train with any other settings. Also, as indicated, it will be abysmally slow.
 Also, you *cannot* use 8Bit-Adam with CPU Training, or you'll have a bad time.
 
-*Don't Cache Latents* - Why is this not just called "cache" latents? Because that's what the original script uses, and I'm trying to maintain the ability to update this as easily as possible. Anyway...when this box is *checked* latents will not be cached. When latents are not cached, you will save a bit of VRAM, but train slightly slower.
-
-*Train Text Encoder* - Not required, but recommended. Enabling this will probably cost a bit more VRAM, but also purportedly increase output image fidelity.
-
-*Attention* - Type of attention to use. Choices are: 'default': usually fastest, but use most VRAM; 'xformers': slower, uses less VRAM, can only be used with *Mixed Precision* = 'fp16'; 'flash_attention': slowest, requires lowest VRAM.
+*Use EMA* - Use estimated moving averages when training the unet. Purportedly, this is better for generating images, but seems to have a minimal effect on training results. Uses more VRAM. 
 
 *Use 8Bit Adam* - Enable this to save VRAM. Should now work on both windows and Linux without needing WSL.
 
+*Mixed Precision* - When using 8Bit Adam, you *must* set this to fp16 or bf16. Bf16 precision is only supported by newer GPUs, and enabled/disabled by default.
+
+*Memory Attention* - Type of attention to use. Choices are: 'default': usually fastest, but use most VRAM; 'xformers': slower, uses less VRAM, can only be used with *Mixed Precision* = 'fp16'; 'flash_attention': slowest, requires lowest VRAM.
+
+*Don't Cache Latents* - Why is this not just called "cache" latents? Because that's what the original script uses, and I'm trying to maintain the ability to update this as easily as possible. Anyway...when this box is *checked* latents will not be cached. When latents are not cached, you will save a bit of VRAM, but train slightly slower.
+
+*Train Text Encoder* - Not required, but recommended. Requires more VRAM, may not work on <12 GB GPUs. Drastically improves output results.
+
+*Prior Loss Weight* - The weight to use when calculating prior loss. You probably want to leave this at 1.
+
 *Center Crop* - Crop images if they aren't the right dimensions? I don't use this, and I recommend you just crop your images "right".
-
-*Gradient Checkpointing* - Enable this to save VRAM at the cost of a bit of speed.
-
-*Scale Learning Rate* - I don't use this, not sure what impact it has on performance or output quality.
-
-*Mixed Precision* - Set to 'fp16' to save VRAM at the cost of speed.
-
-*Everything after 'Mixed Precision'* - Adjust at your own risk. Performance/quality benefits from changing these remain to be tested.
-
-The next two were added after I wrote the above bit, so just ignore me being a big liar.
 
 *Pad Tokens* - Pads the text tokens to a longer length for some reason. 
 
+*Shuffle Tags* - Enable this to treat input prompts as a comma-separated list, and to shuffle that list, which can lead to better editability.
+
 *Max Token Length* - raise the tokenizer's default limit above 75. Requires Pad Tokens for > 75.
 
-*Apply Horizontal Flip* - "Apply horizontal flip augmentation". Flips images horizontally at random, which can potentially offer better editability?
 
-*Use EMA for finetuning* - Use exponential moving average weight to reduce overfitting during the last iterations.
+### Gradients
 
+*Gradient Checkpointing* - Enable this to save VRAM at the cost of a bit of speed.
+
+*Gradient Accumulation Steps* - This should probably be set to the same value as the training batch size.
+
+*Max Grad Norms* - The maximum number of gradient normalizati
+
+
+### Adam Advanced
+
+I literally have no idea what any of these do. Any advice/input is welcome.
+
+
+## Concepts
+
+The UI exposes three concepts, which seemed like a reasonable number of items to train on at once.
+
+If you wish to use more than three concepts at once, you can ignore this section entirely, and instead use 
+the "Use Concepts List" option from the Miscellaneous section under the Parameters tab.
+
+You can refer to the [Example Concepts List](https://github.com/d8ahazard/sd_dreambooth_extension/blob/main/dreambooth/concepts_list.json)
+for a sample of the JSON format. You can theoretically use any number of concepts this way.
+
+
+### Concept Parameters
+
+Below is a list of the various parameters that can be used to train a concept.
+
+*Maximum Training Steps* - The total number of lifetime training steps to train the concept until. Leave at -1 to use the global value.
+
+*Dataset Directory* - The directory in which the instance images are located.
+
+*Classification Dataset Directory* The directory in which class images are stored. Leave empty to save to model directory.
+
+
+#### Filewords
+
+The below values will be used in conjunction with the [filewords] tag in prompts to append/remove tags. See the 
+'Using [filewords]' section below for more information.
+
+*Instance Token* The unique identifier for your subject. (sks, xyz). Leave blank for fine-tuning.
+
+*Class Token* What your subject is. If a xyz is a person, this could be person/man/woman.
+
+
+### Prompts
+
+*Instance Prompt* - A prompt used for your instance images. Use [filewords] to insert or combine existing tags with tokens.
+
+*Class Prompt* - A prompt used for generating and training class images. Use [filewords] to insert or combine existing tags with tokens.
+
+*Classification Image Negative Prompt* - When generating class images, this is the negative prompt that will be used to guide image generation.
+
+*Sample Image Prompt* - A prompt used when generating sample images.  Use [filewords] to insert or combine existing tags with tokens.
+
+*Sample Prompt Template File* - An existing txt file used to generate sample images. [filewords] and [names] will be replaced with the instance token.
+
+*Sample Image Negative Prompt* - When generating sample images, this is the negative prompt that will be used to guide image generation.
+
+
+### Image Generation
+
+*Total Number of Class/Reg Images* - How many classification images will be generated. Leave at 0 to disable prior preservation.
+
+*Classification/Sample CFG Scale* - The Classifier Free Guidance scale to use when generating images.
+
+*Classification/Sample Steps* - The number of steps to use when generating respective images.
+
+*Number of Samples to Generate* - How many sample images to generate.
+
+*Sample Seed* - A seed to use for consistent sample generation. Set to -1 to use a random seed.
+
+
+
+#### Using [filewords]
+Each concept allows you to use prompts from image filenames or accompanying text files for instance and class images.
+
+To instruct the trainer to use prompts from existing files, use '[filewords]' (no quotes) for the instance/class/sample prompts.
+
+In order to properly insert and remove words from existing prompts, we need to let the trainer know what words indicate what our subject name and class are.
+
+To do this, we specify an instance and class token. If your subject were called 'zxy' and it was a man,
+then your instance token would be 'zxy', and your class token would be 'man'.
+
+Now, when building your respective prompts, the subject and class can be inserted or removed as necessary.
+
+
+## Debugging
+
+Here's a bunch of random stuff I added that seemed useful, but didn't seem to fit anywhere else.
+
+*Preview Prompts* - Return a JSON string of the prompts that will be used for training. It's not pretty, but you can tell if things are going to work right.
+
+*Generate Sample Image* - Generate a sample using the specified seed and prompt below.
+
+*Sample Prompt* - What the sample should be.
+
+*Sample Seed* - The seed to use for your sample. Leave at -1 to use a random seed.
+
+*Log Memory* - Log the current memory usage. 
+
+*Train Imagic Only* - Imagic is basically dreambooth, but uses only one image and is significantly faster.
+
+If using Imagic, the first image in the first concept's Instance Data Dir will be used for training.
+
+See here for more details:
+
+https://github.com/ShivamShrirao/diffusers/tree/main/examples/imagic
 
 ### Continuing Training
 

@@ -28,6 +28,8 @@ class DreamboothConfig:
                  attention: str = "default",
                  center_crop: bool = True,
                  concepts_path: str = "",
+                 epoch_pause_frequency: int = 0,
+                 epoch_pause_time: int = 0,
                  gradient_accumulation_steps: int = 1,
                  gradient_checkpointing: bool = True,
                  half_model: bool = False,
@@ -36,7 +38,6 @@ class DreamboothConfig:
                  learning_rate: float = 0.00000172,
                  lr_scheduler: str = 'constant',
                  lr_warmup_steps: int = 0,
-                 max_grad_norm: int = 1,
                  max_token_length: int = 75,
                  max_train_steps: int = 1000,
                  mixed_precision: str = "fp16",
@@ -57,6 +58,7 @@ class DreamboothConfig:
                  scale_lr: bool = False,
                  scheduler: str = "ddim",
                  src: str = "",
+                 shuffle_tags: bool = False,
                  train_batch_size: int = 1,
                  train_text_encoder: bool = True,
                  use_8bit_adam: bool = True,
@@ -125,7 +127,6 @@ class DreamboothConfig:
         if revision == "" or revision is None:
             revision = 0
         model_name = "".join(x for x in model_name if (x.isalnum() or x in "._- "))
-        pretrained_vae_name_or_path = images.sanitize_filename_part(pretrained_vae_name_or_path, True)
         models_path = shared.cmd_opts.dreambooth_models_path
         if models_path == "" or models_path is None:
             models_path = os.path.join(shared.models_path, "dreambooth")
@@ -140,6 +141,8 @@ class DreamboothConfig:
         self.attention = attention
         self.center_crop = center_crop
         self.concepts_path = concepts_path
+        self.epoch_pause_frequency = epoch_pause_frequency
+        self.epoch_pause_time = epoch_pause_time
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.gradient_checkpointing = gradient_checkpointing
         self.half_model = half_model
@@ -147,7 +150,6 @@ class DreamboothConfig:
         self.learning_rate = learning_rate
         self.lr_scheduler = lr_scheduler
         self.lr_warmup_steps = lr_warmup_steps
-        self.max_grad_norm = max_grad_norm
         self.max_token_length = max_token_length
         self.max_train_steps = max_train_steps
         self.mixed_precision = mixed_precision
@@ -169,6 +171,7 @@ class DreamboothConfig:
         self.save_use_epochs = save_use_epochs
         self.scale_lr = scale_lr
         self.src = src
+        self.shuffle_tags = shuffle_tags
         self.train_batch_size = train_batch_size
         self.train_text_encoder = train_text_encoder
         self.use_8bit_adam = use_8bit_adam

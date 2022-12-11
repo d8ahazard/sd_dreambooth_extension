@@ -21,9 +21,9 @@ import gradio as gr
 import torch
 
 import modules.sd_models
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, sanitize_name
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import reload_system_models
-from extensions.sd_dreambooth_extension.dreambooth.utils import printi, sanitize_name, printm, get_db_models
+from extensions.sd_dreambooth_extension.dreambooth.utils import printi, printm, get_db_models
 from modules import shared
 
 try:
@@ -636,7 +636,6 @@ def convert_ldm_clip_checkpoint(checkpoint):
                 text_model_dict["text_model."+ key[len("cond_stage_model.transformer."):]] = checkpoint[key]
             else:
                 text_model_dict[key[len("cond_stage_model.transformer."):]] = checkpoint[key]
-    
 
     text_model.load_state_dict(text_model_dict)
 

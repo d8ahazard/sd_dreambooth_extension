@@ -98,6 +98,9 @@ def on_ui_tabs():
                             db_num_train_epochs = gr.Number(label="Training Steps Per Image (Epochs)", precision=100,
                                                             value=1)
                             db_max_train_steps = gr.Number(label='Max Training Steps', value=0, precision=0)
+                            db_epoch_pause_frequency = gr.Number(label='Pause After N Epochs', value=0)
+                            db_epoch_pause_time = gr.Number(label='Amount of time to pause between Epochs, in Seconds',
+                                                            value=60)
                             db_save_use_global_counts = gr.Checkbox(label='Use Lifetime Steps/Epochs When Saving', value=True)
                             db_save_use_epochs = gr.Checkbox(label="Save Preview/Ckpt Every Epoch")
                             db_save_embedding_every = gr.Number(
@@ -159,6 +162,7 @@ def on_ui_tabs():
                                     db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
                                     db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
+                                    db_shuffle_tags = gr.Checkbox(label="Shuffle Tags", value=False)
                                     db_max_token_length = gr.Slider(label="Max Token Length", minimum=75, maximum=300,
                                                                     step=75)
                                 with gr.Column():
@@ -167,7 +171,6 @@ def on_ui_tabs():
                                     db_gradient_accumulation_steps = gr.Number(label="Gradient Accumulation Steps",
                                                                                precision=0,
                                                                                value=1)
-                                    db_max_grad_norm = gr.Number(label="Max Grad Norms", value=1.0, precision=1)
 
                                 with gr.Column():
                                     gr.HTML("Adam Advanced")
@@ -244,6 +247,8 @@ def on_ui_tabs():
                 db_attention,
                 db_center_crop,
                 db_concepts_path,
+                db_epoch_pause_frequency,
+                db_epoch_pause_time,
                 db_gradient_accumulation_steps,
                 db_gradient_checkpointing,
                 db_half_model,
@@ -252,7 +257,6 @@ def on_ui_tabs():
                 db_learning_rate,
                 db_lr_scheduler,
                 db_lr_warmup_steps,
-                db_max_grad_norm,
                 db_max_token_length,
                 db_max_train_steps,
                 db_mixed_precision,
@@ -273,6 +277,7 @@ def on_ui_tabs():
                 db_scale_lr,
                 db_scheduler,
                 db_src,
+                db_shuffle_tags,
                 db_train_batch_size,
                 db_train_text_encoder,
                 db_use_8bit_adam,
@@ -352,6 +357,8 @@ def on_ui_tabs():
                 db_attention,
                 db_center_crop,
                 db_concepts_path,
+                db_epoch_pause_frequency,
+                db_epoch_pause_time,
                 db_gradient_accumulation_steps,
                 db_gradient_checkpointing,
                 db_half_model,
@@ -359,7 +366,6 @@ def on_ui_tabs():
                 db_learning_rate,
                 db_lr_scheduler,
                 db_lr_warmup_steps,
-                db_max_grad_norm,
                 db_max_token_length,
                 db_max_train_steps,
                 db_mixed_precision,
@@ -376,6 +382,7 @@ def on_ui_tabs():
                 db_save_use_global_counts,
                 db_save_use_epochs,
                 db_scale_lr,
+                db_shuffle_tags,
                 db_train_batch_size,
                 db_train_text_encoder,
                 db_use_8bit_adam,
@@ -603,7 +610,6 @@ def on_ui_tabs():
             ],
             outputs=[
                 db_status,
-                db_outcome,
                 db_revision
             ]
         )

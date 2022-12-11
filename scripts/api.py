@@ -48,7 +48,6 @@ class DreamboothParameters(BaseModel):
     db_adam_beta2: Optional[float] = 0.999
     db_adam_weight_decay: Optional[float] = 0.01
     db_adam_epsilon: Optional[float] = 0.00000001
-    db_max_grad_norm: Optional[int] = 1
     db_save_preview_every: Optional[int] = 500
     db_save_embedding_every: Optional[int] = 500
     db_mixed_precision: Optional[str] = "no"
