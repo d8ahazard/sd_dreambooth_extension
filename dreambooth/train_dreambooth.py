@@ -1,5 +1,6 @@
 import argparse
 import hashlib
+import inspect
 import itertools
 import logging
 import math
@@ -754,7 +755,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     if not args.not_cache_latents:
         train_dataset, train_dataloader = cache_latents(enc_vae=vae, orig_dataset=gen_dataset)
-    #cleanup()
+
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
@@ -827,7 +828,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         if accelerator.is_main_process:
             g_cuda = None
             if args.train_text_encoder:
-                text_enc_model = accelerator.unwrap_model(text_encoder)
+                text_enc_model = accelerator.unwrap_model(text_encoder, keep_fp32_wrapper=True)
             else:
                 text_enc_model = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path,
                                                                subfolder="text_encoder",
@@ -843,7 +844,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
             s_pipeline = DiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
-                unet=accelerator.unwrap_model(unet),
+                unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=True),
                 text_encoder=text_enc_model,
                 vae=vae if vae is not None else create_vae(),
                 scheduler=scheduler,
@@ -886,7 +887,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
 
                         compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
-                                           reload_models=False, lora_path=out_file)
+                                           reload_models=False, lora_path=out_file, log=False)
                         if args.use_ema:
                             ema_unet.restore(unet.parameters())
                     except Exception as e:
@@ -917,10 +918,11 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                                          generator=g_cuda).images[0]
                                     shared.state.current_image = s_image
                                     shared.state.textinfo = c.prompt
-                                    sanitized_prompt = sanitize_name(c.prompt)
-                                    s_image.save(
-                                        os.path.join(sample_dir, f"{sanitized_prompt}{args.revision}-{si}.png"))
-                                del g_cuda
+                                    image_name = os.path.join(sample_dir, f"sample_{args.revision}-{si}.png")
+                                    txt_name = image_name.replace(".jpg", ".txt")
+                                    with open(txt_name, "w", encoding="utf8") as txt_file:
+                                        txt_file.write(c.prompt)
+                                    s_image.save(image_name)
                     except Exception as e:
                         print(f"Exception with the stupid image again: {e}")
                         traceback.print_exc()
