@@ -98,9 +98,9 @@ def on_ui_tabs():
                             db_num_train_epochs = gr.Number(label="Training Steps Per Image (Epochs)", precision=100,
                                                             value=1)
                             db_max_train_steps = gr.Number(label='Max Training Steps', value=0, precision=0)
-                            db_epoch_pause_frequency = gr.Number(label='Pause After N Epochs', value=0, visible=False)
+                            db_epoch_pause_frequency = gr.Number(label='Pause After N Epochs', value=0)
                             db_epoch_pause_time = gr.Number(label='Amount of time to pause between Epochs, in Seconds',
-                                                            value=60, visible=False)
+                                                            value=60)
                             db_save_use_global_counts = gr.Checkbox(label='Use Lifetime Steps/Epochs When Saving', value=True)
                             db_save_use_epochs = gr.Checkbox(label="Save Preview/Ckpt Every Epoch")
                             db_save_embedding_every = gr.Number(
@@ -171,7 +171,6 @@ def on_ui_tabs():
                                     db_gradient_accumulation_steps = gr.Number(label="Gradient Accumulation Steps",
                                                                                precision=0,
                                                                                value=1)
-                                    db_max_grad_norm = gr.Number(label="Max Grad Norms", value=1.0, precision=1)
 
                                 with gr.Column():
                                     gr.HTML("Adam Advanced")
@@ -258,7 +257,6 @@ def on_ui_tabs():
                 db_learning_rate,
                 db_lr_scheduler,
                 db_lr_warmup_steps,
-                db_max_grad_norm,
                 db_max_token_length,
                 db_max_train_steps,
                 db_mixed_precision,
@@ -368,7 +366,6 @@ def on_ui_tabs():
                 db_learning_rate,
                 db_lr_scheduler,
                 db_lr_warmup_steps,
-                db_max_grad_norm,
                 db_max_token_length,
                 db_max_train_steps,
                 db_mixed_precision,

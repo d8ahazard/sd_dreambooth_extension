@@ -38,7 +38,6 @@ class DreamboothConfig:
                  learning_rate: float = 0.00000172,
                  lr_scheduler: str = 'constant',
                  lr_warmup_steps: int = 0,
-                 max_grad_norm: int = 1,
                  max_token_length: int = 75,
                  max_train_steps: int = 1000,
                  mixed_precision: str = "fp16",
@@ -152,7 +151,6 @@ class DreamboothConfig:
         self.learning_rate = learning_rate
         self.lr_scheduler = lr_scheduler
         self.lr_warmup_steps = lr_warmup_steps
-        self.max_grad_norm = max_grad_norm
         self.max_token_length = max_token_length
         self.max_train_steps = max_train_steps
         self.mixed_precision = mixed_precision

@@ -233,7 +233,6 @@ def load_params(model_dir):
                "db_learning_rate",
                "db_lr_scheduler",
                "db_lr_warmup_steps",
-               "db_max_grad_norm",
                "db_max_token_length",
                "db_max_train_steps",
                "db_mixed_precision",

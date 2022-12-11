@@ -6,6 +6,7 @@ import logging
 import math
 import os
 import random
+import time
 import traceback
 from contextlib import nullcontext
 from pathlib import Path
@@ -230,7 +231,6 @@ def parse_args(input_args=None):
     parser.add_argument("--adam_beta2", type=float, default=0.999, help="The beta2 parameter for the Adam optimizer.")
     parser.add_argument("--adam_weight_decay", type=float, default=1e-2, help="Weight decay to use.")
     parser.add_argument("--adam_epsilon", type=float, default=1e-08, help="Epsilon value for the Adam optimizer")
-    parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
     parser.add_argument("--hub_token", type=str, default=None, help="The token to use to push to the Model Hub.")
     parser.add_argument(
@@ -950,7 +950,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     training_complete = False
     msg = ""
     weights_saved = False
-    last_step = global_step
     for epoch in range(args.num_train_epochs):
         if training_complete:
             break
@@ -1041,23 +1040,24 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     loss_avg.reset()
 
                 training_complete = global_step >= actual_train_steps or shared.state.interrupted
+                if not args.save_use_epochs:
+                    if global_step > 0:
+                        if args.save_use_global_counts:
+                            save_img = args.save_preview_every and not args.revision % args.save_preview_every
+                            save_model = args.save_embedding_every and not args.revision % args.save_embedding_every
+                        else:
+                            save_img = args.save_preview_every and not global_step % args.save_preview_every
+                            save_model = args.save_embedding_every and not global_step % args.save_embedding_every
+                        if training_complete:
+                            save_img = False
+                            save_model = True
+                        if save_img or save_model:
+                            args.save()
+                            save_weights()
+                            args = from_file(args.model_name)
+                            weights_saved = True
+                            shared.state.job_count = actual_train_steps
 
-                if global_step > 0:
-                    if args.save_use_global_counts:
-                        save_img = args.save_preview_every and not args.revision % args.save_preview_every
-                        save_model = args.save_embedding_every and not args.revision % args.save_embedding_every
-                    else:
-                        save_img = args.save_preview_every and not global_step % args.save_preview_every
-                        save_model = args.save_embedding_every and not global_step % args.save_embedding_every
-                    if training_complete:
-                        save_img = False
-                        save_model = True
-                    if save_img or save_model:
-                        args.save()
-                        save_weights()
-                        args = from_file(args.model_name)
-                        weights_saved = True
-                        shared.state.job_count = actual_train_steps
                 if shared.state.interrupted:
                     training_complete = True
                 if global_step == 0 or global_step == 5:
@@ -1105,6 +1105,40 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             break
         if shared.state.interrupted:
             training_complete = True
+
+        args.epoch += global_epoch
+        args.save()
+        global_epoch += 1
+
+        if training_complete:
+            break
+
+        if args.save_use_epochs:
+            if args.save_use_global_counts:
+                save_img = args.save_preview_every and not args.epoch % args.save_preview_every
+                save_model = args.save_embedding_every and not args.epoch % args.save_embedding_every
+            else:
+                save_img = args.save_preview_every and not global_epoch % args.save_preview_every
+                save_model = args.save_embedding_every and not global_epoch % args.save_embedding_every
+            if training_complete:
+                save_img = False
+                save_model = True
+            if save_img or save_model:
+                args.save()
+                save_weights()
+                args = from_file(args.model_name)
+                weights_saved = True
+                shared.state.job_count = actual_train_steps
+
+        if args.epoch_pause_frequency > 0 and args.epoch_pause_time > 0:
+            if not global_epoch % args.epoch_pause_frequency:
+                print(f"Giving the GPU a break for {args.epoch_pause_time} seconds.")
+                for i in range(args.epoch_pause_time):
+                    if shared.state.interrupted:
+                        training_complete = True
+                        break
+                    time.sleep(1)
+
         if training_complete:
             break
 
