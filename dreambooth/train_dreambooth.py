@@ -879,7 +879,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                 args.pretrained_model_name_or_path,
                                 subfolder="unet",
                                 revision=args.revision,
-                                torch_dtype=torch.float32
+                                torch_dtype=torch.float16
                             ).to(accelerator.device)
                         else:
                             out_file = None
@@ -934,8 +934,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             del s_pipeline
             del scheduler
             del text_enc_model
-            if g_cuda:
-                del g_cuda
+            if not save_img:
+                if g_cuda:
+                    del g_cuda
             #cleanup()
 
     # Only show the progress bar once on each machine.
