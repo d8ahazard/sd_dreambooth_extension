@@ -287,18 +287,6 @@ def parse_args(input_args=None):
         help="Generate half-precision checkpoints (Saves space, minor difference in output)",
     )
     parser.add_argument(
-        "--instance_token",
-        type=str,
-        default="",
-        help="Instance token used to swap subjects in file prompts."
-    )
-    parser.add_argument(
-        "--class_token",
-        type=bool,
-        default=False,
-        help="Instance token used to swap subjects in file prompts."
-    )
-    parser.add_argument(
         "--attention",
         type=str,
         choices=["default", "xformers", "flash_attention"],
@@ -538,6 +526,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         subfolder="text_encoder",
         revision=args.revision,
     )
+
     unet = UNet2DConditionModel.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="unet",
