@@ -127,7 +127,6 @@ class DreamboothConfig:
         if revision == "" or revision is None:
             revision = 0
         model_name = "".join(x for x in model_name if (x.isalnum() or x in "._- "))
-        pretrained_vae_name_or_path = images.sanitize_filename_part(pretrained_vae_name_or_path, True)
         models_path = shared.cmd_opts.dreambooth_models_path
         if models_path == "" or models_path is None:
             models_path = os.path.join(shared.models_path, "dreambooth")
