@@ -33,7 +33,7 @@ from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import Filenam
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, list_features, get_images
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora, inject_trainable_lora, \
     save_lora_weight
-from modules import shared, paths
+from modules import shared, paths, images
 
 # Custom stuff
 try:
@@ -45,9 +45,7 @@ pil_features = list_features()
 mem_record = {}
 with_prior = False
 
-# End custom stuff
-
-torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.benchmark = False
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
@@ -605,8 +603,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     if args.use_lora:
         params_to_optimize = ([
-                {"params": itertools.chain(*unet_lora_params), "lr": 1e-4},
-                {"params": itertools.chain(*text_encoder_lora_params), "lr": 5e-6,},
+                {"params": itertools.chain(*unet_lora_params), "lr": args.lora_learning_rate},
+                {"params": itertools.chain(*text_encoder_lora_params), "lr": args.lora_txt_learning_rate},
             ]
             if args.train_text_encoder
             else itertools.chain(*unet_lora_params)

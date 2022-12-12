@@ -112,6 +112,8 @@ def on_ui_tabs():
                         with gr.Column():
                             gr.HTML(value="Learning Rate")
                             db_learning_rate = gr.Number(label='Learning Rate', value=2e-6)
+                            db_lora_learning_rate = gr.Number(label='Lora unet Learning Rate', value=2e-4)
+                            db_lora_txt_learning_rate = gr.Number(label='Lora Text Encoder Learning Rate', value=2e-4)
                             db_scale_lr = gr.Checkbox(label="Scale Learning Rate", value=False)
                             db_lr_scheduler = gr.Dropdown(label="Learning Rate Scheduler", value="constant",
                                                           choices=["linear", "cosine", "cosine_with_restarts",
@@ -249,6 +251,8 @@ def on_ui_tabs():
                 db_has_ema,
                 db_hflip,
                 db_learning_rate,
+                db_lora_learning_rate,
+                db_lora_txt_learning_rate,
                 db_lr_scheduler,
                 db_lr_warmup_steps,
                 db_max_token_length,
@@ -358,6 +362,8 @@ def on_ui_tabs():
                 db_half_model,
                 db_hflip,
                 db_learning_rate,
+                db_lora_learning_rate,
+                db_lora_txt_learning_rate,
                 db_lr_scheduler,
                 db_lr_warmup_steps,
                 db_max_token_length,
@@ -603,6 +609,7 @@ def on_ui_tabs():
                 db_use_subdir
             ],
             outputs=[
+                db_lora_model_name,
                 db_status,
                 db_revision
             ]
