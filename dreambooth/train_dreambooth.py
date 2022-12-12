@@ -599,19 +599,19 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             logger.warning(f"Exception importing 8bit adam: {a}")
             traceback.print_exc()
 
-    unet_params = unet.parameters() if not args.use_lora else itertools.chain(*unet_lora_params)
-
-    if args.train_text_encoder:
-        text_params = itertools.chain(*text_encoder_lora_params if args.use_lora else text_encoder.parameters())
-        params_to_optimize = [
-            {'params': unet_params, 'lr': args.learning_rate if not args.use_lora else 1e-4},
-            {'params': text_params, 'lr': args.learning_rate if not args.use_lora else 1e-4}
-        ]
+    if args.use_lora:
+        params_to_optimize = ([
+                {"params": itertools.chain(*unet_lora_params), "lr": 1e-4},
+                {"params": itertools.chain(*text_encoder_lora_params), "lr": 5e-6,},
+            ]
+            if args.train_text_encoder
+            else itertools.chain(*unet_lora_params)
+        )
     else:
-        params_to_optimize = [
-            {'params': unet_params, 'lr': args.learning_rate if not args.use_lora else 1e-4},
-        ]
-
+        params_to_optimize = (
+            itertools.chain(unet.parameters(), text_encoder.parameters()) if args.train_text_encoder
+            else unet.parameters()
+        )
     optimizer = optimizer_class(
         params_to_optimize,
         lr=args.learning_rate,
