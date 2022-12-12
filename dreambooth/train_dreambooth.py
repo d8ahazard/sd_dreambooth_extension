@@ -469,14 +469,14 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                             shared.state.textinfo = "Training canceled."
                             return args, mem_record, "Training canceled."
                         example = sample_dataset.__getitem__(random.randrange(0, s_len))
-                        images = concept_pipeline(example["prompt"], num_inference_steps=concept.class_infer_steps,
+                        concept_images = concept_pipeline(example["prompt"], num_inference_steps=concept.class_infer_steps,
                                                   guidance_scale=concept.class_guidance_scale,
                                                   height=args.resolution,
                                                   width=args.resolution,
                                                   negative_prompt=concept.class_negative_prompt,
                                                   num_images_per_prompt=args.sample_batch_size).images
 
-                        for i, image in enumerate(images):
+                        for i, image in enumerate(concept_images):
                             if shared.state.interrupted:
                                 print("Generation canceled.")
                                 shared.state.textinfo = "Training canceled."
@@ -495,6 +495,10 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                                     f"Prompt: '{example['prompt']}'"
                             shared.state.current_image = image
                             pbar.update()
+                        if len(concept_images) > 1:
+                            grid = images.image_grid(concept_images)
+                            shared.state.current_image = grid
+                            del concept_images
                     del pbar
                 del sample_dataset
         c_idx += 1
@@ -914,12 +918,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         with accelerator.autocast(), torch.inference_mode():
                             prompts = gen_dataset.get_sample_prompts()
                             ci = 0
+                            samples = []
                             for c in prompts:
                                 seed = c.seed
                                 if seed is None or seed == '' or seed == -1:
                                     seed = int(random.randrange(21474836147))
                                 g_cuda = torch.Generator(device=accelerator.device).manual_seed(seed)
-
                                 for si in tqdm(range(c.n_samples), desc="Generating samples"):
                                     s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
                                                          guidance_scale=c.scale,
@@ -928,18 +932,22 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                                          width=args.resolution,
                                                          generator=g_cuda).images[0]
                                     shared.state.current_image = s_image
-                                    shared.state.textinfo = c.prompt
+                                    samples.append(s_image)
                                     image_name = os.path.join(sample_dir, f"sample_{args.revision}-{ci}{si}.png")
                                     txt_name = image_name.replace(".jpg", ".txt")
                                     with open(txt_name, "w", encoding="utf8") as txt_file:
                                         txt_file.write(c.prompt)
                                     s_image.save(image_name)
                                 ci += 1
+                            if len(samples) > 1:
+                                grid = images.image_grid(samples)
+                                shared.state.current_image = grid
+                                del samples
+
                     except Exception as em:
                         print(f"Exception with the stupid image again: {em}")
                         traceback.print_exc()
                         pass
-            print(f"[*] Weights saved at {save_dir}")
             del s_pipeline
             del scheduler
             del text_enc_model
