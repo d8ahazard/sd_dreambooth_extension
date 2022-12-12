@@ -1,6 +1,5 @@
 import argparse
 import hashlib
-import inspect
 import itertools
 import logging
 import math
@@ -31,11 +30,9 @@ from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_che
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, encode_hidden_state, \
     PromptDataset, EMAModel
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_tags, list_features, is_image, \
-    get_images
-from extensions.sd_dreambooth_extension.lora_diffusion import inject_trainable_lora, extract_lora_ups_down, \
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, list_features, get_images
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora, inject_trainable_lora, \
     save_lora_weight
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
 from modules import shared, paths
 
 # Custom stuff
@@ -361,8 +358,8 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
-def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lora_alpha=1) -> tuple[DreamboothConfig, dict, str]:
-
+def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lora_alpha=1) -> tuple[
+    DreamboothConfig, dict, str]:
     global with_prior
     text_encoder = None
     args.tokenizer_name = None
@@ -459,7 +456,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 shared.state.job_no = 0
                 concept_images = get_images(concept.instance_data_dir)
                 filename_texts = [text_getter.read_text(x) for x in concept_images]
-                sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts, concept.class_token,
+                sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts,
+                                               concept.class_token,
                                                concept.instance_token)
                 with accelerator.autocast(), torch.inference_mode():
                     generated_images = 0
@@ -561,12 +559,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     if args.use_lora:
         unet.requires_grad_(False)
-        if lora_model:
-            lora_path = os.path.join(paths.models_path, "lora", lora_model)
-            if os.path.exists(lora_path):
-                print(f"Applying lora weights: {lora_path}")
-                weight_apply_lora(unet, torch.load(lora_path), lora_alpha)
-
+        lora_path = os.path.join(paths.models_path, "lora", lora_model)
+        if os.path.exists(lora_path) and os.path.isfile(lora_path):
+            print("Applying lora weights before training...")
+            loras = torch.load(lora_path)
+            weight_apply_lora(unet, loras)
+        print("Injecting trainable lora...")
         unet_lora_params, train_names = inject_trainable_lora(unet)
 
     else:
@@ -591,17 +589,18 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             logger.warning(f"Exception importing 8bit adam: {a}")
             traceback.print_exc()
 
-    if args.use_lora:
-        params_to_optimize = (
-            itertools.chain(*unet_lora_params, text_encoder.parameters())
-            if args.train_text_encoder
-            else itertools.chain(*unet_lora_params)
-        )
+    if args.train_text_encoder:
+        params_to_optimize = [
+            {'params': text_encoder.parameters()},
+            {'params': unet.params() if not args.use_lora else itertools.chain(*unet_lora_params),
+             'lr': args.learning_rate if not args.use_lora else 1e-4}
+        ]
     else:
-        params_to_optimize = (
-            itertools.chain(unet.parameters(),
-                            text_encoder.parameters()) if args.train_text_encoder else unet.parameters()
-        )
+        params_to_optimize = [
+            {'params': unet.params() if not args.use_lora else itertools.chain(*unet_lora_params),
+             'lr': args.learning_rate if not args.use_lora else 1e-4}
+        ]
+
     optimizer = optimizer_class(
         params_to_optimize,
         lr=args.learning_rate,
@@ -871,26 +870,21 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                             os.makedirs(out_file, exist_ok=True)
                             out_file = os.path.join(out_file, f"{args.model_name}_{args.revision}.pt")
                             print(f"\nSaving lora weights at step {args.revision}")
+                            # Save a pt file
                             save_lora_weight(s_pipeline.unet, out_file)
-
-                            del s_pipeline.unet
-
-                            s_pipeline.unet = UNet2DConditionModel.from_pretrained(
-                                args.pretrained_model_name_or_path,
-                                subfolder="unet",
-                                revision=args.revision,
-                                torch_dtype=torch.float16
-                            ).to(accelerator.device)
+                            print("Saving text encoder...")
+                            s_pipeline.text_encoder.save_pretrained(
+                                os.path.join(args.pretrained_model_name_or_path, "text_encoder"))
                         else:
                             out_file = None
-
-                        shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
-                        s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
+                            shared.state.textinfo = f"Saving diffusion model at step {args.revision}..."
+                            s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
 
                         compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
                                            reload_models=False, lora_path=out_file, log=False)
                         if args.use_ema:
                             ema_unet.restore(unet.parameters())
+
                     except Exception as e:
                         print(f"Exception saving checkpoint/model: {e}")
                         traceback.print_exc()
@@ -937,7 +931,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             if not save_img:
                 if g_cuda:
                     del g_cuda
-            #cleanup()
+            # cleanup()
 
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(actual_train_steps), disable=not accelerator.is_local_main_process)

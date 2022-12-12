@@ -12,9 +12,9 @@ import torch
 from diffusers import DiffusionPipeline
 
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, printi, unload_system_models, \
+from extensions.sd_dreambooth_extension.dreambooth.utils import printi, unload_system_models, \
     reload_system_models
-from extensions.sd_dreambooth_extension.lora_diffusion import weight_apply_lora
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
 from modules import shared, paths
 
 unet_conversion_map = [
@@ -302,6 +302,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     try:
         printi("Converting unet...", log=log)
         loaded_pipeline = DiffusionPipeline.from_pretrained(model_path).to("cpu")
+
         if lora_path is not None and lora_path != "":
             lora_diffusers = config.pretrained_model_name_or_path + "_lora"
             os.makedirs(lora_diffusers, exist_ok=True)
@@ -315,10 +316,11 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
             printi(f"Loading lora from {lora_path}", log=log)
             if os.path.exists(lora_path):
                 checkpoint_path = checkpoint_path.replace(".ckpt", "_lora.ckpt")
-                printi("Applying lora model...")
+                printi("Applying lora weights to model...")
                 weight_apply_lora(loaded_pipeline.unet, torch.load(lora_path), alpha=lora_alpha)
-                loaded_pipeline.save_pretrained(lora_diffusers)
-                unet_path = osp.join(lora_diffusers, "unet", "diffusion_pytorch_model.bin")
+                printi("Saving lora unet...")
+                loaded_pipeline.unet.save_pretrained(os.path.join(config.pretrained_model_name_or_path, "unet_lora"))
+                unet_path = osp.join(config.pretrained_model_name_or_path, "unet_lora", "diffusion_pytorch_model.bin")
 
         del loaded_pipeline
 
