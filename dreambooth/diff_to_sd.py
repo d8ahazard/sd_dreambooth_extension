@@ -316,11 +316,18 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
             printi(f"Loading lora from {lora_path}", log=log)
             if os.path.exists(lora_path):
                 checkpoint_path = checkpoint_path.replace(".ckpt", "_lora.ckpt")
-                printi("Applying lora weights to model...")
+                printi("Applying lora weights to unet...")
                 weight_apply_lora(loaded_pipeline.unet, torch.load(lora_path), alpha=lora_alpha)
                 printi("Saving lora unet...")
                 loaded_pipeline.unet.save_pretrained(os.path.join(config.pretrained_model_name_or_path, "unet_lora"))
                 unet_path = osp.join(config.pretrained_model_name_or_path, "unet_lora", "diffusion_pytorch_model.bin")
+            lora_txt = lora_path.replace(".pt", "_txt.pt")
+            if os.path.exists(lora_txt):
+                printi("Applying lora weights to text encoder...")
+                weight_apply_lora(loaded_pipeline.text_encoder, torch.load(lora_txt), alpha=lora_alpha)
+                printi("Saving lora text encoder...")
+                loaded_pipeline.text_encoder.save_pretrained(os.path.join(config.pretrained_model_name_or_path, "text_encoder_lora"))
+                text_enc_path = osp.join(config.pretrained_model_name_or_path, "text_encoder_lora", "pytorch_model.bin")
 
         del loaded_pipeline
 

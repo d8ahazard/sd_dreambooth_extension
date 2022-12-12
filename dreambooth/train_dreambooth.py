@@ -427,7 +427,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             class_images_dir = Path(class_images_dir)
             class_images_dir.mkdir(parents=True, exist_ok=True)
             class_images = get_images(class_images_dir)
-            for x in class_images:
+            for _ in class_images:
                 cur_class_images += 1
             print(f"Class dir {class_images_dir} has {cur_class_images} images.")
             if cur_class_images < concept.num_class_images:
@@ -483,7 +483,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                 return args, mem_record, "Training canceled."
 
                             image_base = hashlib.sha1(image.tobytes()).hexdigest()
-                            image_filename = str(class_images_dir / f"{generated_images + cur_class_images}-" \
+                            image_filename = str(class_images_dir / f"{generated_images + cur_class_images}-"
                                                                     f"{image_base}.jpg")
                             image.save(image_filename)
                             txt_filename = image_filename.replace(".jpg", ".txt")
@@ -549,6 +549,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     vae = create_vae()
 
+    unet_lora_params = None
+    text_encoder_lora_params = None
+
     if not args.train_text_encoder:
         text_encoder.requires_grad_(False)
 
@@ -560,15 +563,22 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     if args.use_lora:
         unet.requires_grad_(False)
         lora_path = os.path.join(paths.models_path, "lora", lora_model)
+        lora_txt = lora_path.replace(".pt", "_txt.pt")
         if os.path.exists(lora_path) and os.path.isfile(lora_path):
-            print("Applying lora weights before training...")
+            print("Applying lora unet weights before training...")
             loras = torch.load(lora_path)
             weight_apply_lora(unet, loras)
         print("Injecting trainable lora...")
         unet_lora_params, train_names = inject_trainable_lora(unet)
 
-    else:
-        unet_lora_params = None
+        if args.train_text_encoder:
+            text_encoder.requires_grad_(False)
+            if os.path.exists(lora_txt) and os.path.isfile(lora_txt):
+                print("Applying lora text_encoder weights before training...")
+                loras = torch.load(lora_txt)
+                weight_apply_lora(text_encoder, loras, target_replace_module=["CLIPAttention"])
+
+            text_encoder_lora_params, _ = inject_trainable_lora(text_encoder, target_replace_module=["CLIPAttention"])
 
     if args.scale_lr:
         args.learning_rate = (
@@ -589,16 +599,17 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             logger.warning(f"Exception importing 8bit adam: {a}")
             traceback.print_exc()
 
+    unet_params = unet.parameters() if not args.use_lora else itertools.chain(*unet_lora_params)
+
     if args.train_text_encoder:
+        text_params = itertools.chain(*text_encoder_lora_params if args.use_lora else text_encoder.parameters())
         params_to_optimize = [
-            {'params': text_encoder.parameters()},
-            {'params': unet.params() if not args.use_lora else itertools.chain(*unet_lora_params),
-             'lr': args.learning_rate if not args.use_lora else 1e-4}
+            {'params': unet_params, 'lr': args.learning_rate if not args.use_lora else 1e-4},
+            {'params': text_params, 'lr': args.learning_rate if not args.use_lora else 1e-4}
         ]
     else:
         params_to_optimize = [
-            {'params': unet.params() if not args.use_lora else itertools.chain(*unet_lora_params),
-             'lr': args.learning_rate if not args.use_lora else 1e-4}
+            {'params': unet_params, 'lr': args.learning_rate if not args.use_lora else 1e-4},
         ]
 
     optimizer = optimizer_class(
@@ -745,7 +756,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     text_encoder_cache.append(text_encoder(d_batch["input_ids"])[0])
                 concepts_cache.append(dataset.current_concept)
         dataset = LatentsDataset(latents_cache, text_encoder_cache, concepts_cache)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda x: x, shuffle=True)
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda z: z, shuffle=True)
         if enc_vae is not None:
             del enc_vae
         return dataset, dataloader
@@ -872,9 +883,13 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                             print(f"\nSaving lora weights at step {args.revision}")
                             # Save a pt file
                             save_lora_weight(s_pipeline.unet, out_file)
-                            print("Saving text encoder...")
-                            s_pipeline.text_encoder.save_pretrained(
-                                os.path.join(args.pretrained_model_name_or_path, "text_encoder"))
+                            if args.train_text_encoder:
+                                out_txt = out_file.replace(".pt", "_txt.pt")
+                                save_lora_weight(s_pipeline.text_encoder,
+                                                 out_txt,
+                                                 target_replace_module=["CLIPAttention"],
+                                                 )
+
                         else:
                             out_file = None
                             shared.state.textinfo = f"Saving diffusion model at step {args.revision}..."
@@ -885,8 +900,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         if args.use_ema:
                             ema_unet.restore(unet.parameters())
 
-                    except Exception as e:
-                        print(f"Exception saving checkpoint/model: {e}")
+                    except Exception as ex:
+                        print(f"Exception saving checkpoint/model: {ex}")
                         traceback.print_exc()
                         pass
                 save_dir = args.model_dir
@@ -920,8 +935,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                         txt_file.write(c.prompt)
                                     s_image.save(image_name)
                                 ci += 1
-                    except Exception as e:
-                        print(f"Exception with the stupid image again: {e}")
+                    except Exception as em:
+                        print(f"Exception with the stupid image again: {em}")
                         traceback.print_exc()
                         pass
             print(f"[*] Weights saved at {save_dir}")
@@ -1075,7 +1090,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     break
 
                 progress_bar.update(args.train_batch_size)
-                last_step = global_step
                 global_step += args.train_batch_size
                 args.revision += args.train_batch_size
                 shared.state.job_no = global_step
