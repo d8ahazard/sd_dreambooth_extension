@@ -38,6 +38,8 @@ from extensions.sd_dreambooth_extension.lora_diffusion import inject_trainable_l
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
 from modules import shared, paths
 
+from torch.profiler import profile, record_function, ProfilerActivity
+
 # Custom stuff
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -50,7 +52,7 @@ with_prior = False
 
 # End custom stuff
 
-torch.backends.cudnn.benchmark = True
+#torch.backends.cudnn.benchmark = True
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
@@ -362,6 +364,16 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 
 
 def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lora_alpha=1) -> tuple[DreamboothConfig, dict, str]:
+    cleanup(True)
+
+    logging_dir = Path(args.model_dir, "logging")
+
+    prof = profile(
+        schedule=torch.profiler.schedule(wait=0, warmup=0, active=1, repeat=10),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(f'{logging_dir}/dreambooth'),
+        profile_memory=True)
+
+    prof.start()
 
     global with_prior
     text_encoder = None
@@ -369,7 +381,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     global mem_record
     mem_record = memory_record
     max_train_steps = args.max_train_steps
-    logging_dir = Path(args.model_dir, "logging")
+
     args.max_token_length = int(args.max_token_length)
     if not args.pad_tokens and args.max_token_length > 75:
         print("Cannot raise token length limit above 75 when pad_tokens=False")
@@ -921,7 +933,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                     shared.state.current_image = s_image
                                     shared.state.textinfo = c.prompt
                                     image_name = os.path.join(sample_dir, f"sample_{args.revision}-{ci}{si}.png")
-                                    txt_name = image_name.replace(".jpg", ".txt")
+                                    txt_name = image_name.replace(".png", ".txt")
                                     with open(txt_name, "w", encoding="utf8") as txt_file:
                                         txt_file.write(c.prompt)
                                     s_image.save(image_name)
@@ -956,6 +968,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     for epoch in range(args.num_train_epochs):
         if training_complete:
             break
+        prof.step()
         try:
             unet.train()
             if args.train_text_encoder and text_encoder is not None:
@@ -1000,7 +1013,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
                     # Predict the noise residual
                     noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
-
+                    
                     # Get the target for loss depending on the prediction type
                     if noise_scheduler.config.prediction_type == "v_prediction":
                         noise = noise_scheduler.get_velocity(latents, noise, timesteps)
@@ -1027,7 +1040,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     optimizer.step()
                     lr_scheduler.step()
                     optimizer.zero_grad(set_to_none=True)
-                    loss_avg.update(loss.detach_(), bsz)
+                    loss_avg.update(loss.cpu().float(), bsz)
 
                     # Update EMA
                     if args.use_ema and ema_unet is not None:
@@ -1052,7 +1065,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                             save_img = args.save_preview_every and not global_step % args.save_preview_every
                             save_model = args.save_embedding_every and not global_step % args.save_embedding_every
                         if training_complete:
-                            save_img = False
+                            save_img = True
                             save_model = True
                         if save_img or save_model:
                             args.save()
@@ -1085,14 +1098,15 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 global_step += args.train_batch_size
                 args.revision += args.train_batch_size
                 shared.state.job_no = global_step
-
+                
             training_complete = global_step >= actual_train_steps or shared.state.interrupted
             accelerator.wait_for_everyone()
             if not args.not_cache_latents:
                 train_dataset, train_dataloader = cache_latents(enc_vae=vae, orig_dataset=gen_dataset)
             if training_complete:
                 if not weights_saved:
-                    save_img = False
+                    prof.step()
+                    save_img = True
                     save_model = True
                     args.save()
                     save_weights()
@@ -1124,7 +1138,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 save_img = args.save_preview_every and not global_epoch % args.save_preview_every
                 save_model = args.save_embedding_every and not global_epoch % args.save_embedding_every
             if training_complete:
-                save_img = False
+                save_img = True
                 save_model = True
             if save_img or save_model:
                 args.save()
@@ -1144,7 +1158,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
         if training_complete:
             break
-
+    
+    prof.stop()
     cleanup_memory()
     accelerator.end_training()
     return args, mem_record, msg
