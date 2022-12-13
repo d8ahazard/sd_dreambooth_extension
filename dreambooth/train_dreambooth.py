@@ -1,6 +1,5 @@
 import argparse
 import hashlib
-import inspect
 import itertools
 import logging
 import math
@@ -31,12 +30,10 @@ from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_che
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, encode_hidden_state, \
     PromptDataset, EMAModel
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, sanitize_tags, list_features, is_image, \
-    get_images
-from extensions.sd_dreambooth_extension.lora_diffusion import inject_trainable_lora, extract_lora_ups_down, \
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, list_features, get_images
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora, inject_trainable_lora, \
     save_lora_weight
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
-from modules import shared, paths
+from modules import shared, paths, images
 
 from torch.profiler import profile, record_function, ProfilerActivity
 
@@ -50,10 +47,9 @@ pil_features = list_features()
 mem_record = {}
 with_prior = False
 
-# End custom stuff
+torch.backends.cudnn.benchmark = False
 
 #torch.backends.cudnn.benchmark = True
-
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
 console = logging.StreamHandler()
@@ -374,7 +370,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         profile_memory=True)
 
     prof.start()
-
     global with_prior
     text_encoder = None
     args.tokenizer_name = None
@@ -442,7 +437,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             class_images_dir = Path(class_images_dir)
             class_images_dir.mkdir(parents=True, exist_ok=True)
             class_images = get_images(class_images_dir)
-            for x in class_images:
+            for _ in class_images:
                 cur_class_images += 1
             print(f"Class dir {class_images_dir} has {cur_class_images} images.")
             if cur_class_images < concept.num_class_images:
@@ -471,7 +466,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 shared.state.job_no = 0
                 concept_images = get_images(concept.instance_data_dir)
                 filename_texts = [text_getter.read_text(x) for x in concept_images]
-                sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts, concept.class_token,
+                sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts,
+                                               concept.class_token,
                                                concept.instance_token)
                 with accelerator.autocast(), torch.inference_mode():
                     generated_images = 0
@@ -483,21 +479,21 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                             shared.state.textinfo = "Training canceled."
                             return args, mem_record, "Training canceled."
                         example = sample_dataset.__getitem__(random.randrange(0, s_len))
-                        images = concept_pipeline(example["prompt"], num_inference_steps=concept.class_infer_steps,
+                        concept_images = concept_pipeline(example["prompt"], num_inference_steps=concept.class_infer_steps,
                                                   guidance_scale=concept.class_guidance_scale,
                                                   height=args.resolution,
                                                   width=args.resolution,
                                                   negative_prompt=concept.class_negative_prompt,
                                                   num_images_per_prompt=args.sample_batch_size).images
 
-                        for i, image in enumerate(images):
+                        for i, image in enumerate(concept_images):
                             if shared.state.interrupted:
                                 print("Generation canceled.")
                                 shared.state.textinfo = "Training canceled."
                                 return args, mem_record, "Training canceled."
 
                             image_base = hashlib.sha1(image.tobytes()).hexdigest()
-                            image_filename = str(class_images_dir / f"{generated_images + cur_class_images}-" \
+                            image_filename = str(class_images_dir / f"{generated_images + cur_class_images}-"
                                                                     f"{image_base}.jpg")
                             image.save(image_filename)
                             txt_filename = image_filename.replace(".jpg", ".txt")
@@ -509,6 +505,10 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                                     f"Prompt: '{example['prompt']}'"
                             shared.state.current_image = image
                             pbar.update()
+                        if len(concept_images) > 1:
+                            grid = images.image_grid(concept_images)
+                            shared.state.current_image = grid
+                            del concept_images
                     del pbar
                 del sample_dataset
         c_idx += 1
@@ -563,6 +563,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     vae = create_vae()
 
+    unet_lora_params = None
+    text_encoder_lora_params = None
+
     if not args.train_text_encoder:
         text_encoder.requires_grad_(False)
 
@@ -573,16 +576,23 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     if args.use_lora:
         unet.requires_grad_(False)
-        if lora_model:
-            lora_path = os.path.join(paths.models_path, "lora", lora_model)
-            if os.path.exists(lora_path):
-                print(f"Applying lora weights: {lora_path}")
-                weight_apply_lora(unet, torch.load(lora_path), lora_alpha)
-
+        lora_path = os.path.join(paths.models_path, "lora", lora_model)
+        lora_txt = lora_path.replace(".pt", "_txt.pt")
+        if os.path.exists(lora_path) and os.path.isfile(lora_path):
+            print("Applying lora unet weights before training...")
+            loras = torch.load(lora_path)
+            weight_apply_lora(unet, loras)
+        print("Injecting trainable lora...")
         unet_lora_params, train_names = inject_trainable_lora(unet)
 
-    else:
-        unet_lora_params = None
+        if args.train_text_encoder:
+            text_encoder.requires_grad_(False)
+            if os.path.exists(lora_txt) and os.path.isfile(lora_txt):
+                print("Applying lora text_encoder weights before training...")
+                loras = torch.load(lora_txt)
+                weight_apply_lora(text_encoder, loras, target_replace_module=["CLIPAttention"])
+
+            text_encoder_lora_params, _ = inject_trainable_lora(text_encoder, target_replace_module=["CLIPAttention"])
 
     if args.scale_lr:
         args.learning_rate = (
@@ -604,15 +614,17 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             traceback.print_exc()
 
     if args.use_lora:
-        params_to_optimize = (
-            itertools.chain(*unet_lora_params, text_encoder.parameters())
+        params_to_optimize = ([
+                {"params": itertools.chain(*unet_lora_params), "lr": args.lora_learning_rate},
+                {"params": itertools.chain(*text_encoder_lora_params), "lr": args.lora_txt_learning_rate},
+            ]
             if args.train_text_encoder
             else itertools.chain(*unet_lora_params)
         )
     else:
         params_to_optimize = (
-            itertools.chain(unet.parameters(),
-                            text_encoder.parameters()) if args.train_text_encoder else unet.parameters()
+            itertools.chain(unet.parameters(), text_encoder.parameters()) if args.train_text_encoder
+            else unet.parameters()
         )
     optimizer = optimizer_class(
         params_to_optimize,
@@ -758,7 +770,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     text_encoder_cache.append(text_encoder(d_batch["input_ids"])[0])
                 concepts_cache.append(dataset.current_concept)
         dataset = LatentsDataset(latents_cache, text_encoder_cache, concepts_cache)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda x: x, shuffle=True)
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda z: z, shuffle=True)
         if enc_vae is not None:
             del enc_vae
         return dataset, dataloader
@@ -883,28 +895,27 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                             os.makedirs(out_file, exist_ok=True)
                             out_file = os.path.join(out_file, f"{args.model_name}_{args.revision}.pt")
                             print(f"\nSaving lora weights at step {args.revision}")
+                            # Save a pt file
                             save_lora_weight(s_pipeline.unet, out_file)
+                            if args.train_text_encoder:
+                                out_txt = out_file.replace(".pt", "_txt.pt")
+                                save_lora_weight(s_pipeline.text_encoder,
+                                                 out_txt,
+                                                 target_replace_module=["CLIPAttention"],
+                                                 )
 
-                            del s_pipeline.unet
-
-                            s_pipeline.unet = UNet2DConditionModel.from_pretrained(
-                                args.pretrained_model_name_or_path,
-                                subfolder="unet",
-                                revision=args.revision,
-                                torch_dtype=torch.float16
-                            ).to(accelerator.device)
                         else:
                             out_file = None
-
-                        shared.state.textinfo = f"Saving checkpoint at step {args.revision}..."
-                        s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
+                            shared.state.textinfo = f"Saving diffusion model at step {args.revision}..."
+                            s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
 
                         compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
                                            reload_models=False, lora_path=out_file, log=False)
                         if args.use_ema:
                             ema_unet.restore(unet.parameters())
-                    except Exception as e:
-                        print(f"Exception saving checkpoint/model: {e}")
+
+                    except Exception as ex:
+                        print(f"Exception saving checkpoint/model: {ex}")
                         traceback.print_exc()
                         pass
                 save_dir = args.model_dir
@@ -917,12 +928,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         with accelerator.autocast(), torch.inference_mode():
                             prompts = gen_dataset.get_sample_prompts()
                             ci = 0
+                            samples = []
                             for c in prompts:
                                 seed = c.seed
                                 if seed is None or seed == '' or seed == -1:
                                     seed = int(random.randrange(21474836147))
                                 g_cuda = torch.Generator(device=accelerator.device).manual_seed(seed)
-
                                 for si in tqdm(range(c.n_samples), desc="Generating samples"):
                                     s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
                                                          guidance_scale=c.scale,
@@ -931,25 +942,29 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                                          width=args.resolution,
                                                          generator=g_cuda).images[0]
                                     shared.state.current_image = s_image
-                                    shared.state.textinfo = c.prompt
+                                    samples.append(s_image)
                                     image_name = os.path.join(sample_dir, f"sample_{args.revision}-{ci}{si}.png")
                                     txt_name = image_name.replace(".png", ".txt")
                                     with open(txt_name, "w", encoding="utf8") as txt_file:
                                         txt_file.write(c.prompt)
                                     s_image.save(image_name)
                                 ci += 1
-                    except Exception as e:
-                        print(f"Exception with the stupid image again: {e}")
+                            if len(samples) > 1:
+                                grid = images.image_grid(samples)
+                                shared.state.current_image = grid
+                                del samples
+
+                    except Exception as em:
+                        print(f"Exception with the stupid image again: {em}")
                         traceback.print_exc()
                         pass
-            print(f"[*] Weights saved at {save_dir}")
             del s_pipeline
             del scheduler
             del text_enc_model
             if not save_img:
                 if g_cuda:
                     del g_cuda
-            #cleanup()
+            # cleanup()
 
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(actual_train_steps), disable=not accelerator.is_local_main_process)
@@ -1094,7 +1109,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     break
 
                 progress_bar.update(args.train_batch_size)
-                last_step = global_step
                 global_step += args.train_batch_size
                 args.revision += args.train_batch_size
                 shared.state.job_no = global_step

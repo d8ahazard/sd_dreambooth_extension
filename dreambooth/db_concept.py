@@ -39,11 +39,11 @@ class Concept(dict):
             self.instance_token = input_dict["instance_token"] if "instance_token" in input_dict else ""
             self.class_token = input_dict["class_token"] if "class_token" in input_dict else ""
             self.num_class_images = input_dict["num_class_images"] if "num_class_images" in input_dict else 0
-            self.class_negative_prompt = input_dict["class_negative_prompt"] if "class_negative_promt" in input_dict else ""
+            self.class_negative_prompt = input_dict["class_negative_prompt"] if "class_negative_prompt" in input_dict else ""
             self.class_guidance_scale = input_dict["class_guidance_scale"] if "class_guidance_scale" in input_dict else 7.5
             self.class_infer_steps = input_dict["class_infer_steps"] if "class_infer_steps" in input_dict else 60
             self.save_sample_negative_prompt = input_dict["save_sample_negative_prompt"] if "save_sample_negative_prompt" in input_dict else ""
-            self.n_save_sample = input_dict["n_save_sample"] if "n_save_samples" in input_dict else 1
+            self.n_save_sample = input_dict["n_save_sample"] if "n_save_sample" in input_dict else 1
             self.sample_seed = input_dict["sample_seed"] if "sample_seed" in input_dict else -1
             self.save_guidance_scale = input_dict["save_guidance_scale"] if "save_guidance_scale" in input_dict else 7.5
             self.save_infer_steps = input_dict["save_infer_steps"] if "save_infer_steps" in input_dict else 60

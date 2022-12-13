@@ -14,12 +14,6 @@ from webui import wrap_gradio_gpu_call
 
 
 def on_ui_tabs():
-    show_lora = False
-    try:
-        show_lora = shared.cmd_opts.test_lora
-    except:
-        pass
-
     with gr.Blocks() as dreambooth_interface:
         with gr.Row(equal_height=True):
             db_save_params = gr.Button(value="Save Params", elem_id="db_save_config")
@@ -35,12 +29,12 @@ def on_ui_tabs():
                     create_refresh_button(db_model_name, get_db_models, lambda: {
                         "choices": sorted(get_db_models())},
                                           "refresh_db_models")
-                with gr.Row(visible=show_lora):
+                with gr.Row():
                     db_lora_model_name = gr.Dropdown(label='Lora Model', choices=sorted(get_lora_models()))
                     create_refresh_button(db_lora_model_name, get_lora_models, lambda: {
                         "choices": sorted(get_lora_models())},
                                           "refresh_lora_models")
-                db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1, visible=show_lora)
+                db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1)
                 db_half_model = gr.Checkbox(label="Half Model", value=False)
                 db_use_subdir = gr.Checkbox(label="Save Checkpoint to Subdirectory", value=False)
                 with gr.Row():
@@ -95,8 +89,8 @@ def on_ui_tabs():
                     with gr.Accordion(open=True, label="Settings"):
                         with gr.Column():
                             gr.HTML(value="Intervals")
-                            db_num_train_epochs = gr.Number(label="Training Steps Per Image (Epochs)", precision=100,
-                                                            value=1)
+                            db_num_train_epochs = gr.Number(label="Training Steps Per Image (Epochs)", precision=0,
+                                                            value=100)
                             db_max_train_steps = gr.Number(label='Max Training Steps', value=0, precision=0)
                             db_epoch_pause_frequency = gr.Number(label='Pause After N Epochs', value=0)
                             db_epoch_pause_time = gr.Number(label='Amount of time to pause between Epochs, in Seconds',
@@ -118,6 +112,8 @@ def on_ui_tabs():
                         with gr.Column():
                             gr.HTML(value="Learning Rate")
                             db_learning_rate = gr.Number(label='Learning Rate', value=2e-6)
+                            db_lora_learning_rate = gr.Number(label='Lora unet Learning Rate', value=2e-4)
+                            db_lora_txt_learning_rate = gr.Number(label='Lora Text Encoder Learning Rate', value=2e-4)
                             db_scale_lr = gr.Checkbox(label="Scale Learning Rate", value=False)
                             db_lr_scheduler = gr.Dropdown(label="Learning Rate Scheduler", value="constant",
                                                           choices=["linear", "cosine", "cosine_with_restarts",
@@ -149,7 +145,7 @@ def on_ui_tabs():
                                 with gr.Column():
                                     gr.HTML(value="Tuning")
                                     db_use_cpu = gr.Checkbox(label="Use CPU Only (SLOW)", value=False)
-                                    db_use_lora = gr.Checkbox(label="Use LORA", value=False, visible=show_lora)
+                                    db_use_lora = gr.Checkbox(label="Use LORA", value=False)
                                     db_use_ema = gr.Checkbox(label="Use EMA", value=False)
                                     db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                     db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
@@ -255,6 +251,8 @@ def on_ui_tabs():
                 db_has_ema,
                 db_hflip,
                 db_learning_rate,
+                db_lora_learning_rate,
+                db_lora_txt_learning_rate,
                 db_lr_scheduler,
                 db_lr_warmup_steps,
                 db_max_token_length,
@@ -364,6 +362,8 @@ def on_ui_tabs():
                 db_half_model,
                 db_hflip,
                 db_learning_rate,
+                db_lora_learning_rate,
+                db_lora_txt_learning_rate,
                 db_lr_scheduler,
                 db_lr_warmup_steps,
                 db_max_token_length,
@@ -609,6 +609,7 @@ def on_ui_tabs():
                 db_use_subdir
             ],
             outputs=[
+                db_lora_model_name,
                 db_status,
                 db_revision
             ]
