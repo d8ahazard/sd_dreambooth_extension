@@ -89,8 +89,8 @@ def on_ui_tabs():
                     with gr.Accordion(open=True, label="Settings"):
                         with gr.Column():
                             gr.HTML(value="Intervals")
-                            db_num_train_epochs = gr.Number(label="Training Steps Per Image (Epochs)", precision=100,
-                                                            value=1)
+                            db_num_train_epochs = gr.Number(label="Training Steps Per Image (Epochs)", precision=0,
+                                                            value=100)
                             db_max_train_steps = gr.Number(label='Max Training Steps', value=0, precision=0)
                             db_epoch_pause_frequency = gr.Number(label='Pause After N Epochs', value=0)
                             db_epoch_pause_time = gr.Number(label='Amount of time to pause between Epochs, in Seconds',
