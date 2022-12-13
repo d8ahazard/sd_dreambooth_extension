@@ -338,7 +338,9 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic
     if msg:
         shared.state.textinfo = msg
         print(msg)
-        return msg, 0, msg
+        dirs = get_lora_models()
+        lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
+        return lora_model_name, msg, 0, msg
 
     # Clear memory and do "stuff" only after we've ensured all the things are right
     print("Starting Dreambooth training...")
