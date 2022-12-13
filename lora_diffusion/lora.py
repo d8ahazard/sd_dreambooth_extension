@@ -78,9 +78,15 @@ def extract_lora_ups_down(model, target_replace_module=None):
         raise ValueError("No lora injected.")
 
 
-def save_lora_weight(model, path="./lora.pt"):
+def save_lora_weight(
+    model, path="./lora.pt", target_replace_module=None
+):
+    if target_replace_module is None:
+        target_replace_module = ["CrossAttention", "Attention"]
     weights = []
-    for _up, _down in extract_lora_ups_down(model):
+    for _up, _down in extract_lora_ups_down(
+        model, target_replace_module=target_replace_module
+    ):
         weights.append(_up.weight)
         weights.append(_down.weight)
 

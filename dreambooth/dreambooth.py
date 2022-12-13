@@ -6,6 +6,7 @@ import os
 import traceback
 from pathlib import Path
 
+import gradio
 import torch
 import torch.utils.checkpoint
 from diffusers.utils import logging as dl
@@ -13,7 +14,7 @@ from diffusers.utils import logging as dl
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, printm, \
-    isset, list_features, is_image, get_images
+    isset, list_features, is_image, get_images, get_lora_models
 from modules import shared, devices
 
 try:
@@ -61,7 +62,6 @@ def training_wizard(model_dir, is_person=False):
     else:
         # Build concepts list using current settings
         concepts = config.concepts_list
-        pil_feats = list_features()
 
         # Count the total number of images in all datasets
         total_images = 0
@@ -231,6 +231,8 @@ def load_params(model_dir):
                "db_half_model",
                "db_hflip",
                "db_learning_rate",
+               "db_lora_learning_rate",
+               "db_lora_txt_learning_rate",
                "db_lr_scheduler",
                "db_lr_warmup_steps",
                "db_max_token_length",
@@ -370,5 +372,9 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic
     printm("Training completed, reloading SD Model.")
     print(f'Memory output: {mem_record}')
     reload_system_models()
+    if lora_model_name != "" and lora_model_name is not None:
+        lora_model_name = f"{config.model_name}_{total_steps}.pt"
     print(f"Returning result: {res}")
-    return res, total_steps, res
+    dirs = get_lora_models()
+    lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
+    return lora_model_name, res, total_steps, res
