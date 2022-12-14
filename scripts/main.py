@@ -586,12 +586,6 @@ def on_ui_tabs():
             ]
         )
 
-        db_custom_model_name.change(
-            fn=lambda n: n,
-            inputs="text",
-            outputs="text"
-            )
-
         db_create_model.click(
             fn=wrap_gradio_gpu_call(extract_checkpoint),
             _js="db_start_progress",
@@ -618,7 +612,8 @@ def on_ui_tabs():
                 db_lora_model_name,
                 db_lora_weight,
                 db_train_imagic_only,
-                db_use_subdir
+                db_use_subdir,
+                db_custom_model_name
             ],
             outputs=[
                 db_lora_model_name,

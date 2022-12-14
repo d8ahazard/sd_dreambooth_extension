@@ -275,9 +275,12 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     shared.state.job_no = 0
     shared.state.job_count = 7
 
-    model_name = custom_model_name if not "" else model_name
+    save_model_name = model_name if custom_model_name == "" else custom_model_name
+    if custom_model_name == "":
+        printi(f"Compiling checkpoint for {model_name}...")
+    else:
+        printi(f"Compiling checkpoint for {model_name} with a custom name {custom_model_name}")
 
-    printi(f"Compiling checkpoint for {model_name}...")
     if not model_name:
         return "Select a model to compile.", "No model selected."
 
@@ -293,10 +296,10 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     v2 = config.v2
     total_steps = config.revision
     if use_subdir:
-        os.makedirs(os.path.join(models_path, model_name), exist_ok=True)
-        checkpoint_path = os.path.join(models_path, model_name, f"{model_name}_{total_steps}.ckpt")
+        os.makedirs(os.path.join(models_path, save_model_name), exist_ok=True)
+        checkpoint_path = os.path.join(models_path, save_model_name, f"{save_model_name}_{total_steps}.ckpt")
     else:
-        checkpoint_path = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
+        checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}.ckpt")
 
     model_path = config.pretrained_model_name_or_path
     unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")

@@ -28,6 +28,7 @@ class DreamboothConfig:
                  attention: str = "default",
                  center_crop: bool = True,
                  concepts_path: str = "",
+                 custom_model_name: str = "",
                  epoch_pause_frequency: int = 0,
                  epoch_pause_time: int = 0,
                  gradient_accumulation_steps: int = 1,
@@ -143,6 +144,7 @@ class DreamboothConfig:
         self.attention = attention
         self.center_crop = center_crop
         self.concepts_path = concepts_path
+        self.custom_model_name = custom_model_name
         self.epoch_pause_frequency = epoch_pause_frequency
         self.epoch_pause_time = epoch_pause_time
         self.gradient_accumulation_steps = gradient_accumulation_steps
