@@ -147,6 +147,7 @@ def on_ui_tabs():
                                     db_use_cpu = gr.Checkbox(label="Use CPU Only (SLOW)", value=False)
                                     db_use_lora = gr.Checkbox(label="Use LORA", value=False)
                                     db_use_ema = gr.Checkbox(label="Use EMA", value=False)
+                                    db_use_unet = gr.Checkbox(label="Use UNET", value=True)
                                     db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                     db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
                                                                      choices=list_floats())
@@ -283,6 +284,7 @@ def on_ui_tabs():
                 db_use_cpu,
                 db_use_ema,
                 db_use_lora,
+                db_use_unet,
                 db_v2,
                 c1_class_data_dir,
                 c1_class_guidance_scale,
@@ -390,6 +392,7 @@ def on_ui_tabs():
                 db_use_cpu,
                 db_use_ema,
                 db_use_lora,
+                db_use_unet,
                 c1_class_data_dir,
                 c1_class_guidance_scale,
                 c1_class_infer_steps,

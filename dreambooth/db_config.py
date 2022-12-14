@@ -68,6 +68,7 @@ class DreamboothConfig:
                  use_cpu: bool = False,
                  use_ema: bool = True,
                  use_lora: bool = False,
+                 use_unet: bool = True,
                  v2: bool = False,
                  c1_class_data_dir: str = "",
                  c1_class_guidance_scale: float = 7.5,
@@ -183,6 +184,7 @@ class DreamboothConfig:
         self.use_cpu = use_cpu
         self.use_ema = use_ema
         self.use_lora = use_lora
+        self.use_unet = False if use_unet is None else use_unet
         if scheduler is not None:
             self.scheduler = scheduler
 
