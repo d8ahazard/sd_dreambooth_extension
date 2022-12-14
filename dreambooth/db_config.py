@@ -181,8 +181,8 @@ class DreamboothConfig:
         self.use_8bit_adam = use_8bit_adam
         self.use_concepts = use_concepts
         self.use_cpu = use_cpu
-        self.use_ema = use_ema
-        self.use_lora = use_lora
+        self.use_ema = False if use_ema is None else use_ema
+        self.use_lora = False if use_lora is None else use_lora
         if scheduler is not None:
             self.scheduler = scheduler
 
