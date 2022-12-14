@@ -37,7 +37,7 @@ class DreamboothConfig:
                  hflip: bool = False,
                  learning_rate: float = 0.00000172,
                  lora_learning_rate: float = 1e-4,
-                 lora_txt_learning_rate: float = 1e-4,
+                 lora_txt_learning_rate: float = 5e-5,
                  lr_scheduler: str = 'constant',
                  lr_warmup_steps: int = 0,
                  max_token_length: int = 75,

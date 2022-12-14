@@ -602,6 +602,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             traceback.print_exc()
 
     if args.use_lora:
+
+        args.learning_rate = args.lora_learning_rate
+        
         params_to_optimize = ([
                 {"params": itertools.chain(*unet_lora_params), "lr": args.lora_learning_rate},
                 {"params": itertools.chain(*text_encoder_lora_params), "lr": args.lora_txt_learning_rate},
