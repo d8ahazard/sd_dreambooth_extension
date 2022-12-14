@@ -34,6 +34,8 @@ def on_ui_tabs():
                     create_refresh_button(db_lora_model_name, get_lora_models, lambda: {
                         "choices": sorted(get_lora_models())},
                                           "refresh_lora_models")
+                db_custom_model_name = gr.Textbox(label="Custom Model Name", 
+                    placeholder="Enter a model name for saving checkpoints and lora models.")
                 db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1)
                 db_half_model = gr.Checkbox(label="Half Model", value=False)
                 db_use_subdir = gr.Checkbox(label="Save Checkpoint to Subdirectory", value=False)
@@ -243,6 +245,7 @@ def on_ui_tabs():
                 db_attention,
                 db_center_crop,
                 db_concepts_path,
+                db_custom_model_name,
                 db_epoch_pause_frequency,
                 db_epoch_pause_time,
                 db_gradient_accumulation_steps,
@@ -355,6 +358,7 @@ def on_ui_tabs():
                 db_attention,
                 db_center_crop,
                 db_concepts_path,
+                db_custom_model_name,
                 db_epoch_pause_frequency,
                 db_epoch_pause_time,
                 db_gradient_accumulation_steps,
@@ -579,6 +583,12 @@ def on_ui_tabs():
                 db_outcome
             ]
         )
+
+        db_custom_model_name.change(
+            fn=lambda n: n,
+            inputs="text",
+            outputs="text"
+            )
 
         db_create_model.click(
             fn=wrap_gradio_gpu_call(extract_checkpoint),
