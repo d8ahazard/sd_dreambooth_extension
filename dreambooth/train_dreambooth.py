@@ -901,7 +901,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                             s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
 
                             compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
-                                               reload_models=False, lora_path=out_file, log=False)
+                                               reload_models=False, lora_path=out_file, log=False,
+                                               custom_model_name=args.custom_model_name
+                                               )
                         if args.use_ema:
                             ema_unet.restore(unet.parameters())
 
