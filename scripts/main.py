@@ -35,6 +35,7 @@ def on_ui_tabs():
                         "choices": sorted(get_lora_models())},
                                           "refresh_lora_models")
                 db_custom_model_name = gr.Textbox(label="Custom Model Name", 
+                    value="",
                     placeholder="Enter a model name for saving checkpoints and lora models.")
                 db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1)
                 db_half_model = gr.Checkbox(label="Half Model", value=False)
@@ -576,7 +577,8 @@ def on_ui_tabs():
                 db_half_model,
                 db_use_subdir,
                 db_lora_model_name,
-                db_lora_weight
+                db_lora_weight,
+                db_custom_model_name
             ],
             outputs=[
                 db_status,

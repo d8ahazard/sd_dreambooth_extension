@@ -257,7 +257,7 @@ def convert_text_enc_state_dict(text_enc_dict: dict[str, torch.Tensor]):
     return text_enc_dict
 
 
-def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1,
+def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1, custom_model_name="",
                        reload_models=True, log=True):
     """
 
@@ -274,6 +274,9 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     shared.state.textinfo = "Compiling checkpoint."
     shared.state.job_no = 0
     shared.state.job_count = 7
+
+    model_name = custom_model_name if not "" else model_name
+
     printi(f"Compiling checkpoint for {model_name}...")
     if not model_name:
         return "Select a model to compile.", "No model selected."
