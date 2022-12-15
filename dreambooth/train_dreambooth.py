@@ -977,7 +977,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 text_encoder.train()
             for step, batch in enumerate(train_dataloader):
                 weights_saved = False
-                with accelerator.accumulate(unet):
+                with accelerator.accumulate(unet), accelerator.accumulate(text_encoder):
                     # Convert images to latent space
                     with torch.no_grad():
                         if not args.not_cache_latents:
