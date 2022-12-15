@@ -257,7 +257,7 @@ def convert_text_enc_state_dict(text_enc_dict: dict[str, torch.Tensor]):
     return text_enc_dict
 
 
-def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1,
+def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1.0, lora_txt_alpha=1.0, custom_model_name="",
                        reload_models=True, log=True):
     """
 
@@ -274,7 +274,13 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     shared.state.textinfo = "Compiling checkpoint."
     shared.state.job_no = 0
     shared.state.job_count = 7
-    printi(f"Compiling checkpoint for {model_name}...")
+
+    save_model_name = model_name if custom_model_name == "" else custom_model_name
+    if custom_model_name == "":
+        printi(f"Compiling checkpoint for {model_name}...")
+    else:
+        printi(f"Compiling checkpoint for {model_name} with a custom name {custom_model_name}")
+
     if not model_name:
         return "Select a model to compile.", "No model selected."
 
@@ -290,10 +296,10 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     v2 = config.v2
     total_steps = config.revision
     if use_subdir:
-        os.makedirs(os.path.join(models_path, model_name), exist_ok=True)
-        checkpoint_path = os.path.join(models_path, model_name, f"{model_name}_{total_steps}.ckpt")
+        os.makedirs(os.path.join(models_path, save_model_name), exist_ok=True)
+        checkpoint_path = os.path.join(models_path, save_model_name, f"{save_model_name}_{total_steps}.ckpt")
     else:
-        checkpoint_path = os.path.join(models_path, f"{model_name}_{total_steps}.ckpt")
+        checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}.ckpt")
 
     model_path = config.pretrained_model_name_or_path
     unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")
@@ -316,15 +322,15 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
             printi(f"Loading lora from {lora_path}", log=log)
             if os.path.exists(lora_path):
                 checkpoint_path = checkpoint_path.replace(".ckpt", "_lora.ckpt")
-                printi("Applying lora weights to unet...")
+                printi(f"Applying lora weight of alpha: {lora_alpha} to unet...")
                 weight_apply_lora(loaded_pipeline.unet, torch.load(lora_path), alpha=lora_alpha)
                 printi("Saving lora unet...")
                 loaded_pipeline.unet.save_pretrained(os.path.join(config.pretrained_model_name_or_path, "unet_lora"))
                 unet_path = osp.join(config.pretrained_model_name_or_path, "unet_lora", "diffusion_pytorch_model.bin")
             lora_txt = lora_path.replace(".pt", "_txt.pt")
             if os.path.exists(lora_txt):
-                printi("Applying lora weights to text encoder...")
-                weight_apply_lora(loaded_pipeline.text_encoder, torch.load(lora_txt), alpha=lora_alpha)
+                printi(f"Applying lora weight of alpha: {lora_txt_alpha} to text encoder...")
+                weight_apply_lora(loaded_pipeline.text_encoder, torch.load(lora_txt), alpha=lora_txt_alpha)
                 printi("Saving lora text encoder...")
                 loaded_pipeline.text_encoder.save_pretrained(os.path.join(config.pretrained_model_name_or_path, "text_encoder_lora"))
                 text_enc_path = osp.join(config.pretrained_model_name_or_path, "text_encoder_lora", "pytorch_model.bin")

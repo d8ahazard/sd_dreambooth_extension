@@ -28,6 +28,7 @@ class DreamboothConfig:
                  attention: str = "default",
                  center_crop: bool = True,
                  concepts_path: str = "",
+                 custom_model_name: str = "",
                  epoch_pause_frequency: int = 0,
                  epoch_pause_time: int = 0,
                  gradient_accumulation_steps: int = 1,
@@ -37,7 +38,7 @@ class DreamboothConfig:
                  hflip: bool = False,
                  learning_rate: float = 0.00000172,
                  lora_learning_rate: float = 1e-4,
-                 lora_txt_learning_rate: float = 1e-4,
+                 lora_txt_learning_rate: float = 5e-5,
                  lr_scheduler: str = 'constant',
                  lr_warmup_steps: int = 0,
                  max_token_length: int = 75,
@@ -144,6 +145,7 @@ class DreamboothConfig:
         self.attention = attention
         self.center_crop = center_crop
         self.concepts_path = concepts_path
+        self.custom_model_name = custom_model_name
         self.epoch_pause_frequency = epoch_pause_frequency
         self.epoch_pause_time = epoch_pause_time
         self.gradient_accumulation_steps = gradient_accumulation_steps
@@ -182,8 +184,8 @@ class DreamboothConfig:
         self.use_8bit_adam = use_8bit_adam
         self.use_concepts = use_concepts
         self.use_cpu = use_cpu
-        self.use_ema = use_ema
-        self.use_lora = use_lora
+        self.use_ema = False if use_ema is None else use_ema
+        self.use_lora = False if use_lora is None else use_lora
         self.use_unet = False if use_unet is None else use_unet
         if scheduler is not None:
             self.scheduler = scheduler

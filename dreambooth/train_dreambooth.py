@@ -356,7 +356,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
-def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lora_alpha=1) -> tuple[
+def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lora_alpha=1.0, lora_txt_alpha=1.0, custom_model_name="") -> tuple[
     DreamboothConfig, dict, str]:
     global with_prior
     text_encoder = None
@@ -568,7 +568,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     if args.use_lora:
         unet.requires_grad_(False)
-        lora_path = os.path.join(paths.models_path, "lora", lora_model)
+        lora_path = os.path.join(paths.models_path, 
+            "lora",
+             lora_model if custom_model_name == "" else f"{custom_model_name}.pt")
         lora_txt = lora_path.replace(".pt", "_txt.pt")
         if os.path.exists(lora_path) and os.path.isfile(lora_path):
             print("Applying lora unet weights before training...")
@@ -606,6 +608,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             traceback.print_exc()
 
     if args.use_lora:
+
+        args.learning_rate = args.lora_learning_rate
+        
         params_to_optimize = ([
                 {"params": itertools.chain(*unet_lora_params), "lr": args.lora_learning_rate},
                 {"params": itertools.chain(*text_encoder_lora_params), "lr": args.lora_txt_learning_rate},
@@ -728,7 +733,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         if enc_vae is None:
             enc_vae = create_vae()
 
-        if orig_dataset is not None:
+        if orig_dataset is None:
             dataset = SuperDataset(
                 concepts_list=args.concepts_list,
                 tokenizer=tokenizer,
@@ -741,7 +746,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 shuffle_tags=args.shuffle_tags
             )
         else:
-            dataset = gen_dataset
+            dataset = orig_dataset
 
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
@@ -878,6 +883,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 if save_model:
                     try:
                         if args.use_lora:
+                            lora_model_name = args.model_name if custom_model_name == "" else custom_model_name
                             try:
                                 cmd_lora_models_path = shared.cmd_opts.lora_models_path
                             except:
@@ -886,7 +892,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                 cmd_lora_models_path) if cmd_lora_models_path else paths.models_path
                             out_file = os.path.join(model_dir, "lora")
                             os.makedirs(out_file, exist_ok=True)
-                            out_file = os.path.join(out_file, f"{args.model_name}_{args.revision}.pt")
+                            os.path.join(out_file, f"{lora_model_name}_{args.revision}.pt")
+                            out_file = os.path.join(out_file, f"{lora_model_name}_{args.revision}.pt")
                             print(f"\nSaving lora weights at step {args.revision}")
                             # Save a pt file
                             save_lora_weight(s_pipeline.unet, out_file)
@@ -896,14 +903,16 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                                  out_txt,
                                                  target_replace_module=["CLIPAttention"],
                                                  )
-
+                            print(f"\nLora weights successfully saved to {lora_path}")
                         else:
                             out_file = None
                             shared.state.textinfo = f"Saving diffusion model at step {args.revision}..."
                             s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
 
-                        compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
-                                           reload_models=False, lora_path=out_file, log=False)
+                            compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
+                                               reload_models=False, lora_path=out_file, log=False,
+                                               custom_model_name=custom_model_name
+                                               )
                         if args.use_ema:
                             ema_unet.restore(unet.parameters())
 
