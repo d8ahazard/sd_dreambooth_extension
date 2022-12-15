@@ -48,8 +48,9 @@ from diffusers import (
     UNet2DConditionModel,
 )
 from diffusers.pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBertConfig, LDMBertModel
+from diffusers.pipelines.paint_by_example import PaintByExampleImageEncoder, PaintByExamplePipeline
 from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
-from transformers import AutoFeatureExtractor, BertTokenizerFast, CLIPTextModel, CLIPTokenizer
+from transformers import AutoFeatureExtractor, BertTokenizerFast, CLIPTextModel, CLIPTokenizer, CLIPVisionConfig
 
 
 def shave_segments(path, n_shave_prefix_segments=1):
@@ -427,6 +428,7 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
             resnets = [key for key in output_blocks[i] if f"output_blocks.{i}.0" in key]
             attentions = [key for key in output_blocks[i] if f"output_blocks.{i}.1" in key]
 
+            resnet_0_paths = renew_resnet_paths(resnets)
             paths = renew_resnet_paths(resnets)
 
             meta_path = {"old": f"output_blocks.{i}.0", "new": f"up_blocks.{block_id}.resnets.{layer_in_block_id}"}
@@ -790,7 +792,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
             rev_keys = ["db_global_step", "global_step"]
             epoch_keys = ["db_epoch", "epoch"]
-
+            upcast_attention = False
             for key in rev_keys:
                 if key in checkpoint:
                     revision = checkpoint[key]
@@ -804,6 +806,9 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             key_name = "model.diffusion_model.input_blocks.2.1.transformer_blocks.0.attn2.to_k.weight"
 
             if key_name in checkpoint and checkpoint[key_name].shape[-1] == 1024:
+                if revision == 110000:
+                    # v2.1 needs to upcast attention
+                    upcast_attention = True
                 if revision == 875000 or revision == 220000:
                     print(f"Model revision is {revision}, assuming v2, 512 model.")
                     is_512 = True
@@ -858,16 +863,8 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             set_alpha_to_one=False,
             prediction_type=prediction_type,
         )
-        print("Creating scheduler...")
-        if v2:
-            # All the 2.0 models use OpenCLIP and all use DDIM scheduler by default.
-            text_model_type = original_config.model.params.cond_stage_config.target.split(".")[-1]
-            if text_model_type == "FrozenOpenCLIPEmbedder":
-                scheduler_type = "ddim"
-            else:
-                scheduler_type = "pndm"
-            db_config.scheduler = scheduler_type
-            db_config.save()
+        # make sure scheduler works correctly with DDIM
+        scheduler.register_to_config(clip_sample=False)
         if scheduler_type == "pndm":
             config = dict(scheduler.config)
             config["skip_prk_steps"] = True
@@ -899,6 +896,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             printi("Converting unet...")
             # Convert the UNet2DConditionModel model.
             unet_config = create_unet_diffusers_config(original_config, image_size=image_size)
+            unet_config["upcast_attention"] = upcast_attention
             unet = UNet2DConditionModel(**unet_config)
 
             converted_unet_checkpoint, has_ema = convert_ldm_unet_checkpoint(
@@ -930,6 +928,18 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                     feature_extractor=None,
                     requires_safety_checker=False,
                 )
+            # elif text_model_type == "PaintByExample":
+            #     vision_model = convert_paint_by_example_checkpoint(checkpoint)
+            #     tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
+            #     feature_extractor = AutoFeatureExtractor.from_pretrained("CompVis/stable-diffusion-safety-checker")
+            #     pipe = PaintByExamplePipeline(
+            #         vae=vae,
+            #         image_encoder=vision_model,
+            #         unet=unet,
+            #         scheduler=scheduler,
+            #         safety_checker=None,
+            #         feature_extractor=feature_extractor,
+            #     )
             elif text_model_type == "FrozenCLIPEmbedder":
                 text_model = convert_ldm_clip_checkpoint(checkpoint)
                 tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")

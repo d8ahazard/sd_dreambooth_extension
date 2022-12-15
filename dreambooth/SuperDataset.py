@@ -5,11 +5,9 @@ import torch
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
-from pathlib import Path
 
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
-from extensions.sd_dreambooth_extension.dreambooth.utils import list_features, is_image, get_images
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter
+from extensions.sd_dreambooth_extension.dreambooth.utils import get_images
 from modules import images
 
 
@@ -105,6 +103,7 @@ class SuperDataset(Dataset):
             lifetime_steps=-1,
             shuffle_tags=False
     ):
+        from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter
         self.concepts = []
         self.size = size
         self.center_crop = center_crop
@@ -116,7 +115,6 @@ class SuperDataset(Dataset):
         self.lifetime_steps = lifetime_steps
         self.current_concept = 0
 
-        pil_features = list_features()
         total_images = 0
 
         for concept_dict in concepts_list:

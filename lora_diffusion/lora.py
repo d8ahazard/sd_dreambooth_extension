@@ -1,5 +1,9 @@
+import os
+
 import torch
 import torch.nn as nn
+
+from modules import shared, paths
 
 
 class LoraInjectedLinear(nn.Module):
@@ -135,6 +139,32 @@ def weight_apply_lora(
                         weight.dtype
                     )
                     _child_module.weight = nn.Parameter(weight)
+
+
+def apply_lora_weights(lora_model, target_unet, target_text_encoder, lora_alpha=1, device=None):
+    if device is None:
+        device = shared.device
+    target_unet.requires_grad_(False)
+    lora_path = os.path.join(paths.models_path, "lora", lora_model)
+    lora_txt = lora_path.replace(".pt", "_txt.pt")
+    if os.path.exists(lora_path) and os.path.isfile(lora_path):
+        print("Applying lora unet weights before training...")
+        loras = torch.load(lora_path, map_location=device)
+        weight_apply_lora(target_unet, loras, alpha=lora_alpha)
+    print("Injecting trainable lora...")
+    unet_lora_params, _ = inject_trainable_lora(target_unet)
+    text_encoder_lora_params = None
+
+    if target_text_encoder is not None:
+        target_text_encoder.requires_grad_(False)
+        if os.path.exists(lora_txt) and os.path.isfile(lora_txt):
+            print("Applying lora text_encoder weights before training...")
+            loras = torch.load(lora_txt, map_location=device)
+            weight_apply_lora(target_text_encoder, loras, target_replace_module=["CLIPAttention"], alpha=lora_alpha)
+        text_encoder_lora_params, _ = inject_trainable_lora(target_text_encoder,
+                                                            target_replace_module=["CLIPAttention"])
+
+    return unet_lora_params, text_encoder_lora_params
 
 
 def monkeypatch_lora(

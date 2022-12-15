@@ -14,8 +14,7 @@ from huggingface_hub import HfFolder, whoami
 from transformers import AutoTokenizer, CLIPTextModel
 
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, PromptDataset
-from modules import shared, paths
+from modules import shared, paths, sd_models
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -77,7 +76,6 @@ def get_images(image_path):
                 for image in sub_images:
                     output.append(image)
     return output
-
 
 
 def sanitize_tags(name):
@@ -183,62 +181,6 @@ def reload_system_models():
     printm("Restored system models.")
 
 
-def debug_prompts(model_dir):
-    from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
-    if model_dir is None or model_dir == "":
-        return "Please select a model."
-    config = from_file(model_dir)
-    tokenizer = AutoTokenizer.from_pretrained(
-        os.path.join(config.pretrained_model_name_or_path, "tokenizer"),
-        revision=config.revision,
-        use_fast=False,
-    )
-    train_dataset = SuperDataset(
-        concepts_list=config.concepts_list,
-        tokenizer=tokenizer,
-        size=config.resolution,
-        center_crop=config.center_crop,
-        lifetime_steps=config.revision,
-        pad_tokens=config.pad_tokens,
-        hflip=config.hflip,
-        max_token_length=config.max_token_length,
-        shuffle_tags=config.shuffle_tags
-    )
-
-    output = {"instance_prompts": [], "existing_class_prompts": [], "new_class_prompts": [], "sample_prompts": []}
-
-    for i in range(train_dataset.__len__()):
-        item = train_dataset.__getitem__(i)
-        output["instance_prompts"].append(item["instance_prompt"])
-        if "class_prompt" in item:
-            output["existing_class_prompts"].append(item["class_prompt"])
-    sample_prompts = train_dataset.get_sample_prompts()
-    for prompt in sample_prompts:
-        output["sample_prompts"].append(prompt.prompt)
-
-    for concept in config.concepts_list:
-        text_getter = FilenameTextGetter(config.shuffle_tags)
-        c_idx = 0
-        class_images_dir = Path(concept["class_data_dir"])
-        if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:
-            class_images_dir = os.path.join(config.model_dir, f"classifiers_{c_idx}")
-            print(f"Class image dir is not set, defaulting to {class_images_dir}")
-        class_images_dir.mkdir(parents=True, exist_ok=True)
-        pil_features = list_features()
-        cur_class_images = len(get_images(class_images_dir))
-        if cur_class_images < concept.num_class_images:
-            num_new_images = concept.num_class_images - cur_class_images
-            instance_images = get_images(concept.instance_data_dir)
-            filename_texts = [text_getter.read_text(x) for x in instance_images]
-            sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts, concept.class_token,
-                                           concept.instance_token)
-            for i in range(sample_dataset.__len__()):
-                output["new_class_prompts"].append(sample_dataset.__getitem__(i)["prompt"])
-        c_idx += 1
-
-    return json.dumps(output)
-
-
 def generate_sample_img(model_dir: str, save_sample_prompt: str, seed: str):
     if model_dir is None or model_dir == "":
         return "Please select a model."
@@ -314,6 +256,13 @@ def list_features():
                 if extension not in pil_features:
                     pil_features.append(extension)
     return pil_features
+
+
+def get_checkpoint_match(searchString):
+    for info in sd_models.checkpoints_list.values():
+        if searchString in info.title or searchString in info.model_name or searchString in info.filename:
+            return info
+    return None
 
 
 def is_image(path: Path, feats=None):

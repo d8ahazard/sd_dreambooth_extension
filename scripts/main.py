@@ -1,24 +1,39 @@
+from functools import partial
+
 import gradio as gr
 
 from extensions.sd_dreambooth_extension.dreambooth import dreambooth
 from extensions.sd_dreambooth_extension.dreambooth.db_config import save_config
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import performance_wizard, \
-    training_wizard, training_wizard_person, load_model_params
+    training_wizard, training_wizard_person, load_model_params, ui_concepts
+from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generate_prompts
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, log_memory, generate_sample_img, \
-    debug_prompts, list_attention, list_floats, get_lora_models
+    list_attention, list_floats, get_lora_models
 from modules import script_callbacks, sd_models, shared
+from modules.call_queue import queue_lock
 from modules.ui import setup_progressbar, gr_show, wrap_gradio_call, create_refresh_button
 from webui import wrap_gradio_gpu_call
+
+params_to_save = []
+
+
+def gradio_sucks(func):
+    def f(*args, **kwargs):
+        print(f"ARGS: {args}")
+        res = func(*args, **kwargs)
+        return res
+    return f
 
 
 def on_ui_tabs():
     with gr.Blocks() as dreambooth_interface:
         with gr.Row(equal_height=True):
             db_save_params = gr.Button(value="Save Params", elem_id="db_save_config")
-            db_load_params = gr.Button(value='Load Params')
+            db_load_params = gr.Button(value='Load Params', elem_id="db_load_params")
             db_generate_checkpoint = gr.Button(value="Generate Ckpt")
+            db_generate_classes = gr.Button(value="Generate Class Images")
             db_interrupt_training = gr.Button(value="Cancel")
             db_train_model = gr.Button(value="Train", variant='primary')
 
@@ -37,6 +52,7 @@ def on_ui_tabs():
                 db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1)
                 db_half_model = gr.Checkbox(label="Half Model", value=False)
                 db_use_subdir = gr.Checkbox(label="Save Checkpoint to Subdirectory", value=False)
+                db_use_txt2img = gr.Checkbox(label="Generate Concept Images Using txt2img", value=True)
                 with gr.Row():
                     db_train_wizard_person = gr.Button(value="Training Wizard (Person)")
                     db_train_wizard_object = gr.Button(value="Training Wizard (Object/Style)")
@@ -221,20 +237,10 @@ def on_ui_tabs():
                 db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery').style(grid=4)
                 db_preview = gr.Image(elem_id='db_preview', visible=False)
                 setup_progressbar(db_progressbar, db_preview, 'db', textinfo=db_progress)
-        foo = {
-            "one": "one",
-            "two": "two"
-        }
 
-        db_debug_prompts.click(
-            fn=debug_prompts,
-            inputs=[db_model_name],
-            outputs=[db_status]
-        )
+        global params_to_save
 
-        db_save_params.click(
-            fn=save_config,
-            inputs=[
+        params_to_save = [
                 db_model_name,
                 db_adam_beta1,
                 db_adam_beta2,
@@ -338,7 +344,17 @@ def on_ui_tabs():
                 c3_save_sample_negative_prompt,
                 c3_save_sample_prompt,
                 c3_save_sample_template
-            ],
+            ]
+
+        db_debug_prompts.click(
+            fn=generate_prompts,
+            inputs=[db_model_name],
+            outputs=[db_status]
+        )
+
+        db_save_params.click(
+            fn=save_config,
+            inputs=params_to_save,
             outputs=[]
         )
 
@@ -455,27 +471,15 @@ def on_ui_tabs():
         )
 
         db_use_lora.change(
-            fn=lambda x: False if x else db_use_lora,
+            fn=lambda x: False if x else db_use_ema,
             inputs=[db_use_lora],
             outputs=[db_use_ema],
         )
 
         db_use_ema.change(
-            fn=lambda x: False if x else db_use_ema,
+            fn=lambda x: False if x else db_use_lora,
             inputs=[db_use_ema],
             outputs=[db_use_lora],
-        )
-
-        db_create_from_hub.change(
-            fn=lambda x: {
-                hub_row: gr_show(x is True),
-                local_row: gr_show(x is False)
-            },
-            inputs=[db_create_from_hub],
-            outputs=[
-                hub_row,
-                local_row
-            ]
         )
 
         db_model_name.change(
@@ -606,13 +610,23 @@ def on_ui_tabs():
                 db_lora_model_name,
                 db_lora_weight,
                 db_train_imagic_only,
-                db_use_subdir
+                db_use_subdir,
+                db_use_txt2img
             ],
             outputs=[
                 db_lora_model_name,
                 db_status,
                 db_revision
             ]
+        )
+
+        db_generate_classes.click(
+            _js="db_generate_classes",
+            fn=wrap_gradio_gpu_call(gradio_sucks(ui_concepts))
+            ,
+            batch=False,
+            inputs=[db_model_name, db_lora_model_name, db_lora_weight, db_use_txt2img],
+            outputs=[db_status]
         )
 
         db_interrupt_training.click(
@@ -673,17 +687,6 @@ def build_concept_panel():
             save_guidance_scale, save_infer_steps]
 
 
-def save_and_execute(func, extra_outputs=None, wrap_gpu=False):
-    def f(*args, **kwargs):
-        res = func(*args, **kwargs)
-        return res
-
-    if not wrap_gpu:
-        return wrap_gradio_call(f, extra_outputs=extra_outputs, add_stats=False)
-    else:
-        return wrap_gradio_gpu_call(f, extra_outputs=extra_outputs)
-
-
 def get_sd_models():
     sd_models.list_models()
     sd_list = sd_models.checkpoints_list
@@ -691,6 +694,8 @@ def get_sd_models():
     for key in sd_list:
         names.append(key)
     return names
+
+
 
 
 script_callbacks.on_ui_tabs(on_ui_tabs)

@@ -1,20 +1,18 @@
 import gc
-import json
 import logging
 import math
 import os
 import traceback
-from pathlib import Path
 
 import gradio
 import torch
 import torch.utils.checkpoint
 from diffusers.utils import logging as dl
 
-from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
+from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, printm, \
-    isset, list_features, is_image, get_images, get_lora_models
+    isset, get_images, get_lora_models
 from modules import shared, devices
 
 try:
@@ -78,7 +76,6 @@ def training_wizard(model_dir, is_person=False):
         step_mult = 100 * lr_scale
 
         for concept in concepts:
-            image_count = 0
             if not os.path.exists(concept.instance_data_dir):
                 print("Nonexistent instance directory.")
             else:
@@ -204,12 +201,12 @@ def load_params(model_dir):
                 ui_dict[f"db_{key}"] = value
                 msg = "Loaded config."
 
-    ui_concepts = concepts if concepts is not None else []
-    if len(ui_concepts) < 3:
-        while len(ui_concepts) < 3:
-            ui_concepts.append(Concept())
+    ui_concept_list = concepts if concepts is not None else []
+    if len(ui_concept_list) < 3:
+        while len(ui_concept_list) < 3:
+            ui_concept_list.append(Concept())
     c_idx = 1
-    for ui_concept in ui_concepts:
+    for ui_concept in ui_concept_list:
         if c_idx > 3:
             break
 
@@ -307,7 +304,7 @@ def load_model_params(model_dir):
                ""
 
 
-def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic_only: bool, use_subdir: bool):
+def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic_only: bool, use_subdir: bool, use_txt2img: bool):
     global mem_record
     if model_dir == "" or model_dir is None:
         print("Invalid model name.")
@@ -358,7 +355,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic
             print(shared.state.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
             config, mem_record, msg = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name,
-                                           lora_alpha=lora_alpha)
+                                           lora_alpha=lora_alpha, use_txt2img=use_txt2img)
             if config.revision != total_steps:
                 config.save()
         total_steps = config.revision
@@ -380,3 +377,47 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic
     dirs = get_lora_models()
     lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
     return lora_model_name, res, total_steps, res
+
+
+def ui_concepts(model_dir: str, lora_model: str, lora_weight: float, use_txt2im: bool):
+    if model_dir == "" or model_dir is None:
+        print("Invalid model name.")
+        msg = "Create or select a model first."
+        return msg
+    config = from_file(model_dir)
+
+    # Clear pretrained VAE Name if applicable
+    if config.pretrained_vae_name_or_path == "":
+        config.pretrained_vae_name_or_path = None
+
+    msg = None
+    if config.attention == "xformers":
+        if config.mixed_precision == "no":
+            msg = "Using xformers, please set mixed precision to 'fp16' or 'bf16' to continue."
+    if config.use_cpu:
+        if config.use_8bit_adam or config.mixed_precision != "no":
+            msg = "CPU Training detected, please disable 8Bit Adam and set mixed precision to 'no' to continue."
+    if not len(config.concepts_list):
+        msg = "Please configure some concepts."
+    if not os.path.exists(config.pretrained_model_name_or_path):
+        msg = "Invalid training data directory."
+    if isset(config.pretrained_vae_name_or_path) and not os.path.exists(config.pretrained_vae_name_or_path):
+        msg = "Invalid Pretrained VAE Path."
+    if config.resolution <= 0:
+        msg = "Invalid resolution."
+
+    if msg:
+        shared.state.textinfo = msg
+        print(msg)
+        return msg
+    try:
+        from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import generate_classifiers
+        print("Generating concepts...")
+        unload_system_models()
+        count, _ = generate_classifiers(config, lora_model, lora_weight, use_txt2im)
+        reload_system_models()
+        msg = f"Generated {count} class images."
+    except Exception as e:
+        msg = f"Exception generating concepts: {str(e)}"
+        traceback.print_exc()
+    return msg

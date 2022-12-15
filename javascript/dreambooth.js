@@ -3,17 +3,23 @@ function save_config(){
     let btn = gradioApp().getElementById("db_save_config");
     if(btn!=null) {
         btn.click();
+        console.log("Saving config...")
     } else {
         console.log("Can't find btn, trying for btn2");
         let btn2 = document.getElementById("db_save_config");
         if (btn2 != null) {
             btn2.click();
+            console.log("Saving config2...")
         } else {
             console.log("Can't find button2 either.")
         }
     }
 }
 
+function log_save() {
+    console.log("Saving: ", arguments);
+    return arguments;
+}
 // Start progress bar without saving
 function db_start_progress(){
     requestProgress('db');
@@ -22,11 +28,7 @@ function db_start_progress(){
     return args_to_array(arguments);
 }
 
-// Save, don't touch progress or status bars...
-function db_save() {
-    save_config()
-    return args_to_array(arguments);
-}
+
 
 // Save and start progress bar, clear statuses, etc.
 function db_save_start_progress(){
@@ -36,6 +38,19 @@ function db_save_start_progress(){
     gradioApp().querySelector('#db_status').innerHTML='';
     return args_to_array(arguments);
 }
+
+function db_generate_classes(){
+    save_config();
+    requestProgress('db');
+    gradioApp().querySelector('#db_error').innerHTML='';
+    gradioApp().querySelector('#db_status').innerHTML='';
+    let args = [];
+    for (let i = 0; i < 4; i ++) {
+        args.push(arguments[i]);
+    }
+    return args;
+}
+
 
 // Do a thing when the UI updates
 onUiUpdate(function(){

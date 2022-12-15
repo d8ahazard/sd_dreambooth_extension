@@ -1,15 +1,38 @@
 import gc
+import hashlib
+import json
 import os
 import random
 import re
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
 
 import torch
 import torch.utils.checkpoint
+from PIL import Image
+from accelerate import Accelerator
+from diffusers import DiffusionPipeline, AutoencoderKL
 from torch.utils.data import Dataset
-from transformers import CLIPTextModel
+from tqdm import tqdm
+from transformers import CLIPTextModel, AutoTokenizer
 
-from modules import shared, devices
+from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, from_file
+from extensions.sd_dreambooth_extension.dreambooth.utils import printm, cleanup, get_checkpoint_match, get_images
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import apply_lora_weights
+from modules import shared, devices, sd_models, images
+from modules.devices import autocast
+from modules.processing import StableDiffusionProcessingTxt2Img, process_images
+
+
+@dataclass
+class PromptData:
+    prompt = ""
+    negative_prompt = ""
+    steps = 60
+    scale = 7.5
+    out_dir = ""
 
 
 class FilenameTextGetter:
@@ -79,37 +102,53 @@ class FilenameTextGetter:
 
 class PromptDataset(Dataset):
     """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
+    def __init__(self, concepts: [Concept], model_dir: str, shuffle_tags: bool, batch_size: int):
+        c_idx = 0
+        prompts = []
+        self.with_prior = False
+        for concept in concepts:
+            cur_class_images = 0
+            print(f"Checking concept: {concept}")
+            text_getter = FilenameTextGetter(shuffle_tags)
+            print(f"Concept requires {concept.num_class_images} images.")
 
-    def __init__(self, prompt: str, num_samples: int, filename_texts, class_token: str,
-                 instance_token: str):
-        self.prompt = prompt
-        self.instance_token = instance_token
-        self.class_token = class_token
-        self.num_samples = num_samples
-        self.filename_texts = filename_texts
+            if concept.num_class_images > 0:
+                self.with_prior = True
+                class_images_dir = concept["class_data_dir"]
+                if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:
+                    class_images_dir = os.path.join(model_dir, f"classifiers_{c_idx}")
+                    print(f"Class image dir is not set, defaulting to {class_images_dir}")
+                class_images_dir = Path(class_images_dir)
+                class_images_dir.mkdir(parents=True, exist_ok=True)
+                from extensions.sd_dreambooth_extension.dreambooth.utils import get_images
+                class_images = get_images(class_images_dir)
+                for _ in class_images:
+                    cur_class_images += 1
+                print(f"Class dir {class_images_dir} has {cur_class_images} images.")
+                if cur_class_images < concept.num_class_images:
+                    num_new_images = concept.num_class_images - cur_class_images
+                    instance_images = get_images(concept.instance_data_dir)
+                    filename_texts = [text_getter.read_text(x) for x in instance_images]
 
-    def __len__(self):
-        return self.num_samples
+                    for i in range(int(num_new_images / batch_size)):
+                        text = filename_texts[i % len(filename_texts)]
+                        prompt = text_getter.create_text(concept.class_prompt, text, concept.instance_token,
+                                                         concept.class_token)
+                        pd = PromptData
+                        pd.prompt = prompt
+                        pd.negative_prompt = concept.class_negative_prompt
+                        pd.steps = concept.class_infer_steps
+                        pd.scale = concept.class_guidance_scale
+                        pd.out_dir = class_images_dir
+                        prompts.append(pd)
+        random.shuffle(prompts)
+        self.prompts = prompts
 
-    def __getitem__(self, index):
-        example = {"filename_text": self.filename_texts[index % len(self.filename_texts)] if len(
-            self.filename_texts) > 0 else ""}
-        prompt = example["filename_text"]
-        if self.instance_token != "" and self.instance_token is not None:
-            if self.instance_token in prompt and self.class_token is not None and self.class_token != "":
-                class_token = self.class_token
-                # If the token is already in the prompt, just remove the instance token, don't swap it
-                class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
-                for token in class_tokens:
-                    if token in prompt:
-                        prompt = prompt.replace(self.instance_token, "")
-                    else:
-                        prompt = prompt.replace(self.instance_token, self.class_token)
+    def __len__(self) -> int:
+        return len(self.prompts)
 
-        prompt = self.prompt.replace("[filewords]", prompt)
-        example["prompt"] = prompt
-        example["index"] = index
-        return example
+    def __getitem__(self, index) -> PromptData:
+        return self.prompts[index]
 
 
 class EMAModel:
@@ -199,6 +238,226 @@ class EMAModel:
             p.to(device=device, dtype=dtype) if p.is_floating_point() else p.to(device=device)
             for p in self.shadow_params
         ]
+
+
+class ImageBuilder:
+    def __init__(self, config: DreamboothConfig, use_txt2img: bool, lora_model: str = None, lora_weight: float = 0,
+                 batch_size: int = 1, accelerator: Accelerator = None):
+        self.image_pipe = None
+        self.txt_pipe = None
+        # If the accelerator doesn't already exist, we're generating from UI, not pre-training, so we skip unloading.
+        # if accelerator is None:
+        #     self.skip_unload = True
+        # else:
+        #     self.skip_unload = False
+        # self.accelerator = accelerator
+        self.resolution = config.resolution
+        self.last_model = None
+        self.batch_size = batch_size
+        if not os.path.exists(config.src) and use_txt2img:
+            print("Source model is from hub, can't use txt2image.")
+            use_txt2img = False
+
+        self.use_txt2img = use_txt2img
+        self.del_accelerator = False
+
+        if not self.use_txt2img:
+            self.accelerator = accelerator
+            if accelerator is None:
+                try:
+                    accelerator = Accelerator(
+                        gradient_accumulation_steps=config.gradient_accumulation_steps,
+                        mixed_precision=config.mixed_precision,
+                        log_with="tensorboard",
+                        logging_dir=os.path.join(config.model_dir, "logging"),
+                        cpu=config.use_cpu
+                    )
+                    self.accelerator = accelerator
+                    self.del_accelerator = True
+                except Exception as e:
+                    if "AcceleratorState" in str(e):
+                        msg = "Change in precision detected, please restart the webUI entirely to use new precision."
+                    else:
+                        msg = f"Exception initializing accelerator: {e}"
+                    print(msg)
+            print("Setting up diffusers image generator...")
+            torch_dtype = torch.float16 if shared.device.type == "cuda" else torch.float32
+
+            self.image_pipe = DiffusionPipeline.from_pretrained(
+                config.pretrained_model_name_or_path,
+                vae=AutoencoderKL.from_pretrained(
+                    config.pretrained_vae_name_or_path or config.pretrained_model_name_or_path,
+                    subfolder=None if config.pretrained_vae_name_or_path else "vae",
+                    revision=config.revision,
+                    torch_dtype=torch_dtype
+                ),
+                torch_dtype=torch_dtype,
+                requires_safety_checker=False,
+                safety_checker=None,
+                revision=config.revision
+            )
+
+            self.image_pipe.to(accelerator.device)
+            if config.use_lora and lora_model is not None and lora_model != "":
+                apply_lora_weights(lora_model, self.image_pipe.unet, self.image_pipe.text_encoder, lora_weight, accelerator.device)
+            print("Diffusers model configured.")
+        else:
+            print("Loading SD model.")
+            current_model = sd_models.select_checkpoint()
+            new_model_info = get_checkpoint_match(config.src)
+            if new_model_info is not None and current_model is not None:
+                if new_model_info[0] != current_model[0]:
+                    self.last_model = current_model
+                    print(f"Loading model: {new_model_info[0]}")
+                    sd_models.load_model(new_model_info)
+            if new_model_info is not None and current_model is None:
+                sd_models.load_model(new_model_info)
+            shared.sd_model.to(shared.device)
+            print("SD model loaded.")
+
+    def generate_images(self, prompt_data: PromptData) -> Image:
+        if self.use_txt2img:
+            p = StableDiffusionProcessingTxt2Img(
+                sd_model=shared.sd_model,
+                prompt=[prompt_data.prompt] * self.batch_size,
+                negative_prompt=[prompt_data.negative_prompt] * self.batch_size,
+                batch_size=self.batch_size,
+                steps=prompt_data.steps,
+                cfg_scale=prompt_data.scale,
+                width=self.resolution,
+                height=self.resolution,
+                do_not_save_grid=True,
+                do_not_save_samples=True,
+                do_not_reload_embeddings=True
+            )
+            processed = process_images(p)
+            print(f"Processed: {prompt_data.prompt}")
+            p.close()
+            output = processed.images
+        else:
+            with self.accelerator.autocast(), torch.inference_mode():
+                output = self.image_pipe(
+                    [prompt_data.prompt] * self.batch_size,
+                    num_inference_steps=prompt_data.steps,
+                    guidance_scale=prompt_data.scale,
+                    height=self.resolution,
+                    width=self.resolution,
+                    negative_prompt=[prompt_data.negative_prompt] * self.batch_size).images
+        return output
+
+    def unload(self):
+        # If we have an image pipe, delete it
+        if self.image_pipe is not None:
+            del self.image_pipe
+        if self.del_accelerator:
+            del self.accelerator
+        # If there was a model loaded already, reload it
+        if self.last_model is not None:
+            sd_models.load_model(self.last_model)
+
+
+def generate_prompts(model_dir):
+    from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
+    if model_dir is None or model_dir == "":
+        return "Please select a model."
+    config = from_file(model_dir)
+    tokenizer = AutoTokenizer.from_pretrained(
+        os.path.join(config.pretrained_model_name_or_path, "tokenizer"),
+        revision=config.revision,
+        use_fast=False,
+    )
+    train_dataset = SuperDataset(
+        concepts_list=config.concepts_list,
+        tokenizer=tokenizer,
+        size=config.resolution,
+        center_crop=config.center_crop,
+        lifetime_steps=config.revision,
+        pad_tokens=config.pad_tokens,
+        hflip=config.hflip,
+        max_token_length=config.max_token_length,
+        shuffle_tags=config.shuffle_tags
+    )
+
+    output = {"instance_prompts": [], "existing_class_prompts": [], "new_class_prompts": [], "sample_prompts": []}
+
+    for i in range(train_dataset.__len__()):
+        item = train_dataset.__getitem__(i)
+        output["instance_prompts"].append(item["instance_prompt"])
+        if "class_prompt" in item:
+            output["existing_class_prompts"].append(item["class_prompt"])
+    sample_prompts = train_dataset.get_sample_prompts()
+    for prompt in sample_prompts:
+        output["sample_prompts"].append(prompt.prompt)
+
+    for concept in config.concepts_list:
+        c_idx = 0
+        class_images_dir = Path(concept["class_data_dir"])
+        if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:
+            class_images_dir = os.path.join(config.model_dir, f"classifiers_{c_idx}")
+            print(f"Class image dir is not set, defaulting to {class_images_dir}")
+        class_images_dir.mkdir(parents=True, exist_ok=True)
+        cur_class_images = len(get_images(class_images_dir))
+        if cur_class_images < concept.num_class_images:
+            sample_dataset = PromptDataset(config.concepts_list, config.model_dir, config.shuffle_tags, config.sample_batch_size)
+            for i in range(sample_dataset.__len__()):
+                output["new_class_prompts"].append(sample_dataset.__getitem__(i)["prompt"])
+        c_idx += 1
+
+    return json.dumps(output)
+
+
+def generate_classifiers(args: DreamboothConfig, lora_model: str, lora_weight: int, use_txt2img: bool = True):
+    printm("Generating class images...")
+    try:
+        prompt_dataset = PromptDataset(args.concepts_list, args.model_dir, args.shuffle_tags, args.sample_batch_size)
+    except Exception as p:
+        print(f"Exception generating dataset: {str(p)}")
+        return 0, False
+
+    with_prior = prompt_dataset.with_prior
+
+    set_len = prompt_dataset.__len__()
+    if set_len == 0:
+        print("Nothing to generate.")
+        return 0, prompt_dataset.with_prior
+
+    shared.state.textinfo = f"Generating {set_len} class images for training..."
+    shared.state.job_count = set_len
+    shared.state.job_no = 0
+    print(f"Creating image builder {args.sample_batch_size}...")
+    builder = ImageBuilder(args, use_txt2img, lora_model, lora_weight, args.sample_batch_size)
+    generated = 0
+    if not use_txt2img:
+        pbar = tqdm(total=set_len - 1)
+    else:
+        pbar = None
+    for i in range(set_len - 1):
+        if shared.state.interrupted:
+            break
+        pd = prompt_dataset.__getitem__(i)
+        out_images = builder.generate_images(pd)
+        for image in out_images:
+            image_base = hashlib.sha1(image.tobytes()).hexdigest()
+            image_filename = os.path.join(pd.out_dir, f"{image_base}.png")
+            image.save(image_filename)
+            txt_filename = image_filename.replace(".png", ".txt")
+            with open(txt_filename, "w", encoding="utf8") as file:
+                file.write(pd.prompt)
+            if not use_txt2img:
+                shared.state.job_no += 1
+                shared.state.textinfo = f"Class image {i}/{set_len}, " \
+                                        f"Prompt: '{pd.prompt}'"
+                shared.state.current_image = image
+                if pbar is not None:
+                    pbar.update()
+            generated += 1
+        if not use_txt2img:
+            shared.state.current_image = images.image_grid(out_images)
+    builder.unload()
+    del prompt_dataset
+    cleanup()
+    printm(f"Generated {generated} new class images.")
+    return generated, with_prior
 
 
 # Implementation from https://github.com/bmaltais/kohya_ss
