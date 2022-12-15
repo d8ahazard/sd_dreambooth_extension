@@ -168,9 +168,10 @@ class SuperDataset(Dataset):
                                                                    class_token, True)
                         prompt_tokens = self.tokenize(file_prompt)
                         class_data.append(TrainingData(file, file_prompt, prompt_tokens))
-                        random.shuffle(class_data)
-                        if len(class_data) > num_class_images:
-                            class_data = class_data[:num_class_images]
+
+                    random.shuffle(class_data)
+                    if len(class_data) > num_class_images:
+                        class_data = class_data[:num_class_images]
 
                 # Generate sample prompts for concept
                 samples = self.generate_sample_prompts(instance_data, concept)
@@ -265,7 +266,7 @@ class SuperDataset(Dataset):
         example["instance_prompt_ids"] = instance_data.tokens
 
         if concept_data.has_prior():
-            class_data = concept_data.get_instance_image()
+            class_data = concept_data.get_class_image()
             class_image = Image.open(class_data.image)
             if not class_image.mode == "RGB":
                 class_image = class_image.convert("RGB")
