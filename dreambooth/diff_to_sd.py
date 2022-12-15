@@ -262,6 +262,8 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
                        reload_models=True, log=True):
     """
 
+    @param lora_txt_alpha:
+    @param custom_model_name:
     @param model_name: The model name to compile
     @param half: Use FP16 when compiling the model
     @param use_subdir: The model will be saved to a subdirectory of the checkpoints folder

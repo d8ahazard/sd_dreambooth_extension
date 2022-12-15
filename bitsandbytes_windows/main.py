@@ -153,7 +153,7 @@ def evaluate_cuda_setup():
     print(f'CUDA SETUP: Detected CUDA version {cuda_version_string}')
 
     def get_binary_name():
-        "if not has_cublaslt (CC < 7.5), then we have to choose  _nocublaslt.so"
+        """if not has_cublaslt (CC < 7.5), then we have to choose  _nocublaslt.so"""
         bin_base_name = "libbitsandbytes_cuda"
         if has_cublaslt:
             return f"{bin_base_name}{cuda_version_string}.so"

@@ -350,6 +350,12 @@ async def process_api(
         state: data stored from stateful components for session (key is input block id)
         iterators: the in-progress iterators for each generator function (key is function index)
     Returns: None
+    @param fn_index:
+    @param inputs:
+    @param username:
+    @param state:
+    @param iterators:
+    @param self:
     """
     if len(inputs) == 1 and isinstance(inputs[0], list):
         inputs = inputs[0]
