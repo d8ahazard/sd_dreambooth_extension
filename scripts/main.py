@@ -454,14 +454,20 @@ def on_ui_tabs():
             outputs=[hub_row],
         )
 
+        def disable_ema(x):
+            db_use_ema.interactive = not x
+
+        def disable_lora(x):
+            db_use_lora.interactive = not x            
+
         db_use_lora.change(
-            fn=lambda x: False if x else db_use_lora,
+            fn=disable_ema,
             inputs=[db_use_lora],
             outputs=[db_use_ema],
         )
 
         db_use_ema.change(
-            fn=lambda x: False if x else db_use_ema,
+            fn=disable_lora,
             inputs=[db_use_ema],
             outputs=[db_use_lora],
         )
