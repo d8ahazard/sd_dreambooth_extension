@@ -58,7 +58,8 @@ def get_lora_models():
         dirs = os.listdir(out_dir)
         for found in dirs:
             if os.path.isfile(os.path.join(out_dir, found)):
-                output.append(found)
+                if not "_txt.pt" in found and ".pt" in found:
+                    output.append(found)
     return output
 
 
