@@ -723,7 +723,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         if enc_vae is None:
             enc_vae = create_vae()
 
-        if orig_dataset is not None:
+        if orig_dataset is None:
             dataset = SuperDataset(
                 concepts_list=args.concepts_list,
                 tokenizer=tokenizer,
@@ -736,7 +736,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 shuffle_tags=args.shuffle_tags
             )
         else:
-            dataset = gen_dataset
+            dataset = orig_dataset
 
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
