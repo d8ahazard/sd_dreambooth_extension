@@ -38,6 +38,7 @@ def on_ui_tabs():
                     value="",
                     placeholder="Enter a model name for saving checkpoints and lora models.")
                 db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1)
+                db_lora_txt_weight = gr.Slider(label="Lora Text Weight", value=1, minimum=0.1, maximum=1, step=0.1)
                 db_half_model = gr.Checkbox(label="Half Model", value=False)
                 db_use_subdir = gr.Checkbox(label="Save Checkpoint to Subdirectory", value=False)
                 with gr.Row():
@@ -578,7 +579,8 @@ def on_ui_tabs():
                 db_use_subdir,
                 db_lora_model_name,
                 db_lora_weight,
-                db_custom_model_name
+                db_lora_txt_weight,
+                db_custom_model_name,
             ],
             outputs=[
                 db_status,
@@ -611,6 +613,7 @@ def on_ui_tabs():
                 db_model_name,
                 db_lora_model_name,
                 db_lora_weight,
+                db_lora_txt_weight,
                 db_train_imagic_only,
                 db_use_subdir,
                 db_custom_model_name
