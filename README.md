@@ -310,5 +310,19 @@ Please check out the [discussions](https://github.com/d8ahazard/sd_dreambooth_ex
 Please be sure to use an issue template when asking for help. Some of the questions may be tedious, but I promise, they'll help me help you faster.
 
 [Bug Report](https://github.com/d8ahazard/sd_dreambooth_extension/issues/new?assignees=&labels=&template=bug_report.md&title=)
+
 [Feature Request](https://github.com/d8ahazard/sd_dreambooth_extension/issues/new?assignees=&labels=&template=feature_request.md&title=)
+
+
+# Credits
+
+[Huggingface.co](https://huggingface.co) - All the things
+
+[CloneOfSimo](https://github.com/cloneofsimo/lora) - LORA
+
+[ShivamShrirao](https://github.com/ShivamShrirao/diffusers/tree/main/examples/dreambooth) - Multiple concepts, optimizations.
+
+[Bmalthais](https://github.com/bmaltais/kohya_ss) - Optimizations, Features
+
+[Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) - Base app
 
