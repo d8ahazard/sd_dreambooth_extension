@@ -34,7 +34,11 @@ def on_ui_tabs():
                     create_refresh_button(db_lora_model_name, get_lora_models, lambda: {
                         "choices": sorted(get_lora_models())},
                                           "refresh_lora_models")
+                db_custom_model_name = gr.Textbox(label="Custom Model Name", 
+                    value="",
+                    placeholder="Enter a model name for saving checkpoints and lora models.")
                 db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1)
+                db_lora_txt_weight = gr.Slider(label="Lora Text Weight", value=1, minimum=0.1, maximum=1, step=0.1)
                 db_half_model = gr.Checkbox(label="Half Model", value=False)
                 db_use_subdir = gr.Checkbox(label="Save Checkpoint to Subdirectory", value=False)
                 with gr.Row():
@@ -243,6 +247,7 @@ def on_ui_tabs():
                 db_attention,
                 db_center_crop,
                 db_concepts_path,
+                db_custom_model_name,
                 db_epoch_pause_frequency,
                 db_epoch_pause_time,
                 db_gradient_accumulation_steps,
@@ -355,6 +360,7 @@ def on_ui_tabs():
                 db_attention,
                 db_center_crop,
                 db_concepts_path,
+                db_custom_model_name,
                 db_epoch_pause_frequency,
                 db_epoch_pause_time,
                 db_gradient_accumulation_steps,
@@ -578,7 +584,9 @@ def on_ui_tabs():
                 db_half_model,
                 db_use_subdir,
                 db_lora_model_name,
-                db_lora_weight
+                db_lora_weight,
+                db_lora_txt_weight,
+                db_custom_model_name,
             ],
             outputs=[
                 db_status,
@@ -611,8 +619,10 @@ def on_ui_tabs():
                 db_model_name,
                 db_lora_model_name,
                 db_lora_weight,
+                db_lora_txt_weight,
                 db_train_imagic_only,
-                db_use_subdir
+                db_use_subdir,
+                db_custom_model_name
             ],
             outputs=[
                 db_lora_model_name,

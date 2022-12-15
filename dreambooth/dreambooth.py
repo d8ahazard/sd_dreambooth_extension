@@ -224,6 +224,7 @@ def load_params(model_dir):
                "db_attention",
                "db_center_crop",
                "db_concepts_path",
+               "db_custom_model_name",
                "db_epoch_pause_frequency",
                "db_epoch_pause_time",
                "db_gradient_accumulation_steps",
@@ -307,7 +308,7 @@ def load_model_params(model_dir):
                ""
 
 
-def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic_only: bool, use_subdir: bool):
+def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora_txt_alpha: float, imagic_only: bool, use_subdir: bool, custom_model_name: str):
     global mem_record
     if model_dir == "" or model_dir is None:
         print("Invalid model name.")
@@ -343,6 +344,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic
         return lora_model_name, msg, 0, msg
 
     # Clear memory and do "stuff" only after we've ensured all the things are right
+    print(f"Custom model name is {custom_model_name}")
     print("Starting Dreambooth training...")
     unload_system_models()
     total_steps = config.revision
@@ -358,7 +360,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: int, imagic
             print(shared.state.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
             config, mem_record, msg = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name,
-                                           lora_alpha=lora_alpha)
+                                           lora_alpha=lora_alpha, lora_txt_alpha=lora_txt_alpha, custom_model_name=custom_model_name)
             if config.revision != total_steps:
                 config.save()
         total_steps = config.revision
