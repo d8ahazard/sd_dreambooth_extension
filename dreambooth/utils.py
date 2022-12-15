@@ -1,5 +1,4 @@
 import gc
-import json
 import os
 import random
 import traceback
@@ -11,7 +10,7 @@ import torch
 from PIL import features
 from diffusers import StableDiffusionPipeline, EulerAncestralDiscreteScheduler
 from huggingface_hub import HfFolder, whoami
-from transformers import AutoTokenizer, CLIPTextModel
+from transformers import CLIPTextModel
 
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from modules import shared, paths, sd_models
@@ -259,13 +258,6 @@ def list_features():
     return pil_features
 
 
-def get_checkpoint_match(searchString):
-    for info in sd_models.checkpoints_list.values():
-        if searchString in info.title or searchString in info.model_name or searchString in info.filename:
-            return info
-    return None
-
-
 def is_image(path: Path, feats=None):
     if feats is None:
         feats = []
@@ -273,6 +265,13 @@ def is_image(path: Path, feats=None):
         feats = list_features()
     is_img = path.is_file() and path.suffix.lower() in feats
     return is_img
+
+
+def get_checkpoint_match(searchString):
+    for info in sd_models.checkpoints_list.values():
+        if searchString in info.title or searchString in info.model_name or searchString in info.filename:
+            return info
+    return None
 
 
 def get_full_repo_name(model_id: str, organization: Optional[str] = None, token: Optional[str] = None):

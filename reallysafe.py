@@ -18,6 +18,16 @@ def encode(*args):
     return out
 
 
+extras_dict = {
+    "yolo": [],
+    'torch.nn.modules': ['Conv', 'Conv2d', 'BatchNorm2d', "SiLU", "MaxPool2d", "Upsample", "ModuleList"],
+    "models.common": ["C3", "Bottleneck", "SPPF", "Concat", "Conv"],
+    "numpy.core.multiarray": ["_reconstruct"],
+    'torch': ['FloatStorage', 'HalfStorage', 'IntStorage', 'LongStorage', 'DoubleStorage', 'ByteStorage',
+              'BFloat16Storage']
+}
+
+
 class RestrictedUnpickler(pickle.Unpickler):
     extra_handler = None
 
@@ -52,24 +62,17 @@ class RestrictedUnpickler(pickle.Unpickler):
         if module == "pytorch_lightning.callbacks.model_checkpoint" and name == 'ModelCheckpoint':
             import pytorch_lightning.callbacks.model_checkpoint
             return pytorch_lightning.callbacks.model_checkpoint.ModelCheckpoint
-        if "yolo" in module:
-            return super().find_class(module, name)
-        if module == "models.common" and name == "Conv":
-            return super().find_class(module, name)
-        if 'torch.nn.modules' in module and name in ['Conv', 'Conv2d', 'BatchNorm2d', "SiLU", "MaxPool2d", "Upsample",
-                                                     "ModuleList"]:
-            return super().find_class(module, name)
-        if "models.common" in module and name in ["C3", "Bottleneck", "SPPF", "Concat"]:
-            return super().find_class(module, name)
         if module == "__builtin__" and name == 'set':
             return set
-
-        # Forbid everything else.
+        for key in extras_dict:
+            if module in key and name in extras_dict[module] or len(extras_dict[module]) == 0:
+                return super().find_class(name, module)
         raise Exception(f"global '{module}/{name}' is forbidden")
 
 
 # Regular expression that accepts 'dirname/version', 'dirname/data.pkl', and 'dirname/data/<number>'
 allowed_zip_names_re = re.compile(r"^([^/]+)/((data/\d+)|version|(data\.pkl))$")
+extra_zip_names = []
 data_pkl_re = re.compile(r"^([^/]+)/data\.pkl$")
 
 
@@ -77,7 +80,8 @@ def check_zip_filenames(filename, names):
     for name in names:
         if allowed_zip_names_re.match(name):
             continue
-
+        if name in extra_zip_names:
+            continue
         raise Exception(f"bad file inside {filename}: {name}")
 
 

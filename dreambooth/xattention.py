@@ -337,7 +337,6 @@ async def process_api(
     self,
     fn_index: int,
     inputs: List[Any],
-    request: routes.Request | List[routes.Request] | None = None,
     username: str = None,
     state: Dict[int, Any] | List[Dict[int, Any]] | None = None,
     iterators: Dict[int, Any] | None = None,
@@ -376,7 +375,7 @@ async def process_api(
             )
 
         inputs = [self.preprocess_data(fn_index, i, state) for i in zip(*inputs)]
-        result = await self.call_function(fn_index, zip(*inputs), None, request)
+        result = await self.call_function(fn_index, zip(*inputs), None)
         preds = result["prediction"]
         data = [self.postprocess_data(fn_index, o, state) for o in zip(*preds)]
         data = list(zip(*data))
@@ -384,7 +383,7 @@ async def process_api(
     else:
         inputs = self.preprocess_data(fn_index, inputs, state)
         iterator = iterators.get(fn_index, None) if iterators else None
-        result = await self.call_function(fn_index, inputs, iterator, request)
+        result = await self.call_function(fn_index, inputs, iterator)
         data = self.postprocess_data(fn_index, result["prediction"], state)
         is_generating, iterator = result["is_generating"], result["iterator"]
 
@@ -398,5 +397,3 @@ async def process_api(
         "duration": result["duration"],
         "average_duration": block_fn.total_runtime / block_fn.total_runs,
     }
-
-

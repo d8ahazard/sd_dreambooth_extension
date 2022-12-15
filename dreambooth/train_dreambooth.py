@@ -28,7 +28,7 @@ from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_che
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import encode_hidden_state, \
     EMAModel, generate_classifiers
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, apply_lora_weights
 from modules import shared, paths, images
 
@@ -123,10 +123,10 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
-def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lora_alpha=1.0, lora_txt_alpha=1.0, custom_model_name="", use_txt2img=True) -> tuple[
-    DreamboothConfig, dict, str]:
-    logging_dir = Path(args.model_dir, "logging")
+def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lora_alpha=1.0, lora_txt_alpha=1.0,
+         custom_model_name="", use_txt2img=True) -> tuple[DreamboothConfig, dict, str]:
 
+    logging_dir = Path(args.model_dir, "logging")
     if profile_memory:
         cleanup(True)
         prof = profile(
@@ -139,9 +139,10 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         prof = None
 
     global with_prior
+    global mem_record
+
     text_encoder = None
     args.tokenizer_name = None
-    global mem_record
     mem_record = memory_record
     max_train_steps = args.max_train_steps
 
@@ -189,6 +190,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         args.train_text_encoder = False
 
     count, with_prior = generate_classifiers(args, lora_model, accelerator, use_txt2img)
+    if use_txt2img:
+        print("Unloading system models (again).")
+        unload_system_models()
 
     # Load the tokenizer
     if args.tokenizer_name:
@@ -274,7 +278,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     if args.use_lora:
 
         args.learning_rate = args.lora_learning_rate
-        
+
         params_to_optimize = ([
                                   {"params": itertools.chain(*unet_lora_params), "lr": args.lora_learning_rate},
                                   {"params": itertools.chain(*text_encoder_lora_params),
@@ -587,16 +591,15 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         else:
                             out_file = None
                             shared.state.textinfo = f"Saving diffusion model at step {args.revision}..."
-                            accelerator.save_state(os.path.join(args.model_dir, "checkpoints", f"checkpoint-{args.revision}"))
-                            # s_pipeline.save_pretrained(args.pretrained_model_name_or_path)
+                            accelerator.save_state(os.path.join(args.model_dir, "checkpoints",
+                                                                f"checkpoint-{args.revision}"))
 
                             compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
                                                reload_models=False, lora_path=out_file, log=False,
-                                               custom_model_name=custom_model_name
-                                               )
+                                               custom_model_name=custom_model_name)
                         if args.use_ema:
                             ema_unet.restore(unet.parameters())
-
+                        args.save()
                     except Exception as ex:
                         print(f"Exception saving checkpoint/model: {ex}")
                         traceback.print_exc()
@@ -758,6 +761,11 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     accelerator.log(logs, step=args.revision)
                     loss_avg.reset()
 
+                progress_bar.update(args.train_batch_size)
+                global_step += args.train_batch_size
+                args.revision += args.train_batch_size
+                shared.state.job_no = global_step
+
                 training_complete = global_step >= actual_train_steps or shared.state.interrupted
                 if not args.save_use_epochs:
                     if global_step > 0:
@@ -771,9 +779,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                             save_img = True
                             save_model = True
                         if save_img or save_model:
-                            args.save()
                             save_weights()
-                            args = from_file(args.model_name)
                             weights_saved = True
                             shared.state.job_count = actual_train_steps
 
@@ -796,11 +802,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
                     break
 
-                progress_bar.update(args.train_batch_size)
-                global_step += args.train_batch_size
-                args.revision += args.train_batch_size
-                shared.state.job_no = global_step
-
             training_complete = global_step >= actual_train_steps or shared.state.interrupted
             accelerator.wait_for_everyone()
             if not args.not_cache_latents:
@@ -811,9 +812,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         prof.step()
                     save_img = True
                     save_model = True
-                    args.save()
                     save_weights()
-                    args = from_file(args.model_name)
                 msg = f"Training completed, total steps: {args.revision}"
                 break
         except Exception as m:
@@ -829,9 +828,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         args.epoch += global_epoch
         args.save()
         global_epoch += 1
-
-        if training_complete:
-            break
 
         if args.save_use_epochs:
             if args.save_use_global_counts:
