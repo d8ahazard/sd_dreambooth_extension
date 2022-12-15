@@ -265,7 +265,7 @@ class SuperDataset(Dataset):
         example["instance_prompt_ids"] = instance_data.tokens
 
         if concept_data.has_prior():
-            class_data = concept_data.get_instance_image()
+            class_data = concept_data.get_class_image()
             class_image = Image.open(class_data.image)
             if not class_image.mode == "RGB":
                 class_image = class_image.convert("RGB")
