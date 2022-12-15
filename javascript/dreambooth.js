@@ -1,7 +1,7 @@
 // Save our current training params before doing a thing
-function save_config(){
+function save_config() {
     let btn = gradioApp().getElementById("db_save_config");
-    if(btn!=null) {
+    if (btn != null) {
         btn.click();
         console.log("Saving config...")
     } else {
@@ -20,32 +20,32 @@ function log_save() {
     console.log("Saving: ", arguments);
     return arguments;
 }
+
 // Start progress bar without saving
-function db_start_progress(){
+function db_start_progress() {
     requestProgress('db');
-    gradioApp().querySelector('#db_error').innerHTML='';
-    gradioApp().querySelector('#db_status').innerHTML='';
+    gradioApp().querySelector('#db_error').innerHTML = '';
+    gradioApp().querySelector('#db_status').innerHTML = '';
     return args_to_array(arguments);
 }
-
 
 
 // Save and start progress bar, clear statuses, etc.
-function db_save_start_progress(){
+function db_save_start_progress() {
     save_config();
     requestProgress('db');
-    gradioApp().querySelector('#db_error').innerHTML='';
-    gradioApp().querySelector('#db_status').innerHTML='';
+    gradioApp().querySelector('#db_error').innerHTML = '';
+    gradioApp().querySelector('#db_status').innerHTML = '';
     return args_to_array(arguments);
 }
 
-function db_generate_classes(){
+function db_generate_classes() {
     save_config();
     requestProgress('db');
-    gradioApp().querySelector('#db_error').innerHTML='';
-    gradioApp().querySelector('#db_status').innerHTML='';
+    gradioApp().querySelector('#db_error').innerHTML = '';
+    gradioApp().querySelector('#db_status').innerHTML = '';
     let args = [];
-    for (let i = 0; i < 4; i ++) {
+    for (let i = 0; i < 4; i++) {
         args.push(arguments[i]);
     }
     return args;
@@ -53,7 +53,7 @@ function db_generate_classes(){
 
 
 // Do a thing when the UI updates
-onUiUpdate(function(){
+onUiUpdate(function () {
     check_progressbar('db', 'db_progressbar', 'db_progress_span', '', 'db_interrupt', 'db_preview', 'db_gallery')
 });
 

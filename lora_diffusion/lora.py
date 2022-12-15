@@ -21,7 +21,7 @@ class LoraInjectedLinear(nn.Module):
         self.lora_up = nn.Linear(r, out_features, bias=False)
         self.scale = 1.0
 
-        nn.init.normal_(self.lora_down.weight, std=1 / r**2)
+        nn.init.normal_(self.lora_down.weight, std=1 / r ** 2)
         nn.init.zeros_(self.lora_up.weight)
 
     def forward(self, input):
@@ -29,9 +29,9 @@ class LoraInjectedLinear(nn.Module):
 
 
 def inject_trainable_lora(
-    model: nn.Module,
-    target_replace_module: List[str] = ["CrossAttention", "Attention"],
-    r: int = 4,
+        model: nn.Module,
+        target_replace_module: List[str] = ["CrossAttention", "Attention"],
+        r: int = 4,
 ):
     """
     inject lora into model, and returns lora parameter groups.
@@ -85,17 +85,17 @@ def extract_lora_ups_down(model, target_replace_module=None):
             for _child_module in _module.modules():
                 if _child_module.__class__.__name__ == "LoraInjectedLinear":
                     no_injection = False
-                    yield (_child_module.lora_up, _child_module.lora_down)
+                    yield _child_module.lora_up, _child_module.lora_down
     if no_injection:
         raise ValueError("No lora injected.")
 
 
 def save_lora_weight(
-    model, path="./lora.pt", target_replace_module=["CrossAttention", "Attention"]
+        model, path="./lora.pt", target_replace_module=["CrossAttention", "Attention"]
 ):
     weights = []
     for _up, _down in extract_lora_ups_down(
-        model, target_replace_module=target_replace_module
+            model, target_replace_module=target_replace_module
     ):
         weights.append(_up.weight)
         weights.append(_down.weight)
@@ -125,14 +125,12 @@ def save_lora_as_json(model, path="./lora.json"):
 
 
 def weight_apply_lora(
-    model, loras, target_replace_module=["CrossAttention", "Attention"], alpha=1.0
+        model, loras, target_replace_module=["CrossAttention", "Attention"], alpha=1.0
 ):
-
     for _module in model.modules():
         if _module.__class__.__name__ in target_replace_module:
             for _child_module in _module.modules():
                 if _child_module.__class__.__name__ == "Linear":
-
                     weight = _child_module.weight
 
                     up_weight = loras.pop(0).detach().to(weight.device)
@@ -172,7 +170,7 @@ def apply_lora_weights(lora_model, target_unet, target_text_encoder, lora_alpha=
 
 
 def monkeypatch_lora(
-    model, loras, target_replace_module=None
+        model, loras, target_replace_module=None
 ):
     if target_replace_module is None:
         target_replace_module = ["CrossAttention", "Attention"]

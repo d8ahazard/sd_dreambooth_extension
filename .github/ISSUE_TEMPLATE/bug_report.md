@@ -6,11 +6,11 @@ labels: 'new'
 assignees: ''
 
 ---
+
 ## Kindly read this ENTIRE form and fill it out with the requested information. It may seem tedious, but it's even more tedious asking basic questions to ensure I'm not trying to troubleshoot a bug I've already fixed. Help me help you, answer all the questions and follow the steps below before posting.
 
-
-
-**Please find the following lines in the console and paste them below. _If you do not provide this information, your issue will be automatically closed._**
+**Please find the following lines in the console and paste them below. _If you do not provide this information, your
+issue will be automatically closed._**
 
 `
 Python 3.9.12 (main, Apr  4 2022, 05:22:27) [MSC v.1916 64 bit (AMD64)]
@@ -31,7 +31,8 @@ Torch vision version is *.*.*.
 
 **Have you updated the Stable-Diffusion-WebUI to the latest version?**
 
-**No, really. Please save us both some trouble and update the SD-WebUI and Extension and restart before posting this. Reply 'OK' Below to acknowledge that you did this.**
+**No, really. Please save us both some trouble and update the SD-WebUI and Extension and restart before posting this.
+Reply 'OK' Below to acknowledge that you did this.**
 
 **Describe the bug**
 
@@ -39,7 +40,8 @@ Torch vision version is *.*.*.
 
 **Provide logs**
 
-If a crash has occurred, please provide the *entire* stack trace from the log, including the last few log messages *before* the crash occurred.
+If a crash has occurred, please provide the *entire* stack trace from the log, including the last few log messages *
+before* the crash occurred.
 
 **Environment**
 
@@ -50,4 +52,5 @@ If Windows - WSL or native?
 What GPU are you using?
 
 **Screenshots/Config**
-If the issue is specific to an error while training, please provide a screenshot of training parameters or the db_config.json file from /models/dreambooth/MODELNAME/db_config.json
+If the issue is specific to an error while training, please provide a screenshot of training parameters or the
+db_config.json file from /models/dreambooth/MODELNAME/db_config.json

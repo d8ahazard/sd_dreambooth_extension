@@ -125,7 +125,6 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 
 def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lora_alpha=1.0, lora_txt_alpha=1.0,
          custom_model_name="", use_txt2img=True) -> tuple[DreamboothConfig, dict, str]:
-
     logging_dir = Path(args.model_dir, "logging")
     if profile_memory:
         cleanup(True)

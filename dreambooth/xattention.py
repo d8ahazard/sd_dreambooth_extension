@@ -7,7 +7,6 @@ import diffusers
 import torch
 import transformers
 from einops import rearrange
-from gradio import routes
 from torch import einsum
 
 
@@ -330,16 +329,16 @@ trans_ver = transformers.__version__
 if int(trans_ver.split(".")[1]) > 19:
     pass
     # print("Patching transformers to fix kwargs errors.")
-    #transformers.GenerationMixin._validate_model_kwargs = _validate_model_kwargs
+    # transformers.GenerationMixin._validate_model_kwargs = _validate_model_kwargs
 
 
 async def process_api(
-    self,
-    fn_index: int,
-    inputs: List[Any],
-    username: str = None,
-    state: Dict[int, Any] | List[Dict[int, Any]] | None = None,
-    iterators: Dict[int, Any] | None = None,
+        self,
+        fn_index: int,
+        inputs: List[Any],
+        username: str = None,
+        state: Dict[int, Any] | List[Dict[int, Any]] | None = None,
+        iterators: Dict[int, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Processes API calls from the frontend. First preprocesses the data,
@@ -362,7 +361,7 @@ async def process_api(
         batch_sizes = [len(inp) for inp in inputs]
         batch_size = batch_sizes[0]
         if inspect.isasyncgenfunction(block_fn.fn) or inspect.isgeneratorfunction(
-            block_fn.fn
+                block_fn.fn
         ):
             raise ValueError("Gradio does not support generators in batch mode.")
         if not all(x == batch_size for x in batch_sizes):

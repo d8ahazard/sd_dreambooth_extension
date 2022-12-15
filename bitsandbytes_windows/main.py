@@ -29,6 +29,7 @@ def check_cuda_result(cuda, result_val):
         cuda.cuGetErrorString(result_val, ctypes.byref(error_str))
         print(f"CUDA exception! Error code: {error_str.value.decode()}")
 
+
 def get_cuda_version(cuda, cudart_path):
     # https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART____VERSION.html#group__CUDART____VERSION
     try:
@@ -41,11 +42,12 @@ def get_cuda_version(cuda, cudart_path):
     version = ctypes.c_int()
     check_cuda_result(cuda, cudart.cudaRuntimeGetVersion(ctypes.byref(version)))
     version = int(version.value)
-    major = version//1000
-    minor = (version-(major*1000))//10
+    major = version // 1000
+    minor = (version - (major * 1000)) // 10
 
     if major < 11:
-       print('CUDA SETUP: CUDA version lower than 11 are currenlty not supported for LLM.int8(). You will be only to use 8-bit optimizers and quantization routines!!')
+        print(
+            'CUDA SETUP: CUDA version lower than 11 are currenlty not supported for LLM.int8(). You will be only to use 8-bit optimizers and quantization routines!!')
 
     return f'{major}{minor}'
 
@@ -56,7 +58,8 @@ def get_cuda_lib_handle():
         cuda = ctypes.CDLL("libcuda.so")
     except OSError:
         # TODO: shouldn't we error or at least warn here?
-        print('CUDA SETUP: WARNING! libcuda.so not found! Do you have a CUDA driver installed? If you are on a cluster, make sure you are on a CUDA machine!')
+        print(
+            'CUDA SETUP: WARNING! libcuda.so not found! Do you have a CUDA driver installed? If you are on a cluster, make sure you are on a CUDA machine!')
         return None
     check_cuda_result(cuda, cuda.cuInit(0))
 
@@ -73,7 +76,6 @@ def get_compute_capabilities(cuda):
        https://stackoverflow.com/questions/14038589/what-is-the-canonical-way-to-check-for-errors-using-the-cuda-runtime-api
     # bits taken from https://gist.github.com/f0k/63a664160d016a491b2cbea15913d549
     """
-
 
     nGpus = ctypes.c_int()
     cc_major = ctypes.c_int()
@@ -113,12 +115,12 @@ def get_compute_capability(cuda):
 def evaluate_cuda_setup():
     if os.name == "nt":
         print("Using magick windows DLL!")
-        return "libbitsandbytes_cudaall.dll"            # $$$
-    
+        return "libbitsandbytes_cudaall.dll"  # $$$
+
     binary_name = "libbitsandbytes_cpu.so"
-    #if not torch.cuda.is_available():
-        #print('No GPU detected. Loading CPU library...')
-        #return binary_name
+    # if not torch.cuda.is_available():
+    # print('No GPU detected. Loading CPU library...')
+    # return binary_name
 
     cudart_path = determine_cuda_runtime_lib_path()
     if cudart_path is None:
@@ -132,7 +134,6 @@ def evaluate_cuda_setup():
     cc = get_compute_capability(cuda)
     print(f"CUDA SETUP: Highest compute capability among GPUs detected: {cc}")
     cuda_version_string = get_cuda_version(cuda, cudart_path)
-
 
     if cc == '':
         print(

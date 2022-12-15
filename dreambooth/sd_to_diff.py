@@ -48,9 +48,8 @@ from diffusers import (
     UNet2DConditionModel,
 )
 from diffusers.pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBertConfig, LDMBertModel
-from diffusers.pipelines.paint_by_example import PaintByExampleImageEncoder, PaintByExamplePipeline
 from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
-from transformers import AutoFeatureExtractor, BertTokenizerFast, CLIPTextModel, CLIPTokenizer, CLIPVisionConfig
+from transformers import AutoFeatureExtractor, BertTokenizerFast, CLIPTextModel, CLIPTokenizer
 
 
 def shave_segments(path, n_shave_prefix_segments=1):
@@ -634,8 +633,8 @@ def convert_ldm_clip_checkpoint(checkpoint):
 
     for key in keys:
         if key.startswith("cond_stage_model.transformer"):
-            if key.find ("text_model") == -1:
-                text_model_dict["text_model."+ key[len("cond_stage_model.transformer."):]] = checkpoint[key]
+            if key.find("text_model") == -1:
+                text_model_dict["text_model." + key[len("cond_stage_model.transformer."):]] = checkpoint[key]
             else:
                 text_model_dict[key[len("cond_stage_model.transformer."):]] = checkpoint[key]
 
@@ -842,7 +841,8 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                                                     "v1-inference.yaml")
 
         db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type, v2=v2,
-                                     src=ckpt_path if not from_hub else new_model_url, resolution=512 if is_512 else 768)
+                                     src=ckpt_path if not from_hub else new_model_url,
+                                     resolution=512 if is_512 else 768)
         db_config.lifetime_revision = revision
         db_config.epoch = epoch
         print(f"{'v2' if v2 else 'v1'} model loaded.")
@@ -991,11 +991,11 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
     dirs = get_db_models()
 
     return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), \
-        model_dir, \
-        revision, \
-        scheduler, \
-        src, \
-        "True" if has_ema else "False", \
-        "True" if v2 else "False", \
-        db_config.resolution, \
-        status
+           model_dir, \
+           revision, \
+           scheduler, \
+           src, \
+           "True" if has_ema else "False", \
+           "True" if v2 else "False", \
+           db_config.resolution, \
+           status

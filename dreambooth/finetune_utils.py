@@ -22,7 +22,6 @@ from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothCo
 from extensions.sd_dreambooth_extension.dreambooth.utils import printm, cleanup, get_checkpoint_match, get_images
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import apply_lora_weights
 from modules import shared, devices, sd_models, images
-from modules.devices import autocast
 from modules.processing import StableDiffusionProcessingTxt2Img, process_images
 
 
@@ -102,6 +101,7 @@ class FilenameTextGetter:
 
 class PromptDataset(Dataset):
     """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
+
     def __init__(self, concepts: [Concept], model_dir: str, shuffle_tags: bool, batch_size: int):
         c_idx = 0
         prompts = []
@@ -299,7 +299,8 @@ class ImageBuilder:
 
             self.image_pipe.to(accelerator.device)
             if config.use_lora and lora_model is not None and lora_model != "":
-                apply_lora_weights(lora_model, self.image_pipe.unet, self.image_pipe.text_encoder, lora_weight, accelerator.device)
+                apply_lora_weights(lora_model, self.image_pipe.unet, self.image_pipe.text_encoder, lora_weight,
+                                   accelerator.device)
             print("Diffusers model configured.")
         else:
             print("Loading SD model.")
@@ -398,7 +399,8 @@ def generate_prompts(model_dir):
         class_images_dir.mkdir(parents=True, exist_ok=True)
         cur_class_images = len(get_images(class_images_dir))
         if cur_class_images < concept.num_class_images:
-            sample_dataset = PromptDataset(config.concepts_list, config.model_dir, config.shuffle_tags, config.sample_batch_size)
+            sample_dataset = PromptDataset(config.concepts_list, config.model_dir, config.shuffle_tags,
+                                           config.sample_batch_size)
             for i in range(sample_dataset.__len__()):
                 output["new_class_prompts"].append(sample_dataset.__getitem__(i)["prompt"])
         c_idx += 1
@@ -463,7 +465,6 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str, lora_weight: i
 # Implementation from https://github.com/bmaltais/kohya_ss
 def encode_hidden_state(text_encoder: CLIPTextModel, input_ids, pad_tokens, b_size, max_token_length,
                         tokenizer_max_length):
-
     if pad_tokens:
         input_ids = input_ids.reshape((-1, tokenizer_max_length))  # batch_size*3, 77
 

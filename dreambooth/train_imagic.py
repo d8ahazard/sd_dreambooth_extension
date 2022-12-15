@@ -15,8 +15,8 @@ from transformers import CLIPTextModel, CLIPTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
-from extensions.sd_dreambooth_extension.dreambooth.utils import list_features, is_image
 from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import AverageMeter
+from extensions.sd_dreambooth_extension.dreambooth.utils import list_features, is_image
 from modules import shared
 
 logger = get_logger(__name__)
@@ -312,6 +312,7 @@ def train_imagic(args: DreamboothConfig, mem_record):
                 accelerator.log(logs, step=step)
 
         accelerator.wait_for_everyone()
+
     shared.state.job_count = args.max_train_steps * 2
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Optimizing embedding")

@@ -21,5 +21,3 @@ def preload(parser: argparse.ArgumentParser):
                         help="(Dreambooth) Enable fix for OOM errors when extracting checkpoints.")
     parser.add_argument("--profile-db", action='store_true',
                         help="Set this to enable memory profiling while training. For science only.")
-
-

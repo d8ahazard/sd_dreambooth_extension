@@ -8,7 +8,7 @@ from pydantic import BaseModel
 import modules.script_callbacks as script_callbacks
 from extensions.sd_dreambooth_extension.dreambooth import dreambooth
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
-from webui import wrap_gradio_gpu_call
+from modules.call_queue import wrap_gradio_gpu_call
 
 
 class DreamboothParameters(BaseModel):
@@ -67,11 +67,11 @@ class DreamboothParameters(BaseModel):
 def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
     @app.post("/dreambooth/createModel")
     async def createModel(
-                name,
-                source,
-                scheduler,
-                model_url,
-                hub_token):
+            name,
+            source,
+            scheduler,
+            model_url,
+            hub_token):
         print("Creating new Checkpoint: " + name)
         fn = extract_checkpoint(name, source, scheduler, model_url, hub_token)
 

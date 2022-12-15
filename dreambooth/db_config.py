@@ -3,7 +3,7 @@ import os
 import traceback
 
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
-from modules import images, shared
+from modules import shared
 
 
 def sanitize_name(name):
@@ -348,5 +348,3 @@ def from_file(model_name):
         print(f"Exception loading config: {e}")
         traceback.print_exc()
         return None
-
-

@@ -257,7 +257,8 @@ def convert_text_enc_state_dict(text_enc_dict: dict[str, torch.Tensor]):
     return text_enc_dict
 
 
-def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1.0, lora_txt_alpha=1.0, custom_model_name="",
+def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1.0,
+                       lora_txt_alpha=1.0, custom_model_name="",
                        reload_models=True, log=True):
     """
 
@@ -304,7 +305,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     model_path = config.pretrained_model_name_or_path
     new_hotness = os.path.join(config.model_dir, f"checkpoint-{config.revision}")
     if os.path.exists(new_hotness):
-            model_path = new_hotness
+        model_path = new_hotness
     unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")
     vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.bin")
     text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
@@ -335,7 +336,8 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
                 printi(f"Applying lora weight of alpha: {lora_txt_alpha} to text encoder...")
                 weight_apply_lora(loaded_pipeline.text_encoder, torch.load(lora_txt), alpha=lora_txt_alpha)
                 printi("Saving lora text encoder...")
-                loaded_pipeline.text_encoder.save_pretrained(os.path.join(config.pretrained_model_name_or_path, "text_encoder_lora"))
+                loaded_pipeline.text_encoder.save_pretrained(
+                    os.path.join(config.pretrained_model_name_or_path, "text_encoder_lora"))
                 text_enc_path = osp.join(config.pretrained_model_name_or_path, "text_encoder_lora", "pytorch_model.bin")
 
         del loaded_pipeline

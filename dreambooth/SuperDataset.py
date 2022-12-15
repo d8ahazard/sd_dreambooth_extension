@@ -293,6 +293,3 @@ class SuperDataset(Dataset):
             s_data = SampleData(concept.get_sample_prompt(), concept.concept)
             prompts.append(s_data)
         return prompts
-    
-    
-
