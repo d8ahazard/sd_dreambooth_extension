@@ -123,7 +123,7 @@ def on_ui_tabs():
                                                           choices=["linear", "cosine", "cosine_with_restarts",
                                                                    "polynomial", "constant",
                                                                    "constant_with_warmup"])
-                            db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=500)
+                            db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=0)
 
                         with gr.Column():
                             gr.HTML(value="Image Processing")
