@@ -553,6 +553,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     unet_lora_params = None
     text_encoder_lora_params = None
+    args.pad_tokens = args.train_text_encoder
 
     if not args.train_text_encoder:
         text_encoder.requires_grad_(False)

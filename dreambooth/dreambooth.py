@@ -262,6 +262,7 @@ def load_params(model_dir):
                "db_use_lora",
                "db_use_unet",
                "db_use_stages",
+               "db_stage_step_ratio",
                "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps",
                "c1_class_negative_prompt", "c1_class_prompt", "c1_class_token",
                "c1_instance_data_dir", "c1_instance_prompt", "c1_instance_token", "c1_max_steps", "c1_n_save_sample",
@@ -351,7 +352,10 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     unload_system_models()
     total_steps = config.revision
 
-    stage_enable = config.use_stages and config.use_unet and config.train_text_encoder
+    epochs = config.num_train_epochs
+    grad_steps = config.gradient_accumulation_steps
+
+    stage_enable = config.use_stages
     stage_steps = [1, 2] if stage_enable else [1]
     for stage in stage_steps:
         if stage_enable:
@@ -361,11 +365,16 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
         if stage_enable and stage == 1:
             config.use_unet = False
             config.train_text_encoder = True
+            config.gradient_accumulation_steps = grad_steps * 8
+            config.num_train_epochs = int(math.ceil(epochs * config.stage_step_ratio))
             print ("Stage 1: Text Encoder\n")
         if stage_enable and stage == 2:
             config.use_unet = True
             config.train_text_encoder = False
+            config.gradient_accumulation_steps = grad_steps
+            config.num_train_epochs = epochs
             print ("Stage 2: UNET\n")
+
         try:
             if imagic_only:
                 shared.state.textinfo = "Initializing imagic training..."

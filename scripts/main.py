@@ -154,6 +154,7 @@ def on_ui_tabs():
                                     db_use_unet = gr.Checkbox(label="Use UNET", value=True)
                                     db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                     db_use_stages = gr.Checkbox(label="Train UNET and Text Encoder Separately", value=False)
+                                    db_stage_step_ratio = gr.Slider(label="Step ratio of text encoder training", minimum=0, maximum=2, step=0.01, value=1, visible=False)
                                     db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
                                                                      choices=list_floats())
                                     db_attention = gr.Dropdown(
@@ -292,6 +293,7 @@ def on_ui_tabs():
                 db_use_lora,
                 db_use_unet,
                 db_use_stages,
+                db_stage_step_ratio,
                 db_v2,
                 c1_class_data_dir,
                 c1_class_guidance_scale,
@@ -402,6 +404,7 @@ def on_ui_tabs():
                 db_use_lora,
                 db_use_unet,
                 db_use_stages,
+                db_stage_step_ratio,
                 c1_class_data_dir,
                 c1_class_guidance_scale,
                 c1_class_infer_steps,
@@ -482,6 +485,14 @@ def on_ui_tabs():
             fn=disable_lora,
             inputs=[db_use_ema],
             outputs=[db_use_lora],
+        )
+
+        db_use_stages.change(
+            fn=lambda x: {
+                db_stage_step_ratio: gr_show(x is True)
+            },
+            inputs=[db_use_stages],
+            outputs=[db_stage_step_ratio]
         )
 
         db_create_from_hub.change(
