@@ -261,6 +261,7 @@ def load_params(model_dir):
                "db_use_ema",
                "db_use_lora",
                "db_use_unet",
+               "db_use_stages",
                "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps",
                "c1_class_negative_prompt", "c1_class_prompt", "c1_class_token",
                "c1_instance_data_dir", "c1_instance_prompt", "c1_instance_token", "c1_max_steps", "c1_n_save_sample",
@@ -350,27 +351,42 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     unload_system_models()
     total_steps = config.revision
 
-    try:
-        if imagic_only:
-            shared.state.textinfo = "Initializing imagic training..."
-            print(shared.state.textinfo)
-            from extensions.sd_dreambooth_extension.dreambooth.train_imagic import train_imagic
-            mem_record = train_imagic(config, mem_record)
-        else:
-            shared.state.textinfo = "Initializing dreambooth training..."
-            print(shared.state.textinfo)
-            from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
-            config, mem_record, msg = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name,
-                                           lora_alpha=lora_alpha, lora_txt_alpha=lora_txt_alpha, custom_model_name=custom_model_name)
-            if config.revision != total_steps:
-                config.save()
-        total_steps = config.revision
-        res = f"Training {'interrupted' if shared.state.interrupted else 'finished'}. " \
-              f"Total lifetime steps: {total_steps} \n"
-    except Exception as e:
-        res = f"Exception training model: {e}"
-        traceback.print_exc()
-        pass
+    stage_enable = config.use_stages and config.use_unet and config.train_text_encoder
+    stage_steps = [1, 2] if stage_enable else [1]
+    for stage in stage_steps:
+        if stage_enable:
+            print("=========================================================")
+            print("UNET and Text Encoder will train separately to save VRAM!")
+            print("=========================================================")
+        if stage_enable and stage == 1:
+            config.use_unet = False
+            config.train_text_encoder = True
+            print ("Stage 1: Text Encoder\n")
+        if stage_enable and stage == 2:
+            config.use_unet = True
+            config.train_text_encoder = False
+            print ("Stage 2: UNET\n")
+        try:
+            if imagic_only:
+                shared.state.textinfo = "Initializing imagic training..."
+                print(shared.state.textinfo)
+                from extensions.sd_dreambooth_extension.dreambooth.train_imagic import train_imagic
+                mem_record = train_imagic(config, mem_record)
+            else:
+                shared.state.textinfo = "Initializing dreambooth training..."
+                print(shared.state.textinfo)
+                from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
+                config, mem_record, msg = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name,
+                                            lora_alpha=lora_alpha, lora_txt_alpha=lora_txt_alpha, custom_model_name=custom_model_name)
+                if config.revision != total_steps:
+                    config.save()
+            total_steps = config.revision
+            res = f"Training {'interrupted' if shared.state.interrupted else 'finished'}. " \
+                f"Total lifetime steps: {total_steps} \n"
+        except Exception as e:
+            res = f"Exception training model: {e}"
+            traceback.print_exc()
+            pass
 
     devices.torch_gc()
     gc.collect()

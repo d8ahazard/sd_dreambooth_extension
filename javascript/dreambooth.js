@@ -127,7 +127,9 @@ new_titles = {
     "Use Concepts List": "Train multiple concepts from a JSON file or string.",
     "Use Lifetime Steps/Epochs When Saving": "When checked, will save preview images and checkpoints using lifetime steps/epochs, versus current training steps.",
     "Use EMA": "Enabling this will provide better results and editability, but cost more VRAM.",
-    "Use LORA": "Uses Low-rank Adaptation for Fast Text-to-Image Diffusion Fine-tuning. Uses less VRAM, saves a .pt file instead of a full checkpoint"
+    "Use LORA": "Uses Low-rank Adaptation for Fast Text-to-Image Diffusion Fine-tuning. Uses less VRAM, saves a .pt file instead of a full checkpoint",
+    "Use UNET": "UNET is a deep learning model used for image segmentation. It consists of a contracting path to capture context and a symmetric expanding path that enables precise localization. It is trained end-to-end to classify each pixel in an image.",
+    "Train UNET and Text Encoder Separately": "Train UNET and Text Encoder in different stages for > 10GB GPUs to provide better results and editability.",
 }
 
 ex_titles = Object.assign({}, ex_titles, new_titles);
