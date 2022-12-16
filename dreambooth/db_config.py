@@ -70,6 +70,7 @@ class DreamboothConfig:
                  use_ema: bool = True,
                  use_lora: bool = False,
                  use_unet: bool = True,
+                 use_stages: bool = False,
                  v2: bool = False,
                  c1_class_data_dir: str = "",
                  c1_class_guidance_scale: float = 7.5,
@@ -187,6 +188,7 @@ class DreamboothConfig:
         self.use_ema = False if use_ema is None else use_ema
         self.use_lora = False if use_lora is None else use_lora
         self.use_unet = False if use_unet is None else use_unet
+        self.use_stages = False if use_stages is None else use_stages
         if scheduler is not None:
             self.scheduler = scheduler
 

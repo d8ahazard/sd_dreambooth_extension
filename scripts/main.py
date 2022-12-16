@@ -153,6 +153,7 @@ def on_ui_tabs():
                                     db_use_ema = gr.Checkbox(label="Use EMA", value=False)
                                     db_use_unet = gr.Checkbox(label="Use UNET", value=True)
                                     db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
+                                    db_use_stages = gr.Checkbox(label="Train UNET and Text Encoder Separately", value=False)
                                     db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
                                                                      choices=list_floats())
                                     db_attention = gr.Dropdown(
@@ -290,6 +291,7 @@ def on_ui_tabs():
                 db_use_ema,
                 db_use_lora,
                 db_use_unet,
+                db_use_stages,
                 db_v2,
                 c1_class_data_dir,
                 c1_class_guidance_scale,
@@ -399,6 +401,7 @@ def on_ui_tabs():
                 db_use_ema,
                 db_use_lora,
                 db_use_unet,
+                db_use_stages,
                 c1_class_data_dir,
                 c1_class_guidance_scale,
                 c1_class_infer_steps,
