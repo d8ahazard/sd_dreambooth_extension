@@ -129,6 +129,9 @@ def performance_wizard():
     use_8bit_adam = True
     use_cpu = False
     use_ema = False
+    use_unet = True
+    use_stages = False
+    use_lora = False
     try:
         t = torch.cuda.get_device_properties(0).total_memory
         gb = math.ceil(t / 1073741824)
@@ -147,9 +150,13 @@ def performance_wizard():
             train_text_encoder = True
             use_ema = True
         if 16 > gb >= 10:
-            train_text_encoder = False
+            train_text_encoder = True
             use_ema = False
-        if gb < 10:
+            use_unet = True
+            use_stages = True
+        if 10 > gb >= 8:
+            use_lora = True
+        if gb < 8:
             use_cpu = True
             use_8bit_adam = False
             mixed_precision = 'no'
@@ -175,11 +182,11 @@ def performance_wizard():
     log_dict = {"Attention": attention, "Gradient Checkpointing": gradient_checkpointing, "Precision": mixed_precision,
                 "Cache Latents": not not_cache_latents, "Training Batch Size": train_batch_size,
                 "Class Generation Batch Size": sample_batch_size,
-                "Train Text Encoder": train_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "CPU": use_cpu}
+                "Train Text Encoder": train_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "CPU": use_cpu, "LoRA": use_lora, "UNET": use_unet, "UNET and Text Encoder Train Separately": use_stages}
     for key in log_dict:
         msg += f"<br>{key}: {log_dict[key]}"
     return msg, attention, gradient_checkpointing, mixed_precision, not_cache_latents, sample_batch_size, \
-           train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema
+           train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema, use_unet, use_stages, use_lora
 
 
 def load_params(model_dir):
@@ -369,6 +376,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
             config.num_train_epochs = int(math.ceil(epochs * config.stage_step_ratio))
             print ("Stage 1: Text Encoder\n")
         if stage_enable and stage == 2:
+            config.use_ema = False
             config.use_unet = True
             config.train_text_encoder = False
             config.gradient_accumulation_steps = grad_steps
