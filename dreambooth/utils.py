@@ -8,12 +8,14 @@ from typing import Optional
 
 import torch
 from PIL import features
-from diffusers import StableDiffusionPipeline, EulerAncestralDiscreteScheduler
+from diffusers import StableDiffusionPipeline
 from huggingface_hub import HfFolder, whoami
 from transformers import CLIPTextModel
 
+from extensions.sd_dreambooth_extension.dreambooth import dream_state
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from modules import shared, paths, sd_models
+from modules.shared import opts
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -28,9 +30,9 @@ except:
 
 def printi(msg, params=None, log=True):
     if log:
-        shared.state.textinfo = msg
-        if shared.state.job_count > shared.state.job_no:
-            shared.state.job_no += 1
+        dream_state.status.textinfo = msg
+        if dream_state.status.job_count > dream_state.status.job_no:
+            dream_state.status.job_no += 1
         if params:
             print(msg, params)
         else:
@@ -83,7 +85,7 @@ def sanitize_tags(name):
     name = ""
     for tag in tags:
         tag = tag.replace(" ", "_").strip()
-        tag = "".join(x for x in tag if (x.isalnum() or x in "._-"))
+        name = "".join(x for x in tag if (x.isalnum() or x in "._-"))
     name = name.replace(" ", "_")
     return "".join(x for x in name if (x.isalnum() or x in "._-,"))
 
@@ -181,18 +183,23 @@ def reload_system_models():
     printm("Restored system models.")
 
 
-def generate_sample_img(model_dir: str, save_sample_prompt: str, seed: str):
+def generate_sample_img(model_dir: str, save_sample_prompt: str, negative_prompt: str, seed: int, num_samples: int):
+    dream_state.status.job_count = (num_samples * 60) + 2
+    print("Generate samples definitely clicked.")
     if model_dir is None or model_dir == "":
         return "Please select a model."
     config = from_file(model_dir)
     unload_system_models()
     model_path = config.pretrained_model_name_or_path
-    image = None
     if not os.path.exists(config.pretrained_model_name_or_path):
         print(f"Model path '{config.pretrained_model_name_or_path}' doesn't exist.")
-        return f"Can't find diffusers model at {config.pretrained_model_name_or_path}.", None
+        return None, f"Can't find diffusers model at {config.pretrained_model_name_or_path}."
     try:
         print(f"Loading model from {model_path}.")
+        dream_state.status.job_no = 1
+        dream_state.status.textinfo = "Loading diffusion model..."
+        dream_state.status.job_count = num_samples
+        dream_state.status.current_image_sampling_step = 0
         text_enc_model = CLIPTextModel.from_pretrained(config.pretrained_model_name_or_path,
                                                        subfolder="text_encoder", revision=config.revision)
         pipeline = StableDiffusionPipeline.from_pretrained(
@@ -205,37 +212,41 @@ def generate_sample_img(model_dir: str, save_sample_prompt: str, seed: str):
             requires_safety_checker=False
         )
         pipeline = pipeline.to(shared.device)
-        pil_features = list_features()
-        save_dir = os.path.join(shared.sd_path, "outputs", "dreambooth")
+
+        def update_latent(step: int, timestep: int, latents: torch.FloatTensor):
+            dream_state.status.job_no += opts.show_progress_every_n_steps
+            decoded = pipeline.decode_latents(latents)
+            dream_state.status.current_latent = pipeline.numpy_to_pil(decoded)
+            print(f"latent callback fired: {step} {timestep}")
+
         db_model_path = config.model_dir
         if save_sample_prompt is None:
             msg = "Please provide a sample prompt."
             print(msg)
-            return msg, None
-        shared.state.textinfo = f"Generating preview image for model {db_model_path}..."
+            return None, msg
+        dream_state.status.textinfo = f"Generating preview image for model {db_model_path}..."
         # I feel like this might not actually be necessary...but what the heck.
         if seed is None or seed == '' or seed == -1:
             seed = int(random.randrange(21474836147))
         g_cuda = torch.Generator(device=shared.device).manual_seed(seed)
-        sample_dir = os.path.join(save_dir, "samples")
-        os.makedirs(sample_dir, exist_ok=True)
-        file_count = 0
-        shared.state.job_count = 1
+        dream_state.status.job_count = 1
         with torch.autocast("cuda"), torch.inference_mode():
-            image = pipeline(save_sample_prompt,
-                             num_inference_steps=60,
-                             guidance_scale=7.5,
-                             scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
-                                                                       beta_end=0.012),
-                             width=config.resolution,
-                             height=config.resolution,
-                             generator=g_cuda).images[0]
+            images = pipeline([save_sample_prompt] * num_samples,
+                              negative_prompt=[negative_prompt] * num_samples,
+                              num_inference_steps=60,
+                              guidance_scale=7.5,
+                              width=config.resolution,
+                              height=config.resolution,
+                              callback_steps=opts.show_progress_every_n_steps,
+                              callback=update_latent,
+                              generator=g_cuda).images
+
 
     except:
         print("Exception generating sample!")
         traceback.print_exc()
     reload_system_models()
-    return "Sample generated.", image
+    return images, "Sample generated."
 
 
 def isset(val: str):

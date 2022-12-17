@@ -11,6 +11,7 @@ import traceback
 import torch
 from diffusers import DiffusionPipeline
 
+from extensions.sd_dreambooth_extension.dreambooth import dream_state
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.utils import printi, unload_system_models, \
     reload_system_models
@@ -274,9 +275,9 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     @return: status: What happened, path: Checkpoint path
     """
     unload_system_models()
-    shared.state.textinfo = "Compiling checkpoint."
-    shared.state.job_no = 0
-    shared.state.job_count = 7
+    dream_state.status.textinfo = "Compiling checkpoint."
+    dream_state.status.job_no = 0
+    dream_state.status.job_count = 7
 
     save_model_name = model_name if custom_model_name == "" else custom_model_name
     if custom_model_name == "":
@@ -285,7 +286,9 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
         printi(f"Compiling checkpoint for {model_name} with a custom name {custom_model_name}")
 
     if not model_name:
-        return "Select a model to compile.", "No model selected."
+        msg = "Select a model to compile."
+        print(msg)
+        return msg
 
     ckpt_dir = shared.cmd_opts.ckpt_dir
     models_path = os.path.join(shared.models_path, "Stable-diffusion")
@@ -391,9 +394,10 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
             printi(f"Copying config file to {cfg_dest}", log=log)
             shutil.copyfile(cfg_file, cfg_dest)
     except Exception as e:
-        print("Exception compiling checkpoint!")
+        msg = f"Exception compiling checkpoint: {e}"
+        print(msg)
         traceback.print_exc()
-        return f"Exception compiling: {e}", ""
+        return msg
 
     try:
         del unet_state_dict
@@ -407,4 +411,6 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     # cleanup()
     if reload_models:
         reload_system_models()
-    return "Checkpoint compiled successfully.", "Checkpoint compiled successfully."
+    msg = "Checkpoint compiled successfully."
+    printi(msg)
+    return msg

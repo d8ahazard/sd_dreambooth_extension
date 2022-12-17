@@ -13,8 +13,9 @@ from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
+from extensions.sd_dreambooth_extension.dreambooth import dream_state
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
+from extensions.sd_dreambooth_extension.scripts.dreambooth import printm
 from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import AverageMeter
 from extensions.sd_dreambooth_extension.dreambooth.utils import list_features, is_image
 from modules import shared
@@ -282,9 +283,9 @@ def train_imagic(args: DreamboothConfig, mem_record):
     def train_loop(pbar, optim):
         loss_avg = AverageMeter()
         for step in pbar:
-            if shared.state.interrupted:
+            if dream_state.status.interrupted:
                 break
-            shared.state.job_no += 1
+            dream_state.status.job_no += 1
             with accelerator.accumulate(unet):
                 noise = torch.randn_like(init_latents)
                 bsz = init_latents.shape[0]
@@ -313,17 +314,17 @@ def train_imagic(args: DreamboothConfig, mem_record):
 
         accelerator.wait_for_everyone()
 
-    shared.state.job_count = args.max_train_steps * 2
+    dream_state.status.job_count = args.max_train_steps * 2
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Optimizing embedding")
-    shared.state.textinfo = "Optimizing Embedding"
-    printm(shared.state.textinfo)
+    dream_state.status.textinfo = "Optimizing Embedding"
+    printm(dream_state.status.textinfo)
     train_loop(progress_bar, optimizer)
 
     optimized_embeddings.requires_grad_(False)
     if accelerator.is_main_process:
-        shared.state.textinfo = "Saving embedding(s)."
-        printm(shared.state.textinfo)
+        dream_state.status.textinfo = "Saving embedding(s)."
+        printm(dream_state.status.textinfo)
         emb_dir = shared.cmd_opts.embeddings_dir
         torch.save(target_embeddings.cpu(), os.path.join(emb_dir, f"{args.model_name}.pt"))
         torch.save(optimized_embeddings.cpu(), os.path.join(emb_dir, f"{args.model_name}_optimized.pt"))
@@ -339,16 +340,16 @@ def train_imagic(args: DreamboothConfig, mem_record):
     optimizer = accelerator.prepare(optimizer)
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Fine Tuning")
-    shared.state.textinfo = "Fine Tuning"
-    printm(shared.state.textinfo)
+    dream_state.status.textinfo = "Fine Tuning"
+    printm(dream_state.status.textinfo)
     unet.train()
 
     train_loop(progress_bar, optimizer)
 
     # Create the pipeline using the trained modules and save it.
     if accelerator.is_main_process:
-        shared.state.textinfo = "Saving pretrained model."
-        printm(shared.state.textinfo)
+        dream_state.status.textinfo = "Saving pretrained model."
+        printm(dream_state.status.textinfo)
         pipeline = StableDiffusionPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             unet=accelerator.unwrap_model(unet),

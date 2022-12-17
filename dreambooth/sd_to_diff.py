@@ -21,8 +21,9 @@ import gradio as gr
 import torch
 
 import modules.sd_models
+from extensions.sd_dreambooth_extension.dreambooth import dream_state
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, sanitize_name
-from extensions.sd_dreambooth_extension.dreambooth.dreambooth import reload_system_models
+from extensions.sd_dreambooth_extension.scripts.dreambooth import reload_system_models
 from extensions.sd_dreambooth_extension.dreambooth.utils import printi, printm, get_db_models
 from modules import shared
 
@@ -757,10 +758,10 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
     if not shared.cmd_opts.disable_safe_unpickle:
         reset_safe = True
         shared.cmd_opts.disable_safe_unpickle = True
-
+    dream_state.status.job_count = 11
     try:
         new_model_name = sanitize_name(new_model_name)
-        shared.state.job_no = 0
+        dream_state.status.job_no = 0
         checkpoint = None
         map_location = shared.device
         if shared.cmd_opts.ckptfix or shared.cmd_opts.medvram or shared.cmd_opts.lowvram:
@@ -774,12 +775,12 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
 
             if checkpoint_info is None:
                 print("Unable to find checkpoint file!")
-                shared.state.job_no = 8
+                dream_state.status.job_no = 8
                 return "", "", 0, "", "", "", "", 512, "", "Unable to find base checkpoint."
 
             if not os.path.exists(checkpoint_info.filename):
                 print("Unable to find checkpoint file!")
-                shared.state.job_no = 8
+                dream_state.status.job_no = 8
                 return "", "", 0, "", "", "", "", 512, "", "Unable to find base checkpoint."
 
             ckpt_path = checkpoint_info[0]
@@ -890,7 +891,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             pipe = DiffusionPipeline.from_pretrained(new_model_url, use_auth_token=new_model_token,
                                                      scheduler=scheduler, device_map=map_location)
             printi("Model loaded.")
-            shared.state.job_no = 7
+            dream_state.status.job_no = 7
 
         else:
             printi("Converting unet...")

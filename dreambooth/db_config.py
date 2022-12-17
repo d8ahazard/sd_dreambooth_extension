@@ -275,7 +275,9 @@ class DreamboothConfig:
 
 def save_config(*args):
     config = DreamboothConfig(*args)
+    print("Saved settings.")
     config.save()
+    return "Saved settings."
 
 
 def from_file(model_name):

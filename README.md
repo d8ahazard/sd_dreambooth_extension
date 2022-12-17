@@ -309,8 +309,6 @@ tell if things are going to work right.
 
 *Sample Seed* - The seed to use for your sample. Leave at -1 to use a random seed.
 
-*Log Memory* - Log the current memory usage.
-
 *Train Imagic Only* - Imagic is basically dreambooth, but uses only one image and is significantly faster.
 
 If using Imagic, the first image in the first concept's Instance Data Dir will be used for training.

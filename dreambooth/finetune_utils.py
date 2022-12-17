@@ -17,6 +17,7 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from transformers import CLIPTextModel, AutoTokenizer
 
+from extensions.sd_dreambooth_extension.dreambooth import dream_state
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, from_file
 from extensions.sd_dreambooth_extension.dreambooth.utils import printm, cleanup, get_checkpoint_match, get_images
@@ -241,16 +242,10 @@ class EMAModel:
 
 
 class ImageBuilder:
-    def __init__(self, config: DreamboothConfig, use_txt2img: bool, lora_model: str = None, lora_weight: float = 0,
+    def __init__(self, config: DreamboothConfig, use_txt2img: bool, lora_model: str = None, lora_weight: float = 1,
                  batch_size: int = 1, accelerator: Accelerator = None):
         self.image_pipe = None
         self.txt_pipe = None
-        # If the accelerator doesn't already exist, we're generating from UI, not pre-training, so we skip unloading.
-        # if accelerator is None:
-        #     self.skip_unload = True
-        # else:
-        #     self.skip_unload = False
-        # self.accelerator = accelerator
         self.resolution = config.resolution
         self.last_model = None
         self.batch_size = batch_size
@@ -358,6 +353,8 @@ class ImageBuilder:
 
 
 def generate_prompts(model_dir):
+    print("Generating prompts.")
+    dream_state.status.job_count = 4
     from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
     if model_dir is None or model_dir == "":
         return "Please select a model."
@@ -367,6 +364,8 @@ def generate_prompts(model_dir):
         revision=config.revision,
         use_fast=False,
     )
+    dream_state.status.job_no = 1
+    dream_state.status.textinfo = "Building dataset from existing files..."
     train_dataset = SuperDataset(
         concepts_list=config.concepts_list,
         tokenizer=tokenizer,
@@ -380,7 +379,8 @@ def generate_prompts(model_dir):
     )
 
     output = {"instance_prompts": [], "existing_class_prompts": [], "new_class_prompts": [], "sample_prompts": []}
-
+    dream_state.status.job_no = 2
+    dream_state.status.textinfo = "Appending instance and class prompts from existing files..."
     for i in range(train_dataset.__len__()):
         item = train_dataset.__getitem__(i)
         output["instance_prompts"].append(item["instance_prompt"])
@@ -390,6 +390,8 @@ def generate_prompts(model_dir):
     for prompt in sample_prompts:
         output["sample_prompts"].append(prompt.prompt)
 
+    dream_state.status.job_no = 3
+    dream_state.status.textinfo = "Building dataset for 'new' class images..."
     for concept in config.concepts_list:
         c_idx = 0
         class_images_dir = Path(concept["class_data_dir"])
@@ -402,9 +404,11 @@ def generate_prompts(model_dir):
             sample_dataset = PromptDataset(config.concepts_list, config.model_dir, config.shuffle_tags,
                                            config.sample_batch_size)
             for i in range(sample_dataset.__len__()):
-                output["new_class_prompts"].append(sample_dataset.__getitem__(i)["prompt"])
+                prompt = sample_dataset.__getitem__(i)
+                output["new_class_prompts"].append(prompt["prompt"])
         c_idx += 1
-
+    dream_state.status.job_no = 4
+    dream_state.status.textinfo = "Prompt generation complete."
     return json.dumps(output)
 
 
@@ -423,18 +427,16 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str, lora_weight: i
         print("Nothing to generate.")
         return 0, prompt_dataset.with_prior
 
-    shared.state.textinfo = f"Generating {set_len} class images for training..."
-    shared.state.job_count = set_len
-    shared.state.job_no = 0
+    dream_state.status.textinfo = f"Generating {set_len} class images for training..."
+    dream_state.status.job_count = set_len
+    dream_state.status.job_no = 0
     print(f"Creating image builder {args.sample_batch_size}...")
     builder = ImageBuilder(args, use_txt2img, lora_model, lora_weight, args.sample_batch_size)
     generated = 0
-    if not use_txt2img:
-        pbar = tqdm(total=set_len - 1)
-    else:
-        pbar = None
+    pbar = tqdm(total=set_len - 1)
+
     for i in range(set_len - 1):
-        if shared.state.interrupted:
+        if dream_state.status.interrupted:
             break
         pd = prompt_dataset.__getitem__(i)
         out_images = builder.generate_images(pd)
@@ -445,16 +447,15 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str, lora_weight: i
             txt_filename = image_filename.replace(".png", ".txt")
             with open(txt_filename, "w", encoding="utf8") as file:
                 file.write(pd.prompt)
-            if not use_txt2img:
-                shared.state.job_no += 1
-                shared.state.textinfo = f"Class image {i}/{set_len}, " \
-                                        f"Prompt: '{pd.prompt}'"
-                shared.state.current_image = image
-                if pbar is not None:
-                    pbar.update()
+            dream_state.status.job_no += 1
+            dream_state.status.textinfo = f"Class image {i}/{set_len}, " \
+                                    f"Prompt: '{pd.prompt}'"
+            dream_state.status.current_image = image
+            if pbar is not None:
+                pbar.update()
             generated += 1
-        if not use_txt2img:
-            shared.state.current_image = images.image_grid(out_images)
+
+        dream_state.status.current_image = images.image_grid(out_images)
     builder.unload()
     del prompt_dataset
     cleanup()

@@ -1,16 +1,40 @@
-#db_gallery {
-    display: none !important;
-}
-
-#db_preview {
-    width: 100% !important;
-    height: 100% !important;
-    display: block !important;
-}
-
 #refresh_db_models, #refresh_lora_models, #refresh_sd_models {
     margin-top: 0.75em;
     max-width: 2.5em;
     min-width: 2.5em;
     height: 2.4em;
+}
+
+.hh {
+    font-size: 20px
+}
+
+#db_preview{
+    position: absolute;
+    width: 320px;
+    left: 0;
+    right: 0;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 34px;
+    z-index: 100;
+    border: none;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+@media screen and (min-width: 768px) {
+    #db_preview {
+        position: absolute;
+    }
+}
+
+@media screen and (max-width: 767px) {
+    #db_preview {
+        position: relative;
+    }
+}
+
+#db_preview div.left-0.top-0{
+    display: none;
 }

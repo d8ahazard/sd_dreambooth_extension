@@ -1,19 +1,13 @@
 // Save our current training params before doing a thing
+
+const id_part = "db_";
+
+// Click a button. Whee.
 function save_config() {
     let btn = gradioApp().getElementById("db_save_config");
-    if (btn != null) {
-        btn.click();
-        console.log("Saving config...")
-    } else {
-        console.log("Can't find btn, trying for btn2");
-        let btn2 = document.getElementById("db_save_config");
-        if (btn2 != null) {
-            btn2.click();
-            console.log("Saving config2...")
-        } else {
-            console.log("Can't find button2 either.")
-        }
-    }
+    if (btn == null) return;
+    console.log("Saving config...");
+    btn.click();
 }
 
 function log_save() {
@@ -21,47 +15,255 @@ function log_save() {
     return arguments;
 }
 
-// Start progress bar without saving
-function db_start_progress() {
-    requestProgress('db');
-    gradioApp().querySelector('#db_error').innerHTML = '';
-    gradioApp().querySelector('#db_status').innerHTML = '';
-    return args_to_array(arguments);
-}
-
-
-// Save and start progress bar, clear statuses, etc.
-function db_save_start_progress() {
-    save_config();
-    requestProgress('db');
-    gradioApp().querySelector('#db_error').innerHTML = '';
-    gradioApp().querySelector('#db_status').innerHTML = '';
-    return args_to_array(arguments);
-}
-
-function db_generate_classes() {
-    save_config();
-    requestProgress('db');
-    gradioApp().querySelector('#db_error').innerHTML = '';
-    gradioApp().querySelector('#db_status').innerHTML = '';
-    let args = [];
-    for (let i = 0; i < 4; i++) {
-        args.push(arguments[i]);
+function getRealElement(selector) {
+    let elem = gradioApp().getElementById(selector);
+    if (elem) {
+    let child = elem.querySelector('#' + selector);
+        if (child) {
+            return child;
+        } else {
+            return elem;
+        }
     }
-    return args;
+    return elem;
+}
+// Handler to start save config, progress bar, and filtering args.
+function db_start(numArgs, save, startProgress, args) {
+    if (save) save_config();
+    if (startProgress) requestDbProgress();
+    console.log("Clearing statuses.");
+    let items = ['db_status', 'db_status2'];
+    for (let elem in items) {
+        let sel = items[elem];
+        let outcomeDiv = getRealElement(sel);
+        if (outcomeDiv) {
+            outcomeDiv.innerHTML = '';
+        } else {
+            console.log("YOU SUCK: ", sel);
+        }
+
+    }
+
+
+    return filterArgs(numArgs, args);
+}
+
+function db_start_sample() {
+    return db_start(5, true, true, arguments);
+}
+
+function db_start_pwizard() {
+    return db_start(0, true, false, arguments);
+}
+
+function db_start_twizard() {
+    return db_start(1, true, false, arguments);
+}
+
+function db_start_checkpoint() {
+    return db_start(7, false, true, arguments);
+}
+
+function db_start_prompts() {
+    return db_start(1, true, false, arguments);
+}
+
+function db_start_create() {
+    return db_start(7, false, true, arguments);
+}
+
+function db_start_train() {
+    return db_start(8, true, true, arguments);
+}
+
+function db_start_classes() {
+    return db_start(4, true, true, arguments);
+}
+
+// Return only the number of arguments given as an input
+function filterArgs(argsCount, arguments) {
+    let args_out = [];
+    if (arguments.length > argsCount && argsCount !== 0) {
+        for (let i = 0; i < argsCount; i++) {
+            args_out.push(arguments[i]);
+        }
+    }
+    console.log("Filtered args ("+argsCount+"): ", args_out);
+    return args_out;
 }
 
 
 // Do a thing when the UI updates
 onUiUpdate(function () {
-    check_progressbar('db', 'db_progressbar', 'db_progress_span', '', 'db_interrupt', 'db_preview', 'db_gallery')
+    db_progressbar();
 });
 
-ex_titles = titles;
+
+let progressTimeout = null;
+let galleryObserver = null;
+let gallerySet = false;
+
+function db_progressbar(){
+    let id_gallery = "db_gallery";
+
+    // gradio 3.8's enlightened approach allows them to create two nested div elements inside each other with same id
+    // every time you use gr.HTML(elem_id='xxx'), so we handle this here
+    let progressbar = gradioApp().querySelector("#db_progressbar #db_progressbar");
+    let progressbarParent;
+    if(progressbar){
+        progressbarParent = gradioApp().querySelector("#db_progressbar");
+    } else{
+        progressbar = gradioApp().getElementById("db_progressbar");
+        progressbarParent = null;
+    }
+
+    // let skip = id_skip ? gradioApp().getElementById(id_skip) : null;
+    let interrupt = gradioApp().getElementById("db_cancel");
+    
+    if(progressbar && progressbar.offsetParent){
+        if(progressbar.innerText){
+            let newtitle = '[' + progressbar.innerText.trim() + '] Stable Diffusion';
+            if(document.title !== newtitle){
+                document.title =  newtitle;          
+            }
+        }else{
+            let newtitle = 'Stable Diffusion'
+            if(document.title !== newtitle){
+                document.title =  newtitle;          
+            }
+        }
+    }
+    
+	if(progressbar != null){
+	    let mutationObserver = new MutationObserver(function(m){
+            if(progressTimeout) {
+                return;
+            }
+
+            let preview = gradioApp().getElementById("db_preview");
+            let gallery = gradioApp().getElementById("db_gallery");
+
+            if(preview != null && gallery != null){
+                preview.style.width = gallery.clientWidth + "px"
+                preview.style.height = gallery.clientHeight + "px"
+                if(progressbarParent) progressbar.style.width = progressbarParent.clientWidth + "px"
+
+				//only watch gallery if there is a generation process going on
+                checkDbGallery();
+
+                let progressDiv = gradioApp().querySelectorAll('#db_progress_span').length > 0;
+                if(progressDiv){
+                    progressTimeout = window.setTimeout(function() {
+                        requestMoreDbProgress();
+                    }, 500);
+                } else{
+                    interrupt.style.display = "none";
+			
+                    //disconnect observer once generation finished, so user can close selected image if they want
+                    if (galleryObserver) {
+                        galleryObserver.disconnect();
+                        galleryObserver = null;
+                        gallerySet = false;
+                    }
+                }
+            }
+
+        });
+        mutationObserver.observe( progressbar, { childList:true, subtree:true });
+	}
+}
+
+function checkDbGallery(){
+    if (gallerySet) return;
+    let gallery = gradioApp().getElementById("db_gallery");
+    // if gallery has no change, no need to setting up observer again.
+    if (gallery){
+        if(galleryObserver){
+            galleryObserver.disconnect();
+        }
+        // Get the last selected item in the gallery.
+        let prevSelectedIndex = selected_gallery_index();
+        // Make things clickable?
+        galleryObserver = new MutationObserver(function (){
+            let galleryButtons = gradioApp().querySelectorAll('#db_gallery .gallery-item');
+            let galleryBtnSelected = gradioApp().querySelector('#db_gallery .gallery-item.\\!ring-2');
+            if (prevSelectedIndex !== -1 && galleryButtons.length>prevSelectedIndex && !galleryBtnSelected) {
+                // automatically re-open previously selected index (if exists)
+                let activeElement = gradioApp().activeElement;
+                let scrollX = window.scrollX;
+                let scrollY = window.scrollY;
+
+                galleryButtons[prevSelectedIndex].click();
+                showGalleryImage();
+
+                // When the gallery button is clicked, it gains focus and scrolls itself into view
+                // We need to scroll back to the previous position
+                setTimeout(function (){
+                    window.scrollTo(scrollX, scrollY);
+                }, 50);
+
+                if(activeElement){
+                    // i fought this for about an hour; i don't know why the focus is lost or why this helps recover it
+                    // if someone has a better solution please by all means
+                    setTimeout(function (){
+                        activeElement.focus({
+                            preventScroll: true // Refocus the element that was focused before the gallery was opened without scrolling to it
+                        })
+                    }, 1);
+                }
+            }
+        })
+        galleryObserver.observe( gallery, { childList:true, subtree:false });
+        gallerySet = true;
+
+    }
+}
+
+function requestDbProgress(){
+    let btn = gradioApp().getElementById("db_check_progress_initial");
+    if(btn==null) {
+        console.log("Can't find da button!.")
+        return;
+    }
+    console.log("Requesting progress start...");
+    btn.click();
+    db_progressbar();
+}
+
+function requestMoreDbProgress(){
+    let btn = gradioApp().getElementById("db_check_progress");
+    if(btn==null) {
+        console.log("Check progress button is null!");
+        return;
+    }
+    console.log("MORE PROGRESS!");
+    btn.click();
+    progressTimeout = null;
+    let progressDiv = gradioApp().querySelectorAll('#db_progress_span').length > 0;
+    // TODO: Eventually implement other skip/cancel buttons.
+    // let skip = id_skip ? gradioApp().getElementById("db_skip") : null;
+    let interrupt = gradioApp().getElementById("db_cancel");
+    if(progressDiv && interrupt){
+        // if (skip) {
+        //     skip.style.display = "block";
+        // }
+        interrupt.style.display = "block";
+    }
+}
+
+let ex_titles;
+let broke_titles = false;
+try {
+    ex_titles = titles;
+} catch (e) {
+    broke_titles = true;
+}
+if (broke_titles) {
+    let titles = {};
+}
 
 console.log("Existing titles: ", ex_titles);
-
-new_titles = {
+let new_titles = {
     "Adam Beta 1": "The beta1 parameter for the Adam optimizer.",
     "Adam Beta 2": "The beta2 parameter for the Adam optimizer.",
     "Adam Epsilon": "",
@@ -144,7 +346,6 @@ new_titles = {
     "Use EMA": "Enabling this will provide better results and editability, but cost more VRAM.",
     "Use LORA": "Uses Low-rank Adaptation for Fast Text-to-Image Diffusion Fine-tuning. Uses less VRAM, saves a .pt file instead of a full checkpoint"
 }
-
 ex_titles = Object.assign({}, ex_titles, new_titles);
 titles = ex_titles;
 

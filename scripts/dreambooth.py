@@ -9,6 +9,7 @@ import torch
 import torch.utils.checkpoint
 from diffusers.utils import logging as dl
 
+from extensions.sd_dreambooth_extension.dreambooth import dream_state
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, printm, \
@@ -28,6 +29,7 @@ logger.setLevel(logging.DEBUG)
 dl.set_verbosity_error()
 
 mem_record = {}
+print("Reloaded dreambooth.py")
 
 
 def training_wizard_person(model_dir):
@@ -39,7 +41,6 @@ def training_wizard_person(model_dir):
 def training_wizard(model_dir, is_person=False):
     """
     Calculate the number of steps based on our learning rate, return the following:
-    db_status,
     db_max_train_steps,
     db_num_train_epochs,
     c1_max_steps,
@@ -47,7 +48,8 @@ def training_wizard(model_dir, is_person=False):
     c2_max_steps,
     c2_num_class_images,
     c3_max_steps,
-    c3_num_class_images
+    c3_num_class_images,
+    db_status
     """
     if model_dir == "" or model_dir is None:
         return "Please select a model.", 1000, -1, 0, -1, 0, -1, 0
@@ -100,7 +102,7 @@ def training_wizard(model_dir, is_person=False):
         for x in range(3):
             if x < len(counts_list):
                 c_dict = counts_list[x]
-                c_list.append(c_dict["classifiers"])
+                c_list.append(int(c_dict["classifiers"]))
                 status += f"<br>Concept {x} Class Images: {c_dict['classifiers']}"
 
             else:
@@ -108,7 +110,7 @@ def training_wizard(model_dir, is_person=False):
 
         print(status)
 
-    return status, 0, step_mult, -1, c_list[0], -1, c_list[1], -1, c_list[2]
+    return 0, int(step_mult), -1, c_list[0], -1, c_list[1], -1, c_list[2], status
 
 
 def performance_wizard():
@@ -175,8 +177,8 @@ def performance_wizard():
                 "Train Text Encoder": train_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "CPU": use_cpu}
     for key in log_dict:
         msg += f"<br>{key}: {log_dict[key]}"
-    return msg, attention, gradient_checkpointing, mixed_precision, not_cache_latents, sample_batch_size, \
-           train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema
+    return attention, gradient_checkpointing, mixed_precision, not_cache_latents, sample_batch_size, \
+           train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema, msg
 
 
 def load_params(model_dir):
@@ -289,29 +291,58 @@ def load_params(model_dir):
     return output
 
 
-def load_model_params(model_dir):
-    data = from_file(model_dir)
+def load_model_params(model_name):
+    """
+    @param model_name: The name of the model to load.
+    @return:
+    db_model_path: The full path to the model directory
+    db_revision: The current revision of the model
+    db_v2: If the model requires a v2 config/compilation
+    db_has_ema: Was the model extracted with EMA weights
+    db_src: The source checkpoint that weights were extracted from or hub URL
+    db_scheduler: Scheduler used for this model
+    db_outcome: The result of loading model params
+    """
+    data = from_file(model_name)
     if data is None:
         print("Can't load config!")
-        msg = f"Error loading config for model '{model_dir}'."
+        msg = f"Error loading model params: '{model_name}'."
         return "", "", "", "", "", "", msg
     else:
+        msg = f"Selected model: '{model_name}'."
         return data.model_dir, \
                data.revision, \
                "True" if data.v2 else "False", \
                "True" if data.has_ema else "False", \
                data.src, \
                data.scheduler, \
-               ""
+               msg
 
 
 def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora_txt_alpha: float, imagic_only: bool,
                    use_subdir: bool, custom_model_name: str, use_txt2img: bool):
+    """
+
+    @param model_dir: The directory containing the dreambooth model/config
+    @param lora_model_name: (Optional) - A lora model name to apply to diffusion model.
+    @param lora_alpha: Lora unet strength if model name specified.
+    @param lora_txt_alpha: Lora text encoder strength if model name specified.
+    @param imagic_only: Train using imagic instead of dreambooth.
+    @param use_subdir: Save generated checkpoints to a subdirectory in the models dir.
+    @param custom_model_name: A custom filename to use when generating regular and lora checkpoints.
+    @param use_txt2img: Whether to use txt2img or diffusion pipeline for image generation.
+    @return:
+    lora_model_name: If using lora, this will be the model name of the saved weights. (For resuming further training)
+    revision: The model revision after training.
+    status: Any relevant messages.
+    """
     global mem_record
     if model_dir == "" or model_dir is None:
         print("Invalid model name.")
         msg = "Create or select a model first."
-        return msg, 0, msg
+        dirs = get_lora_models()
+        lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
+        return lora_model_name, 0, msg
     config = from_file(model_dir)
 
     # Clear pretrained VAE Name if applicable
@@ -335,11 +366,10 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
         msg = "Invalid resolution."
 
     if msg:
-        shared.state.textinfo = msg
         print(msg)
         dirs = get_lora_models()
         lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
-        return lora_model_name, msg, 0, msg
+        return lora_model_name, 0, msg
 
     # Clear memory and do "stuff" only after we've ensured all the things are right
     print(f"Custom model name is {custom_model_name}")
@@ -349,13 +379,13 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
 
     try:
         if imagic_only:
-            shared.state.textinfo = "Initializing imagic training..."
-            print(shared.state.textinfo)
+            dream_state.status.textinfo = "Initializing imagic training..."
+            print(dream_state.status.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_imagic import train_imagic
             mem_record = train_imagic(config, mem_record)
         else:
-            shared.state.textinfo = "Initializing dreambooth training..."
-            print(shared.state.textinfo)
+            dream_state.status.textinfo = "Initializing dreambooth training..."
+            print(dream_state.status.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
             config, mem_record, msg = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name,
                                            lora_alpha=lora_alpha, lora_txt_alpha=lora_txt_alpha,
@@ -363,7 +393,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
             if config.revision != total_steps:
                 config.save()
         total_steps = config.revision
-        res = f"Training {'interrupted' if shared.state.interrupted else 'finished'}. " \
+        res = f"Training {'interrupted' if dream_state.status.interrupted else 'finished'}. " \
               f"Total lifetime steps: {total_steps} \n"
     except Exception as e:
         res = f"Exception training model: {e}"
@@ -380,7 +410,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     print(f"Returning result: {res}")
     dirs = get_lora_models()
     lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
-    return lora_model_name, res, total_steps, res
+    return lora_model_name, total_steps, res
 
 
 def ui_concepts(model_dir: str, lora_model: str, lora_weight: float, use_txt2im: bool):
@@ -411,7 +441,7 @@ def ui_concepts(model_dir: str, lora_model: str, lora_weight: float, use_txt2im:
         msg = "Invalid resolution."
 
     if msg:
-        shared.state.textinfo = msg
+        dream_state.status.textinfo = msg
         print(msg)
         return msg
     try:

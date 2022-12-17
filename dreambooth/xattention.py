@@ -358,6 +358,7 @@ async def process_api(
     @param self:
     """
     if len(inputs) == 1 and isinstance(inputs[0], list):
+        print("Fixing inputs.")
         inputs = inputs[0]
     block_fn = self.fns[fn_index]
     batch = self.dependencies[fn_index]["batch"]

@@ -1,5 +1,6 @@
 import os
 import random
+from typing import List
 
 import torch
 from PIL import Image
@@ -30,7 +31,7 @@ class TrainingData:
 
 class ConceptData:
     def __init__(self, name: str, max_steps: int, instance_images: [TrainingData], class_images: [TrainingData],
-                 sample_prompts: [str], concept: Concept):
+                 sample_prompts: List[str], concept: Concept):
         """
         A class for holding all the info on a concept without needing a bunch of different dictionaries and stuff
         @param name: Token for our subject.
