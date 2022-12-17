@@ -369,6 +369,9 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
             print("=========================================================")
             print("UNET and Text Encoder will train separately to save VRAM!")
             print("=========================================================")
+        if stage_enable and shared.state.interrupted:
+            print ("Stage training interrupted!\n")
+            break
         if stage_enable and stage == 1:
             config.use_unet = False
             config.train_text_encoder = True
