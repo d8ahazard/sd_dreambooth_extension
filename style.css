@@ -9,7 +9,11 @@
     font-size: 20px
 }
 
-#db_preview{
+#db_cancel {
+    display: none;
+}
+
+#db_preview {
     position: absolute;
     width: 320px;
     left: 0;

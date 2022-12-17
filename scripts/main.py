@@ -166,8 +166,8 @@ def on_ui_tabs():
             db_load_params = gr.Button(value='Load Settings', elem_id="db_load_params")
             db_save_params = gr.Button(value="Save Settings", elem_id="db_save_config")
             db_train_model = gr.Button(value="Train", variant='primary')
-            db_interrupt_training = gr.Button(value="Cancel", elem_id="db_cancel")
             db_generate_checkpoint = gr.Button(value="Generate Ckpt")
+            db_cancel = gr.Button(value="Cancel", elem_id="db_cancel")
         with gr.Row().style(equal_height=False):
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Model Selection</span>")
@@ -812,7 +812,7 @@ def on_ui_tabs():
             outputs=[db_status]
         )
 
-        db_interrupt_training.click(
+        db_cancel.click(
             fn=lambda: dream_state.status.interrupt(),
             inputs=[],
             outputs=[],
