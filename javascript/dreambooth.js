@@ -54,7 +54,7 @@ function db_start_sample() {
 
 // Performance wizard
 function db_start_pwizard() {
-    return db_start(0, true, false, arguments);
+    return db_start(0, false, false, arguments);
 }
 
 // Training wizard
