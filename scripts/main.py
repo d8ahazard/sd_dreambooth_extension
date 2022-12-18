@@ -151,7 +151,6 @@ def on_ui_tabs():
                                     db_use_cpu = gr.Checkbox(label="Use CPU Only (SLOW)", value=False)
                                     db_use_lora = gr.Checkbox(label="Use LORA", value=False)
                                     db_use_ema = gr.Checkbox(label="Use EMA", value=False)
-                                    db_use_unet = gr.Checkbox(label="Use UNET", value=True)
                                     db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                     db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
                                                                      choices=list_floats())
@@ -160,8 +159,9 @@ def on_ui_tabs():
                                         choices=list_attention())
 
                                     db_not_cache_latents = gr.Checkbox(label="Don't Cache Latents", value=True)
+                                    db_train_unet = gr.Checkbox(label="Train UNET", value=True)
                                     db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
-                                    db_use_stages = gr.Checkbox(label="Train Text Encoder and UNET in Two Stages", value=False)
+                                    db_train_in_stages = gr.Checkbox(label="Train Text Encoder and UNET in Two Stages", value=False)
                                     db_stage_step_ratio = gr.Slider(label="Step Ratio of Text Encoder Training", minimum=0, maximum=2, step=0.01, value=1, visible=False)
                                     db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
@@ -291,8 +291,8 @@ def on_ui_tabs():
                 db_use_cpu,
                 db_use_ema,
                 db_use_lora,
-                db_use_unet,
-                db_use_stages,
+                db_train_unet,
+                db_train_in_stages,
                 db_stage_step_ratio,
                 db_v2,
                 c1_class_data_dir,
@@ -402,8 +402,8 @@ def on_ui_tabs():
                 db_use_cpu,
                 db_use_ema,
                 db_use_lora,
-                db_use_unet,
-                db_use_stages,
+                db_train_unet,
+                db_train_in_stages,
                 db_stage_step_ratio,
                 c1_class_data_dir,
                 c1_class_guidance_scale,
@@ -487,11 +487,11 @@ def on_ui_tabs():
             outputs=[db_use_lora],
         )
 
-        db_use_stages.change(
+        db_train_in_stages.change(
             fn=lambda x: {
                 db_stage_step_ratio: gr_show(x is True)
             },
-            inputs=[db_use_stages],
+            inputs=[db_train_in_stages],
             outputs=[db_stage_step_ratio]
         )
 
@@ -552,8 +552,8 @@ def on_ui_tabs():
                 db_use_8bit_adam,
                 db_use_cpu,
                 db_use_ema,
-                db_use_unet,
-                db_use_stages,
+                db_train_unet,
+                db_train_in_stages,
                 db_use_lora
             ]
         )
