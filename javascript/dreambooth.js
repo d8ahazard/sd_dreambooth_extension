@@ -32,7 +32,7 @@ function db_start(numArgs, save, startProgress, args) {
     if (save) save_config();
     if (startProgress) requestDbProgress();
     console.log("Clearing statuses.");
-    let items = ['db_status', 'db_status2'];
+    let items = ['db_status', 'db_status2', "db_progressbar"];
     for (let elem in items) {
         let sel = items[elem];
         let outcomeDiv = getRealElement(sel);
@@ -49,33 +49,40 @@ function db_start(numArgs, save, startProgress, args) {
 }
 
 function db_start_sample() {
-    return db_start(5, true, true, arguments);
+    return db_start(7, false, true, arguments);
 }
 
+// Performance wizard
 function db_start_pwizard() {
     return db_start(0, true, false, arguments);
 }
 
+// Training wizard
 function db_start_twizard() {
     return db_start(1, true, false, arguments);
 }
 
+// Generate checkpoint
 function db_start_checkpoint() {
     return db_start(7, false, true, arguments);
 }
 
+// Generate sample prompts
 function db_start_prompts() {
     return db_start(1, true, false, arguments);
 }
 
+// Create new checkpoint
 function db_start_create() {
     return db_start(7, false, true, arguments);
 }
 
+// Train!
 function db_start_train() {
     return db_start(8, true, true, arguments);
 }
 
+// Generate class images
 function db_start_classes() {
     return db_start(4, true, true, arguments);
 }

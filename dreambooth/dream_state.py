@@ -75,8 +75,6 @@ class DreamState:
         if self.current_latent is None:
             return
 
-        print(f"Current latent is {type(self.current_latent)}")
-
         if isinstance(self.current_latent, list):
             if len(self.current_latent) > 1:
                 self.current_image = images.image_grid(self.current_latent)

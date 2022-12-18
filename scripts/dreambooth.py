@@ -2,12 +2,15 @@ import gc
 import logging
 import math
 import os
+import random
 import traceback
 
 import gradio
 import torch
 import torch.utils.checkpoint
+from diffusers import StableDiffusionPipeline
 from diffusers.utils import logging as dl
+from transformers import CLIPTextModel
 
 from extensions.sd_dreambooth_extension.dreambooth import dream_state
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
@@ -15,6 +18,7 @@ from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, printm, \
     isset, get_images, get_lora_models
 from modules import shared, devices
+from modules.shared import opts
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -29,7 +33,6 @@ logger.setLevel(logging.DEBUG)
 dl.set_verbosity_error()
 
 mem_record = {}
-print("Reloaded dreambooth.py")
 
 
 def training_wizard_person(model_dir):
@@ -111,6 +114,81 @@ def training_wizard(model_dir, is_person=False):
         print(status)
 
     return 0, int(step_mult), -1, c_list[0], -1, c_list[1], -1, c_list[2], status
+
+
+def generate_sample_img(model_dir: str, save_sample_prompt: str, negative_prompt: str, seed: int, num_samples: int,
+                        steps: int = 60, scale: float = 7.5):
+    dream_state.status.job_count = num_samples + 1
+    if model_dir is None or model_dir == "":
+        return "Please select a model."
+    config = from_file(model_dir)
+    unload_system_models()
+    model_path = config.pretrained_model_name_or_path
+    if not os.path.exists(config.pretrained_model_name_or_path):
+        print(f"Model path '{config.pretrained_model_name_or_path}' doesn't exist.")
+        return None, f"Can't find diffusers model at {config.pretrained_model_name_or_path}."
+    msg = f"Generated {num_samples} sample(s)."
+    try:
+        print(f"Loading model from {model_path}.")
+        dream_state.status.job_no = 1
+        dream_state.status.textinfo = "Loading diffusion model..."
+        text_enc_model = CLIPTextModel.from_pretrained(config.pretrained_model_name_or_path,
+                                                       subfolder="text_encoder", revision=config.revision)
+        pipeline = StableDiffusionPipeline.from_pretrained(
+            config.pretrained_model_name_or_path,
+            text_encoder=text_enc_model,
+            torch_dtype=torch.float16,
+            revision=config.revision,
+            safety_checker=None,
+            feature_extractor=None,
+            requires_safety_checker=False
+        )
+        pipeline = pipeline.to(shared.device)
+
+        def update_latent(step: int, timestep: int, latents: torch.FloatTensor):
+            dream_state.status.sampling_step = step
+            decoded = pipeline.decode_latents(latents)
+            dream_state.status.current_latent = pipeline.numpy_to_pil(decoded)
+
+        db_model_path = config.model_dir
+        if save_sample_prompt is None:
+            msg = "Please provide a sample prompt."
+            print(msg)
+            return None, msg
+        dream_state.status.textinfo = f"Generating sample image for model {db_model_path}..."
+        if seed is None or seed == '' or seed == -1:
+            seed = int(random.randrange(21474836147))
+        g_cuda = torch.Generator(device=shared.device).manual_seed(seed)
+        preview_every = opts.show_progress_every_n_steps
+        with torch.autocast("cuda"), torch.inference_mode():
+            if preview_every > 0:
+                dream_state.status.sampling_steps = steps
+                images = pipeline([save_sample_prompt] * num_samples,
+                                  negative_prompt=[negative_prompt] * num_samples,
+                                  num_inference_steps=steps,
+                                  guidance_scale=scale,
+                                  width=config.resolution,
+                                  height=config.resolution,
+                                  callback_steps=preview_every,
+                                  callback=update_latent,
+                                  generator=g_cuda).images
+            else:
+                images = pipeline([save_sample_prompt] * num_samples,
+                                  negative_prompt=[negative_prompt] * num_samples,
+                                  num_inference_steps=steps,
+                                  guidance_scale=scale,
+                                  width=config.resolution,
+                                  height=config.resolution,
+                                  generator=g_cuda).images
+
+        dream_state.status.sampling_steps = 0
+        dream_state.status.current_image_sampling_step = 0
+    except Exception as e:
+        msg = f"Exception generating sample(s): {e}"
+        print(msg)
+        traceback.print_exc()
+    reload_system_models()
+    return images, msg
 
 
 def performance_wizard():
@@ -233,6 +311,8 @@ def load_params(model_dir):
                "db_learning_rate",
                "db_lora_learning_rate",
                "db_lora_txt_learning_rate",
+               "db_lora_txt_weight",
+               "db_lora_weight",
                "db_lr_scheduler",
                "db_lr_warmup_steps",
                "db_max_token_length",
@@ -245,9 +325,18 @@ def load_params(model_dir):
                "db_prior_loss_weight",
                "db_resolution",
                "db_sample_batch_size",
+               "db_save_ckpt_after",
+               "db_save_ckpt_cancel",
+               "db_save_ckpt_during",
                "db_save_class_txt",
                "db_save_embedding_every",
+               "db_save_lora_after",
+               "db_save_lora_cancel",
+               "db_save_lora_during",
                "db_save_preview_every",
+               "db_save_state_after",
+               "db_save_state_cancel",
+               "db_save_state_during",
                "db_save_use_global_counts",
                "db_save_use_epochs",
                "db_scale_lr",

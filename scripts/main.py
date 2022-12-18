@@ -10,15 +10,16 @@ from extensions.sd_dreambooth_extension.dreambooth.db_config import save_config
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generate_prompts
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, generate_sample_img, list_attention, \
+from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, list_attention, \
     list_floats, get_lora_models
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
-    training_wizard, training_wizard_person, load_model_params, ui_concepts
+    training_wizard, training_wizard_person, load_model_params, ui_concepts, generate_sample_img
 from modules import script_callbacks, sd_models
 from modules.ui import gr_show, create_refresh_button
 
 params_to_save = []
+
 is_image_call = False
 
 
@@ -55,22 +56,16 @@ def check_progress_call():
     @return:
     pspan: Progress bar span
     show_preview: Preview visibility
-    show_gallery: Gallery visibility, same as preview
     image: Output Image
     textinfo_result: Primary status
     textinfo2_result: Secondary status
     """
-    global is_image_call
     if dream_state.status.job_count == 0:
-        keep_gallery = is_image_call
-        is_image_call = False
-        return "", gr_show(keep_gallery), gr_show(keep_gallery), gr_show(keep_gallery), gr_show(True), gr_show(False)
+        return "", gr_show(False), gr_show(False), gr_show(True), gr_show(False)
     progress = 0
 
     if dream_state.status.job_count > 0:
         progress += dream_state.status.job_no / dream_state.status.job_count
-    if dream_state.status.sampling_steps > 0:
-        progress += 1 / dream_state.status.job_count * dream_state.status.sampling_step / dream_state.status.sampling_steps
 
     time_left = calc_time_left(progress, 1, " ETA: ", dream_state.status.time_left_force_display)
     if time_left != "":
@@ -79,18 +74,14 @@ def check_progress_call():
     progress = min(progress, 1)
 
     progressbar = f"""<div class='progressDiv'><div class='progress' style="overflow:visible;width:{progress * 100}%;white-space:nowrap;">{"&nbsp;" * 2 + str(int(progress * 100)) + "%" + time_left if progress > 0.01 else ""}</div></div>"""
-
     dream_state.status.set_current_image()
     show_preview = gr_show(False)
-    show_gallery = gr_show(False)
     image = dream_state.status.current_image
 
     if image is None:
         image = gr.update(value=None)
     else:
-        is_image_call = True
         show_preview = gr_show(True)
-        show_gallery = gr_show(True)
 
     if dream_state.status.textinfo is not None:
         textinfo_result = dream_state.status.textinfo
@@ -102,7 +93,7 @@ def check_progress_call():
     else:
         textinfo2_result = ""
     pspan = f"<span id='db_progress_span' style='display: none'>{time.time()}</span><p>{progressbar}</p>"
-    return pspan, show_preview, show_gallery, image, textinfo_result, textinfo2_result
+    return pspan, show_preview, image, textinfo_result, textinfo2_result
 
 
 def check_progress_call_initial():
@@ -371,6 +362,7 @@ def on_ui_tabs():
                                                        step=0.1)
                         db_save_lora_during = gr.Checkbox(label="Generate lora weights when saving during training.")
                         db_save_lora_after = gr.Checkbox(label="Generate lora weights when training completes.")
+                        db_save_lora_cancel = gr.Checkbox(label="Generate lora weights when training is canceled.")
                     with gr.Column():
                         gr.HTML("Diffusion Weights")
                         db_save_state_during = gr.Checkbox(
@@ -388,6 +380,8 @@ def on_ui_tabs():
                         db_sample_negative = gr.Textbox(label="Sample Negative Prompt")
                         db_sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
                         db_num_samples = gr.Number(label="Number of Samples to Generate", value=1, precision=0)
+                        db_sample_steps = gr.Number(label="Sampling Steps for Sample", value=60, precision=0)
+                        db_sample_scale = gr.Number(label="CFG Scale for Sample", value=7.5, precision=2)
 
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")
@@ -395,7 +389,7 @@ def on_ui_tabs():
                 db_status = gr.HTML(elem_id="db_status", value="")
                 db_status2 = gr.HTML(elem_id="db_status2", value="")
                 db_progressbar = gr.HTML(elem_id="db_progressbar")
-                db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery', visible=False).style(grid=4)
+                db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery').style(grid=4)
                 db_preview = gr.Image(elem_id='db_preview', visible=False)
                 # This one should be populated with the output of methods
 
@@ -405,7 +399,7 @@ def on_ui_tabs():
                     fn=lambda: check_progress_call(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_gallery, db_preview, db_status, db_status2],
+                    outputs=[db_progressbar, db_preview, db_preview, db_status, db_status2],
                 )
 
                 db_check_progress_initial = gr.Button('Check progress (first)', elem_id="db_check_progress_initial",
@@ -414,7 +408,7 @@ def on_ui_tabs():
                     fn=lambda: check_progress_call_initial(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_gallery, db_preview, db_status, db_status2],
+                    outputs=[db_progressbar, db_preview, db_preview, db_status, db_status2],
                 )
 
         global params_to_save
@@ -439,6 +433,8 @@ def on_ui_tabs():
             db_learning_rate,
             db_lora_learning_rate,
             db_lora_txt_learning_rate,
+            db_lora_txt_weight,
+            db_lora_weight,
             db_lr_scheduler,
             db_lr_warmup_steps,
             db_max_token_length,
@@ -453,9 +449,18 @@ def on_ui_tabs():
             db_resolution,
             db_revision,
             db_sample_batch_size,
+            db_save_ckpt_after,
+            db_save_ckpt_cancel,
+            db_save_ckpt_during,
             db_save_class_txt,
             db_save_embedding_every,
+            db_save_lora_after,
+            db_save_lora_cancel,
+            db_save_lora_during,
             db_save_preview_every,
+            db_save_state_after,
+            db_save_state_cancel,
+            db_save_state_during,
             db_save_use_global_counts,
             db_save_use_epochs,
             db_scale_lr,
@@ -555,6 +560,8 @@ def on_ui_tabs():
                 db_learning_rate,
                 db_lora_learning_rate,
                 db_lora_txt_learning_rate,
+                db_lora_txt_weight,
+                db_lora_weight,
                 db_lr_scheduler,
                 db_lr_warmup_steps,
                 db_max_token_length,
@@ -567,9 +574,18 @@ def on_ui_tabs():
                 db_prior_loss_weight,
                 db_resolution,
                 db_sample_batch_size,
+                db_save_ckpt_after,
+                db_save_ckpt_cancel,
+                db_save_ckpt_during,
                 db_save_class_txt,
                 db_save_embedding_every,
+                db_save_lora_after,
+                db_save_lora_cancel,
+                db_save_lora_during,
                 db_save_preview_every,
+                db_save_state_after,
+                db_save_state_cancel,
+                db_save_state_during,
                 db_save_use_global_counts,
                 db_save_use_epochs,
                 db_scale_lr,
@@ -746,7 +762,7 @@ def on_ui_tabs():
         db_generate_sample.click(
             fn=wrap_gpu_call(generate_sample_img),
             _js="db_start_sample",
-            inputs=[db_model_name, db_sample_prompt, db_sample_negative, db_sample_seed, db_num_samples],
+            inputs=[db_model_name, db_sample_prompt, db_sample_negative, db_sample_seed, db_num_samples, db_sample_steps, db_sample_scale],
             outputs=[db_gallery, db_status]
         )
 

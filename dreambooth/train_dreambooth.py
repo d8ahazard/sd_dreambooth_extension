@@ -516,6 +516,10 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     global_step = 0
     global_epoch = 0
+    last_save_step = 0
+    last_save_epoch = 0
+    last_img_step = 0
+    last_img_epoch = 0
     first_epoch = 0
     resume_step = 0
     resume_from_checkpoint = False
@@ -769,15 +773,24 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 if not args.save_use_epochs:
                     if global_step > 0:
                         if args.save_use_global_counts:
-                            save_img = args.save_preview_every and not args.revision % args.save_preview_every
-                            save_model = args.save_embedding_every and not args.revision % args.save_embedding_every
+                            save_img = args.save_preview_every and not args.revision - last_img_step >= args.save_preview_every
+                            save_model = args.save_embedding_every and args.revision - last_save_step >= args.save_embedding_every
+                            if save_model:
+                                last_save_step = args.revision
+                            if save_img:
+                                last_img_step = args.revision
                         else:
-                            save_img = args.save_preview_every and not global_step % args.save_preview_every
-                            save_model = args.save_embedding_every and not global_step % args.save_embedding_every
+                            save_img = args.save_preview_every and not global_step - last_img_step >= args.save_preview_every
+                            save_model = args.save_embedding_every and global_step - last_save_step >= args.save_embedding_every
+                            if save_model:
+                                last_save_step = global_step
+                            if save_img:
+                                last_img_step = global_step
                         if training_complete:
                             save_img = True
                             save_model = True
                         if save_img or save_model:
+
                             save_weights()
                             weights_saved = True
                             dream_state.status.job_count = actual_train_steps
@@ -830,11 +843,19 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
         if args.save_use_epochs:
             if args.save_use_global_counts:
-                save_img = args.save_preview_every and not args.epoch % args.save_preview_every
-                save_model = args.save_embedding_every and not args.epoch % args.save_embedding_every
+                save_img = args.save_preview_every and not args.epoch - last_img_epoch >= args.save_preview_every
+                save_model = args.save_embedding_every and not args.epoch - last_save_epoch >= args.save_embedding_every
+                if save_model:
+                    last_save_epoch = args.epoch
+                if save_img:
+                    last_img_epoch = args.epoch
             else:
-                save_img = args.save_preview_every and not global_epoch % args.save_preview_every
-                save_model = args.save_embedding_every and not global_epoch % args.save_embedding_every
+                save_img = args.save_preview_every and not global_epoch - last_img_epoch >= args.save_preview_every
+                save_model = args.save_embedding_every and not global_epoch - last_save_epoch >= args.save_embedding_every
+                if save_model:
+                    last_save_epoch = global_epoch
+                if save_img:
+                    last_img_epoch = global_epoch
             if training_complete:
                 save_img = True
                 save_model = True
