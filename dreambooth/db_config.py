@@ -69,8 +69,8 @@ class DreamboothConfig:
                  use_cpu: bool = False,
                  use_ema: bool = True,
                  use_lora: bool = False,
-                 use_unet: bool = True,
-                 use_stages: bool = False,
+                 train_unet: bool = True,
+                 train_in_stages: bool = False,
                  stage_step_ratio: float = 1.0,
                  v2: bool = False,
                  c1_class_data_dir: str = "",
@@ -188,8 +188,8 @@ class DreamboothConfig:
         self.use_cpu = use_cpu
         self.use_ema = False if use_ema is None else use_ema
         self.use_lora = False if use_lora is None else use_lora
-        self.use_unet = False if use_unet is None else use_unet
-        self.use_stages = False if use_stages is None else use_stages
+        self.train_unet = False if train_unet is None else train_unet
+        self.train_in_stages = False if train_in_stages is None else train_in_stages
         self.stage_step_ratio = stage_step_ratio
         if scheduler is not None:
             self.scheduler = scheduler

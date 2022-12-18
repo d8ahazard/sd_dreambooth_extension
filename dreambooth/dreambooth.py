@@ -129,8 +129,8 @@ def performance_wizard():
     use_8bit_adam = True
     use_cpu = False
     use_ema = False
-    use_unet = True
-    use_stages = False
+    train_unet = True
+    train_in_stages = False
     use_lora = False
     try:
         t = torch.cuda.get_device_properties(0).total_memory
@@ -152,8 +152,8 @@ def performance_wizard():
         if 16 > gb >= 10:
             train_text_encoder = True
             use_ema = False
-            use_unet = True
-            use_stages = True
+            train_unet = True
+            train_in_stages = True
         if 10 > gb >= 8:
             use_lora = True
         if gb < 8:
@@ -182,11 +182,11 @@ def performance_wizard():
     log_dict = {"Attention": attention, "Gradient Checkpointing": gradient_checkpointing, "Precision": mixed_precision,
                 "Cache Latents": not not_cache_latents, "Training Batch Size": train_batch_size,
                 "Class Generation Batch Size": sample_batch_size,
-                "Train Text Encoder": train_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "CPU": use_cpu, "LoRA": use_lora, "UNET": use_unet, "UNET and Text Encoder Train Separately": use_stages}
+                "Train Text Encoder": train_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "CPU": use_cpu, "LoRA": use_lora, "UNET": train_unet, "UNET and Text Encoder Train Separately": train_in_stages}
     for key in log_dict:
         msg += f"<br>{key}: {log_dict[key]}"
     return msg, attention, gradient_checkpointing, mixed_precision, not_cache_latents, sample_batch_size, \
-           train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema, use_unet, use_stages, use_lora
+           train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema, train_unet, train_in_stages, use_lora
 
 
 def load_params(model_dir):
@@ -267,8 +267,8 @@ def load_params(model_dir):
                "db_use_cpu",
                "db_use_ema",
                "db_use_lora",
-               "db_use_unet",
-               "db_use_stages",
+               "db_train_unet",
+               "db_train_in_stages",
                "db_stage_step_ratio",
                "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps",
                "c1_class_negative_prompt", "c1_class_prompt", "c1_class_token",
@@ -345,6 +345,10 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
         msg = "Invalid Pretrained VAE Path."
     if config.resolution <= 0:
         msg = "Invalid resolution."
+    if config.train_in_stages and not config.train_unet or not config.train_text_encoder:
+        msg = "Multi-Stage training require both Train UNET and Train Text Encoder to be enable."
+    if config.train_in_stages and config.use_lora:
+        msg = "Multi-Stage training cannot continue if LoRA enabled, disable either one." # why use Multi-Stage when LoRA can be train on <= 8GB GPUs
 
     if msg:
         shared.state.textinfo = msg
@@ -362,7 +366,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     epochs = config.num_train_epochs
     grad_steps = config.gradient_accumulation_steps
 
-    stage_enable = config.use_stages
+    stage_enable = config.train_in_stages
     stage_steps = [1, 2] if stage_enable else [1]
     for stage in stage_steps:
         if stage_enable:
@@ -373,14 +377,14 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
             print ("Stage training interrupted!\n")
             break
         if stage_enable and stage == 1:
-            config.use_unet = False
+            config.train_unet = False
             config.train_text_encoder = True
             config.gradient_accumulation_steps = grad_steps * 8
             config.num_train_epochs = int(math.ceil(epochs * config.stage_step_ratio))
             print ("Stage 1: Text Encoder\n")
         if stage_enable and stage == 2:
             config.use_ema = False
-            config.use_unet = True
+            config.train_unet = True
             config.train_text_encoder = False
             config.gradient_accumulation_steps = grad_steps
             config.num_train_epochs = epochs
