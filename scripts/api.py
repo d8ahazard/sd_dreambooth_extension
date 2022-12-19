@@ -1,12 +1,16 @@
 import asyncio
+import hashlib
+import io
 import json
+import os
 import traceback
+import zipfile
 
 import gradio as gr
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from pydantic import BaseModel
 from pydantic.dataclasses import Union
-from starlette.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 
 import modules.script_callbacks as script_callbacks
 from extensions.sd_dreambooth_extension.dreambooth import dream_state
@@ -16,6 +20,26 @@ from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_che
 from extensions.sd_dreambooth_extension.dreambooth.utils import wrap_gpu_call
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import generate_sample_img
+from modules import shared
+
+
+def zip_files(model_name, files):
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "a",
+                         zipfile.ZIP_DEFLATED, False) as zip_file:
+        for file in files:
+            img_byte_arr = io.BytesIO()
+            file.save(img_byte_arr, format='PNG')
+            img_byte_arr = img_byte_arr.getvalue()
+            file_name = hashlib.sha1(file.tobytes()).hexdigest()
+            image_filename = f"{file_name}.png"
+            zip_file.writestr(image_filename, img_byte_arr)
+    zip_file.close()
+    return StreamingResponse(
+        iter([zip_buffer.getvalue()]),
+        media_type="application/x-zip-compressed",
+        headers={"Content-Disposition": f"attachment; filename={model_name}_images.zip"}
+    )
 
 
 class DreamboothConcept(BaseModel):
@@ -179,20 +203,57 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
             return {"Exception saving model": f"{e}"}
 
     @app.get("/dreambooth/get_checkpoint")
-    async def get_checkpoint(model_name: str, lora_model_name: str, lora_weight: int = 1, lora_text_weight: int = 1):
+    async def get_checkpoint(model_name: str, skip_build=True, lora_model_name: str = "", save_model_name: str = "", lora_weight: int = 1, lora_text_weight: int = 1):
         config = from_file(model_name)
-        ckpt_result = compile_checkpoint(model_name, config.half_model, False,lora_model_name,lora_weight,
-                                         lora_text_weight, "", False, True)
-        path = ""
-        if "Checkpoint compiled successfully" in ckpt_result:
-            path = ckpt_result.split(":")[1]
-        return {"checkpoint_path": f"{path}"}
+        path = None
+        if save_model_name == "" or save_model_name is None:
+            save_model_name = model_name
+        if skip_build:
+            ckpt_dir = shared.cmd_opts.ckpt_dir
+            models_path = os.path.join(shared.models_path, "Stable-diffusion")
+            if ckpt_dir is not None:
+                models_path = ckpt_dir
+            use_subdir = False
+            if "use_subdir" in config.__dict__:
+                use_subdir = config["use_subdir"]
+            total_steps = config.revision
+            if use_subdir:
+                checkpoint_path = os.path.join(models_path, save_model_name, f"{save_model_name}_{total_steps}.ckpt")
+            else:
+                checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}.ckpt")
+            print(f"Looking for checkpoint at {checkpoint_path}")
+            if os.path.exists(checkpoint_path):
+                print("Existing checkpoint found, returning.")
+                path = checkpoint_path
+            else:
+                skip_build = False
+        if not skip_build:
+            ckpt_result = compile_checkpoint(model_name, config.half_model, False, lora_model_name, lora_weight,
+                                             lora_text_weight, save_model_name, False, True)
+            if "Checkpoint compiled successfully" in ckpt_result:
+                path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()
+                print(f"Checkpoint aved to path: {path}")
 
-    @app.post("/dreambooth/get_images")
+        if path is not None and os.path.exists(path):
+            print(f"Returning file response: {path}-{os.path.splitext(path)}")
+            return FileResponse(path)
+
+        return {"exception": f"Unable to find or compile checkpoint."}
+
+    @app.get("/dreambooth/samples")
     async def generate_image(model_name: str, sample_prompt: str, num_images: int = 1, batch_size: int = 1,
-                             lora_model_path: str = "", lora_weight: float = 1.0,lora_txt_weight: float = 1.0,
+                             lora_model_path: str = "", lora_weight: float = 1.0, lora_txt_weight: float = 1.0,
                              negative_prompt: str = "", steps: int = 60, scale: float = 7.5):
-        images = generate_sample_img(model_name, sample_prompt,negative_prompt, -1,num_images, steps, scale)
+        images, msg = generate_sample_img(model_name, sample_prompt,negative_prompt, -1, num_images, steps, scale)
+        if len(images) > 1:
+            return zip_files(model_name, images)
+        else:
+            img_byte_arr = io.BytesIO()
+            file = images[0]
+            file.save(img_byte_arr, format='PNG')
+            img_byte_arr = img_byte_arr.getvalue()
+
+        return Response(content=img_byte_arr, media_type="image/png")
 
 
 

@@ -8,7 +8,8 @@ import traceback
 import gradio
 import torch
 import torch.utils.checkpoint
-from diffusers import StableDiffusionPipeline
+from accelerate import Accelerator
+from diffusers import StableDiffusionPipeline, UNet2DConditionModel, DDIMScheduler, DiffusionPipeline, AutoencoderKL
 from diffusers.utils import logging as dl
 from transformers import CLIPTextModel
 
@@ -117,11 +118,20 @@ def training_wizard(model_dir, is_person=False):
 
 
 def generate_sample_img(model_dir: str, save_sample_prompt: str, negative_prompt: str, seed: int, num_samples: int,
-                        steps: int = 60, scale: float = 7.5):
+                        steps: int = 60, scale: float = 7.5, accelerator: Accelerator = None):
     dream_state.status.job_count = num_samples + 1
     if model_dir is None or model_dir == "":
         return "Please select a model."
     config = from_file(model_dir)
+    if accelerator is None:
+        accelerator = Accelerator(
+            gradient_accumulation_steps=config.gradient_accumulation_steps,
+            mixed_precision=config.mixed_precision,
+            log_with="tensorboard",
+            logging_dir=os.path.join(config.model_dir, "logging"),
+            cpu=config.use_cpu
+        )
+
     unload_system_models()
     model_path = config.pretrained_model_name_or_path
     if not os.path.exists(config.pretrained_model_name_or_path):
@@ -130,20 +140,63 @@ def generate_sample_img(model_dir: str, save_sample_prompt: str, negative_prompt
     msg = f"Generated {num_samples} sample(s)."
     try:
         print(f"Loading model from {model_path}.")
+        from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import import_model_class_from_model_name_or_path
         dream_state.status.job_no = 1
         dream_state.status.textinfo = "Loading diffusion model..."
-        text_enc_model = CLIPTextModel.from_pretrained(config.pretrained_model_name_or_path,
-                                                       subfolder="text_encoder", revision=config.revision)
-        pipeline = StableDiffusionPipeline.from_pretrained(
+        # Load models and create wrapper for stable diffusion
+        # import correct text encoder class
+        text_encoder_cls = import_model_class_from_model_name_or_path(config.pretrained_model_name_or_path, config.revision)
+
+        text_encoder = text_encoder_cls.from_pretrained(
             config.pretrained_model_name_or_path,
+            subfolder="text_encoder",
+            revision=config.revision,
+        )
+
+        unet = UNet2DConditionModel.from_pretrained(
+            config.pretrained_model_name_or_path,
+            subfolder="unet",
+            revision=config.revision,
+            torch_dtype=torch.float32
+        )
+
+        vae = AutoencoderKL.from_pretrained(
+            config.pretrained_model_name_or_path,
+            subfolder="vae",
+            revision=config.revision
+        )
+        unet, text_encoder = accelerator.prepare(unet, text_encoder)
+        text_enc_model = accelerator.unwrap_model(text_encoder, keep_fp32_wrapper=True)
+
+        pred_type = "epsilon"
+        if config.v2:
+            pred_type = "v_prediction"
+        scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", steps_offset=1,
+                                  clip_sample=False, set_alpha_to_one=False, prediction_type=pred_type)
+        
+        pipeline = DiffusionPipeline.from_pretrained(
+            config.pretrained_model_name_or_path,
+            unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=True),
             text_encoder=text_enc_model,
+            vae=vae,
+            scheduler=scheduler,
             torch_dtype=torch.float16,
             revision=config.revision,
             safety_checker=None,
-            feature_extractor=None,
-            requires_safety_checker=False
+            requires_safety_checker=None
         )
-        pipeline = pipeline.to(shared.device)
+
+        pipeline = pipeline.to(accelerator.device)
+        new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
+        if os.path.exists(new_hotness):
+            accelerator.print(f"Resuming from checkpoint {new_hotness}")
+            try:
+                no_safe = shared.cmd_opts.disable_safe_unpickle
+            except:
+                no_safe = False
+            shared.cmd_opts.disable_safe_unpickle = True
+            accelerator.load_state(new_hotness)
+            shared.cmd_opts.disable_safe_unpickle = no_safe
 
         def update_latent(step: int, timestep: int, latents: torch.FloatTensor):
             dream_state.status.sampling_step = step
