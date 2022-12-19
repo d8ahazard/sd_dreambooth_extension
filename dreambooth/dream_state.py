@@ -41,6 +41,7 @@ class DreamState:
             "job_no": self.job_no,
             "sampling_step": self.sampling_step,
             "sampling_steps": self.sampling_steps,
+            "last_status": self.textinfo
         }
 
         return obj

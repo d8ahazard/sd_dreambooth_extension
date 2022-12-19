@@ -308,17 +308,23 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
         checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}.ckpt")
 
     model_path = config.pretrained_model_name_or_path
-    new_hotness = os.path.join(config.model_dir, f"checkpoint-{config.revision}")
+    new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
+
     if os.path.exists(new_hotness):
-        model_path = new_hotness
-    unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")
+        print(f"Loading snapshot paths from {new_hotness}")
+        unet_path = osp.join(new_hotness, "pytorch_model.bin")
+        text_enc_path = osp.join(new_hotness, "pytorch_model_1.bin")
+    else:
+        unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")
+        text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
+
     vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.bin")
-    text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
+
     try:
         printi("Converting unet...", log=log)
-        loaded_pipeline = DiffusionPipeline.from_pretrained(model_path).to("cpu")
 
         if lora_path is not None and lora_path != "":
+            loaded_pipeline = DiffusionPipeline.from_pretrained(model_path).to("cpu")
             lora_diffusers = config.pretrained_model_name_or_path + "_lora"
             os.makedirs(lora_diffusers, exist_ok=True)
             if not os.path.exists(lora_path):
@@ -344,8 +350,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
                 loaded_pipeline.text_encoder.save_pretrained(
                     os.path.join(config.pretrained_model_name_or_path, "text_encoder_lora"))
                 text_enc_path = osp.join(config.pretrained_model_name_or_path, "text_encoder_lora", "pytorch_model.bin")
-
-        del loaded_pipeline
+            del loaded_pipeline
 
         # Convert the UNet model
         unet_state_dict = torch.load(unet_path, map_location="cpu")
@@ -411,6 +416,6 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     # cleanup()
     if reload_models:
         reload_system_models()
-    msg = "Checkpoint compiled successfully."
+    msg = f"Checkpoint compiled successfully: {checkpoint_path}"
     printi(msg)
     return msg

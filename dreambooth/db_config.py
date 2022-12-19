@@ -64,7 +64,7 @@ class DreamboothConfig:
                  save_lora_cancel: bool = True,
                  save_lora_during: bool = True,
                  save_preview_every: int = 500,
-                 save_state_after: bool = False,
+                 save_state_after: bool = True,
                  save_state_cancel: bool = False,
                  save_state_during: bool = False,
                  save_use_global_counts: bool = False,
@@ -295,6 +295,28 @@ class DreamboothConfig:
             json.dump(self.__dict__, outfile, indent=4)
 
 
+def save_json(model_name: str, json_cfg: str):
+    """
+    Save the config file
+    """
+    models_path = shared.cmd_opts.dreambooth_models_path
+    if models_path == "" or models_path is None:
+        models_path = os.path.join(shared.models_path, "dreambooth")
+    if not os.path.exists(os.path.join(models_path, model_name)):
+        os.makedirs(os.path.join(models_path, model_name))
+    config_file = os.path.join(models_path, model_name, "db_config.json")
+    try:
+        loaded = json.loads(json_cfg)
+        with open(config_file, "w") as outfile:
+            json.dump(loaded, outfile, indent=4)
+
+        return json.dumps(loaded)
+    except Exception as e:
+        traceback.print_exc()
+        return {"exception": f"{e}"}
+
+
+
 def save_config(*args):
     config = DreamboothConfig(*args)
     print("Saved settings.")
@@ -324,6 +346,9 @@ def from_file(model_name):
     try:
         with open(config_file, 'r') as openfile:
             config_dict = json.load(openfile)
+            if config_dict is None:
+                print("Invalid config dict.")
+                return config_dict
             concept_keys = ["instance_data_dir", "class_data_dir", "instance_prompt",
                             "class_prompt", "save_sample_prompt", "save_sample_template", "instance_token",
                             "class_token", "num_class_images",

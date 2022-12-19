@@ -526,7 +526,13 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     new_hotness = os.path.join(args.model_dir, "checkpoints", f"checkpoint-{args.revision}")
     if os.path.exists(new_hotness):
         accelerator.print(f"Resuming from checkpoint {new_hotness}")
+        try:
+            no_safe = shared.cmd_opts.disable_safe_unpickle
+        except:
+            no_safe = False
+        shared.cmd_opts.disable_safe_unpickle = True
         accelerator.load_state(new_hotness)
+        shared.cmd_opts.disable_safe_unpickle = no_safe
         global_step = args.revision
         resume_from_checkpoint = True
         resume_global_step = global_step * args.gradient_accumulation_steps
@@ -534,6 +540,31 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         resume_step = resume_global_step % num_update_steps_per_epoch
 
     def save_weights():
+        save_lora = False
+        save_snapshot = False
+        save_checkpoint = False
+        if training_complete:
+            if dream_state.status.interrupted:
+                if args.save_lora_cancel:
+                    save_lora = True
+                if args.save_state_cancel:
+                    save_snapshot = True
+                if args.save_ckpt_cancel:
+                    save_checkpoint = True
+            else:
+                if args.save_lora_after:
+                    save_lora = True
+                if args.save_state_after:
+                    save_snapshot = True
+                if args.save_ckpt_after:
+                    save_checkpoint = True
+        else:
+            if args.save_lora_during:
+                save_lora = True
+            if args.save_state_during:
+                save_snapshot = True
+            if args.save_ckpt_during:
+                save_snapshot = True
         # Create the pipeline using the trained modules and save it.
         if accelerator.is_main_process:
             accelerator.save_state(os.path.join(args.model_dir, "checkpoints", f"checkpoint-{args.revision}"))
@@ -570,7 +601,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             with accelerator.autocast(), torch.inference_mode():
                 if save_model:
                     try:
-                        if args.use_lora:
+                        if args.use_lora and save_lora:
                             lora_model_name = args.model_name if custom_model_name == "" else custom_model_name
                             try:
                                 cmd_lora_models_path = shared.cmd_opts.lora_models_path
@@ -593,13 +624,19 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                             print(f"\nLora weights successfully saved to {out_file}")
                         else:
                             out_file = None
-                            dream_state.status.textinfo = f"Saving diffusion model at step {args.revision}..."
-                            accelerator.save_state(os.path.join(args.model_dir, "checkpoints",
-                                                                f"checkpoint-{args.revision}"))
+                            if save_snapshot:
+                                dream_state.status.textinfo = f"Saving snapshot at step {args.revision}..."
 
-                        compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
-                                           reload_models=False, lora_path=out_file, log=False,
-                                           custom_model_name=custom_model_name)
+                                accelerator.save_state(os.path.join(args.model_dir, "checkpoints",
+                                                                    f"checkpoint-{args.revision}"))
+                            else:
+                                dream_state.status.textinfo = f"Saving diffusion model at step {args.revision}..."
+                                s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"))
+
+                        if save_checkpoint:
+                            compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
+                                               reload_models=False, lora_path=out_file, log=False,
+                                               custom_model_name=custom_model_name)
                         if args.use_ema:
                             ema_unet.restore(unet.parameters())
                         args.save()

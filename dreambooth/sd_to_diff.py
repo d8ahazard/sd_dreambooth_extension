@@ -843,7 +843,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
 
         db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type, v2=v2,
                                      src=ckpt_path if not from_hub else new_model_url,
-                                     resolution=512 if is_512 else 768)
+                                     resolution=image_size)
         db_config.lifetime_revision = revision
         db_config.epoch = epoch
         print(f"{'v2' if v2 else 'v1'} model loaded.")

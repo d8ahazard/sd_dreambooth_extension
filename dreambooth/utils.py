@@ -183,6 +183,42 @@ def reload_system_models():
     printm("Restored system models.")
 
 
+def wrap_gpu_call(func, extra_outputs=None):
+    def f(*args, extra_outputs_array=extra_outputs, **kwargs):
+        try:
+            dream_state.status.begin()
+            res = func(*args, **kwargs)
+            dream_state.status.end()
+
+        except Exception as e:
+            # When printing out our debug argument list, do not print out more than a MB of text
+            max_debug_str_len = 131072  # (1024*1024)/8
+
+            print("Error completing request", file=sys.stderr)
+            arg_str = f"Arguments: {str(args)} {str(kwargs)}"
+            print(arg_str[:max_debug_str_len], file=sys.stderr)
+            if len(arg_str) > max_debug_str_len:
+                print(f"(Argument list truncated at {max_debug_str_len}/{len(arg_str)} characters)", file=sys.stderr)
+
+            print(traceback.format_exc(), file=sys.stderr)
+
+            dream_state.status.job = ""
+            dream_state.status.job_count = 0
+
+            if extra_outputs_array is None:
+                extra_outputs_array = [None, '']
+
+            res = extra_outputs_array + [f"<div class='error'>{html.escape(type(e).__name__ + ': ' + str(e))}</div>"]
+
+        dream_state.status.skipped = False
+        dream_state.status.interrupted = False
+        dream_state.status.job_count = 0
+
+        return res
+
+    return f
+
+
 def isset(val: str):
     return val is not None and val != "" and val != "*"
 

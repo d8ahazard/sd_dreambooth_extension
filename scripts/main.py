@@ -11,7 +11,7 @@ from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_che
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generate_prompts
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, list_attention, \
-    list_floats, get_lora_models
+    list_floats, get_lora_models, wrap_gpu_call
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
     training_wizard, training_wizard_person, load_model_params, ui_concepts, generate_sample_img
@@ -106,42 +106,6 @@ def check_progress_call_initial():
     dream_state.status.time_left_force_display = False
 
     return check_progress_call()
-
-
-def wrap_gpu_call(func, extra_outputs=None):
-    def f(*args, extra_outputs_array=extra_outputs, **kwargs):
-        try:
-            dream_state.status.begin()
-            res = func(*args, **kwargs)
-            dream_state.status.end()
-
-        except Exception as e:
-            # When printing out our debug argument list, do not print out more than a MB of text
-            max_debug_str_len = 131072  # (1024*1024)/8
-
-            print("Error completing request", file=sys.stderr)
-            arg_str = f"Arguments: {str(args)} {str(kwargs)}"
-            print(arg_str[:max_debug_str_len], file=sys.stderr)
-            if len(arg_str) > max_debug_str_len:
-                print(f"(Argument list truncated at {max_debug_str_len}/{len(arg_str)} characters)", file=sys.stderr)
-
-            print(traceback.format_exc(), file=sys.stderr)
-
-            dream_state.status.job = ""
-            dream_state.status.job_count = 0
-
-            if extra_outputs_array is None:
-                extra_outputs_array = [None, '']
-
-            res = extra_outputs_array + [f"<div class='error'>{html.escape(type(e).__name__ + ': ' + str(e))}</div>"]
-
-        dream_state.status.skipped = False
-        dream_state.status.interrupted = False
-        dream_state.status.job_count = 0
-
-        return res
-
-    return f
 
 
 def ui_gen_ckpt(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1.0,
@@ -366,11 +330,11 @@ def on_ui_tabs():
                     with gr.Column():
                         gr.HTML("Diffusion Weights")
                         db_save_state_during = gr.Checkbox(
-                            label="Safe separate diffusers snapshots when saving during training.")
+                            label="Save separate diffusers snapshots when saving during training.")
                         db_save_state_after = gr.Checkbox(
-                            label="Safe separate diffusers snapshots when training completes.")
+                            label="Save separate diffusers snapshots when training completes.", value=True)
                         db_save_state_cancel = gr.Checkbox(
-                            label="Safe separate diffusers snapshots when training completes.")
+                            label="Save separate diffusers snapshots when training is canceled.")
                 with gr.Tab("Generate"):
                     with gr.Column():
                         db_generate_classes = gr.Button(value="Generate Class Images")
