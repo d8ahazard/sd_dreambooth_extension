@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+import numpy as np
 import torch
 import torch.utils.checkpoint
 from PIL import Image
@@ -20,10 +21,14 @@ from transformers import CLIPTextModel, AutoTokenizer
 from extensions.sd_dreambooth_extension.dreambooth import dream_state
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, from_file
+from extensions.sd_dreambooth_extension.dreambooth.dream_state import status
 from extensions.sd_dreambooth_extension.dreambooth.utils import printm, cleanup, get_checkpoint_match, get_images
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import apply_lora_weights
-from modules import shared, devices, sd_models, images
-from modules.processing import StableDiffusionProcessingTxt2Img, process_images
+from modules import shared, devices, sd_models, images, sd_hijack, prompt_parser, lowvram
+from modules.processing import StableDiffusionProcessingTxt2Img, process_images, StableDiffusionProcessing, Processed, \
+    get_fixed_seed, create_infotext, decode_first_stage
+from modules.sd_hijack import model_hijack
+from modules.shared import opts
 
 
 @dataclass
@@ -293,6 +298,16 @@ class ImageBuilder:
             )
 
             self.image_pipe.to(accelerator.device)
+            new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
+            if os.path.exists(new_hotness):
+                accelerator.print(f"Resuming from checkpoint {new_hotness}")
+                try:
+                    no_safe = shared.cmd_opts.disable_safe_unpickle
+                except:
+                    no_safe = False
+                shared.cmd_opts.disable_safe_unpickle = True
+                accelerator.load_state(new_hotness)
+                shared.cmd_opts.disable_safe_unpickle = no_safe
             if config.use_lora and lora_model is not None and lora_model != "":
                 apply_lora_weights(lora_model, self.image_pipe.unet, self.image_pipe.text_encoder, lora_weight,
                                    accelerator.device)
@@ -312,6 +327,11 @@ class ImageBuilder:
             print("SD model loaded.")
 
     def generate_images(self, prompt_data: PromptData) -> Image:
+        def update_latent(step: int, timestep: int, latents: torch.FloatTensor):
+            dream_state.status.sampling_step = step
+            decoded = self.image_pipe.decode_latents(latents)
+            dream_state.status.current_latent = self.image_pipe.numpy_to_pil(decoded)
+
         if self.use_txt2img:
             p = StableDiffusionProcessingTxt2Img(
                 sd_model=shared.sd_model,
@@ -326,19 +346,32 @@ class ImageBuilder:
                 do_not_save_samples=True,
                 do_not_reload_embeddings=True
             )
-            processed = process_images(p)
+            processed = process_txt2img(p)
             print(f"Processed: {prompt_data.prompt}")
             p.close()
-            output = processed.images
+            output = processed
         else:
+            preview_every = shared.opts.show_progress_every_n_steps
+
             with self.accelerator.autocast(), torch.inference_mode():
-                output = self.image_pipe(
-                    [prompt_data.prompt] * self.batch_size,
-                    num_inference_steps=prompt_data.steps,
-                    guidance_scale=prompt_data.scale,
-                    height=self.resolution,
-                    width=self.resolution,
-                    negative_prompt=[prompt_data.negative_prompt] * self.batch_size).images
+                if preview_every > 0:
+                    output = self.image_pipe(
+                        [prompt_data.prompt] * self.batch_size,
+                        num_inference_steps=prompt_data.steps,
+                        guidance_scale=prompt_data.scale,
+                        height=self.resolution,
+                        width=self.resolution,
+                        callback_steps=preview_every,
+                        callback=update_latent,
+                        negative_prompt=[prompt_data.negative_prompt] * self.batch_size).images
+                else:
+                    output = self.image_pipe(
+                        [prompt_data.prompt] * self.batch_size,
+                        num_inference_steps=prompt_data.steps,
+                        guidance_scale=prompt_data.scale,
+                        height=self.resolution,
+                        width=self.resolution,
+                        negative_prompt=[prompt_data.negative_prompt] * self.batch_size).images
         return output
 
     def unload(self):
@@ -350,6 +383,128 @@ class ImageBuilder:
         # If there was a model loaded already, reload it
         if self.last_model is not None:
             sd_models.load_model(self.last_model)
+
+
+def process_txt2img(p: StableDiffusionProcessing) -> Processed:
+    """this is the main loop that both txt2img and img2img use; it calls func_init once inside all the scopes and func_sample once per batch"""
+
+    if type(p.prompt) == list:
+        assert (len(p.prompt) > 0)
+    else:
+        assert p.prompt is not None
+
+    devices.torch_gc()
+
+    seed = get_fixed_seed(p.seed)
+    subseed = get_fixed_seed(p.subseed)
+
+    sd_hijack.model_hijack.clear_comments()
+
+    comments = {}
+
+    if type(p.prompt) == list:
+        p.all_prompts = [shared.prompt_styles.apply_styles_to_prompt(x, p.styles) for x in p.prompt]
+    else:
+        p.all_prompts = p.batch_size * p.n_iter * [shared.prompt_styles.apply_styles_to_prompt(p.prompt, p.styles)]
+
+    if type(p.negative_prompt) == list:
+        p.all_negative_prompts = [shared.prompt_styles.apply_negative_styles_to_prompt(x, p.styles) for x in
+                                  p.negative_prompt]
+    else:
+        p.all_negative_prompts = p.batch_size * p.n_iter * [
+            shared.prompt_styles.apply_negative_styles_to_prompt(p.negative_prompt, p.styles)]
+
+    if type(seed) == list:
+        p.all_seeds = seed
+    else:
+        p.all_seeds = [int(seed) + (x if p.subseed_strength == 0 else 0) for x in range(len(p.all_prompts))]
+
+    if type(subseed) == list:
+        p.all_subseeds = subseed
+    else:
+        p.all_subseeds = [int(subseed) + x for x in range(len(p.all_prompts))]
+
+    def infotext(iteration=0, position_in_batch=0):
+        return create_infotext(p, p.all_prompts, p.all_seeds, p.all_subseeds, comments, iteration, position_in_batch)
+
+    with open(os.path.join(shared.script_path, "params.txt"), "w", encoding="utf8") as file:
+        processed = Processed(p, [], p.seed, "")
+        file.write(processed.infotext(p, 0))
+
+    infotexts = []
+    output_images = []
+
+    with torch.no_grad(), p.sd_model.ema_scope():
+        with devices.autocast():
+            p.init(p.all_prompts, p.all_seeds, p.all_subseeds)
+
+        if status.job_count == -1:
+            status.job_count = p.n_iter
+
+        for n in range(p.n_iter):
+            if status.skipped:
+                status.skipped = False
+
+            if status.interrupted:
+                break
+
+            prompts = p.all_prompts[n * p.batch_size:(n + 1) * p.batch_size]
+            negative_prompts = p.all_negative_prompts[n * p.batch_size:(n + 1) * p.batch_size]
+            seeds = p.all_seeds[n * p.batch_size:(n + 1) * p.batch_size]
+            subseeds = p.all_subseeds[n * p.batch_size:(n + 1) * p.batch_size]
+
+            if len(prompts) == 0:
+                break
+
+            with devices.autocast():
+                uc = prompt_parser.get_learned_conditioning(shared.sd_model, negative_prompts, p.steps)
+                c = prompt_parser.get_multicond_learned_conditioning(shared.sd_model, prompts, p.steps)
+
+            if len(model_hijack.comments) > 0:
+                for comment in model_hijack.comments:
+                    comments[comment] = 1
+
+            if p.n_iter > 1:
+                status.job = f"Batch {n + 1} out of {p.n_iter}"
+
+            with devices.autocast():
+                samples_ddim = p.sample(conditioning=c, unconditional_conditioning=uc, seeds=seeds, subseeds=subseeds,
+                                        subseed_strength=p.subseed_strength, prompts=prompts)
+
+            x_samples_ddim = [decode_first_stage(p.sd_model, samples_ddim[i:i + 1].to(dtype=devices.dtype_vae))[0].cpu()
+                              for i in range(samples_ddim.size(0))]
+            x_samples_ddim = torch.stack(x_samples_ddim).float()
+            x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
+
+            del samples_ddim
+
+            if shared.cmd_opts.lowvram or shared.cmd_opts.medvram:
+                lowvram.send_everything_to_cpu()
+
+            devices.torch_gc()
+
+            for i, x_sample in enumerate(x_samples_ddim):
+                x_sample = 255. * np.moveaxis(x_sample.cpu().numpy(), 0, 2)
+                x_sample = x_sample.astype(np.uint8)
+
+                image = Image.fromarray(x_sample)
+
+                text = infotext(n, i)
+                infotexts.append(text)
+                image.info["parameters"] = text
+                output_images.append(image)
+
+            del x_samples_ddim
+
+            devices.torch_gc()
+
+            status.nextjob()
+
+        p.color_corrections = None
+
+    devices.torch_gc()
+
+    return output_images
 
 
 def generate_prompts(model_dir):

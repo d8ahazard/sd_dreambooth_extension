@@ -1,7 +1,7 @@
 import datetime
 import time
 
-from modules import devices, images
+from modules import devices, images, shared
 from modules.shared import parallel_processing_allowed, opts
 
 
@@ -64,13 +64,27 @@ class DreamState:
         self.job_count = 0
         devices.torch_gc()
 
+    def nextjob(self):
+        if opts.show_progress_every_n_steps == -1:
+            self.do_set_current_image(False)
+
+        self.job_no += 1
+        self.sampling_step = 0
+        self.current_image_sampling_step = 0
+
     """sets self.current_image from self.current_latent if enough sampling steps have been made after the last call to this"""
 
     def set_current_image(self):
+        from_shared = False
+        if shared.state.current_latent is not None and self.current_latent is None:
+            self.sampling_step = shared.state.sampling_step
+            self.current_image_sampling_step = shared.state.current_image_sampling_step
+            self.current_latent = shared.state.current_latent
+            from_shared = True
         if self.sampling_step - self.current_image_sampling_step >= opts.show_progress_every_n_steps > 0:
-            self.do_set_current_image()
+            self.do_set_current_image(from_shared)
 
-    def do_set_current_image(self):
+    def do_set_current_image(self, from_shared):
         if not parallel_processing_allowed:
             return
         if self.current_latent is None:
@@ -81,8 +95,11 @@ class DreamState:
                 self.current_image = images.image_grid(self.current_latent)
             else:
                 self.current_image = self.current_latent[0]
-
-        self.current_image_sampling_step = self.sampling_step
+        if from_shared:
+            self.current_image_sampling_step = shared.state.sampling_step
+        else:
+            self.current_image_sampling_step = self.sampling_step
+        self.current_latent = None
 
 
 status = DreamState()

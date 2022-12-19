@@ -35,10 +35,9 @@
     right: 0;
     margin-left: auto;
     margin-right: auto;
-    margin-top: 85px;
+    bottom: 10px;
     z-index: 100;
-    border: none;
-    border-radius: 5px;
+    border-radius: 25px;
 }
 
 @media screen and (min-width: 768px) {
