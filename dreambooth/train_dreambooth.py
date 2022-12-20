@@ -978,8 +978,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     msg = ""
     weights_saved = False
     for epoch in range(args.num_train_epochs):
-        if training_complete:
-            break
         try:
             unet.train()
             if args.train_text_encoder and text_encoder is not None:
@@ -1082,7 +1080,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                             args.save()
                             save_weights()
                             args = from_file(args.model_name)
-                            weights_saved = True
+                            weights_saved = save_model
                             shared.state.job_count = actual_train_steps
 
                 if shared.state.interrupted:
@@ -1120,6 +1118,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     args.save()
                     save_weights()
                     args = from_file(args.model_name)
+                    weights_saved = save_model
                 msg = f"Training completed, total steps: {args.revision}"
                 break
         except Exception as m:
@@ -1136,9 +1135,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         args.save()
         global_epoch += 1
 
-        if training_complete:
-            break
-
         if args.save_use_epochs:
             if args.save_use_global_counts:
                 save_img = args.save_preview_every and not args.epoch % args.save_preview_every
@@ -1153,7 +1149,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 args.save()
                 save_weights()
                 args = from_file(args.model_name)
-                weights_saved = True
+                weights_saved = save_model
                 shared.state.job_count = actual_train_steps
 
         if args.epoch_pause_frequency > 0 and args.epoch_pause_time > 0:
