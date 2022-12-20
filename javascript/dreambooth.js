@@ -79,7 +79,7 @@ new_titles = {
     "Instance Prompt": "A prompt describing the subject. Use [Filewords] to parse image filename/.txt to insert existing prompt here.",
     "Instance Token": "When using [filewords], this is the instance identifier that is unique to your subject. Should be a single word.",
     "Learning Rate Scheduler": "The learning rate scheduler to use.",
-    "Learning Rate Warmup Steps": "Number of steps for the warmup in the lr scheduler.",
+    "Learning Rate Warmup Steps": "Number of steps for the warmup in the lr scheduler. Applies to all schedulers except constant.",
     "Learning Rate": "The rate at which the model learns. Default is 0.000005. Use a lower value like 0.000002 or 0.000001 for more complex subjects...like people.",
     "Load Params": "Load last saved training parameters for the model..",
     "Log Memory": "Log the current GPU memory usage.",
