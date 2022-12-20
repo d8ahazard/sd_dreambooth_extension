@@ -12,7 +12,7 @@ from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, l
     list_floats, get_lora_models, wrap_gpu_call
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
-    training_wizard, training_wizard_person, load_model_params, ui_concepts, ui_samples
+    training_wizard, training_wizard_person, load_model_params, ui_classifiers, ui_samples
 from modules import script_callbacks, sd_models
 from modules.ui import gr_show, create_refresh_button
 
@@ -800,8 +800,8 @@ def on_ui_tabs():
 
         db_generate_classes.click(
             _js="db_start_classes",
-            fn=wrap_gpu_call(ui_concepts),
-            inputs=[db_model_name, db_lora_model_name, db_lora_weight, db_use_txt2img],
+            fn=wrap_gpu_call(ui_classifiers),
+            inputs=[db_model_name, db_lora_model_name, db_lora_weight, db_lora_txt_weight, db_use_txt2img],
             outputs=[db_status, db_gallery]
         )
 

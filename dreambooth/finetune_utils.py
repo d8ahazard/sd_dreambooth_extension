@@ -4,6 +4,7 @@ import json
 import os
 import random
 import re
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -310,7 +311,8 @@ class ImageBuilder:
                 accelerator.load_state(new_hotness)
                 shared.cmd_opts.disable_safe_unpickle = no_safe
             if config.use_lora and lora_model is not None and lora_model != "":
-                apply_lora_weights(lora_model, self.image_pipe.unet, self.image_pipe.text_encoder, lora_weight, lora_txt_weight,
+                apply_lora_weights(lora_model, self.image_pipe.unet, self.image_pipe.text_encoder, lora_weight,
+                                   lora_txt_weight,
                                    accelerator.device)
             print("Diffusers model configured.")
         else:
@@ -327,11 +329,12 @@ class ImageBuilder:
             shared.sd_model.to(shared.device)
             print("SD model loaded.")
 
-    def generate_images(self, prompt_data: list[PromptData]) -> Image:
+    def generate_images(self, prompt_data: list[PromptData]) -> [Image]:
         def update_latent(step: int, timestep: int, latents: torch.FloatTensor):
             dream_state.status.sampling_step = step
             decoded = self.image_pipe.decode_latents(latents)
             dream_state.status.current_latent = self.image_pipe.numpy_to_pil(decoded)
+
         positive_prompts = []
         negative_prompts = []
         seed = -1
@@ -403,7 +406,7 @@ class ImageBuilder:
             sd_models.load_model(self.last_model)
 
 
-def process_txt2img(p: StableDiffusionProcessing) -> Processed:
+def process_txt2img(p: StableDiffusionProcessing) -> [Image]:
     """this is the main loop that both txt2img and img2img use; it calls func_init once inside all the scopes and func_sample once per batch"""
 
     if type(p.prompt) == list:
@@ -584,7 +587,21 @@ def generate_prompts(model_dir):
     return json.dumps(output)
 
 
-def generate_classifiers(args: DreamboothConfig, lora_model: str, lora_weight: int, use_txt2img: bool = True):
+def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weight: float = 1.0,
+                         lora_text_weight: float = 1.0, use_txt2img: bool = True, accelerator: Accelerator = None):
+    """
+
+    @param args: A DreamboothConfig
+    @param lora_model: Optional path to a lora model to use. You probably don't want to use this.
+    @param lora_weight: Alpha to use when merging lora unet.
+    @param lora_text_weight: Alpha to use when merging lora text encoder.
+    @param use_txt2img: Generate images using txt2image. Does not use lora.
+    @param accelerator: An optional existing accelerator to use.
+    @return:
+    generated: Number of images generated
+    with_prior: Whether prior preservation should be used
+    images: A list of strings with paths to images.
+    """
     printm("Generating class images...")
     out_images = []
     try:
@@ -598,13 +615,14 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str, lora_weight: i
     set_len = prompt_dataset.__len__()
     if set_len == 0:
         print("Nothing to generate.")
-        return 0, prompt_dataset.with_prior
+        return 0, prompt_dataset.with_prior, []
 
     dream_state.status.textinfo = f"Generating {set_len} class images for training..."
     dream_state.status.job_count = set_len
     dream_state.status.job_no = 0
     print(f"Creating image builder {args.sample_batch_size}...")
-    builder = ImageBuilder(args, use_txt2img, lora_model, lora_weight, args.sample_batch_size)
+    builder = ImageBuilder(args, use_txt2img=use_txt2img, lora_model=lora_model, lora_weight=lora_weight,
+                           lora_txt_weight=lora_text_weight, batch_size=args.sample_batch_size, accelerator=accelerator)
     generated = 0
     pbar = tqdm(total=set_len - 1)
 
@@ -615,10 +633,13 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str, lora_weight: i
         for b in range(args.sample_batch_size):
             pd = prompt_dataset.__getitem__(i)
             prompts.append(pd)
-            out_images = builder.generate_images(prompts)
-            for image in out_images:
+
+        new_images = builder.generate_images(prompts)
+        for image in new_images:
+            try:
                 image_base = hashlib.sha1(image.tobytes()).hexdigest()
                 image_filename = os.path.join(pd.out_dir, f"{image_base}.png")
+                print(f"Trying to save: {image_filename}")
                 image.save(image_filename)
                 out_images.append(image_filename)
                 txt_filename = image_filename.replace(".png", ".txt")
@@ -626,13 +647,17 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str, lora_weight: i
                     file.write(pd.prompt)
                 dream_state.status.job_no += 1
                 dream_state.status.textinfo = f"Class image {i}/{set_len}, " \
-                                        f"Prompt: '{pd.prompt}'"
-                dream_state.status.current_image = image
-                if pbar is not None:
-                    pbar.update()
-                generated += 1
+                                              f"Prompt: '{pd.prompt}'"
+            except Exception as e:
+                print(f"What the fuck: {image}")
+                traceback.print_exc()
 
-        dream_state.status.current_image = images.image_grid(out_images)
+            dream_state.status.current_image = image
+            if pbar is not None:
+                pbar.update()
+            generated += 1
+
+        dream_state.status.current_image = images.image_grid(new_images)
     builder.unload()
     del prompt_dataset
     cleanup()

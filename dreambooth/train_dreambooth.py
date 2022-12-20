@@ -186,7 +186,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         dream_state.status.textinfo = msg
         args.train_text_encoder = False
 
-    count, with_prior, _ = generate_classifiers(args, lora_model, accelerator, use_txt2img)
+    count, with_prior, _ = generate_classifiers(args, lora_model, lora_weight=lora_alpha, lora_text_weight=lora_txt_alpha,
+                                                use_txt2img=use_txt2img, accelerator=accelerator)
     if use_txt2img:
         print("Unloading system models (again).")
         unload_system_models()
@@ -434,7 +435,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     text_encoder_cache.append(text_encoder(d_batch["input_ids"])[0])
                 concepts_cache.append(dataset.current_concept)
         dataset = LatentsDataset(latents_cache, text_encoder_cache, concepts_cache)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda z: z, shuffle=True)
+        dataloader = accelerator.prepare(
+            torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda z: z, shuffle=True))
         if enc_vae is not None:
             del enc_vae
         return dataset, dataloader

@@ -513,15 +513,15 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
             prompt = img_data.txt
             image_path = os.path.join(image_dir, name)
             text_path = os.path.splitext(image_path)[0]
-            text_path = os.path.join(text_path, ".txt")
+            text_path = F"{text_path}.txt"
             print(f"Saving image to: {image_path}")
             img.save(image_path)
             print(f"Saving prompt to: {text_path}")
-            with open(text_path, "wb") as tx_file:
-                tx_file.writelines([prompt])
+            with open(text_path, "w") as tx_file:
+                tx_file.writelines(prompt)
             image_paths.append(image_path)
 
-        return {"Status": f"Saved {len(image_paths)} images.", "Images": {image_paths}}
+        return {"Status": f"Saved {len(image_paths)} images.", "Images": {x for x in image_paths}}
 
     @app.get("/dreambooth/testimg")
     async def generate_test_data():

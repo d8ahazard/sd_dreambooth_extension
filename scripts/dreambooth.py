@@ -481,12 +481,21 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     return lora_model_name, total_steps, res
 
 
-def ui_concepts(model_dir: str, lora_model: str, lora_weight: float, use_txt2im: bool):
-    if model_dir == "" or model_dir is None:
+def ui_classifiers(model_name: str, lora_model: str, lora_weight: float, lora_txt_weight: float, use_txt2img: bool):
+    """
+    UI method for generating class images.
+    @param model_name: The model to generate classes for.
+    @param lora_model: An optional lora model to use when generating classes.
+    @param lora_weight: The weight of the lora unet.
+    @param lora_txt_weight: The weight of the lora text encoder.
+    @param use_txt2img: Use txt2image when generating concepts.
+    @return:
+    """
+    if model_name == "" or model_name is None:
         print("Invalid model name.")
         msg = "Create or select a model first."
         return msg
-    config = from_file(model_dir)
+    config = from_file(model_name)
 
     # Clear pretrained VAE Name if applicable
     if config.pretrained_vae_name_or_path == "":
@@ -512,14 +521,17 @@ def ui_concepts(model_dir: str, lora_model: str, lora_weight: float, use_txt2im:
         dream_state.status.textinfo = msg
         print(msg)
         return msg
+
+    images = []
     try:
         from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import generate_classifiers
         print("Generating concepts...")
         unload_system_models()
-        count, _, image_paths = generate_classifiers(config, lora_model, lora_weight, use_txt2im)
+        count, _, images = generate_classifiers(config, lora_model=lora_model, lora_weight=lora_weight,
+                                                lora_text_weight=lora_txt_weight, use_txt2img=use_txt2img)
         reload_system_models()
         msg = f"Generated {count} class images."
     except Exception as e:
         msg = f"Exception generating concepts: {str(e)}"
         traceback.print_exc()
-    return msg, image_paths
+    return msg, images
