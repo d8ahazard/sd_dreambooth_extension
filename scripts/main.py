@@ -1,7 +1,4 @@
-import html
-import sys
 import time
-import traceback
 
 import gradio as gr
 
@@ -10,18 +7,18 @@ from extensions.sd_dreambooth_extension.dreambooth.db_config import save_config
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generate_prompts
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
+from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret, create_secret, clear_secret
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, list_attention, \
     list_floats, get_lora_models, wrap_gpu_call
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
-    training_wizard, training_wizard_person, load_model_params, ui_concepts, generate_sample_img
+    training_wizard, training_wizard_person, load_model_params, ui_concepts, ui_samples
 from modules import script_callbacks, sd_models
 from modules.ui import gr_show, create_refresh_button
 
 params_to_save = []
-
-is_image_call = False
-
+refresh_symbol = '\U0001f504'  # 🔄
+delete_symbol = '\U0001F5D1'  # 🗑️
 
 def get_sd_models():
     sd_models.list_models()
@@ -240,6 +237,10 @@ def on_ui_tabs():
                             db_use_concepts = gr.Checkbox(label="Use Concepts List", value=False)
                             db_concepts_path = gr.Textbox(label="Concepts List",
                                                           placeholder="Path to JSON file with concepts to train.")
+                            with gr.Row():
+                                db_secret = gr.Textbox(label="API Key", value=get_secret, interactive=False, type="password")
+                                db_refresh_button = gr.Button(value=refresh_symbol, elem_id="refresh_secret")
+                                db_clear_secret = gr.Button(value=delete_symbol, elem_id="clear_secret")
 
                     with gr.Accordion(open=False, label="Advanced"):
                         with gr.Row():
@@ -358,6 +359,18 @@ def on_ui_tabs():
                 # This one should be populated with the output of methods
 
                 db_check_progress = gr.Button('Check progress', elem_id=f"db_check_progress", visible=False)
+
+                db_refresh_button.click(
+                    fn=create_secret,
+                    inputs=[],
+                    outputs=[db_secret]
+                )
+
+                db_clear_secret.click(
+                    fn=clear_secret,
+                    inputs=[],
+                    outputs =[db_secret]
+                )
 
                 db_check_progress.click(
                     fn=lambda: check_progress_call(),
@@ -724,7 +737,7 @@ def on_ui_tabs():
         )
 
         db_generate_sample.click(
-            fn=wrap_gpu_call(generate_sample_img),
+            fn=wrap_gpu_call(ui_samples),
             _js="db_start_sample",
             inputs=[db_model_name, db_sample_prompt, db_sample_negative, db_sample_seed, db_num_samples, db_sample_steps, db_sample_scale],
             outputs=[db_gallery, db_status]
@@ -789,7 +802,7 @@ def on_ui_tabs():
             _js="db_start_classes",
             fn=wrap_gpu_call(ui_concepts),
             inputs=[db_model_name, db_lora_model_name, db_lora_weight, db_use_txt2img],
-            outputs=[db_status]
+            outputs=[db_status, db_gallery]
         )
 
         db_cancel.click(

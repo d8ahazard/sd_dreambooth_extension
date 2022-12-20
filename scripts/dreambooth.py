@@ -2,24 +2,20 @@ import gc
 import logging
 import math
 import os
-import random
 import traceback
 
 import gradio
 import torch
 import torch.utils.checkpoint
-from accelerate import Accelerator
-from diffusers import StableDiffusionPipeline, UNet2DConditionModel, DDIMScheduler, DiffusionPipeline, AutoencoderKL
 from diffusers.utils import logging as dl
-from transformers import CLIPTextModel
 
 from extensions.sd_dreambooth_extension.dreambooth import dream_state
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
+from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, PromptData
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, printm, \
     isset, get_images, get_lora_models
 from modules import shared, devices
-from modules.shared import opts
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -117,125 +113,55 @@ def training_wizard(model_dir, is_person=False):
     return 0, int(step_mult), -1, c_list[0], -1, c_list[1], -1, c_list[2], status
 
 
-def generate_sample_img(model_dir: str, save_sample_prompt: str, negative_prompt: str, seed: int, num_samples: int,
-                        steps: int = 60, scale: float = 7.5, accelerator: Accelerator = None):
+def ui_samples(model_dir: str,
+               save_sample_prompt: str,
+               num_samples: int = 1,
+               batch_size: int = 1,
+               lora_model_path: str = "",
+               lora_weight: float = 1,
+               lora_txt_weight: float = 1,
+               negative_prompt: str = "",
+               seed: int = -1,
+               steps: int = 60,
+               scale: float = 7.5
+               ):
     dream_state.status.job_count = num_samples + 1
     if model_dir is None or model_dir == "":
         return "Please select a model."
     config = from_file(model_dir)
-    if accelerator is None:
-        accelerator = Accelerator(
-            gradient_accumulation_steps=config.gradient_accumulation_steps,
-            mixed_precision=config.mixed_precision,
-            log_with="tensorboard",
-            logging_dir=os.path.join(config.model_dir, "logging"),
-            cpu=config.use_cpu
-        )
-
-    unload_system_models()
-    model_path = config.pretrained_model_name_or_path
-    if not os.path.exists(config.pretrained_model_name_or_path):
-        print(f"Model path '{config.pretrained_model_name_or_path}' doesn't exist.")
-        return None, f"Can't find diffusers model at {config.pretrained_model_name_or_path}."
     msg = f"Generated {num_samples} sample(s)."
+    images = []
     try:
-        print(f"Loading model from {model_path}.")
-        from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import import_model_class_from_model_name_or_path
+        print(f"Loading model from {config.model_dir}.")
         dream_state.status.job_no = 1
         dream_state.status.textinfo = "Loading diffusion model..."
-        # Load models and create wrapper for stable diffusion
-        # import correct text encoder class
-        text_encoder_cls = import_model_class_from_model_name_or_path(config.pretrained_model_name_or_path, config.revision)
-
-        text_encoder = text_encoder_cls.from_pretrained(
-            config.pretrained_model_name_or_path,
-            subfolder="text_encoder",
-            revision=config.revision,
-        )
-
-        unet = UNet2DConditionModel.from_pretrained(
-            config.pretrained_model_name_or_path,
-            subfolder="unet",
-            revision=config.revision,
-            torch_dtype=torch.float32
-        )
-
-        vae = AutoencoderKL.from_pretrained(
-            config.pretrained_model_name_or_path,
-            subfolder="vae",
-            revision=config.revision
-        )
-        unet, text_encoder = accelerator.prepare(unet, text_encoder)
-        text_enc_model = accelerator.unwrap_model(text_encoder, keep_fp32_wrapper=True)
-
-        pred_type = "epsilon"
-        if config.v2:
-            pred_type = "v_prediction"
-        scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", steps_offset=1,
-                                  clip_sample=False, set_alpha_to_one=False, prediction_type=pred_type)
-        
-        pipeline = DiffusionPipeline.from_pretrained(
-            config.pretrained_model_name_or_path,
-            unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=True),
-            text_encoder=text_enc_model,
-            vae=vae,
-            scheduler=scheduler,
-            torch_dtype=torch.float16,
-            revision=config.revision,
-            safety_checker=None,
-            requires_safety_checker=None
-        )
-
-        pipeline = pipeline.to(accelerator.device)
-        new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
-        if os.path.exists(new_hotness):
-            accelerator.print(f"Resuming from checkpoint {new_hotness}")
-            try:
-                no_safe = shared.cmd_opts.disable_safe_unpickle
-            except:
-                no_safe = False
-            shared.cmd_opts.disable_safe_unpickle = True
-            accelerator.load_state(new_hotness)
-            shared.cmd_opts.disable_safe_unpickle = no_safe
-
-        def update_latent(step: int, timestep: int, latents: torch.FloatTensor):
-            dream_state.status.sampling_step = step
-            decoded = pipeline.decode_latents(latents)
-            dream_state.status.current_latent = pipeline.numpy_to_pil(decoded)
-
-        db_model_path = config.model_dir
+        img_builder = ImageBuilder(
+            config,
+            False,
+            lora_model_path,
+            lora_weight,
+            lora_txt_weight,
+            batch_size)
         if save_sample_prompt is None:
             msg = "Please provide a sample prompt."
             print(msg)
             return None, msg
-        dream_state.status.textinfo = f"Generating sample image for model {db_model_path}..."
-        if seed is None or seed == '' or seed == -1:
-            seed = int(random.randrange(21474836147))
-        g_cuda = torch.Generator(device=shared.device).manual_seed(seed)
-        preview_every = opts.show_progress_every_n_steps
-        with torch.autocast("cuda"), torch.inference_mode():
-            if preview_every > 0:
-                dream_state.status.sampling_steps = steps
-                images = pipeline([save_sample_prompt] * num_samples,
-                                  negative_prompt=[negative_prompt] * num_samples,
-                                  num_inference_steps=steps,
-                                  guidance_scale=scale,
-                                  width=config.resolution,
-                                  height=config.resolution,
-                                  callback_steps=preview_every,
-                                  callback=update_latent,
-                                  generator=g_cuda).images
-            else:
-                images = pipeline([save_sample_prompt] * num_samples,
-                                  negative_prompt=[negative_prompt] * num_samples,
-                                  num_inference_steps=steps,
-                                  guidance_scale=scale,
-                                  width=config.resolution,
-                                  height=config.resolution,
-                                  generator=g_cuda).images
-
+        dream_state.status.textinfo = f"Generating sample image for model {config.model_name}..."
         dream_state.status.sampling_steps = 0
         dream_state.status.current_image_sampling_step = 0
+        pd = PromptData()
+        pd.steps = steps
+        pd.prompt = save_sample_prompt
+        pd.negative_prompt = negative_prompt
+        pd.scale = scale
+        pd.seed = seed
+        prompts = [pd] * batch_size
+        while len(images) > num_samples:
+            out_images = img_builder.generate_images(prompts)
+            for img in out_images:
+                if len(images) > num_samples:
+                    images.append(img)
+        img_builder.unload()
     except Exception as e:
         msg = f"Exception generating sample(s): {e}"
         print(msg)
@@ -590,10 +516,10 @@ def ui_concepts(model_dir: str, lora_model: str, lora_weight: float, use_txt2im:
         from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import generate_classifiers
         print("Generating concepts...")
         unload_system_models()
-        count, _ = generate_classifiers(config, lora_model, lora_weight, use_txt2im)
+        count, _, image_paths = generate_classifiers(config, lora_model, lora_weight, use_txt2im)
         reload_system_models()
         msg = f"Generated {count} class images."
     except Exception as e:
         msg = f"Exception generating concepts: {str(e)}"
         traceback.print_exc()
-    return msg
+    return msg, image_paths

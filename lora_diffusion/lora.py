@@ -143,7 +143,7 @@ def weight_apply_lora(
                     _child_module.weight = nn.Parameter(weight)
 
 
-def apply_lora_weights(lora_model, target_unet, target_text_encoder, lora_alpha=1, device=None):
+def apply_lora_weights(lora_model, target_unet, target_text_encoder, lora_alpha=1, lora_txt_alpha=1, device=None):
     if device is None:
         device = shared.device
     target_unet.requires_grad_(False)
@@ -162,7 +162,7 @@ def apply_lora_weights(lora_model, target_unet, target_text_encoder, lora_alpha=
         if os.path.exists(lora_txt) and os.path.isfile(lora_txt):
             print("Applying lora text_encoder weights before training...")
             loras = torch.load(lora_txt, map_location=device)
-            weight_apply_lora(target_text_encoder, loras, target_replace_module=["CLIPAttention"], alpha=lora_alpha)
+            weight_apply_lora(target_text_encoder, loras, target_replace_module=["CLIPAttention"], alpha=lora_txt_alpha)
         text_encoder_lora_params, _ = inject_trainable_lora(target_text_encoder,
                                                             target_replace_module=["CLIPAttention"])
 

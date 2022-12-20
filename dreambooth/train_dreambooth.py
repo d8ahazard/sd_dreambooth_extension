@@ -32,8 +32,6 @@ from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, apply_lora_weights
 from modules import shared, paths, images
 
-# Custom stuff
-
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
 except:
@@ -188,7 +186,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         dream_state.status.textinfo = msg
         args.train_text_encoder = False
 
-    count, with_prior = generate_classifiers(args, lora_model, accelerator, use_txt2img)
+    count, with_prior, _ = generate_classifiers(args, lora_model, accelerator, use_txt2img)
     if use_txt2img:
         print("Unloading system models (again).")
         unload_system_models()
@@ -253,7 +251,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     if args.use_lora:
         unet_lora_params, text_encoder_lora_params = apply_lora_weights(lora_model, unet, text_encoder, lora_alpha,
-                                                                        accelerator.device)
+                                                                        lora_txt_alpha, accelerator.device)
 
     if args.scale_lr:
         args.learning_rate = (
