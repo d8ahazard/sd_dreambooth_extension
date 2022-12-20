@@ -42,6 +42,13 @@ class ImageData:
         self.prompt = prompt
         self.data = data
 
+    def dict(self):
+        return {
+            "name": self.name,
+            "data": self.data,
+            "txt": self.prompt
+        }
+
 
 class DbImagesRequest(BaseModel):
     imageList: List[InstanceData] = Field(title="Images",
@@ -167,6 +174,20 @@ def check_api_key(key):
         if key != current_key:
             return JSONResponse(status_code=403, content={"message": "Invalid API Key."})
     return None
+
+
+def base64_to_pil(im_b64) -> Image:
+    im_b64 = bytes(im_b64, 'utf-8')
+    im_bytes = base64.b64decode(im_b64)  # im_bytes is a binary image
+    im_file = io.BytesIO(im_bytes)  # convert image to file-like object
+    img = Image.open(im_file)
+    return img
+
+
+def file_to_base64(file_path) -> str:
+    with open(file_path, "rb") as f:
+        im_b64 = base64.b64encode(f.read())
+        return str(im_b64, 'utf-8')
 
 
 def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
@@ -476,10 +497,6 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
         if key_check is not None:
             return key_check
         
-        def prepareFiles(file):
-            im = Image.open(io.BytesIO(base64.b64decode(file)))
-            return im
-
         root_img_path = os.path.join(shared.script_path, "..", "InstanceImages")
         if not os.path.exists(root_img_path):
             print(f"Creating root instance dir: {root_img_path}")
@@ -491,15 +508,14 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
 
         image_paths = []
         for img_data in images.imageList:
-            img = prepareFiles(img_data.data)
+            img = base64_to_pil(img_data.data)
             name = img_data.name
             prompt = img_data.txt
             image_path = os.path.join(image_dir, name)
-            text_path = os.path.splitext(image_path)[1]
+            text_path = os.path.splitext(image_path)[0]
             text_path = os.path.join(text_path, ".txt")
             print(f"Saving image to: {image_path}")
-            with open(image_path, "wb") as im_file:
-                im_file.write(img)
+            img.save(image_path)
             print(f"Saving prompt to: {text_path}")
             with open(text_path, "wb") as tx_file:
                 tx_file.writelines([prompt])
@@ -514,12 +530,12 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
         instance_images = get_images(model_dir)
         inst_datas = []
         for x in instance_images:
-            image_data = Image.open(x).tobytes()
-            image_bytes = base64.b64encode(image_data)
+            image_bytes = file_to_base64(x)
             name = x.name + x.suffix
             txt = text_getter.read_text(x)
-            inst_datas.append(ImageData(name, txt, image_bytes))
+            inst_datas.append(ImageData(name, txt, image_bytes).dict())
         return JSONResponse(inst_datas)
+
 
 script_callbacks.on_app_started(dreamBoothAPI)
 
