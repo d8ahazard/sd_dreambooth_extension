@@ -29,6 +29,7 @@ class DreamboothConfig:
                  center_crop: bool = True,
                  concepts_path: str = "",
                  custom_model_name: str = "",
+                 epoch: int = 0,
                  epoch_pause_frequency: int = 0,
                  epoch_pause_time: int = 0,
                  gradient_accumulation_steps: int = 1,
@@ -140,6 +141,8 @@ class DreamboothConfig:
                  ):
         if revision == "" or revision is None:
             revision = 0
+        if epoch == "" or epoch is None:
+            epoch = 0
         model_name = "".join(x for x in model_name if (x.isalnum() or x in "._- "))
         models_path = shared.cmd_opts.dreambooth_models_path
         if models_path == "" or models_path is None:
@@ -156,6 +159,7 @@ class DreamboothConfig:
         self.center_crop = center_crop
         self.concepts_path = concepts_path
         self.custom_model_name = custom_model_name
+        self.epoch = epoch
         self.epoch_pause_frequency = epoch_pause_frequency
         self.epoch_pause_time = epoch_pause_time
         self.gradient_accumulation_steps = gradient_accumulation_steps

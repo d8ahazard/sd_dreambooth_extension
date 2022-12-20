@@ -491,7 +491,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
     # Afterwards we recalculate our number of training epochs
     args.num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
-    actual_train_steps = max_train_steps * args.train_batch_size
+    actual_train_steps = max_train_steps * args.train_batch_size * args.gradient_accumulation_steps
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
@@ -521,13 +521,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         shared.cmd_opts.disable_safe_unpickle = no_safe
         global_step = args.revision
         resume_from_checkpoint = True
-        resume_global_step = global_step * args.gradient_accumulation_steps
+        resume_global_step = global_step
         first_epoch = resume_global_step // num_update_steps_per_epoch
         resume_step = resume_global_step % num_update_steps_per_epoch
-
-    stats = f"CPU: {args.use_cpu} Adam: {use_adam}, Prec: {args.mixed_precision}, " \
-            f"Grad: {args.gradient_checkpointing}, TextTr: {args.train_text_encoder} EM: {args.use_ema}, " \
-            f"LR: {args.learning_rate} LORA:{args.use_lora}"
 
     print("  ***** Running training *****")
     print(f"  Num examples = {len(train_dataset)}")
@@ -806,9 +802,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     accelerator.log(logs, step=args.revision)
                     loss_avg.reset()
 
-                progress_bar.update(args.train_batch_size)
-                global_step += args.train_batch_size
-                args.revision += args.train_batch_size
+                progress_bar.update(args.train_batch_size * args.gradient_accumulation_steps)
+                global_step += args.train_batch_size * args.gradient_accumulation_steps
+                args.revision += args.train_batch_size * args.gradient_accumulation_steps
                 dream_state.status.job_no = global_step
 
                 training_complete = global_step >= actual_train_steps or dream_state.status.interrupted
@@ -879,9 +875,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         if dream_state.status.interrupted:
             training_complete = True
 
-        args.epoch += global_epoch
-        args.save()
+        args.epoch += 1
         global_epoch += 1
+        args.save()
 
         if args.save_use_epochs:
             if args.save_use_global_counts:

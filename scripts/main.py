@@ -403,6 +403,7 @@ def on_ui_tabs():
             db_center_crop,
             db_concepts_path,
             db_custom_model_name,
+            db_epochs,
             db_epoch_pause_frequency,
             db_epoch_pause_time,
             db_gradient_accumulation_steps,
