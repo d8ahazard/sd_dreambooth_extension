@@ -380,6 +380,7 @@ def load_model_params(model_name):
         msg = f"Selected model: '{model_name}'."
         return data.model_dir, \
                data.revision, \
+               data.epoch, \
                "True" if data.v2 else "False", \
                "True" if data.has_ema else "False", \
                data.src, \

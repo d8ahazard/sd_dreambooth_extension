@@ -13,7 +13,7 @@ import torch
 import torch.nn.functional as f
 import torch.utils.checkpoint
 from accelerate import Accelerator
-from diffusers import AutoencoderKL, DDIMScheduler, DiffusionPipeline, UNet2DConditionModel
+from diffusers import AutoencoderKL, DDIMScheduler, DiffusionPipeline, UNet2DConditionModel, DDPMScheduler
 from diffusers.optimization import get_scheduler
 from diffusers.utils import logging as dl
 from huggingface_hub import HfFolder, whoami
@@ -188,7 +188,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     count, with_prior, _ = generate_classifiers(args, lora_model, lora_weight=lora_alpha, lora_text_weight=lora_txt_alpha,
                                                 use_txt2img=use_txt2img, accelerator=accelerator)
-    if use_txt2img:
+    if use_txt2img and count > 0:
         print("Unloading system models (again).")
         unload_system_models()
 
@@ -299,7 +299,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         eps=args.adam_epsilon,
     )
 
-    noise_scheduler = DDIMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
+    noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
 
     def cleanup_memory():
         try:
@@ -447,13 +447,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     if not args.not_cache_latents:
         train_dataset, train_dataloader = cache_latents(enc_vae=vae, orig_dataset=gen_dataset)
 
-    # Scheduler and math around the number of training steps.
-    overrode_max_train_steps = False
-    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
-    if max_train_steps is None or max_train_steps < 1:
-        max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-        overrode_max_train_steps = True
-
     lr_scheduler = get_scheduler(
         args.lr_scheduler,
         optimizer=optimizer,
@@ -485,6 +478,13 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             )
 
     printm("Scheduler, EMA Loaded.")
+    # Scheduler and math around the number of training steps.
+    overrode_max_train_steps = False
+    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
+    if max_train_steps is None or max_train_steps < 1:
+        max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
+        overrode_max_train_steps = True
+
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
     if overrode_max_train_steps:
@@ -499,20 +499,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     # Train!
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
-    stats = f"CPU: {args.use_cpu} Adam: {use_adam}, Prec: {args.mixed_precision}, " \
-            f"Grad: {args.gradient_checkpointing}, TextTr: {args.train_text_encoder} EM: {args.use_ema}, " \
-            f"LR: {args.learning_rate} LORA:{args.use_lora}"
-
-    print("***** Running training *****")
-    print(f"  Num examples = {len(train_dataset)}")
-    print(f"  Num batches each epoch = {len(train_dataloader)}")
-    print(f"  Num Epochs = {args.num_train_epochs}")
-    print(f"  Instantaneous batch size per device = {args.train_batch_size}")
-    print(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
-    print(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
-    print(f"  Total optimization steps = {max_train_steps}")
-    print(f"  Actual steps: {actual_train_steps}")
-    printm(f"  Training settings: {stats}")
 
     global_step = 0
     global_epoch = 0
@@ -538,6 +524,25 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         resume_global_step = global_step * args.gradient_accumulation_steps
         first_epoch = resume_global_step // num_update_steps_per_epoch
         resume_step = resume_global_step % num_update_steps_per_epoch
+
+    stats = f"CPU: {args.use_cpu} Adam: {use_adam}, Prec: {args.mixed_precision}, " \
+            f"Grad: {args.gradient_checkpointing}, TextTr: {args.train_text_encoder} EM: {args.use_ema}, " \
+            f"LR: {args.learning_rate} LORA:{args.use_lora}"
+
+    print("  ***** Running training *****")
+    print(f"  Num examples = {len(train_dataset)}")
+    print(f"  Num batches each epoch = {len(train_dataloader)}")
+    print(f"  Num Epochs = {args.num_train_epochs}")
+    print(f"  Instantaneous batch size per device = {args.train_batch_size}")
+    print(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
+    print(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
+    print(f"  Total optimization steps = {max_train_steps}")
+    print(f"  Resuming from checkpoint: {resume_from_checkpoint}")
+    print(f"  First resume epoch: {first_epoch}")
+    print(f"  First resume step: {resume_step}")
+    print(f"  CPU: {args.use_cpu} Adam: {use_adam}, Prec: {args.mixed_precision}")
+    print(f"  Grad: {args.gradient_checkpointing}, TextTr: {args.train_text_encoder} Use EMA: {args.use_ema}")
+    print(f"  Learning rate: {args.learning_rate} Use lora:{args.use_lora}")
 
     def save_weights():
         save_lora = False
@@ -693,7 +698,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     del g_cuda
 
     # Only show the progress bar once on each machine.
-    progress_bar = tqdm(range(first_epoch, actual_train_steps), disable=not accelerator.is_local_main_process)
+    progress_bar = tqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
     lifetime_step = args.revision
     dream_state.status.job_count = max_train_steps

@@ -316,7 +316,6 @@ def save_json(model_name: str, json_cfg: str):
         return {"exception": f"{e}"}
 
 
-
 def save_config(*args):
     config = DreamboothConfig(*args)
     print("Saved settings.")
@@ -392,6 +391,10 @@ def from_file(model_name):
                 config.revision = 0
             else:
                 config.revision = int(config.revision)
+            if config.epoch == "" or config.epoch is None:
+                config.epoch = 0
+            else:
+                config.epoch = int(config.epoch)
             return config
     except Exception as e:
         print(f"Exception loading config: {e}")

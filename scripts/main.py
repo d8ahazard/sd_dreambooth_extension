@@ -141,6 +141,9 @@ def on_ui_tabs():
                     gr.HTML(value="Model Revision:")
                     db_revision = gr.HTML(elem_id="db_revision")
                 with gr.Row():
+                    gr.HTML(value="Model Epoch:")
+                    db_epochs = gr.HTML(elem_id="db_epochs")
+                with gr.Row():
                     gr.HTML(value="V2 Model:")
                     db_v2 = gr.HTML(elem_id="db_v2")
                 with gr.Row():
@@ -659,7 +662,7 @@ def on_ui_tabs():
         db_model_name.change(
             fn=load_model_params,
             inputs=[db_model_name],
-            outputs=[db_model_path, db_revision, db_v2, db_has_ema, db_src, db_scheduler, db_status]
+            outputs=[db_model_path, db_revision, db_epochs, db_v2, db_has_ema, db_src, db_scheduler, db_status]
         )
 
         db_use_concepts.change(
