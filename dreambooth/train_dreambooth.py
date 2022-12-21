@@ -9,7 +9,7 @@ import time
 import traceback
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -356,7 +356,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
-def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lora_alpha=1.0, lora_txt_alpha=1.0, custom_model_name="") -> tuple[
+def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lora_alpha=1.0, lora_txt_alpha=1.0, custom_model_name="") -> Tuple[
     DreamboothConfig, dict, str]:
     global with_prior
     text_encoder = None
