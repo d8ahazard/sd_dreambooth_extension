@@ -1,4 +1,5 @@
-# Borrowed from Shivam's repo so we don't have to completely clone a different diffusers version
+from __future__ import annotations
+
 import inspect
 import math
 from typing import Any, Dict, List
@@ -129,8 +130,9 @@ class FlashAttentionFunction(torch.autograd.function.Function):
                 if exists(row_mask):
                     exp_weights.masked_fill_(~row_mask, 0.)
 
+                # 'keepdims' is not a valid parameter. Hmm.
                 block_row_sums = exp_weights.sum(
-                    dim=-1, keepdims=True).clamp(min=EPSILON)
+                    dim=-1, keepdim=True).clamp(min=EPSILON)
 
                 new_row_maxes = torch.maximum(block_row_maxes, row_maxes)
 

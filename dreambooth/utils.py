@@ -1,21 +1,20 @@
+from __future__ import annotations
+
 import gc
+import html
 import os
-import random
+import sys
 import traceback
 from io import StringIO
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import torch
 from PIL import features
-from diffusers import StableDiffusionPipeline
 from huggingface_hub import HfFolder, whoami
-from transformers import CLIPTextModel
 
 from extensions.sd_dreambooth_extension.dreambooth import dream_state
-from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from modules import shared, paths, sd_models
-from modules.shared import opts
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -59,7 +58,7 @@ def get_lora_models():
         dirs = os.listdir(out_dir)
         for found in dirs:
             if os.path.isfile(os.path.join(out_dir, found)):
-                if not "_txt.pt" in found and ".pt" in found:
+                if "_txt.pt" not in found and ".pt" in found:
                     output.append(found)
     return output
 
@@ -219,7 +218,7 @@ def wrap_gpu_call(func, extra_outputs=None):
     return f
 
 
-def isset(val: str):
+def isset(val: Union[str | None]):
     return val is not None and val != "" and val != "*"
 
 
@@ -248,9 +247,9 @@ def is_image(path: Path, feats=None):
     return is_img
 
 
-def get_checkpoint_match(searchString):
+def get_checkpoint_match(search_string):
     for info in sd_models.checkpoints_list.values():
-        if searchString in info.title or searchString in info.model_name or searchString in info.filename:
+        if search_string in info.title or search_string in info.model_name or search_string in info.filename:
             return info
     return None
 

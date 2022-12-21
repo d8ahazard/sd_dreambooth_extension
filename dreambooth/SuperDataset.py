@@ -288,7 +288,7 @@ class SuperDataset(Dataset):
             self.current_concept = 0
         return example
 
-    def get_sample_prompts(self) -> SampleData:
+    def get_sample_prompts(self) -> [SampleData]:
         prompts = []
         for concept in self.concepts:
             s_data = SampleData(concept.get_sample_prompt(), concept.concept)

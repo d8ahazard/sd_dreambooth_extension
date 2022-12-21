@@ -20,6 +20,7 @@ params_to_save = []
 refresh_symbol = '\U0001f504'  # 🔄
 delete_symbol = '\U0001F5D1'  # 🗑️
 
+
 def get_sd_models():
     sd_models.list_models()
     sd_list = sd_models.checkpoints_list
@@ -106,8 +107,9 @@ def check_progress_call_initial():
 
 
 def ui_gen_ckpt(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1.0,
-                       lora_txt_alpha=1.0, custom_model_name=""):
-    res = compile_checkpoint(model_name, half, use_subdir, lora_path, lora_alpha, lora_txt_alpha, custom_model_name, True, True)
+                lora_txt_alpha=1.0, custom_model_name=""):
+    res = compile_checkpoint(model_name, half, use_subdir, lora_path, lora_alpha, lora_txt_alpha, custom_model_name,
+                             True, True)
     print(f"Res: {res}")
     return res
 
@@ -215,7 +217,8 @@ def on_ui_tabs():
                             db_learning_rate = gr.Number(label='Learning Rate', value=2e-6)
                             with gr.Row(visible=False) as lora_lr_row:
                                 db_lora_learning_rate = gr.Number(label='Lora unet Learning Rate', value=2e-4)
-                                db_lora_txt_learning_rate = gr.Number(label='Lora Text Encoder Learning Rate', value=2e-4)
+                                db_lora_txt_learning_rate = gr.Number(label='Lora Text Encoder Learning Rate',
+                                                                      value=2e-4)
                             db_scale_lr = gr.Checkbox(label="Scale Learning Rate", value=False)
                             db_lr_scheduler = gr.Dropdown(label="Learning Rate Scheduler", value="constant",
                                                           choices=["linear", "cosine", "cosine_with_restarts",
@@ -241,7 +244,8 @@ def on_ui_tabs():
                             db_concepts_path = gr.Textbox(label="Concepts List",
                                                           placeholder="Path to JSON file with concepts to train.")
                             with gr.Row():
-                                db_secret = gr.Textbox(label="API Key", value=get_secret, interactive=False, type="password")
+                                db_secret = gr.Textbox(label="API Key", value=get_secret, interactive=False,
+                                                       type="password")
                                 db_refresh_button = gr.Button(value=refresh_symbol, elem_id="refresh_secret")
                                 db_clear_secret = gr.Button(value=delete_symbol, elem_id="clear_secret")
 
@@ -372,7 +376,7 @@ def on_ui_tabs():
                 db_clear_secret.click(
                     fn=clear_secret,
                     inputs=[],
-                    outputs =[db_secret]
+                    outputs=[db_secret]
                 )
 
                 db_check_progress.click(
@@ -743,7 +747,8 @@ def on_ui_tabs():
         db_generate_sample.click(
             fn=wrap_gpu_call(ui_samples),
             _js="db_start_sample",
-            inputs=[db_model_name, db_sample_prompt, db_sample_negative, db_sample_seed, db_num_samples, db_sample_steps, db_sample_scale],
+            inputs=[db_model_name, db_sample_prompt, db_sample_negative, db_sample_seed, db_num_samples,
+                    db_sample_steps, db_sample_scale],
             outputs=[db_gallery, db_status]
         )
 

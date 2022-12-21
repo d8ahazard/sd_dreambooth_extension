@@ -288,6 +288,8 @@ def train_imagic(args: DreamboothConfig, mem_record):
             dream_state.status.job_no += 1
             with accelerator.accumulate(unet):
                 noise = torch.randn_like(init_latents)
+                # Not sure if this matters, but technically, add_noise should take a FloatTensor
+                noise = noise.float()
                 bsz = init_latents.shape[0]
                 # Sample a random timestep for each image
                 timesteps = torch.randint(0, 1000, (bsz,),

@@ -26,10 +26,9 @@ from extensions.sd_dreambooth_extension.dreambooth.dream_state import status
 from extensions.sd_dreambooth_extension.dreambooth.utils import printm, cleanup, get_checkpoint_match, get_images
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import apply_lora_weights
 from modules import shared, devices, sd_models, images, sd_hijack, prompt_parser, lowvram
-from modules.processing import StableDiffusionProcessingTxt2Img, process_images, StableDiffusionProcessing, Processed, \
+from modules.processing import StableDiffusionProcessingTxt2Img, StableDiffusionProcessing, Processed, \
     get_fixed_seed, create_infotext, decode_first_stage
 from modules.sd_hijack import model_hijack
-from modules.shared import opts
 
 
 @dataclass
@@ -635,8 +634,10 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
             prompts.append(pd)
 
         new_images = builder.generate_images(prompts)
+        i_idx = 0
         for image in new_images:
             try:
+                pd = prompts[i_idx]
                 image_base = hashlib.sha1(image.tobytes()).hexdigest()
                 image_filename = os.path.join(pd.out_dir, f"{image_base}.png")
                 print(f"Trying to save: {image_filename}")
@@ -649,9 +650,9 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
                 dream_state.status.textinfo = f"Class image {i}/{set_len}, " \
                                               f"Prompt: '{pd.prompt}'"
             except Exception as e:
-                print(f"What the fuck: {image}")
+                print(f"Exception generating images: {e}")
                 traceback.print_exc()
-
+            i_idx += 1
             dream_state.status.current_image = image
             if pbar is not None:
                 pbar.update()

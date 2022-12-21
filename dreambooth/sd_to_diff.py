@@ -24,7 +24,7 @@ import modules.sd_models
 from extensions.sd_dreambooth_extension.dreambooth import dream_state
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, sanitize_name
 from extensions.sd_dreambooth_extension.scripts.dreambooth import reload_system_models
-from extensions.sd_dreambooth_extension.dreambooth.utils import printi, printm, get_db_models
+from extensions.sd_dreambooth_extension.dreambooth.utils import printi, printm, get_db_models, get_checkpoint_match
 from modules import shared
 
 try:
@@ -428,7 +428,7 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
             resnets = [key for key in output_blocks[i] if f"output_blocks.{i}.0" in key]
             attentions = [key for key in output_blocks[i] if f"output_blocks.{i}.1" in key]
 
-            resnet_0_paths = renew_resnet_paths(resnets)
+            # resnet_0_paths = renew_resnet_paths(resnets)
             paths = renew_resnet_paths(resnets)
 
             meta_path = {"old": f"output_blocks.{i}.0", "new": f"up_blocks.{block_id}.resnets.{layer_in_block_id}"}
@@ -751,6 +751,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
     src = ""
     revision = 0
     epoch = 0
+    upcast_attention = False
 
     # Needed for V2 models so we can create the right text encoder.
 
@@ -764,14 +765,18 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         dream_state.status.job_no = 0
         checkpoint = None
         map_location = shared.device
-        if shared.cmd_opts.ckptfix or shared.cmd_opts.medvram or shared.cmd_opts.lowvram:
-            printm(f"Using CPU for extraction.")
-            map_location = torch.device('cpu')
+        try:
+            if shared.cmd_opts.ckptfix or shared.cmd_opts.medvram or shared.cmd_opts.lowvram:
+                printm(f"Using CPU for extraction.")
+                map_location = torch.device('cpu')
+        except:
+            print("UPDATE YOUR WEBUI!!!!")
+            return "", "", 0, "", "", "", "", 512, "", "UPDATE YOUR WEBUI!"
 
         # Try to determine if v1 or v2 model
         if not from_hub:
             printi("Loading model from checkpoint.")
-            checkpoint_info = modules.sd_models.get_closet_checkpoint_match(ckpt_path)
+            checkpoint_info = get_checkpoint_match(ckpt_path)
 
             if checkpoint_info is None:
                 print("Unable to find checkpoint file!")
@@ -787,12 +792,9 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
 
             printi("Loading checkpoint...")
             checkpoint = torch.load(ckpt_path)
-            # Todo: Decide if we should store this separately in the db_config and append it when re-compiling models.
-            # global_step = checkpoint["global_step"]
             checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
             rev_keys = ["db_global_step", "global_step"]
             epoch_keys = ["db_epoch", "epoch"]
-            upcast_attention = False
             for key in rev_keys:
                 if key in checkpoint:
                     revision = checkpoint[key]

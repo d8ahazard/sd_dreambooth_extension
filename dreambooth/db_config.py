@@ -143,6 +143,7 @@ class DreamboothConfig:
             revision = 0
         if epoch == "" or epoch is None:
             epoch = 0
+        print(f"Extra args: {model_path} and {kwargs}")
         model_name = "".join(x for x in model_name if (x.isalnum() or x in "._- "))
         models_path = shared.cmd_opts.dreambooth_models_path
         if models_path == "" or models_path is None:

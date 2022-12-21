@@ -7,7 +7,7 @@ import time
 import traceback
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import torch
 import torch.nn.functional as f
@@ -23,13 +23,13 @@ from transformers import AutoTokenizer, PretrainedConfig, CLIPTextModel
 
 from extensions.sd_dreambooth_extension.dreambooth import xattention, dream_state
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, from_file
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
-from extensions.sd_dreambooth_extension.scripts.dreambooth import printm
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import encode_hidden_state, \
     EMAModel, generate_classifiers
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, apply_lora_weights
+from extensions.sd_dreambooth_extension.scripts.dreambooth import printm
 from modules import shared, paths, images
 
 try:
@@ -103,7 +103,7 @@ class LatentsDataset(Dataset):
 class AverageMeter:
     def __init__(self, name=None):
         self.name = name
-        self.avg: torch.Tensor = None
+        self.avg: Union[torch.Tensor | None] = None
         self.sum = 0
         self.count = 0
 
@@ -191,7 +191,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         dream_state.status.textinfo = msg
         args.train_text_encoder = False
 
-    count, with_prior, _ = generate_classifiers(args, lora_model, lora_weight=lora_alpha, lora_text_weight=lora_txt_alpha,
+    count, with_prior, _ = generate_classifiers(args, lora_model, lora_weight=lora_alpha,
+                                                lora_text_weight=lora_txt_alpha,
                                                 use_txt2img=use_txt2img, accelerator=accelerator)
     if use_txt2img and count > 0:
         print("Unloading system models (again).")
@@ -508,9 +509,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     global_step = 0
     global_epoch = 0
     last_save_step = 0
-    last_save_epoch = 0
     last_img_step = 0
-    last_img_epoch = 0
     first_epoch = 0
     resume_step = 0
     resume_from_checkpoint = False
@@ -527,7 +526,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         global_step = args.revision
         resume_from_checkpoint = True
         resume_global_step = global_step
-        first_epoch = resume_global_step // num_update_steps_per_epoch
+        first_epoch = resume_global_step // num_update_steps_per_epoch // args.train_batch_size
         resume_step = resume_global_step % num_update_steps_per_epoch
 
     print("  ***** Running training *****")
@@ -591,7 +590,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     last_img_step = training_save_check
 
         else:
-            print("Save completed/canceled.")
+            print("\nSave completed/canceled.")
             save_image = True
             save_model = True
 
@@ -654,6 +653,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
             with accelerator.autocast(), torch.inference_mode():
                 if save_model:
+                    print(" SAVE MODEL IS SET.")
                     try:
                         if args.use_lora and save_lora:
                             lora_model_name = args.model_name if custom_model_name == "" else custom_model_name
@@ -700,6 +700,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         traceback.print_exc()
                         pass
                 save_dir = args.model_dir
+
                 if save_image:
                     dream_state.status.textinfo = f"Saving preview image at step {args.revision}..."
                     try:
@@ -874,7 +875,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     training_complete = True
 
                 dream_state.status.textinfo = f"Training, step {global_step}/{actual_train_steps} current," \
-                                        f" {args.revision}/{actual_train_steps + lifetime_step} lifetime"
+                                              f" {args.revision}/{actual_train_steps + lifetime_step} lifetime"
 
                 # Log completion message
                 if training_complete:
@@ -885,7 +886,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         state = "complete"
 
                     dream_state.status.textinfo = f"Training {state} {global_step}/{actual_train_steps}, {args.revision}" \
-                                            f" total."
+                                                  f" total."
 
                     break
 

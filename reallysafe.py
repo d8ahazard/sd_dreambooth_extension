@@ -65,7 +65,7 @@ class RestrictedUnpickler(pickle.Unpickler):
         if module == "__builtin__" and name == 'set':
             return set
         for key in extras_dict:
-            if module in key and name in extras_dict[module] or len(extras_dict[module]) == 0:
+            if module in key and name in extras_dict[key] or len(extras_dict[key]) == 0:
                 return super().find_class(name, module)
         raise Exception(f"global '{module}/{name}' is forbidden")
 

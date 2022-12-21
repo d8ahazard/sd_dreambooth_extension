@@ -55,6 +55,7 @@ class DbImagesRequest(BaseModel):
                                           description="List of images to work on. Must be Base64 strings")
 
 
+# API Representation of concept data
 class DreamboothConcept(BaseModel):
     max_steps: int = -1
     instance_data_dir: str = ""
@@ -77,6 +78,7 @@ class DreamboothConcept(BaseModel):
     save_infer_steps: int = 60
 
 
+# API Representation of db config
 class DreamboothParameters(BaseModel):
     concepts_list: list[DreamboothConcept]
     adam_beta1: float = 0.9
@@ -144,7 +146,7 @@ def zip_files(db_model_name, files, name_part=""):
             if isinstance(file, str):
                 print(f"Zipping img: {file}")
                 if os.path.exists(file) and os.path.isfile(file):
-                    parent_path = os.path.join(Path(file).parent), Path(file).name
+                    parent_path = os.path.join(Path(file).parent, Path(file).name)
                     zip_file.write(file, arcname=parent_path)
                     check_txt = os.path.join(os.path.splitext(file)[0], ".txt")
                     if os.path.exists(check_txt):
@@ -190,7 +192,7 @@ def file_to_base64(file_path) -> str:
         return str(im_b64, 'utf-8')
 
 
-def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
+def dreambooth_api(_: gr.Blocks, app: FastAPI):
     @app.post("/dreambooth/createModel")
     async def create_model(
             new_model_name: str = Query(None, description="The name of the model to create.", ),
@@ -211,13 +213,13 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
             return key_check
 
         print("Creating new Checkpoint: " + new_model_name)
-        fn = extract_checkpoint(new_model_name,
-                                new_model_src,
-                                new_model_scheduler,
-                                create_from_hub,
-                                new_model_url,
-                                new_model_token,
-                                new_model_extract_ema)
+        _ = extract_checkpoint(new_model_name,
+                               new_model_src,
+                               new_model_scheduler,
+                               create_from_hub,
+                               new_model_url,
+                               new_model_token,
+                               new_model_extract_ema)
 
     @app.post("/dreambooth/start_training")
     async def start_training(
@@ -251,8 +253,8 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
             lora_weight = params.lora_weight
             lora_txt_weight = params.lora_txt_weight
 
-        task = asyncio.create_task(train_model(model_name, lora_model_name, lora_weight, lora_txt_weight, use_imagic,
-                                               use_subdir, custom_name, use_tx2img))
+        _ = asyncio.create_task(train_model(model_name, lora_model_name, lora_weight, lora_txt_weight, use_imagic,
+                                            use_subdir, custom_name, use_tx2img))
         return {"status": "finished"}
 
     async def train_model(model_name,
@@ -277,7 +279,8 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
 
     @app.get("/dreambooth/status")
     async def check_status(
-            api_key: str = Query("", description="If an API key is set, this must be present.", )) -> DreamState:
+            api_key: str = Query("", description="If an API key is set, this must be present.", )) -> \
+            Union[DreamState, JSONResponse]:
         """
         Check the current state of Dreambooth processes.
         @return:
@@ -285,13 +288,13 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        return {"current_state": f"{json.dumps(dream_state.status.dict())}"}
+        return JSONResponse(content={"current_state": f"{json.dumps(dream_state.status.dict())}"})
 
     @app.get("/dreambooth/model_config")
     async def get_model_config(
             model_name: str = Query(None, description="The model name to fetch config for."),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
-    ) -> DreamboothConfig:
+    ) -> Union[DreamboothConfig, JSONResponse]:
         """
         Get a specified model config.
         """
@@ -301,7 +304,7 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
         cfg = from_file(model_name)
         if cfg:
             return JSONResponse(content=cfg.__dict__)
-        return {"Exception": "Config not found."}
+        return JSONResponse(content={"Exception": "Config not found."})
 
     @app.post("/dreambooth/model_config")
     async def set_model_config(
@@ -388,8 +391,10 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
             num_images: int = Query(1, description="The number of sample images to generate."),
             batch_size: int = Query(1, description="How many images to generate at once."),
             lora_model_path: str = Query("", description="The path to a lora model to use when generating images."),
-            lora_weight: float = Query(1.0, description="The weight of the lora unet when merging with the base model."),
-            lora_txt_weight: float = Query(1.0, description="The weight of the lora text encoder when merging with the base model"),
+            lora_weight: float = Query(1.0,
+                                       description="The weight of the lora unet when merging with the base model."),
+            lora_txt_weight: float = Query(1.0,
+                                           description="The weight of the lora text encoder when merging with the base model"),
             negative_prompt: str = Query("", description="An optional negative prompt to use when generating images."),
             seed: int = Query(-1, description="The seed to use when generating samples"),
             steps: int = Query(60, description="Number of sampling steps to use when generating images."),
@@ -442,7 +447,8 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
     @app.get("/dreambooth/classifiers")
     async def get_classifiers(
             model_name: str = Query(description="The model name to retrieve classifiers for."),
-            concept_idx: int = Query(-1, description="If set, will retrieve the specified concept's class images. Otherwise, all class images will be retrieved."),
+            concept_idx: int = Query(-1,
+                                     description="If set, will retrieve the specified concept's class images. Otherwise, all class images will be retrieved."),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ):
         """
@@ -496,7 +502,7 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        
+
         root_img_path = os.path.join(shared.script_path, "..", "InstanceImages")
         if not os.path.exists(root_img_path):
             print(f"Creating root instance dir: {root_img_path}")
@@ -537,6 +543,6 @@ def dreamBoothAPI(demo: gr.Blocks, app: FastAPI):
         return JSONResponse(inst_datas)
 
 
-script_callbacks.on_app_started(dreamBoothAPI)
+script_callbacks.on_app_started(dreambooth_api)
 
 print("Dreambooth API layer loaded")

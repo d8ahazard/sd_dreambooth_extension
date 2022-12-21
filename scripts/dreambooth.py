@@ -14,7 +14,7 @@ from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, PromptData
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, printm, \
-    isset, get_images, get_lora_models
+    get_images, get_lora_models
 from modules import shared, devices
 
 try:
@@ -429,8 +429,9 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
         msg = "Please configure some concepts."
     if not os.path.exists(config.pretrained_model_name_or_path):
         msg = "Invalid training data directory."
-    if isset(config.pretrained_vae_name_or_path) and not os.path.exists(config.pretrained_vae_name_or_path):
-        msg = "Invalid Pretrained VAE Path."
+    if config.pretrained_vae_name_or_path != "" and config.pretrained_vae_name_or_path is not None:
+        if not os.path.exists(config.pretrained_vae_name_or_path):
+            msg = "Invalid Pretrained VAE Path."
     if config.resolution <= 0:
         msg = "Invalid resolution."
 
@@ -513,8 +514,9 @@ def ui_classifiers(model_name: str, lora_model: str, lora_weight: float, lora_tx
         msg = "Please configure some concepts."
     if not os.path.exists(config.pretrained_model_name_or_path):
         msg = "Invalid training data directory."
-    if isset(config.pretrained_vae_name_or_path) and not os.path.exists(config.pretrained_vae_name_or_path):
-        msg = "Invalid Pretrained VAE Path."
+    if config.pretrained_vae_name_or_path != "" and config.pretrained_vae_name_or_path is not None:
+        if not os.path.exists(config.pretrained_vae_name_or_path):
+            msg = "Invalid Pretrained VAE Path."
     if config.resolution <= 0:
         msg = "Invalid resolution."
 
