@@ -763,7 +763,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     text_encoder_cache.append(text_encoder(d_batch["input_ids"])[0])
                 concepts_cache.append(dataset.current_concept)
         dataset = LatentsDataset(latents_cache, text_encoder_cache, concepts_cache)
-        dataloader = accelerator.prepare(torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda z: z, shuffle=True))
+        # prevent mem leak
+        accelerator._dataloaders = []
+        dataloader = accelerator.prepare_data_loader(torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda z: z, shuffle=True))
         if enc_vae is not None:
             del enc_vae
         return dataset, dataloader
