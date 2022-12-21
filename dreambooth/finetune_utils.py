@@ -142,7 +142,7 @@ class PromptDataset(Dataset):
                         text = filename_texts[i % len(filename_texts)]
                         prompt = text_getter.create_text(concept.class_prompt, text, concept.instance_token,
                                                          concept.class_token)
-                        pd = PromptData
+                        pd = PromptData()
                         pd.prompt = prompt
                         pd.negative_prompt = concept.class_negative_prompt
                         pd.steps = concept.class_infer_steps
