@@ -1,6 +1,6 @@
 import gradio as gr
 
-from extensions.sd_dreambooth_extension.dreambooth.discord_hook import is_discord_available
+from extensions.sd_dreambooth_extension.dreambooth.discord_hook import test_discord, is_discord_available
 from extensions.sd_dreambooth_extension.dreambooth import dreambooth
 from extensions.sd_dreambooth_extension.dreambooth.db_config import save_config
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
@@ -223,8 +223,9 @@ def on_ui_tabs():
                         db_discord_webhook_url = gr.Textbox(
                             label="Discord WebHook", 
                             placeholder="https://discord.com/api/webhooks/XXXXX/XXXXX",
-                            value=""
-                        )
+                            value="")
+                        db_discord_test_btn = gr.Button(value="Test Discord Hook")
+                        db_discord_test_result = gr.HTML(elem_id="db_discord_test_results", value="")
 
             with gr.Column(variant="panel"):
                 db_status = gr.HTML(elem_id="db_status", value="")
@@ -238,6 +239,12 @@ def on_ui_tabs():
             "one": "one",
             "two": "two"
         }
+
+        db_discord_test_btn.click(
+            fn=test_discord,
+            inputs=[db_discord_webhook_url],
+            outputs=[db_discord_test_result]
+        )
 
         db_debug_prompts.click(
             fn=debug_prompts,

@@ -23,8 +23,7 @@ from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, PretrainedConfig, CLIPTextModel
 
-import extensions.sd_dreambooth_extension.dreambooth.discord_hook
-
+from extensions.sd_dreambooth_extension.dreambooth.discord_hook import is_discord_available, send_update
 from extensions.sd_dreambooth_extension.dreambooth import xattention
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, from_file
@@ -950,12 +949,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                         txt_file.write(c.prompt)
                                     s_image.save(image_name)
 
-                                    if len(args.discord_webhook_url) > 0 and discord_hook.is_discord_available():
-                                        discord_hook.send_update(
-                                            args.discord_webhook_url,
-                                            s_image, args.model_name,
-                                            c.prompt, seed, global_step
-                                        )
+                                    if len(args.discord_webhook_url) > 0 and is_discord_available():
+                                        send_update(args.discord_webhook_url,
+                                            s_image, args.model_name, c.prompt, seed, global_step)
 
                                 ci += 1
                             if len(samples) > 1:
