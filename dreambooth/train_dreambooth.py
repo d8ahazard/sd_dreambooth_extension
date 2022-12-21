@@ -622,7 +622,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     def save_weights(save_image, save_model, save_snapshot, save_checkpoint, save_lora):
         # Create the pipeline using the trained modules and save it.
         if accelerator.is_main_process:
-            accelerator.save_state(os.path.join(args.model_dir, "checkpoints", f"checkpoint-{args.revision}"))
             g_cuda = None
             if args.train_text_encoder:
                 text_enc_model = accelerator.unwrap_model(text_encoder, keep_fp32_wrapper=True)
