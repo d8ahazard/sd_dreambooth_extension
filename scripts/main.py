@@ -1,6 +1,6 @@
 import gradio as gr
 
-from extensions.sd_dreambooth_extension.dreambooth.discord_hook import test_discord, is_discord_available
+from extensions.sd_dreambooth_extension.dreambooth.discord_hook import test_discord
 from extensions.sd_dreambooth_extension.dreambooth import dreambooth
 from extensions.sd_dreambooth_extension.dreambooth.db_config import save_config
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
@@ -218,7 +218,7 @@ def on_ui_tabs():
                         db_log_memory = gr.Button(value="Log Memory")
                         db_train_imagic_only = gr.Checkbox(label="Train Imagic Only", value=False)
 
-                with gr.Tab("Discord", visible=is_discord_available()):
+                with gr.Tab("Discord"):
                     with gr.Column():
                         db_discord_webhook_url = gr.Textbox(
                             label="Discord WebHook", 
