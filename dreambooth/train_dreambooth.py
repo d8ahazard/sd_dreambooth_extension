@@ -58,6 +58,11 @@ logger.addHandler(console)
 logger.setLevel(logging.DEBUG)
 dl.set_verbosity_error()
 
+last_img_step = -1
+last_save_step = -1
+last_check_step = 0
+last_check_epoch = 0
+
 
 def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision):
     text_encoder_config = PretrainedConfig.from_pretrained(
@@ -540,32 +545,81 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     print(f"  Grad: {args.gradient_checkpointing}, TextTr: {args.train_text_encoder} Use EMA: {args.use_ema}")
     print(f"  Learning rate: {args.learning_rate} Use lora:{args.use_lora}")
 
-    def save_weights():
-        save_lora = False
-        save_snapshot = False
-        save_checkpoint = False
-        if training_complete:
-            if dream_state.status.interrupted:
-                if args.save_lora_cancel:
-                    save_lora = True
-                if args.save_state_cancel:
-                    save_snapshot = True
-                if args.save_ckpt_cancel:
-                    save_checkpoint = True
+    last_img_step = -1
+    last_save_step = -1
+    last_check_step = 0
+    last_check_epoch = 0
+
+    def check_save():
+        global last_save_step
+        global last_img_step
+        global last_check_step
+        global last_check_epoch
+
+        training_save_interval = args.save_embedding_every
+        training_image_interval = args.save_preview_every
+
+        if args.save_use_epochs:
+            if args.save_use_global_counts:
+                training_save_check = global_epoch
             else:
-                if args.save_lora_after:
-                    save_lora = True
-                if args.save_state_after:
-                    save_snapshot = True
-                if args.save_ckpt_after:
-                    save_checkpoint = True
+                training_save_check = args.epoch
         else:
-            if args.save_lora_during:
-                save_lora = True
-            if args.save_state_during:
-                save_snapshot = True
-            if args.save_ckpt_during:
-                save_snapshot = True
+            if args.save_use_global_counts:
+                training_save_check = global_step
+            else:
+                training_save_check = args.revision
+
+        save_completed = global_step >= actual_train_steps
+        save_canceled = dream_state.status.interrupted
+        save_image = False
+        save_model = False
+        if not save_canceled and not save_completed:
+            if last_save_step == -1:
+                save_model = False
+                last_save_step = 0
+            else:
+                if training_save_check - last_save_step >= training_save_interval:
+                    save_model = True
+                    last_save_step = training_save_check
+            if last_img_step == -1:
+                save_image = False
+                last_img_step = 0
+            else:
+                if training_save_check - last_img_step >= training_image_interval:
+                    save_image = True
+                    last_img_step = training_save_check
+
+        else:
+            print("Save completed/canceled.")
+            save_image = True
+            save_model = True
+
+        save_snapshot = False
+        save_lora = False
+        save_checkpoint = False
+
+        if save_model:
+            if save_canceled:
+                save_lora = args.save_lora_cancel
+                save_snapshot = args.save_state_during
+                save_checkpoint = args.save_ckpt_cancel
+            elif save_completed:
+                save_lora = args.save_lora_after
+                save_snapshot = args.save_state_after
+                save_checkpoint = args.save_ckpt_after
+            else:
+                save_lora = args.save_lora_during
+                save_snapshot = args.save_state_during
+                save_checkpoint = args.save_ckpt_during
+
+        if save_checkpoint or save_snapshot or save_lora or save_image or save_model:
+            print(f"Save fired {save_lora}, {save_checkpoint}, {save_snapshot}, {save_image}")
+            save_weights(save_image, save_model, save_snapshot, save_checkpoint, save_lora)
+
+        return save_model
+
+    def save_weights(save_image, save_model, save_snapshot, save_checkpoint, save_lora):
         # Create the pipeline using the trained modules and save it.
         if accelerator.is_main_process:
             accelerator.save_state(os.path.join(args.model_dir, "checkpoints", f"checkpoint-{args.revision}"))
@@ -627,11 +681,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                             out_file = None
                             if save_snapshot:
                                 dream_state.status.textinfo = f"Saving snapshot at step {args.revision}..."
-
+                                print("Saving snapshot.")
                                 accelerator.save_state(os.path.join(args.model_dir, "checkpoints",
                                                                     f"checkpoint-{args.revision}"))
                             else:
                                 dream_state.status.textinfo = f"Saving diffusion model at step {args.revision}..."
+                                print("Saving diffusion models.")
                                 s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"))
 
                         if save_checkpoint:
@@ -646,7 +701,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         traceback.print_exc()
                         pass
                 save_dir = args.model_dir
-                if save_img:
+                if save_image:
                     dream_state.status.textinfo = f"Saving preview image at step {args.revision}..."
                     try:
                         s_pipeline.set_progress_bar_config(disable=True)
@@ -689,7 +744,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             del s_pipeline
             del scheduler
             del text_enc_model
-            if not save_img:
+            if save_image:
                 if g_cuda:
                     del g_cuda
 
@@ -718,7 +773,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     if step % args.gradient_accumulation_steps == 0:
                         progress_bar.update(1)
                     continue
-                weights_saved = False
                 with accelerator.accumulate(unet), accelerator.accumulate(text_encoder):
                     # Convert images to latent space
                     with torch.no_grad():
@@ -802,46 +856,30 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     accelerator.log(logs, step=args.revision)
                     loss_avg.reset()
 
-                progress_bar.update(args.train_batch_size * args.gradient_accumulation_steps)
-                global_step += args.train_batch_size * args.gradient_accumulation_steps
-                args.revision += args.train_batch_size * args.gradient_accumulation_steps
+                actual_steps = args.train_batch_size * args.gradient_accumulation_steps
+                progress_bar.update(actual_steps)
+                global_step += actual_steps
+                args.revision += actual_steps
                 dream_state.status.job_no = global_step
 
+                # Check training complete before save check
                 training_complete = global_step >= actual_train_steps or dream_state.status.interrupted
-                if not args.save_use_epochs:
-                    if global_step > 0:
-                        if args.save_use_global_counts:
-                            save_img = args.save_preview_every and not args.revision - last_img_step >= args.save_preview_every
-                            save_model = args.save_embedding_every and args.revision - last_save_step >= args.save_embedding_every
-                            if save_model:
-                                last_save_step = args.revision
-                            if save_img:
-                                last_img_step = args.revision
-                        else:
-                            save_img = args.save_preview_every and not global_step - last_img_step >= args.save_preview_every
-                            save_model = args.save_embedding_every and global_step - last_save_step >= args.save_embedding_every
-                            if save_model:
-                                last_save_step = global_step
-                            if save_img:
-                                last_img_step = global_step
-                        if training_complete:
-                            save_img = True
-                            save_model = True
-                        if save_img or save_model:
 
-                            save_weights()
-                            weights_saved = True
-                            dream_state.status.job_count = actual_train_steps
+                weights_saved = check_save()
 
+                # Reset the job count after saving images
+                dream_state.status.job_count = actual_train_steps
+
+                # Check again after possibly saving
                 if dream_state.status.interrupted:
                     training_complete = True
-                if global_step == 0 or global_step == 5:
-                    printm(f"Step {global_step} completed.")
+
                 dream_state.status.textinfo = f"Training, step {global_step}/{actual_train_steps} current," \
                                         f" {args.revision}/{actual_train_steps + lifetime_step} lifetime"
 
+                # Log completion message
                 if training_complete:
-                    print("Training complete.")
+                    print("  Training complete.")
                     if dream_state.status.interrupted:
                         state = "cancelled"
                     else:
@@ -852,17 +890,17 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
                     break
 
+            # Check after epoch
             training_complete = global_step >= actual_train_steps or dream_state.status.interrupted
             accelerator.wait_for_everyone()
+
             if not args.not_cache_latents:
                 train_dataset, train_dataloader = cache_latents(enc_vae=vae, orig_dataset=gen_dataset)
+
             if training_complete:
-                if not weights_saved:
-                    if profile_memory and prof is not None:
-                        prof.step()
-                    save_img = True
-                    save_model = True
-                    save_weights()
+                if profile_memory and prof is not None:
+                    prof.step()
+
                 msg = f"Training completed, total steps: {args.revision}"
                 break
         except Exception as m:
@@ -878,31 +916,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         args.epoch += 1
         global_epoch += 1
         args.save()
-
-        if args.save_use_epochs:
-            if args.save_use_global_counts:
-                save_img = args.save_preview_every and not args.epoch - last_img_epoch >= args.save_preview_every
-                save_model = args.save_embedding_every and not args.epoch - last_save_epoch >= args.save_embedding_every
-                if save_model:
-                    last_save_epoch = args.epoch
-                if save_img:
-                    last_img_epoch = args.epoch
-            else:
-                save_img = args.save_preview_every and not global_epoch - last_img_epoch >= args.save_preview_every
-                save_model = args.save_embedding_every and not global_epoch - last_save_epoch >= args.save_embedding_every
-                if save_model:
-                    last_save_epoch = global_epoch
-                if save_img:
-                    last_img_epoch = global_epoch
-            if training_complete:
-                save_img = True
-                save_model = True
-            if save_img or save_model:
-                args.save()
-                save_weights()
-                args = from_file(args.model_name)
-                weights_saved = True
-                dream_state.status.job_count = actual_train_steps
+        if not weights_saved:
+            check_save()
+        dream_state.status.job_count = actual_train_steps
 
         if args.epoch_pause_frequency > 0 and args.epoch_pause_time > 0:
             if not global_epoch % args.epoch_pause_frequency:
