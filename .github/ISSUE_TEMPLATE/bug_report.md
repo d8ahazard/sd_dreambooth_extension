@@ -1,4 +1,5 @@
 ---
+
 name: Bug report
 about: Please Answer the Following Questions
 title: ''
@@ -7,7 +8,7 @@ assignees: ''
 
 ---
 
-## Kindly read this ENTIRE form and fill it out with the requested information. It may seem tedious, but it's even more tedious asking basic questions to ensure I'm not trying to troubleshoot a bug I've already fixed. Help me help you, answer all the questions and follow the steps below before posting.
+### Kindly read the entire form below and fill it out with the requested information.
 
 **Please find the following lines in the console and paste them below. _If you do not provide this information, your
 issue will be automatically closed._**

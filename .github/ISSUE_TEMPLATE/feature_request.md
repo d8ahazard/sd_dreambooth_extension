@@ -6,6 +6,7 @@ labels: ''
 assignees: ''
 
 ---
+### Kindly read the entire form below and fill it out with the requested information.
 
 **WHAT**
 What is this feature of which you speak??
