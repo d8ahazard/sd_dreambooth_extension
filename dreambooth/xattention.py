@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import inspect
 import math
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union, Optional
 
 import diffusers
 import torch
 import transformers
+from diffusers.optimization import SchedulerType, TYPE_TO_SCHEDULER_FUNCTION
 from einops import rearrange
 from torch import einsum
+from torch.optim import Optimizer
 
 
 def replace_unet_cross_attn_to_default():
@@ -281,20 +283,12 @@ def replace_unet_cross_attn_to_xformers():
         raise ImportError(
             "xformers not installed. Re-launch webui with --xformers.")
 
-    def forward_xformers(self, x, context=None, mask=None):
+    def forward_xformers(self, x, context=None, attention_mask=None):
         h = self.heads
         q_in = self.to_q(x)
 
-        context = default(context, x)
-        context = context.to(x.dtype)
-
-        if hasattr(self, 'hypernetwork') and self.hypernetwork is not None:
-            context_k, context_v = self.hypernetwork.forward(x, context)
-            context_k = context_k.to(x.dtype)
-            context_v = context_v.to(x.dtype)
-        else:
-            context_k = context
-            context_v = context
+        context_k = default(context, x)
+        context_v = context.to(x.dtype)
 
         k_in = self.to_k(context_k)
         v_in = self.to_v(context_v)
@@ -405,3 +399,61 @@ async def process_api(
         "duration": result["duration"],
         "average_duration": block_fn.total_runtime / block_fn.total_runs,
     }
+
+
+def get_scheduler(
+    name: Union[str, SchedulerType],
+    optimizer: Optimizer,
+    num_warmup_steps: Optional[int] = None,
+    num_training_steps: Optional[int] = None,
+    num_cycles: int = 1,
+    power: float = 1.0,
+):
+    """
+    Unified API to get any scheduler from its name.
+
+    Args:
+        name (`str` or `SchedulerType`):
+            The name of the scheduler to use.
+        optimizer (`torch.optim.Optimizer`):
+            The optimizer that will be used during training.
+        num_warmup_steps (`int`, *optional*):
+            The number of warmup steps to do. This is not required by all schedulers (hence the argument being
+            optional), the function will raise an error if it's unset and the scheduler type requires it.
+        num_training_steps (`int``, *optional*):
+            The number of training steps to do. This is not required by all schedulers (hence the argument being
+            optional), the function will raise an error if it's unset and the scheduler type requires it.
+        num_cycles (`int`, *optional*):
+            The number of hard restarts used in `COSINE_WITH_RESTARTS` scheduler.
+        power (`float`, *optional*, defaults to 1.0):
+            Power factor. See `POLYNOMIAL` scheduler
+        last_epoch (`int`, *optional*, defaults to -1):
+            The index of the last epoch when resuming training.
+    """
+    name = SchedulerType(name)
+    schedule_func = TYPE_TO_SCHEDULER_FUNCTION[name]
+    if name == SchedulerType.CONSTANT:
+        return schedule_func(optimizer)
+
+    # All other schedulers require `num_warmup_steps`
+    if num_warmup_steps is None:
+        raise ValueError(f"{name} requires `num_warmup_steps`, please provide that argument.")
+
+    if name == SchedulerType.CONSTANT_WITH_WARMUP:
+        return schedule_func(optimizer, num_warmup_steps=num_warmup_steps)
+
+    # All other schedulers require `num_training_steps`
+    if num_training_steps is None:
+        raise ValueError(f"{name} requires `num_training_steps`, please provide that argument.")
+
+    if name == SchedulerType.COSINE_WITH_RESTARTS:
+        return schedule_func(
+            optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps, num_cycles=num_cycles
+        )
+
+    if name == SchedulerType.POLYNOMIAL:
+        return schedule_func(
+            optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps, power=power
+        )
+
+    return schedule_func(optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)

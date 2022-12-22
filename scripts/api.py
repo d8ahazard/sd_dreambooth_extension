@@ -100,6 +100,8 @@ class DreamboothParameters(BaseModel):
     lora_txt_learning_rate: float = 0.0002
     lora_txt_weight: int = 1
     lora_weight: int = 1
+    lr_cycles: int = 1
+    lr_power: float = 1.0
     lr_scheduler: str = "constant"
     lr_warmup_steps: int = 500
     max_token_length: int = 75
@@ -119,7 +121,6 @@ class DreamboothParameters(BaseModel):
     save_ckpt_after: bool = True
     save_ckpt_cancel: bool = True
     save_ckpt_during: bool = True
-    save_class_txt: bool = True
     save_embedding_every: int = 500
     save_lora_after: bool = True
     save_lora_cancel: bool = True

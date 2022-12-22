@@ -6,15 +6,16 @@ import random
 import time
 import traceback
 from contextlib import nullcontext
+from decimal import Decimal
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, List
 
 import torch
 import torch.nn.functional as f
 import torch.utils.checkpoint
+from PIL import Image
 from accelerate import Accelerator
 from diffusers import AutoencoderKL, DDIMScheduler, DiffusionPipeline, UNet2DConditionModel, DDPMScheduler
-from diffusers.optimization import get_scheduler, get_polynomial_decay_schedule_with_warmup
 from diffusers.utils import logging as dl
 from huggingface_hub import HfFolder, whoami
 from torch.utils.data import Dataset
@@ -28,7 +29,8 @@ from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import encode_hidden_state, \
     EMAModel, generate_classifiers
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models, parse_logs
+from extensions.sd_dreambooth_extension.dreambooth.xattention import get_scheduler
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, apply_lora_weights
 from extensions.sd_dreambooth_extension.scripts.dreambooth import printm
 from modules import shared, paths, images
@@ -127,9 +129,35 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
+last_samples = []
+
+
+class TrainResult:
+    config: DreamboothConfig = None
+    mem_record: List = []
+    msg: str = ""
+    samples: [Image] = []
+    
+
 def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lora_alpha=1.0, lora_txt_alpha=1.0,
-         custom_model_name="", use_txt2img=True) -> tuple[DreamboothConfig, dict, str]:
+         custom_model_name="", use_txt2img=True) -> TrainResult:
+    """
+
+    @param args: The model config to use. 
+    @param memory_record: A global memory record. This can probably go away now.
+    @param use_subdir: Save checkpoints to a subdirectory.
+    @param lora_model: An optional lora model to use/resume.
+    @param lora_alpha: The weight to use when applying lora unet.
+    @param lora_txt_alpha: The weight to use when applying lora text encoder.
+    @param custom_model_name: A custom name to use when saving checkpoints.
+    @param use_txt2img: Use txt2img when generating class images.
+    @return: TrainResult
+    """
+    global last_samples
     logging_dir = Path(args.model_dir, "logging")
+    result = TrainResult
+    result.config = args
+    
     if profile_memory:
         cleanup(True)
         prof = profile(
@@ -171,8 +199,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             gradient_accumulation_steps=args.gradient_accumulation_steps,
             mixed_precision=args.mixed_precision,
             log_with="tensorboard",
-            logging_dir=logging_dir,
-            cpu=args.use_cpu
+            logging_dir=logging_dir
         )
     except Exception as e:
         if "AcceleratorState" in str(e):
@@ -180,7 +207,10 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         else:
             msg = f"Exception initializing accelerator: {e}"
         print(msg)
-        return args, mem_record, msg
+        result.msg = msg
+        result.mem_record = mem_record
+        result.config = args
+        return result
     # Currently, it's not possible to do gradient accumulation when training two models with accelerate.accumulate
     # This will be enabled soon in accelerate. For now, we don't allow gradient accumulation when training two models.
     # TODO (patil-suraj): Remove this check when gradient accumulation with two models is enabled in accelerate.
@@ -235,14 +265,14 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     def create_vae():
         vae_path = args.pretrained_vae_name_or_path if args.pretrained_vae_name_or_path else \
             args.pretrained_model_name_or_path
-        result = AutoencoderKL.from_pretrained(
+        new_vae = AutoencoderKL.from_pretrained(
             vae_path,
             subfolder=None if args.pretrained_vae_name_or_path else "vae",
             revision=args.revision
         )
-        result.requires_grad_(False)
-        result.to(accelerator.device, dtype=weight_dtype)
-        return result
+        new_vae.requires_grad_(False)
+        new_vae.to(accelerator.device, dtype=weight_dtype)
+        return new_vae
 
     vae = create_vae()
 
@@ -354,7 +384,10 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         print(msg)
         status.textinfo = msg
         cleanup_memory()
-        return args, mem_record, msg
+        result.msg = msg
+        result.mem_record = mem_record
+        result.config = args
+        return result
 
     def collate_fn(examples):
         input_ids = [ex["instance_prompt_ids"] for ex in examples]
@@ -386,7 +419,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     train_dataloader = torch.utils.data.DataLoader(
         # train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, num_workers=1
-        train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
+        train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True, num_workers=1
     )
     # Move text_encoder and VAE to GPU.
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
@@ -452,22 +485,21 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     if not args.not_cache_latents:
         train_dataset, train_dataloader = cache_latents(enc_vae=vae, orig_dataset=gen_dataset)
 
-    if args.lr_scheduler == "polynomial":
-        lr_scheduler = get_polynomial_decay_schedule_with_warmup(
-            optimizer=optimizer,
-            num_warmup_steps=args.lr_warmup_steps * args.gradient_accumulation_steps,
-            num_training_steps=max_train_steps * args.gradient_accumulation_steps,
-            lr_end=args.min_learning_rate,
-            last_epoch=args.epoch
-        )
-        pass
-    else:
-        lr_scheduler = get_scheduler(
-            args.lr_scheduler,
-            optimizer=optimizer,
-            num_warmup_steps=args.lr_warmup_steps * args.gradient_accumulation_steps,
-            num_training_steps=max_train_steps * args.gradient_accumulation_steps,
-        )
+    # This needs to be done before we set up the optimizer, for reasons that should have been obvious.
+    overrode_max_train_steps = False
+    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
+    if max_train_steps is None or max_train_steps < 1:
+        max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
+        overrode_max_train_steps = True
+
+    lr_scheduler = get_scheduler(
+        args.lr_scheduler,
+        optimizer=optimizer,
+        num_warmup_steps=args.lr_warmup_steps * args.gradient_accumulation_steps,
+        num_training_steps=max_train_steps * args.gradient_accumulation_steps,
+        num_cycles=args.lr_cycles,
+        power=args.lr_power,
+    )
 
     # create ema, fix OOM
     if args.use_ema:
@@ -494,11 +526,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     printm("Scheduler, EMA Loaded.")
     # Scheduler and math around the number of training steps.
-    overrode_max_train_steps = False
-    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
-    if max_train_steps is None or max_train_steps < 1:
-        max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-        overrode_max_train_steps = True
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
@@ -548,9 +575,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     print(f"  Resuming from checkpoint: {resume_from_checkpoint}")
     print(f"  First resume epoch: {first_epoch}")
     print(f"  First resume step: {resume_step}")
-    print(f"  CPU: {args.use_cpu} Adam: {use_adam}, Prec: {args.mixed_precision}")
-    print(f"  Grad: {args.gradient_checkpointing}, TextTr: {args.train_text_encoder} Use EMA: {args.use_ema}")
-    print(f"  Learning rate: {args.learning_rate} Use lora:{args.use_lora}")
+    print(f"  Lora: {args.use_lora}, Adam: {use_adam}, Prec: {args.mixed_precision}")
+    print(f"  Grad: {args.gradient_checkpointing}, Text: {args.train_text_encoder}, EMA: {args.use_ema}")
+    print(f"  LR: {args.learning_rate})")
 
     last_img_step = -1
     last_save_step = -1
@@ -627,6 +654,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         return save_model
 
     def save_weights(save_image, save_model, save_snapshot, save_checkpoint, save_lora):
+        global last_samples
         # Create the pipeline using the trained modules and save it.
         if accelerator.is_main_process:
             g_cuda = None
@@ -719,6 +747,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                             prompts = gen_dataset.get_sample_prompts()
                             ci = 0
                             samples = []
+                            last_samples = []
                             for c in prompts:
                                 seed = c.seed
                                 if seed is None or seed == '' or seed == -1:
@@ -739,10 +768,15 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                         txt_file.write(c.prompt)
                                     s_image.save(image_name)
                                 ci += 1
+                            for sample in samples:
+                                last_samples.append(sample)
                             if len(samples) > 1:
                                 img_grid = images.image_grid(samples)
                                 status.current_image = img_grid
                                 del samples
+                        log_images = parse_logs(model_name=args.model_name)
+                        for log_image in log_images:
+                            last_samples.insert(0, log_image)
 
                     except Exception as em:
                         print(f"Exception with the stupid image again: {em}")
@@ -855,13 +889,14 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     if args.use_ema and ema_unet is not None:
                         ema_unet.step(unet.parameters())
 
-                if not global_step % 2:
+                if not global_step % args.train_batch_size:
                     allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                     cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
-                    logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0],
-                            "vram": f"{allocated}/{cached}GB"}
-                    status.textinfo2 = f"loss: {loss_avg.avg.item()}, lr: {lr_scheduler.get_last_lr()[0]}" \
-                                       f"vram: {allocated}/{cached}GB"
+                    log_loss = loss_avg.avg.item()
+                    last_lr = lr_scheduler.get_last_lr()[0]
+                    logs = {"loss": log_loss, "lr": last_lr, "vram_usage": f"{allocated}"}
+                    status.textinfo2 = f"Loss: {'%.2f' % log_loss}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
+                                       f"VRAM: {allocated}/{cached} GB"
                     progress_bar.set_postfix(**logs)
                     accelerator.log(logs, step=args.revision)
                     loss_avg.reset()
@@ -884,7 +919,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     training_complete = True
                 tot_step = global_step + lifetime_step
                 status.textinfo = f"Steps: {global_step}/{max_train_steps} (Current)," \
-                                  f" {args.revision}/{tot_step} (Lifetime), Epoch: {args.epoch}"
+                                  f" {args.revision}/{tot_step + args.lifetime_revision} (Lifetime), Epoch: {args.epoch}"
 
                 # Log completion message
                 if training_complete:
@@ -945,4 +980,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         prof.stop()
     cleanup_memory()
     accelerator.end_training()
-    return args, mem_record, msg
+    result.msg = msg
+    result.config = args
+    result.mem_record = mem_record
+    result.samples = last_samples
+    return result

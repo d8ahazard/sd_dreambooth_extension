@@ -7,11 +7,14 @@ import sys
 import traceback
 from io import StringIO
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, Tuple
 
+import pandas as pd
 import torch
-from PIL import features
+from PIL import features, Image
 from huggingface_hub import HfFolder, whoami
+from pandas import DataFrame
+from tensorflow.python.summary.summary_iterator import summary_iterator
 
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from modules import shared, paths, sd_models
@@ -262,3 +265,106 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{username}/{model_id}"
     else:
         return f"{organization}/{model_id}"
+
+
+def parse_logs(model_name: str, sort_by=None):
+    """Convert local TensorBoard data into Pandas DataFrame.
+
+    Function takes the root directory path and recursively parses
+    all events data.
+    If the `sort_by` value is provided then it will use that column
+    to sort values; typically `wall_time` or `step`.
+
+    *Note* that the whole data is converted into a DataFrame.
+    Depending on the data size this might take a while. If it takes
+    too long then narrow it to some sub-directories.
+
+    Paramters:
+        root_dir: (str) path to root dir with tensorboard data.
+        sort_by: (optional str) column name to sort by.
+
+    Returns:
+        pandas.DataFrame with [wall_time, name, step, value] columns.
+
+    """
+    def convert_tfevent(filepath) -> Tuple[DataFrame, DataFrame, DataFrame]:
+        loss_events = []
+        lr_events = []
+        ram_events = []
+        for e in summary_iterator(filepath):
+            if len(e.summary.value):
+                parsed = parse_tfevent(e)
+                if parsed["Name"] == "lr":
+                    lr_events.append(parsed)
+                elif parsed["Name"] == "loss":
+                    loss_events.append(parsed)
+                elif parsed["Name"] == "vram_usage":
+                    ram_events.append(parsed)
+        return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events)
+
+    def parse_tfevent(tfevent):
+        return {
+            "Wall_time": tfevent.wall_time,
+            "Name": tfevent.summary.value[0].tag,
+            "Step": tfevent.step,
+            "Value": float(tfevent.summary.value[0].simple_value),
+        }
+
+    from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
+    model_config = from_file(model_name)
+    if model_config is None:
+        print("Unable to load model config!")
+        return None
+    root_dir = os.path.join(model_config.model_dir, "logging", "dreambooth")
+    columns_order = ['Wall_time', 'Name', 'Step', 'Value']
+
+    out_loss = []
+    out_lr = []
+    out_ram = []
+    for (root, _, filenames) in os.walk(root_dir):
+        for filename in filenames:
+            if "events.out.tfevents" not in filename:
+                continue
+            file_full_path = os.path.join(root, filename)
+            converted_loss, converted_lr, converted_ram = convert_tfevent(file_full_path)
+            out_loss.append(converted_loss)
+            out_lr.append(converted_lr)
+            if converted_ram.__len__() > 0:
+                out_ram.append(converted_ram)
+
+    # Concatenate (and sort) all partial individual dataframes
+    all_df_loss = pd.concat(out_loss)[columns_order]
+    all_df_loss = all_df_loss.sort_values("Wall_time")
+    all_df_loss = all_df_loss.reset_index(drop=True)
+
+    all_df_lr = pd.concat(out_lr)[columns_order]
+    all_df_lr = all_df_lr.sort_values("Wall_time")
+    all_df_lr = all_df_lr.reset_index(drop=True)
+
+    plotted_loss = all_df_loss.plot(x="Step", y="Value", title="Loss Averages")
+    plotted_lr = all_df_lr.plot(x="Step", y="Value", title="Learning Rate")
+
+    loss_img = os.path.join(model_config.model_dir, "logging", f"loss_plot_{model_config.revision}.png")
+    lr_img = os.path.join(model_config.model_dir, "logging", f"lr_plot_{model_config.revision}.png")
+
+    plotted_loss.figure.savefig(loss_img)
+    plotted_lr.figure.savefig(lr_img)
+
+    log_pil = Image.open(loss_img)
+    log_lr = Image.open(lr_img)
+
+    out_images = [log_pil, log_lr]
+
+    if len(out_ram):
+        all_df_ram = pd.concat(out_ram)[columns_order]
+        all_df_ram = all_df_ram.sort_values("Wall_time")
+        all_df_ram = all_df_ram.reset_index(drop=True)
+
+        plotted_ram = all_df_ram.plot(x="Step", y="Value", title="VRAM Usage")
+
+        ram_img = os.path.join(model_config.model_dir, "logging", f"ram_plot_{model_config.revision}.png")
+        plotted_ram.figure.savefig(ram_img)
+        log_ram = Image.open(ram_img)
+        out_images.append(log_ram)
+
+    return out_images

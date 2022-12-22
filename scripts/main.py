@@ -9,7 +9,7 @@ from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generat
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret, create_secret, clear_secret
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, list_attention, \
-    list_floats, get_lora_models, wrap_gpu_call
+    list_floats, get_lora_models, wrap_gpu_call, parse_logs
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
     training_wizard, training_wizard_person, load_model_params, ui_classifiers, ui_samples
@@ -19,6 +19,7 @@ from modules.ui import gr_show, create_refresh_button
 params_to_save = []
 refresh_symbol = '\U0001f504'  # 🔄
 delete_symbol = '\U0001F5D1'  # 🗑️
+update_symbol = '\U0001F81D'  # 🠝
 
 
 def get_sd_models():
@@ -56,7 +57,6 @@ def check_progress_call():
     show_preview: Preview visibility
     image: Output Image
     textinfo_result: Primary status
-    textinfo2_result: Secondary status
     """
     if status.job_count == 0:
         return "", gr_show(False), gr_show(False), gr_show(True), gr_show(False)
@@ -87,11 +87,10 @@ def check_progress_call():
         textinfo_result = ""
 
     if status.textinfo2 is not None:
-        textinfo2_result = status.textinfo2
-    else:
-        textinfo2_result = ""
+        textinfo_result = f"{textinfo_result}<br>{status.textinfo2}"
+
     pspan = f"<span id='db_progress_span' style='display: none'>{time.time()}</span><p>{progressbar}</p>"
-    return pspan, show_preview, image, textinfo_result, textinfo2_result
+    return pspan, show_preview, image, textinfo_result, gr_show(False)
 
 
 def check_progress_call_initial():
@@ -195,16 +194,16 @@ def on_ui_tabs():
                                                             value=100)
                             db_max_train_steps = gr.Number(label='Max Training Steps', value=0, precision=0)
                             db_epoch_pause_frequency = gr.Number(label='Pause After N Epochs', value=0)
-                            db_epoch_pause_time = gr.Number(label='Amount of time to pause between Epochs, in Seconds',
+                            db_epoch_pause_time = gr.Number(label='Amount of time to pause between Epochs (s)',
                                                             value=60)
+                            db_save_use_epochs = gr.Checkbox(label="Use Epoch Values for Save Frequency")
                             db_save_use_global_counts = gr.Checkbox(label='Use Lifetime Steps/Epochs When Saving',
                                                                     value=True)
-                            db_save_use_epochs = gr.Checkbox(label="Save Preview/Ckpt Every Epoch")
                             db_save_embedding_every = gr.Number(
-                                label='Save Checkpoint Frequency', value=500,
+                                label='Save Model Frequency (Epochs)', value=500,
                                 precision=0)
                             db_save_preview_every = gr.Number(
-                                label='Save Preview(s) Frequency', value=500,
+                                label='Save Preview(s) Frequency (Epochs)', value=500,
                                 precision=0)
 
                         with gr.Column():
@@ -214,17 +213,18 @@ def on_ui_tabs():
 
                         with gr.Column():
                             gr.HTML(value="Learning Rate")
-                            db_learning_rate = gr.Number(label='Learning Rate', value=2e-6)
-                            db_min_learning_rate = gr.Number(label='Minimum Learning Rate', value=1e-6, visible=False)
-                            with gr.Row(visible=False) as lora_lr_row:
-                                db_lora_learning_rate = gr.Number(label='Lora unet Learning Rate', value=2e-4)
-                                db_lora_txt_learning_rate = gr.Number(label='Lora Text Encoder Learning Rate',
-                                                                      value=2e-4)
-                            db_scale_lr = gr.Checkbox(label="Scale Learning Rate", value=False)
                             db_lr_scheduler = gr.Dropdown(label="Learning Rate Scheduler", value="constant",
                                                           choices=["linear", "cosine", "cosine_with_restarts",
                                                                    "polynomial", "constant",
                                                                    "constant_with_warmup"])
+                            db_learning_rate = gr.Number(label='Learning Rate', value=2e-6)
+                            db_lr_cycles = gr.Number(label="Number of Hard Resets", value=1, precision=0, visible=False)
+                            db_lr_power = gr.Number(label="Polynomial Power", value=1.0, precision=1, visible=False)
+                            with gr.Row(visible=False) as lora_lr_row:
+                                db_lora_learning_rate = gr.Number(label='Lora UNET Learning Rate', value=2e-4)
+                                db_lora_txt_learning_rate = gr.Number(label='Lora Text Encoder Learning Rate',
+                                                                      value=2e-4)
+                            db_scale_lr = gr.Checkbox(label="Scale Learning Rate", value=False)
                             db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=500)
 
                         with gr.Column():
@@ -232,8 +232,6 @@ def on_ui_tabs():
                             db_resolution = gr.Number(label="Resolution", precision=0, value=512)
                             db_center_crop = gr.Checkbox(label="Center Crop", value=False)
                             db_hflip = gr.Checkbox(label="Apply Horizontal Flip", value=True)
-                            db_save_class_txt = gr.Checkbox(label="Save Class Captions to txt", value=True,
-                                                            visible=False)
 
                         with gr.Column():
                             gr.HTML(value="Miscellaneous")
@@ -255,7 +253,6 @@ def on_ui_tabs():
                             with gr.Column():
                                 with gr.Column():
                                     gr.HTML(value="Tuning")
-                                    db_use_cpu = gr.Checkbox(label="Use CPU Only (SLOW)", value=False)
                                     db_use_ema = gr.Checkbox(label="Use EMA", value=False)
                                     db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
                                     db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
@@ -347,31 +344,49 @@ def on_ui_tabs():
                 with gr.Tab("Generate"):
                     with gr.Column():
                         db_generate_classes = gr.Button(value="Generate Class Images")
-                        db_generate_sample = gr.Button(value="Generate Sample Images")
                         db_generate_prompts = gr.Button(value="Preview Prompts")
+                        db_generate_graph = gr.Button(value="Generate Graph")
                         db_sample_prompt = gr.Textbox(label="Sample Prompt")
                         db_sample_negative = gr.Textbox(label="Sample Negative Prompt")
                         db_sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
                         db_num_samples = gr.Number(label="Number of Samples to Generate", value=1, precision=0)
-                        db_sample_steps = gr.Number(label="Sampling Steps for Sample", value=60, precision=0)
-                        db_sample_scale = gr.Number(label="CFG Scale for Sample", value=7.5, precision=2)
+                        db_sample_steps = gr.Number(label="Sample Steps", value=60, precision=0)
+                        db_sample_scale = gr.Number(label="Sample CFG Scale", value=7.5, precision=2)
+                        db_generate_sample = gr.Button(value="Generate Sample Images")
 
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")
+                db_check_progress_initial = gr.Button(value=update_symbol, elem_id="db_check_progress_initial")
+
                 # These two should be updated while doing things
                 db_status = gr.HTML(elem_id="db_status", value="")
-                db_status2 = gr.HTML(elem_id="db_status2", value="")
                 db_progressbar = gr.HTML(elem_id="db_progressbar")
                 db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery').style(grid=4)
                 db_preview = gr.Image(elem_id='db_preview', visible=False)
-                # This one should be populated with the output of methods
-
-                db_check_progress = gr.Button('Check progress', elem_id=f"db_check_progress", visible=False)
+                db_check_progress = gr.Button("Check Progress", elem_id=f"db_check_progress", visible=False)
 
                 db_refresh_button.click(
                     fn=create_secret,
                     inputs=[],
                     outputs=[db_secret]
+                )
+
+                def update_labels(x):
+                    if x:
+                        unit = "Epochs"
+                        value = 25
+                    else:
+                        unit = "Steps"
+                        value = 500
+                    print(f"Units set to {unit}")
+                    return gr.update(label=f'Save Model Frequency ({unit})', value=value), \
+                        gr.update(label=f'Save Preview(s) Frequency ({unit})', value=value), \
+                        gr.update(label=f"Use Lifetime {unit} When Saving")
+
+                db_save_use_epochs.change(
+                    fn=update_labels,
+                    inputs=[db_save_use_epochs],
+                    outputs=[db_save_preview_every, db_save_embedding_every, db_save_use_global_counts]
                 )
 
                 db_clear_secret.click(
@@ -384,16 +399,14 @@ def on_ui_tabs():
                     fn=lambda: check_progress_call(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_preview, db_status, db_status2],
+                    outputs=[db_progressbar, db_preview, db_preview, db_status, db_check_progress_initial],
                 )
 
-                db_check_progress_initial = gr.Button('Check progress (first)', elem_id="db_check_progress_initial",
-                                                      visible=False)
                 db_check_progress_initial.click(
                     fn=lambda: check_progress_call_initial(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_preview, db_status, db_status2],
+                    outputs=[db_progressbar, db_preview, db_preview, db_status, db_check_progress_initial],
                 )
 
         global params_to_save
@@ -421,11 +434,12 @@ def on_ui_tabs():
             db_lora_txt_learning_rate,
             db_lora_txt_weight,
             db_lora_weight,
+            db_lr_cycles,
+            db_lr_power,
             db_lr_scheduler,
             db_lr_warmup_steps,
             db_max_token_length,
             db_max_train_steps,
-            db_min_learning_rate,
             db_mixed_precision,
             db_model_path,
             db_not_cache_latents,
@@ -439,7 +453,6 @@ def on_ui_tabs():
             db_save_ckpt_after,
             db_save_ckpt_cancel,
             db_save_ckpt_during,
-            db_save_class_txt,
             db_save_embedding_every,
             db_save_lora_after,
             db_save_lora_cancel,
@@ -458,7 +471,6 @@ def on_ui_tabs():
             db_train_text_encoder,
             db_use_8bit_adam,
             db_use_concepts,
-            db_use_cpu,
             db_use_ema,
             db_use_lora,
             db_v2,
@@ -549,11 +561,12 @@ def on_ui_tabs():
                 db_lora_txt_learning_rate,
                 db_lora_txt_weight,
                 db_lora_weight,
+                db_lr_cycles,
+                db_lr_power,
                 db_lr_scheduler,
                 db_lr_warmup_steps,
                 db_max_token_length,
                 db_max_train_steps,
-                db_min_learning_rate,
                 db_mixed_precision,
                 db_not_cache_latents,
                 db_num_train_epochs,
@@ -565,7 +578,6 @@ def on_ui_tabs():
                 db_save_ckpt_after,
                 db_save_ckpt_cancel,
                 db_save_ckpt_during,
-                db_save_class_txt,
                 db_save_embedding_every,
                 db_save_lora_after,
                 db_save_lora_cancel,
@@ -582,7 +594,6 @@ def on_ui_tabs():
                 db_train_text_encoder,
                 db_use_8bit_adam,
                 db_use_concepts,
-                db_use_cpu,
                 db_use_ema,
                 db_use_lora,
                 c1_class_data_dir,
@@ -657,9 +668,11 @@ def on_ui_tabs():
 
         def toggle_lr_min(sched):
             if sched == "polynomial":
-                return gr.update(visible=True)
+                return gr.update(visible=True), gr.update(visible=False)
+            elif sched == "cosine_with_restarts":
+                return gr.update(visible=False), gr.update(visible=True)
             else:
-                return gr.update(visible=False)
+                return gr.update(visible=False), gr.update(visible=False)
 
         db_use_lora.change(
             fn=disable_ema,
@@ -670,7 +683,7 @@ def on_ui_tabs():
         db_lr_scheduler.change(
             fn=toggle_lr_min,
             inputs=[db_lr_scheduler],
-            outputs=[db_min_learning_rate]
+            outputs=[db_lr_power, db_lr_cycles]
         )
 
         db_use_ema.change(
@@ -702,6 +715,12 @@ def on_ui_tabs():
             outputs=[db_status]
         )
 
+        db_generate_graph.click(
+            fn=parse_logs,
+            inputs=[db_model_name],
+            outputs=[db_gallery]
+        )
+
         db_performance_wizard.click(
             fn=performance_wizard,
             _js="db_start_pwizard",
@@ -709,13 +728,14 @@ def on_ui_tabs():
             outputs=[
                 db_attention,
                 db_gradient_checkpointing,
+                db_gradient_accumulation_steps,
                 db_mixed_precision,
                 db_not_cache_latents,
                 db_sample_batch_size,
                 db_train_batch_size,
                 db_train_text_encoder,
                 db_use_8bit_adam,
-                db_use_cpu,
+                db_use_lora,
                 db_use_ema,
                 db_status
             ]
@@ -819,6 +839,7 @@ def on_ui_tabs():
                 db_lora_model_name,
                 db_revision,
                 db_epochs,
+                db_gallery,
                 db_status
             ]
         )
@@ -870,7 +891,7 @@ def build_concept_panel():
         class_negative_prompt = gr.Textbox(label="Classification Image Negative Prompt")
         sample_template = gr.Textbox(label="Sample Prompt Template File",
                                      placeholder="Enter the path to a txt file containing sample prompts.")
-        save_sample_negative_prompt = gr.Textbox(label="Sample Image Negative Prompt")
+        save_sample_negative_prompt = gr.Textbox(label="Sample Negative Prompt")
 
     with gr.Column():
         gr.HTML("Image Generation")

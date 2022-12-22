@@ -37,16 +37,17 @@ class DreamboothConfig:
                  half_model: bool = False,
                  has_ema: bool = False,
                  hflip: bool = False,
-                 learning_rate: float = 0.00000172,
+                 learning_rate: float = 5e-6,
                  lora_learning_rate: float = 1e-4,
                  lora_txt_learning_rate: float = 5e-5,
                  lora_txt_weight: float = 1.0,
                  lora_weight: float = 1.0,
+                 lr_cycles: int = 1,
+                 lr_power: float = 1.0,
                  lr_scheduler: str = 'constant',
                  lr_warmup_steps: int = 0,
                  max_token_length: int = 75,
                  max_train_steps: int = 1000,
-                 min_learning_rate: float = .000001,
                  mixed_precision: str = "fp16",
                  model_path: str = "",
                  not_cache_latents=False,
@@ -60,7 +61,6 @@ class DreamboothConfig:
                  save_ckpt_after: bool = True,
                  save_ckpt_cancel: bool = True,
                  save_ckpt_during: bool = True,
-                 save_class_txt: bool = False,
                  save_embedding_every: int = 500,
                  save_lora_after: bool = True,
                  save_lora_cancel: bool = True,
@@ -79,7 +79,6 @@ class DreamboothConfig:
                  train_text_encoder: bool = True,
                  use_8bit_adam: bool = True,
                  use_concepts: bool = False,
-                 use_cpu: bool = False,
                  use_ema: bool = True,
                  use_lora: bool = False,
                  v2: bool = False,
@@ -173,9 +172,10 @@ class DreamboothConfig:
         self.lora_txt_learning_rate = lora_txt_learning_rate
         self.lora_txt_weight = lora_txt_weight
         self.lora_weight = lora_weight
+        self.lr_cycles = lr_cycles
+        self.lr_power = lr_power
         self.lr_scheduler = lr_scheduler
         self.lr_warmup_steps = lr_warmup_steps
-        self.min_learning_rate = min_learning_rate
         self.max_token_length = max_token_length
         self.max_train_steps = max_train_steps
         self.mixed_precision = mixed_precision
@@ -193,7 +193,6 @@ class DreamboothConfig:
         self.save_ckpt_after = save_ckpt_after
         self.save_ckpt_cancel = save_ckpt_cancel
         self.save_ckpt_during = save_ckpt_during
-        self.save_class_txt = save_class_txt
         self.save_embedding_every = save_embedding_every
         self.save_lora_after = save_lora_after
         self.save_lora_cancel = save_lora_cancel
@@ -211,7 +210,6 @@ class DreamboothConfig:
         self.train_text_encoder = train_text_encoder
         self.use_8bit_adam = use_8bit_adam
         self.use_concepts = use_concepts
-        self.use_cpu = use_cpu
         self.use_ema = False if use_ema is None else use_ema
         self.use_lora = False if use_lora is None else use_lora
         if scheduler is not None:

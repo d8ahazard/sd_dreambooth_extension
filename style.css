@@ -1,7 +1,7 @@
 #db_progressbar {
-  position: absolute;
   z-index: 1000;
   right: 0;
+  bottom: -10px;
   padding-left: 5px;
   padding-right: 5px;
   display: block;
@@ -13,11 +13,17 @@
 }
 
 
-#refresh_db_models, #refresh_lora_models, #refresh_sd_models, #refresh_secret, #clear_secret {
+#refresh_db_models, #refresh_lora_models, #refresh_sd_models, #refresh_secret, #clear_secret, #db_check_progress_initial {
     margin-top: 0.75em;
     max-width: 2.5em;
     min-width: 2.5em;
     height: 2.4em;
+}
+
+#db_check_progress_initial {
+    position: absolute;
+    top: 0px;
+    right: 10px;
 }
 
 .hh {

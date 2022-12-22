@@ -9,9 +9,9 @@ import torch
 import torch.utils.checkpoint
 from diffusers.utils import logging as dl
 
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, PromptData
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, printm, \
     get_images, get_lora_models
@@ -113,6 +113,83 @@ def training_wizard(model_dir, is_person=False):
     return 0, int(step_mult), -1, c_list[0], -1, c_list[1], -1, c_list[2], w_status
 
 
+def performance_wizard():
+    """
+    Calculate performance settings based on available resources.
+    @return:
+    attention: Memory Attention
+    gradient_checkpointing: Whether to use gradient checkpointing or not.
+    gradient_accumulation_steps: Number of steps to use. Set to batch size.
+    mixed_precision: Mixed precision to use. BF16 will be selected if available.
+    not_cache_latents: Latent caching.
+    sample_batch_size: Batch size to use when creating class images.
+    train_batch_size: Batch size to use when training.
+    train_text_encoder: Whether to train text encoder or not.
+    use_8bit_adam: Use 8bit adam. Defaults to true.
+    use_lora: Train using LORA. Better than "use CPU".
+    use_ema: Train using EMA.
+    msg: Stuff to show in the UI
+    """
+    attention = "flash_attention"
+    gradient_checkpointing = True
+    gradient_accumulation_steps = 1
+    mixed_precision = 'fp16'
+    not_cache_latents = True
+    sample_batch_size = 1
+    train_batch_size = 1
+    train_text_encoder = False
+    use_8bit_adam = True
+    use_lora = False
+    use_ema = False
+
+    if torch.cuda.is_bf16_supported():
+        mixed_precision = 'bf16'
+
+    has_xformers = False
+    try:
+        import xformers
+        import xformers.ops
+        has_xformers = True
+    except:
+        pass
+    if has_xformers:
+        attention = "xformers"
+    try:
+        t = torch.cuda.get_device_properties(0).total_memory
+        gb = math.ceil(t / 1073741824)
+        print(f"Total VRAM: {gb}")
+        if gb >= 24:
+            not_cache_latents = False
+            sample_batch_size = 4
+            train_batch_size = 2
+            train_text_encoder = True
+            use_ema = True
+            if attention != "xformers":
+                attention = "no"
+                train_batch_size = 1
+        if 24 > gb >= 16:
+            not_cache_latents = False
+            train_text_encoder = True
+            use_ema = True
+        if 16 > gb >= 10:
+            use_lora = True
+            use_ema = False
+
+        msg = f"Calculated training params based on {gb}GB of VRAM:"
+    except Exception as e:
+        msg = f"An exception occurred calculating performance values: {e}"
+        pass
+
+    log_dict = {"Attention": attention, "Gradient Checkpointing": gradient_checkpointing, "Precision": mixed_precision,
+                "Cache Latents": not not_cache_latents, "Training Batch Size": train_batch_size,
+                "Class Generation Batch Size": sample_batch_size,
+                "Train Text Encoder": train_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "LORA": use_lora}
+    for key in log_dict:
+        msg += f"<br>{key}: {log_dict[key]}"
+    return attention, gradient_checkpointing, gradient_accumulation_steps, mixed_precision, not_cache_latents, \
+        sample_batch_size, train_batch_size, train_text_encoder, use_8bit_adam, use_lora, use_ema, msg
+
+
 def ui_samples(model_dir: str,
                save_sample_prompt: str,
                num_samples: int = 1,
@@ -170,74 +247,6 @@ def ui_samples(model_dir: str,
     return images, msg
 
 
-def performance_wizard():
-    attention = "xformers"
-    gradient_checkpointing = True
-    mixed_precision = 'fp16'
-    target_precision = 'fp16'
-    if torch.cuda.is_bf16_supported():
-        mixed_precision = 'bf16'
-        target_precision = 'bf16'
-    not_cache_latents = True
-    sample_batch_size = 1
-    train_batch_size = 1
-    train_text_encoder = False
-    use_8bit_adam = True
-    use_cpu = False
-    use_ema = False
-    try:
-        t = torch.cuda.get_device_properties(0).total_memory
-        gb = math.ceil(t / 1073741824)
-        print(f"Total VRAM: {gb}")
-        if gb >= 24:
-            attention = "default"
-            not_cache_latents = False
-            sample_batch_size = 4
-            train_batch_size = 2
-            train_text_encoder = True
-            use_ema = True
-            use_8bit_adam = False
-        if 24 > gb >= 16:
-            attention = "xformers"
-            not_cache_latents = False
-            train_text_encoder = True
-            use_ema = True
-        if 16 > gb >= 10:
-            train_text_encoder = False
-            use_ema = False
-        if gb < 10:
-            use_cpu = True
-            use_8bit_adam = False
-            mixed_precision = 'no'
-
-        msg = f"Calculated training params based on {gb}GB of VRAM:"
-    except Exception as e:
-        msg = f"An exception occurred calculating performance values: {e}"
-        pass
-
-    has_xformers = False
-    try:
-        import xformers
-        import xformers.ops
-        has_xformers = True
-    except:
-        pass
-    if has_xformers:
-        use_8bit_adam = True
-        mixed_precision = target_precision
-
-    if use_cpu:
-        msg += "<br>Detected less than 10GB of VRAM, setting CPU training to true."
-    log_dict = {"Attention": attention, "Gradient Checkpointing": gradient_checkpointing, "Precision": mixed_precision,
-                "Cache Latents": not not_cache_latents, "Training Batch Size": train_batch_size,
-                "Class Generation Batch Size": sample_batch_size,
-                "Train Text Encoder": train_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "CPU": use_cpu}
-    for key in log_dict:
-        msg += f"<br>{key}: {log_dict[key]}"
-    return attention, gradient_checkpointing, mixed_precision, not_cache_latents, sample_batch_size, \
-           train_batch_size, train_text_encoder, use_8bit_adam, use_cpu, use_ema, msg
-
-
 def load_params(model_dir):
     data = from_file(model_dir)
     concepts = []
@@ -292,11 +301,12 @@ def load_params(model_dir):
                "db_lora_txt_learning_rate",
                "db_lora_txt_weight",
                "db_lora_weight",
+               "db_lr_cycles",
+               "db_lr_power",
                "db_lr_scheduler",
                "db_lr_warmup_steps",
                "db_max_token_length",
                "db_max_train_steps",
-               "db_min_learning_rate",
                "db_mixed_precision",
                "db_not_cache_latents",
                "db_num_train_epochs",
@@ -308,7 +318,6 @@ def load_params(model_dir):
                "db_save_ckpt_after",
                "db_save_ckpt_cancel",
                "db_save_ckpt_during",
-               "db_save_class_txt",
                "db_save_embedding_every",
                "db_save_lora_after",
                "db_save_lora_cancel",
@@ -325,7 +334,6 @@ def load_params(model_dir):
                "db_train_text_encoder",
                "db_use_8bit_adam",
                "db_use_concepts",
-               "db_use_cpu",
                "db_use_ema",
                "db_use_lora",
                "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps",
@@ -405,6 +413,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     lora_model_name: If using lora, this will be the model name of the saved weights. (For resuming further training)
     revision: The model revision after training.
     epoch: The model epoch after training.
+    images: Output images from training.
     status: Any relevant messages.
     """
     global mem_record
@@ -413,7 +422,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
         msg = "Create or select a model first."
         dirs = get_lora_models()
         lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
-        return lora_model_name, 0, 0, msg
+        return lora_model_name, 0, 0, [], msg
     config = from_file(model_dir)
 
     # Clear pretrained VAE Name if applicable
@@ -424,9 +433,6 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     if config.attention == "xformers":
         if config.mixed_precision == "no":
             msg = "Using xformers, please set mixed precision to 'fp16' or 'bf16' to continue."
-    if config.use_cpu:
-        if config.use_8bit_adam or config.mixed_precision != "no":
-            msg = "CPU Training detected, please disable 8Bit Adam and set mixed precision to 'no' to continue."
     if not len(config.concepts_list):
         msg = "Please configure some concepts."
     if not os.path.exists(config.pretrained_model_name_or_path):
@@ -441,14 +447,14 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
         print(msg)
         dirs = get_lora_models()
         lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
-        return lora_model_name, 0, 0, msg
+        return lora_model_name, 0, 0, [], msg
 
     # Clear memory and do "stuff" only after we've ensured all the things are right
     print(f"Custom model name is {custom_model_name}")
     print("Starting Dreambooth training...")
     unload_system_models()
     total_steps = config.revision
-
+    images = []
     try:
         if imagic_only:
             status.textinfo = "Initializing imagic training..."
@@ -459,9 +465,14 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
             status.textinfo = "Initializing dreambooth training..."
             print(status.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
-            config, mem_record, msg = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name,
-                                           lora_alpha=lora_alpha, lora_txt_alpha=lora_txt_alpha,
-                                           custom_model_name=custom_model_name, use_txt2img=use_txt2img)
+            result = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name,
+                          lora_alpha=lora_alpha, lora_txt_alpha=lora_txt_alpha,
+                          custom_model_name=custom_model_name, use_txt2img=use_txt2img)
+
+            config = result.config
+            mem_record = result.mem_record
+            images = result.samples
+            print(f"We have {len(images)} sample image(s).")
             if config.revision != total_steps:
                 config.save()
         total_steps = config.revision
@@ -482,7 +493,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     print(f"Returning result: {res}")
     dirs = get_lora_models()
     lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
-    return lora_model_name, total_steps, config.epoch, res
+    return lora_model_name, total_steps, config.epoch, images, res
 
 
 def ui_classifiers(model_name: str, lora_model: str, lora_weight: float, lora_txt_weight: float, use_txt2img: bool):
