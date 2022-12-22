@@ -115,6 +115,7 @@ class SuperDataset(Dataset):
         self.text_getter = FilenameTextGetter(shuffle_tags)
         self.lifetime_steps = lifetime_steps
         self.current_concept = 0
+        self.shuffle_tags = shuffle_tags
 
         total_images = 0
 
@@ -174,7 +175,7 @@ class SuperDataset(Dataset):
 
                 # Generate sample prompts for concept
                 samples = self.generate_sample_prompts(instance_data, concept)
-
+                print(f"Concept {concept_key} has {len(samples)} sample prompts.")
                 # One pretty wrapper for the whole concept
                 concept_data = ConceptData(concept_key, max_steps, instance_data, class_data, samples, concept)
                 self.concepts.append(concept_data)
@@ -193,8 +194,7 @@ class SuperDataset(Dataset):
             ]
         )
 
-    @staticmethod
-    def generate_sample_prompts(instance_data: [TrainingData], concept: Concept):
+    def generate_sample_prompts(self, instance_data: [TrainingData], concept: Concept):
         prompts = []
         # Try populating prompts from template file if specified
         if concept.save_sample_template != "":
@@ -217,6 +217,14 @@ class SuperDataset(Dataset):
                 for replace in to_replace:
                     if replace in prompt:
                         prompt = prompt.replace(replace, f"{concept.instance_token} {concept.class_token}")
+                if "," in prompt and self.shuffle_tags:
+                    prompt_tags = prompt.split(",")
+                    first_tag = prompt_tags.pop(0)
+                    prompt = f"{first_tag}"
+                    # Shuffle tags in sample prompt
+                    if len(prompt_tags) > 1:
+                        random.shuffle(prompt_tags)
+                        prompt = f"{prompt_tags}, {','.join(prompt_tags)}"
                 out_prompts.append(prompt)
             prompts = out_prompts
         return prompts
@@ -293,4 +301,5 @@ class SuperDataset(Dataset):
         for concept in self.concepts:
             s_data = SampleData(concept.get_sample_prompt(), concept.concept)
             prompts.append(s_data)
+        random.shuffle(prompts)
         return prompts

@@ -19,13 +19,14 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from transformers import CLIPTextModel, AutoTokenizer
 
-from extensions.sd_dreambooth_extension.dreambooth import dream_state
+from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, from_file
-from extensions.sd_dreambooth_extension.dreambooth.dream_state import status
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils import printm, cleanup, get_checkpoint_match, get_images
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import apply_lora_weights
 from modules import shared, devices, sd_models, images, sd_hijack, prompt_parser, lowvram
+
 from modules.processing import StableDiffusionProcessingTxt2Img, StableDiffusionProcessing, Processed, \
     get_fixed_seed, create_infotext, decode_first_stage
 from modules.sd_hijack import model_hijack
@@ -47,8 +48,8 @@ class FilenameTextGetter:
     re_numbers_at_start = re.compile(r"^[-\d]+\s*")
 
     def __init__(self, shuffle_tags=False):
-        self.re_word = re.compile(shared.opts.dataset_filename_word_regex) if len(
-            shared.opts.dataset_filename_word_regex) > 0 else None
+        self.re_word = re.compile(db_shared.dataset_filename_word_regex) if len(
+            db_shared.dataset_filename_word_regex) > 0 else None
         self.shuffle_tags = shuffle_tags
 
     def read_text(self, img_path):
@@ -63,7 +64,7 @@ class FilenameTextGetter:
             filename_text = re.sub(self.re_numbers_at_start, '', filename_text)
             if self.re_word:
                 tokens = self.re_word.findall(filename_text)
-                filename_text = (shared.opts.dataset_filename_join_string or "").join(tokens)
+                filename_text = (db_shared.dataset_filename_join_string or "").join(tokens)
 
         filename_text = filename_text.replace("\\", "")  # work with \(franchies\)
         return filename_text
@@ -99,10 +100,14 @@ class FilenameTextGetter:
                         # Description only, insert both at the front?
                         filename_text = f"{instance_token} {class_token}, {filename_text}"
 
-        tags = filename_text.split(',')
-        if self.shuffle_tags:
+        # Append the filename text to the template first...THEN shuffle it all.
+        output = text_template.replace("[filewords]", filename_text)
+        tags = output.split(',')
+        if self.shuffle_tags and len(tags) > 2:
+            first_tag = tags.pop(0)
             random.shuffle(tags)
-        output = text_template.replace("[filewords]", ','.join(tags))
+            tags.insert(0, first_tag)
+        output = ','.join(tags)
         return output
 
 
@@ -122,7 +127,7 @@ class PromptDataset(Dataset):
             if concept.num_class_images > 0:
                 self.with_prior = True
                 class_images_dir = concept["class_data_dir"]
-                if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:
+                if class_images_dir == "" or class_images_dir is None or class_images_dir == db_shared.script_path:
                     class_images_dir = os.path.join(model_dir, f"classifiers_{c_idx}")
                     print(f"Class image dir is not set, defaulting to {class_images_dir}")
                 class_images_dir = Path(class_images_dir)
@@ -192,7 +197,7 @@ class EMAModel:
             else:
                 s_param.copy_(param)
 
-        devices.torch_gc()
+        db_shared.torch_gc()
 
     def copy_to(self, parameters: Iterable[torch.nn.Parameter]) -> None:
         """
@@ -302,13 +307,10 @@ class ImageBuilder:
             new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
             if os.path.exists(new_hotness):
                 accelerator.print(f"Resuming from checkpoint {new_hotness}")
-                try:
-                    no_safe = shared.cmd_opts.disable_safe_unpickle
-                except:
-                    no_safe = False
-                shared.cmd_opts.disable_safe_unpickle = True
+                no_safe = db_shared.stop_safe_unpickle()
                 accelerator.load_state(new_hotness)
-                shared.cmd_opts.disable_safe_unpickle = no_safe
+                if no_safe:
+                    db_shared.start_safe_unpickle()
             if config.use_lora and lora_model is not None and lora_model != "":
                 apply_lora_weights(lora_model, self.image_pipe.unet, self.image_pipe.text_encoder, lora_weight,
                                    lora_txt_weight,
@@ -330,9 +332,9 @@ class ImageBuilder:
 
     def generate_images(self, prompt_data: list[PromptData]) -> [Image]:
         def update_latent(step: int, timestep: int, latents: torch.FloatTensor):
-            dream_state.status.sampling_step = step
+            status.sampling_step = step
             decoded = self.image_pipe.decode_latents(latents)
-            dream_state.status.current_latent = self.image_pipe.numpy_to_pil(decoded)
+            status.current_latent = self.image_pipe.numpy_to_pil(decoded)
 
         positive_prompts = []
         negative_prompts = []
@@ -364,7 +366,7 @@ class ImageBuilder:
             p.close()
             output = processed
         else:
-            preview_every = shared.opts.show_progress_every_n_steps
+            preview_every = db_shared.show_progress_every_n_steps
 
             with self.accelerator.autocast(), torch.inference_mode():
                 if seed is None or seed == '' or seed == -1:
@@ -447,7 +449,7 @@ def process_txt2img(p: StableDiffusionProcessing) -> [Image]:
     def infotext(iteration=0, position_in_batch=0):
         return create_infotext(p, p.all_prompts, p.all_seeds, p.all_subseeds, comments, iteration, position_in_batch)
 
-    with open(os.path.join(shared.script_path, "params.txt"), "w", encoding="utf8") as file:
+    with open(os.path.join(db_shared.script_path, "params.txt"), "w", encoding="utf8") as file:
         processed = Processed(p, [], p.seed, "")
         file.write(processed.infotext(p, 0))
 
@@ -498,7 +500,7 @@ def process_txt2img(p: StableDiffusionProcessing) -> [Image]:
 
             del samples_ddim
 
-            if shared.cmd_opts.lowvram or shared.cmd_opts.medvram:
+            if db_shared.lowvram or db_shared.medvram:
                 lowvram.send_everything_to_cpu()
 
             devices.torch_gc()
@@ -529,7 +531,7 @@ def process_txt2img(p: StableDiffusionProcessing) -> [Image]:
 
 def generate_prompts(model_dir):
     print("Generating prompts.")
-    dream_state.status.job_count = 4
+    status.job_count = 4
     from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
     if model_dir is None or model_dir == "":
         return "Please select a model."
@@ -539,8 +541,8 @@ def generate_prompts(model_dir):
         revision=config.revision,
         use_fast=False,
     )
-    dream_state.status.job_no = 1
-    dream_state.status.textinfo = "Building dataset from existing files..."
+    status.job_no = 1
+    status.textinfo = "Building dataset from existing files..."
     train_dataset = SuperDataset(
         concepts_list=config.concepts_list,
         tokenizer=tokenizer,
@@ -554,8 +556,8 @@ def generate_prompts(model_dir):
     )
 
     output = {"instance_prompts": [], "existing_class_prompts": [], "new_class_prompts": [], "sample_prompts": []}
-    dream_state.status.job_no = 2
-    dream_state.status.textinfo = "Appending instance and class prompts from existing files..."
+    status.job_no = 2
+    status.textinfo = "Appending instance and class prompts from existing files..."
     for i in range(train_dataset.__len__()):
         item = train_dataset.__getitem__(i)
         output["instance_prompts"].append(item["instance_prompt"])
@@ -565,12 +567,12 @@ def generate_prompts(model_dir):
     for prompt in sample_prompts:
         output["sample_prompts"].append(prompt.prompt)
 
-    dream_state.status.job_no = 3
-    dream_state.status.textinfo = "Building dataset for 'new' class images..."
+    status.job_no = 3
+    status.textinfo = "Building dataset for 'new' class images..."
     for concept in config.concepts_list:
         c_idx = 0
         class_images_dir = Path(concept["class_data_dir"])
-        if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:
+        if class_images_dir == "" or class_images_dir is None or class_images_dir == db_shared.script_path:
             class_images_dir = os.path.join(config.model_dir, f"classifiers_{c_idx}")
             print(f"Class image dir is not set, defaulting to {class_images_dir}")
         class_images_dir.mkdir(parents=True, exist_ok=True)
@@ -581,8 +583,8 @@ def generate_prompts(model_dir):
                 prompt = sample_dataset.__getitem__(i)
                 output["new_class_prompts"].append(prompt.prompt)
         c_idx += 1
-    dream_state.status.job_no = 4
-    dream_state.status.textinfo = "Prompt generation complete."
+    status.job_no = 4
+    status.textinfo = "Prompt generation complete."
     return json.dumps(output)
 
 
@@ -616,9 +618,9 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
         print("Nothing to generate.")
         return 0, prompt_dataset.with_prior, []
 
-    dream_state.status.textinfo = f"Generating {set_len} class images for training..."
-    dream_state.status.job_count = set_len
-    dream_state.status.job_no = 0
+    status.textinfo = f"Generating {set_len} class images for training..."
+    status.job_count = set_len
+    status.job_no = 0
     print(f"Creating image builder {args.sample_batch_size}...")
     builder = ImageBuilder(args, use_txt2img=use_txt2img, lora_model=lora_model, lora_weight=lora_weight,
                            lora_txt_weight=lora_text_weight, batch_size=args.sample_batch_size, accelerator=accelerator)
@@ -626,7 +628,7 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
     pbar = tqdm(total=set_len - 1)
 
     for i in range(set_len):
-        if dream_state.status.interrupted:
+        if status.interrupted:
             break
         prompts = []
         for b in range(args.sample_batch_size):
@@ -646,19 +648,20 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
                 txt_filename = image_filename.replace(".png", ".txt")
                 with open(txt_filename, "w", encoding="utf8") as file:
                     file.write(pd.prompt)
-                dream_state.status.job_no += 1
-                dream_state.status.textinfo = f"Class image {i}/{set_len}, " \
-                                              f"Prompt: '{pd.prompt}'"
+                status.job_no += 1
+                status.textinfo = f"Class image {generated}/{set_len}, Prompt: '{pd.prompt}'"
             except Exception as e:
                 print(f"Exception generating images: {e}")
                 traceback.print_exc()
             i_idx += 1
-            dream_state.status.current_image = image
+            status.current_image = image
             if pbar is not None:
                 pbar.update()
             generated += 1
+            if generated >= set_len:
+                break
 
-        dream_state.status.current_image = images.image_grid(new_images)
+        status.current_image = images.image_grid(new_images)
     builder.unload()
     del prompt_dataset
     cleanup()
@@ -672,7 +675,7 @@ def encode_hidden_state(text_encoder: CLIPTextModel, input_ids, pad_tokens, b_si
     if pad_tokens:
         input_ids = input_ids.reshape((-1, tokenizer_max_length))  # batch_size*3, 77
 
-    clip_skip = shared.opts.CLIP_stop_at_last_layers
+    clip_skip = db_shared.CLIP_stop_at_last_layers
     if clip_skip <= 1:
         encoder_hidden_states = text_encoder(input_ids)[0]
     else:

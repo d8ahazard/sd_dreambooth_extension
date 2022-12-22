@@ -13,7 +13,7 @@ from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
-from extensions.sd_dreambooth_extension.dreambooth import dream_state
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.scripts.dreambooth import printm
 from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import AverageMeter
@@ -285,7 +285,7 @@ def train_imagic(args: DreamboothConfig, mem_record):
         for step in pbar:
             if dream_state.status.interrupted:
                 break
-            dream_state.status.job_no += 1
+            status.job_no += 1
             with accelerator.accumulate(unet):
                 noise = torch.randn_like(init_latents)
                 # Not sure if this matters, but technically, add_noise should take a FloatTensor
@@ -316,17 +316,17 @@ def train_imagic(args: DreamboothConfig, mem_record):
 
         accelerator.wait_for_everyone()
 
-    dream_state.status.job_count = args.max_train_steps * 2
+    status.job_count = args.max_train_steps * 2
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Optimizing embedding")
-    dream_state.status.textinfo = "Optimizing Embedding"
-    printm(dream_state.status.textinfo)
+    status.textinfo = "Optimizing Embedding"
+    printm(status.textinfo)
     train_loop(progress_bar, optimizer)
 
     optimized_embeddings.requires_grad_(False)
     if accelerator.is_main_process:
-        dream_state.status.textinfo = "Saving embedding(s)."
-        printm(dream_state.status.textinfo)
+        status.textinfo = "Saving embedding(s)."
+        printm(status.textinfo)
         emb_dir = shared.cmd_opts.embeddings_dir
         torch.save(target_embeddings.cpu(), os.path.join(emb_dir, f"{args.model_name}.pt"))
         torch.save(optimized_embeddings.cpu(), os.path.join(emb_dir, f"{args.model_name}_optimized.pt"))
@@ -339,19 +339,20 @@ def train_imagic(args: DreamboothConfig, mem_record):
         # weight_decay=args.adam_weight_decay,
         eps=args.adam_epsilon,
     )
-    optimizer = accelerator.prepare(optimizer)
+    # Accelerator.prepare takes a list?
+    optimizer = accelerator.prepare([optimizer])
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Fine Tuning")
-    dream_state.status.textinfo = "Fine Tuning"
-    printm(dream_state.status.textinfo)
+    status.textinfo = "Fine Tuning"
+    printm(status.textinfo)
     unet.train()
 
     train_loop(progress_bar, optimizer)
 
     # Create the pipeline using the trained modules and save it.
     if accelerator.is_main_process:
-        dream_state.status.textinfo = "Saving pretrained model."
-        printm(dream_state.status.textinfo)
+        status.textinfo = "Saving pretrained model."
+        printm(status.textinfo)
         pipeline = StableDiffusionPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             unet=accelerator.unwrap_model(unet),

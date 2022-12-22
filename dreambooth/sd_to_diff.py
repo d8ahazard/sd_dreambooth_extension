@@ -20,9 +20,9 @@ import shutil
 import gradio as gr
 import torch
 
-import modules.sd_models
-from extensions.sd_dreambooth_extension.dreambooth import dream_state
+from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, sanitize_name
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import stop_safe_unpickle
 from extensions.sd_dreambooth_extension.scripts.dreambooth import reload_system_models
 from extensions.sd_dreambooth_extension.dreambooth.utils import printi, printm, get_db_models, get_checkpoint_match
 from modules import shared
@@ -742,7 +742,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         status
     """
     db_config = None
-    status = ""
+    result_status = ""
     has_ema = False
     v2 = False
     is_512 = True
@@ -755,18 +755,15 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
 
     # Needed for V2 models so we can create the right text encoder.
 
-    reset_safe = False
-    if not shared.cmd_opts.disable_safe_unpickle:
-        reset_safe = True
-        shared.cmd_opts.disable_safe_unpickle = True
-    dream_state.status.job_count = 11
+    reset_safe = stop_safe_unpickle()
+    db_shared.status.job_count = 11
     try:
         new_model_name = sanitize_name(new_model_name)
-        dream_state.status.job_no = 0
+        db_shared.status.job_no = 0
         checkpoint = None
         map_location = shared.device
         try:
-            if shared.cmd_opts.ckptfix or shared.cmd_opts.medvram or shared.cmd_opts.lowvram:
+            if db_shared.ckptfix or db_shared.medvram or db_shared.lowvram:
                 printm(f"Using CPU for extraction.")
                 map_location = torch.device('cpu')
         except:
@@ -780,12 +777,12 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
 
             if checkpoint_info is None:
                 print("Unable to find checkpoint file!")
-                dream_state.status.job_no = 8
+                db_shared.status.job_no = 8
                 return "", "", 0, "", "", "", "", 512, "", "Unable to find base checkpoint."
 
             if not os.path.exists(checkpoint_info.filename):
                 print("Unable to find checkpoint file!")
-                dream_state.status.job_no = 8
+                db_shared.status.job_no = 8
                 return "", "", 0, "", "", "", "", 512, "", "Unable to find base checkpoint."
 
             ckpt_path = checkpoint_info[0]
@@ -893,7 +890,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             pipe = DiffusionPipeline.from_pretrained(new_model_url, use_auth_token=new_model_token,
                                                      scheduler=scheduler, device_map=map_location)
             printi("Model loaded.")
-            dream_state.status.job_no = 7
+            db_shared.status.job_no = 7
 
         else:
             printi("Converting unet...")
@@ -965,14 +962,14 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                                               scheduler=scheduler)
     except Exception as e:
         pipe = None
-        status = f"Exception while extracting model: {e}"
+        result_status = f"Exception while extracting model: {e}"
 
     if pipe is None or db_config is None:
         print("Pipeline or config is not set, unable to continue.")
     else:
         printi("Saving diffusers model...")
         pipe.save_pretrained(db_config.pretrained_model_name_or_path)
-        status = f"Checkpoint successfully extracted to {db_config.pretrained_model_name_or_path}"
+        result_status = f"Checkpoint successfully extracted to {db_config.pretrained_model_name_or_path}"
         model_dir = db_config.model_dir
         revision = db_config.revision
         scheduler = db_config.scheduler
@@ -981,16 +978,16 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         for req_dir in required_dirs:
             full_path = os.path.join(db_config.pretrained_model_name_or_path, req_dir)
             if not os.path.exists(full_path):
-                status = f"Missing model directory, removing model: {full_path}"
+                result_status = f"Missing model directory, removing model: {full_path}"
                 shutil.rmtree(db_config.model_dir, ignore_errors=False, onerror=None)
                 break
 
     if reset_safe:
-        shared.cmd_opts.disable_safe_unpickle = False
+        db_shared.start_safe_unpickle()
 
     reload_system_models()
-    printm(status, True)
-    printi(status)
+    printm(result_status, True)
+    printi(result_status)
     dirs = get_db_models()
 
     return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), \
@@ -1001,4 +998,4 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
            "True" if has_ema else "False", \
            "True" if v2 else "False", \
            db_config.resolution, \
-           status
+           result_status

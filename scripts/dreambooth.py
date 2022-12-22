@@ -9,7 +9,7 @@ import torch
 import torch.utils.checkpoint
 from diffusers.utils import logging as dl
 
-from extensions.sd_dreambooth_extension.dreambooth import dream_state
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, PromptData
@@ -57,8 +57,8 @@ def training_wizard(model_dir, is_person=False):
     config = from_file(model_dir)
 
     if config is None:
-        status = "Unable to load config."
-        return status, 0, 100, -1, 0, -1, 0, -1
+        w_status = "Unable to load config."
+        return w_status, 0, 100, -1, 0, -1, 0, -1
     else:
         # Build concepts list using current settings
         concepts = config.concepts_list
@@ -95,22 +95,22 @@ def training_wizard(model_dir, is_person=False):
                 counts_list.append(c_dict)
 
         c_list = []
-        status = f"Wizard results:"
-        status += f"<br>Num Epochs: {step_mult}"
-        status += f"<br>Max Steps: {0}"
+        w_status = f"Wizard results:"
+        w_status += f"<br>Num Epochs: {step_mult}"
+        w_status += f"<br>Max Steps: {0}"
 
         for x in range(3):
             if x < len(counts_list):
                 c_dict = counts_list[x]
                 c_list.append(int(c_dict["classifiers"]))
-                status += f"<br>Concept {x} Class Images: {c_dict['classifiers']}"
+                w_status += f"<br>Concept {x} Class Images: {c_dict['classifiers']}"
 
             else:
                 c_list.append(0)
 
-        print(status)
+        print(w_status)
 
-    return 0, int(step_mult), -1, c_list[0], -1, c_list[1], -1, c_list[2], status
+    return 0, int(step_mult), -1, c_list[0], -1, c_list[1], -1, c_list[2], w_status
 
 
 def ui_samples(model_dir: str,
@@ -125,7 +125,7 @@ def ui_samples(model_dir: str,
                steps: int = 60,
                scale: float = 7.5
                ):
-    dream_state.status.job_count = num_samples + 1
+    status.job_count = num_samples + 1
     if model_dir is None or model_dir == "":
         return "Please select a model."
     config = from_file(model_dir)
@@ -133,8 +133,8 @@ def ui_samples(model_dir: str,
     images = []
     try:
         print(f"Loading model from {config.model_dir}.")
-        dream_state.status.job_no = 1
-        dream_state.status.textinfo = "Loading diffusion model..."
+        status.job_no = 1
+        status.textinfo = "Loading diffusion model..."
         img_builder = ImageBuilder(
             config,
             False,
@@ -146,9 +146,9 @@ def ui_samples(model_dir: str,
             msg = "Please provide a sample prompt."
             print(msg)
             return None, msg
-        dream_state.status.textinfo = f"Generating sample image for model {config.model_name}..."
-        dream_state.status.sampling_steps = 0
-        dream_state.status.current_image_sampling_step = 0
+        status.textinfo = f"Generating sample image for model {config.model_name}..."
+        status.sampling_steps = 0
+        status.current_image_sampling_step = 0
         pd = PromptData()
         pd.steps = steps
         pd.prompt = save_sample_prompt
@@ -296,6 +296,7 @@ def load_params(model_dir):
                "db_lr_warmup_steps",
                "db_max_token_length",
                "db_max_train_steps",
+               "db_min_learning_rate",
                "db_mixed_precision",
                "db_not_cache_latents",
                "db_num_train_epochs",
@@ -403,6 +404,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     @return:
     lora_model_name: If using lora, this will be the model name of the saved weights. (For resuming further training)
     revision: The model revision after training.
+    epoch: The model epoch after training.
     status: Any relevant messages.
     """
     global mem_record
@@ -411,7 +413,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
         msg = "Create or select a model first."
         dirs = get_lora_models()
         lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
-        return lora_model_name, 0, msg
+        return lora_model_name, 0, 0, msg
     config = from_file(model_dir)
 
     # Clear pretrained VAE Name if applicable
@@ -439,7 +441,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
         print(msg)
         dirs = get_lora_models()
         lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
-        return lora_model_name, 0, msg
+        return lora_model_name, 0, 0, msg
 
     # Clear memory and do "stuff" only after we've ensured all the things are right
     print(f"Custom model name is {custom_model_name}")
@@ -449,13 +451,13 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
 
     try:
         if imagic_only:
-            dream_state.status.textinfo = "Initializing imagic training..."
-            print(dream_state.status.textinfo)
+            status.textinfo = "Initializing imagic training..."
+            print(status.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_imagic import train_imagic
             mem_record = train_imagic(config, mem_record)
         else:
-            dream_state.status.textinfo = "Initializing dreambooth training..."
-            print(dream_state.status.textinfo)
+            status.textinfo = "Initializing dreambooth training..."
+            print(status.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
             config, mem_record, msg = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name,
                                            lora_alpha=lora_alpha, lora_txt_alpha=lora_txt_alpha,
@@ -463,7 +465,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
             if config.revision != total_steps:
                 config.save()
         total_steps = config.revision
-        res = f"Training {'interrupted' if dream_state.status.interrupted else 'finished'}. " \
+        res = f"Training {'interrupted' if status.interrupted else 'finished'}. " \
               f"Total lifetime steps: {total_steps} \n"
     except Exception as e:
         res = f"Exception training model: {e}"
@@ -480,7 +482,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     print(f"Returning result: {res}")
     dirs = get_lora_models()
     lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
-    return lora_model_name, total_steps, res
+    return lora_model_name, total_steps, config.epoch, res
 
 
 def ui_classifiers(model_name: str, lora_model: str, lora_weight: float, lora_txt_weight: float, use_txt2img: bool):
@@ -521,7 +523,7 @@ def ui_classifiers(model_name: str, lora_model: str, lora_weight: float, lora_tx
         msg = "Invalid resolution."
 
     if msg:
-        dream_state.status.textinfo = msg
+        status.textinfo = msg
         print(msg)
         return msg
 

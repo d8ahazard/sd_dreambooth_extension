@@ -2,8 +2,8 @@ import time
 
 import gradio as gr
 
-from extensions.sd_dreambooth_extension.dreambooth import dream_state
 from extensions.sd_dreambooth_extension.dreambooth.db_config import save_config
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generate_prompts
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
@@ -34,7 +34,7 @@ def calc_time_left(progress, threshold, label, force_display):
     if progress == 0:
         return ""
     else:
-        time_since_start = time.time() - dream_state.status.time_start
+        time_since_start = time.time() - status.time_start
         eta = (time_since_start / progress)
         eta_relative = eta - time_since_start
         if (eta_relative > threshold and progress > 0.02) or force_display:
@@ -58,36 +58,36 @@ def check_progress_call():
     textinfo_result: Primary status
     textinfo2_result: Secondary status
     """
-    if dream_state.status.job_count == 0:
+    if status.job_count == 0:
         return "", gr_show(False), gr_show(False), gr_show(True), gr_show(False)
     progress = 0
 
-    if dream_state.status.job_count > 0:
-        progress += dream_state.status.job_no / dream_state.status.job_count
+    if status.job_count > 0:
+        progress += status.job_no / status.job_count
 
-    time_left = calc_time_left(progress, 1, " ETA: ", dream_state.status.time_left_force_display)
+    time_left = calc_time_left(progress, 1, " ETA: ", status.time_left_force_display)
     if time_left != "":
-        dream_state.status.time_left_force_display = True
+        status.time_left_force_display = True
 
     progress = min(progress, 1)
 
     progressbar = f"""<div class='progressDiv'><div class='progress' style="overflow:visible;width:{progress * 100}%;white-space:nowrap;">{"&nbsp;" * 2 + str(int(progress * 100)) + "%" + time_left if progress > 0.01 else ""}</div></div>"""
-    dream_state.status.set_current_image()
+    status.set_current_image()
     show_preview = gr_show(False)
-    image = dream_state.status.current_image
+    image = status.current_image
 
     if image is None:
         image = gr.update(value=None)
     else:
         show_preview = gr_show(True)
 
-    if dream_state.status.textinfo is not None:
-        textinfo_result = dream_state.status.textinfo
+    if status.textinfo is not None:
+        textinfo_result = status.textinfo
     else:
         textinfo_result = ""
 
-    if dream_state.status.textinfo2 is not None:
-        textinfo2_result = dream_state.status.textinfo2
+    if status.textinfo2 is not None:
+        textinfo2_result = status.textinfo2
     else:
         textinfo2_result = ""
     pspan = f"<span id='db_progress_span' style='display: none'>{time.time()}</span><p>{progressbar}</p>"
@@ -95,13 +95,13 @@ def check_progress_call():
 
 
 def check_progress_call_initial():
-    dream_state.status.job_count = -1
-    dream_state.status.current_latent = None
-    dream_state.status.current_image = None
-    dream_state.status.textinfo = None
-    dream_state.status.textinfo2 = None
-    dream_state.status.time_start = time.time()
-    dream_state.status.time_left_force_display = False
+    status.job_count = -1
+    status.current_latent = None
+    status.current_image = None
+    status.textinfo = None
+    status.textinfo2 = None
+    status.time_start = time.time()
+    status.time_left_force_display = False
 
     return check_progress_call()
 
@@ -215,6 +215,7 @@ def on_ui_tabs():
                         with gr.Column():
                             gr.HTML(value="Learning Rate")
                             db_learning_rate = gr.Number(label='Learning Rate', value=2e-6)
+                            db_min_learning_rate = gr.Number(label='Minimum Learning Rate', value=1e-6, visible=False)
                             with gr.Row(visible=False) as lora_lr_row:
                                 db_lora_learning_rate = gr.Number(label='Lora unet Learning Rate', value=2e-4)
                                 db_lora_txt_learning_rate = gr.Number(label='Lora Text Encoder Learning Rate',
@@ -424,6 +425,7 @@ def on_ui_tabs():
             db_lr_warmup_steps,
             db_max_token_length,
             db_max_train_steps,
+            db_min_learning_rate,
             db_mixed_precision,
             db_model_path,
             db_not_cache_latents,
@@ -551,6 +553,7 @@ def on_ui_tabs():
                 db_lr_warmup_steps,
                 db_max_token_length,
                 db_max_train_steps,
+                db_min_learning_rate,
                 db_mixed_precision,
                 db_not_cache_latents,
                 db_num_train_epochs,
@@ -652,10 +655,22 @@ def on_ui_tabs():
         def disable_lora(x):
             db_use_lora.interactive = not x
 
+        def toggle_lr_min(sched):
+            if sched == "polynomial":
+                return gr.update(visible=True)
+            else:
+                return gr.update(visible=False)
+
         db_use_lora.change(
             fn=disable_ema,
             inputs=[db_use_lora],
             outputs=[db_use_ema, lora_save_col, lora_lr_row, lora_model_row],
+        )
+
+        db_lr_scheduler.change(
+            fn=toggle_lr_min,
+            inputs=[db_lr_scheduler],
+            outputs=[db_min_learning_rate]
         )
 
         db_use_ema.change(
@@ -803,6 +818,7 @@ def on_ui_tabs():
             outputs=[
                 db_lora_model_name,
                 db_revision,
+                db_epochs,
                 db_status
             ]
         )
@@ -815,7 +831,7 @@ def on_ui_tabs():
         )
 
         db_cancel.click(
-            fn=lambda: dream_state.status.interrupt(),
+            fn=lambda: status.interrupt(),
             inputs=[],
             outputs=[],
         )

@@ -13,7 +13,7 @@ import torch
 from PIL import features
 from huggingface_hub import HfFolder, whoami
 
-from extensions.sd_dreambooth_extension.dreambooth import dream_state
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from modules import shared, paths, sd_models
 
 try:
@@ -29,9 +29,9 @@ except:
 
 def printi(msg, params=None, log=True):
     if log:
-        dream_state.status.textinfo = msg
-        if dream_state.status.job_count > dream_state.status.job_no:
-            dream_state.status.job_no += 1
+        status.textinfo = msg
+        if status.job_count > status.job_no:
+            status.job_no += 1
         if params:
             print(msg, params)
         else:
@@ -185,9 +185,9 @@ def reload_system_models():
 def wrap_gpu_call(func, extra_outputs=None):
     def f(*args, extra_outputs_array=extra_outputs, **kwargs):
         try:
-            dream_state.status.begin()
+            status.begin()
             res = func(*args, **kwargs)
-            dream_state.status.end()
+            status.end()
 
         except Exception as e:
             # When printing out our debug argument list, do not print out more than a MB of text
@@ -201,17 +201,17 @@ def wrap_gpu_call(func, extra_outputs=None):
 
             print(traceback.format_exc(), file=sys.stderr)
 
-            dream_state.status.job = ""
-            dream_state.status.job_count = 0
+            status.job = ""
+            status.job_count = 0
 
             if extra_outputs_array is None:
                 extra_outputs_array = [None, '']
 
             res = extra_outputs_array + [f"<div class='error'>{html.escape(type(e).__name__ + ': ' + str(e))}</div>"]
 
-        dream_state.status.skipped = False
-        dream_state.status.interrupted = False
-        dream_state.status.job_count = 0
+        status.skipped = False
+        status.interrupted = False
+        status.job_count = 0
 
         return res
 

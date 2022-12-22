@@ -17,10 +17,10 @@ from pydantic.dataclasses import Union
 from pydantic.types import List
 
 import modules.script_callbacks as script_callbacks
-from extensions.sd_dreambooth_extension.dreambooth import dream_state
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.dream_state import DreamState
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import DreamState
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
@@ -288,7 +288,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        return JSONResponse(content={"current_state": f"{json.dumps(dream_state.status.dict())}"})
+        return JSONResponse(content={"current_state": f"{json.dumps(status.status.dict())}"})
 
     @app.get("/dreambooth/model_config")
     async def get_model_config(
@@ -498,6 +498,13 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
     ):
         """
         Upload images for training.
+
+        Request body should be a JSON Object. Primary key is 'imageList'.
+
+        'imageList' is a list of objects. Each object should have three values:
+        'data' - A base64-encoded string containing the binary data of the image.
+        'name' - The filename to store the image under.
+        'txt' - The caption for the image. Will be stored in a text file beside the image.
         """
         key_check = check_api_key(api_key)
         if key_check is not None:

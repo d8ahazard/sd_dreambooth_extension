@@ -3,7 +3,7 @@ import os
 import traceback
 
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
-from modules import shared
+from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared
 
 
 def sanitize_name(name):
@@ -46,6 +46,7 @@ class DreamboothConfig:
                  lr_warmup_steps: int = 0,
                  max_token_length: int = 75,
                  max_train_steps: int = 1000,
+                 min_learning_rate: float = .000001,
                  mixed_precision: str = "fp16",
                  model_path: str = "",
                  not_cache_latents=False,
@@ -145,7 +146,7 @@ class DreamboothConfig:
             epoch = 0
         print(f"Extra args: {model_path} and {kwargs}")
         model_name = "".join(x for x in model_name if (x.isalnum() or x in "._- "))
-        models_path = shared.cmd_opts.dreambooth_models_path
+        models_path = shared.dreambooth_models_path
         if models_path == "" or models_path is None:
             models_path = os.path.join(shared.models_path, "dreambooth")
         model_dir = os.path.join(models_path, model_name)
@@ -174,6 +175,7 @@ class DreamboothConfig:
         self.lora_weight = lora_weight
         self.lr_scheduler = lr_scheduler
         self.lr_warmup_steps = lr_warmup_steps
+        self.min_learning_rate = min_learning_rate
         self.max_token_length = max_token_length
         self.max_train_steps = max_train_steps
         self.mixed_precision = mixed_precision
@@ -291,7 +293,7 @@ class DreamboothConfig:
         Save the config file
         """
         self.lifetime_revision = self.initial_revision + self.revision
-        models_path = shared.cmd_opts.dreambooth_models_path
+        models_path = shared.dreambooth_models_path
         if models_path == "" or models_path is None:
             models_path = os.path.join(shared.models_path, "dreambooth")
 
@@ -304,7 +306,7 @@ def save_json(model_name: str, json_cfg: str):
     """
     Save the config file
     """
-    models_path = shared.cmd_opts.dreambooth_models_path
+    models_path = shared.dreambooth_models_path
     if models_path == "" or models_path is None:
         models_path = os.path.join(shared.models_path, "dreambooth")
     if not os.path.exists(os.path.join(models_path, model_name)):
@@ -342,7 +344,7 @@ def from_file(model_name):
     if isinstance(model_name, list):
         model_name = model_name[0]
     model_name = sanitize_name(model_name)
-    models_path = shared.cmd_opts.dreambooth_models_path
+    models_path = shared.dreambooth_models_path
     if models_path == "" or models_path is None:
         models_path = os.path.join(shared.models_path, "dreambooth")
     working_dir = os.path.join(models_path, model_name, "working")

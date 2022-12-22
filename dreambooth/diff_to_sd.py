@@ -11,12 +11,12 @@ import traceback
 import torch
 from diffusers import DiffusionPipeline
 
-from extensions.sd_dreambooth_extension.dreambooth import dream_state
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.utils import printi, unload_system_models, \
     reload_system_models
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
-from modules import shared, paths
+from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -275,9 +275,9 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     @return: status: What happened, path: Checkpoint path
     """
     unload_system_models()
-    dream_state.status.textinfo = "Compiling checkpoint."
-    dream_state.status.job_no = 0
-    dream_state.status.job_count = 7
+    status.textinfo = "Compiling checkpoint."
+    status.job_no = 0
+    status.job_count = 7
 
     save_model_name = model_name if custom_model_name == "" else custom_model_name
     if custom_model_name == "":
@@ -290,7 +290,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
         print(msg)
         return msg
 
-    ckpt_dir = shared.cmd_opts.ckpt_dir
+    ckpt_dir = shared.ckpt_dir
     models_path = os.path.join(shared.models_path, "Stable-diffusion")
     if ckpt_dir is not None:
         models_path = ckpt_dir
@@ -329,10 +329,10 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
             os.makedirs(lora_diffusers, exist_ok=True)
             if not os.path.exists(lora_path):
                 try:
-                    cmd_lora_models_path = shared.cmd_opts.lora_models_path
+                    cmd_lora_models_path = shared.lora_models_path
                 except:
                     cmd_lora_models_path = None
-                model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else paths.models_path
+                model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else shared.models_path
                 lora_path = os.path.join(model_dir, "lora", lora_path)
             printi(f"Loading lora from {lora_path}", log=log)
             if os.path.exists(lora_path):

@@ -14,16 +14,17 @@ import torch.nn.functional as f
 import torch.utils.checkpoint
 from accelerate import Accelerator
 from diffusers import AutoencoderKL, DDIMScheduler, DiffusionPipeline, UNet2DConditionModel, DDPMScheduler
-from diffusers.optimization import get_scheduler
+from diffusers.optimization import get_scheduler, get_polynomial_decay_schedule_with_warmup
 from diffusers.utils import logging as dl
 from huggingface_hub import HfFolder, whoami
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, PretrainedConfig, CLIPTextModel
 
-from extensions.sd_dreambooth_extension.dreambooth import xattention, dream_state
+from extensions.sd_dreambooth_extension.dreambooth import xattention
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import encode_hidden_state, \
     EMAModel, generate_classifiers
@@ -188,7 +189,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
               "Please set gradient_accumulation_steps to 1. This feature will be supported in the future. Text " \
               "encoder training will be disabled."
         print(msg)
-        dream_state.status.textinfo = msg
+        status.textinfo = msg
         args.train_text_encoder = False
 
     count, with_prior, _ = generate_classifiers(args, lora_model, lora_weight=lora_alpha,
@@ -281,8 +282,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     if args.use_lora:
 
-        args.learning_rate = args.lora_learning_rate
-
         params_to_optimize = ([
                                   {"params": itertools.chain(*unet_lora_params), "lr": args.lora_learning_rate},
                                   {"params": itertools.chain(*text_encoder_lora_params),
@@ -353,7 +352,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     if train_dataset.__len__ == 0:
         msg = "Please provide a directory with actual images in it."
         print(msg)
-        dream_state.status.textinfo = msg
+        status.textinfo = msg
         cleanup_memory()
         return args, mem_record, msg
 
@@ -453,12 +452,22 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     if not args.not_cache_latents:
         train_dataset, train_dataloader = cache_latents(enc_vae=vae, orig_dataset=gen_dataset)
 
-    lr_scheduler = get_scheduler(
-        args.lr_scheduler,
-        optimizer=optimizer,
-        num_warmup_steps=args.lr_warmup_steps * args.gradient_accumulation_steps,
-        num_training_steps=max_train_steps * args.gradient_accumulation_steps,
-    )
+    if args.lr_scheduler == "polynomial":
+        lr_scheduler = get_polynomial_decay_schedule_with_warmup(
+            optimizer=optimizer,
+            num_warmup_steps=args.lr_warmup_steps * args.gradient_accumulation_steps,
+            num_training_steps=max_train_steps * args.gradient_accumulation_steps,
+            lr_end=args.min_learning_rate,
+            last_epoch=args.epoch
+        )
+        pass
+    else:
+        lr_scheduler = get_scheduler(
+            args.lr_scheduler,
+            optimizer=optimizer,
+            num_warmup_steps=args.lr_warmup_steps * args.gradient_accumulation_steps,
+            num_training_steps=max_train_steps * args.gradient_accumulation_steps,
+        )
 
     # create ema, fix OOM
     if args.use_ema:
@@ -497,7 +506,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
     # Afterwards we recalculate our number of training epochs
     args.num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
-    actual_train_steps = max_train_steps * args.train_batch_size * args.gradient_accumulation_steps
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
@@ -569,8 +577,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             else:
                 training_save_check = args.revision
 
-        save_completed = global_step >= actual_train_steps
-        save_canceled = dream_state.status.interrupted
+        save_completed = global_step >= max_train_steps
+        save_canceled = status.interrupted
         save_image = False
         save_model = False
         if not save_canceled and not save_completed:
@@ -679,12 +687,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         else:
                             out_file = None
                             if save_snapshot:
-                                dream_state.status.textinfo = f"Saving snapshot at step {args.revision}..."
+                                status.textinfo = f"Saving snapshot at step {args.revision}..."
                                 print("Saving snapshot.")
                                 accelerator.save_state(os.path.join(args.model_dir, "checkpoints",
                                                                     f"checkpoint-{args.revision}"))
                             else:
-                                dream_state.status.textinfo = f"Saving diffusion model at step {args.revision}..."
+                                status.textinfo = f"Saving diffusion model at step {args.revision}..."
                                 print("Saving diffusion models.")
                                 s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"))
 
@@ -702,7 +710,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 save_dir = args.model_dir
 
                 if save_image:
-                    dream_state.status.textinfo = f"Saving preview image at step {args.revision}..."
+                    status.textinfo = f"Saving preview image at step {args.revision}..."
                     try:
                         s_pipeline.set_progress_bar_config(disable=True)
                         sample_dir = os.path.join(save_dir, "samples")
@@ -723,7 +731,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                                          height=args.resolution,
                                                          width=args.resolution,
                                                          generator=g_cuda).images[0]
-                                    dream_state.status.current_image = s_image
+                                    status.current_image = s_image
                                     samples.append(s_image)
                                     image_name = os.path.join(sample_dir, f"sample_{args.revision}-{ci}{si}.png")
                                     txt_name = image_name.replace(".jpg", ".txt")
@@ -733,7 +741,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                 ci += 1
                             if len(samples) > 1:
                                 img_grid = images.image_grid(samples)
-                                dream_state.status.current_image = img_grid
+                                status.current_image = img_grid
                                 del samples
 
                     except Exception as em:
@@ -752,9 +760,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     progress_bar = tqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
     lifetime_step = args.revision
-    dream_state.status.job_count = max_train_steps
-    dream_state.status.job_no = global_step
-    dream_state.status.textinfo = f"Training step: {global_step}/{max_train_steps}"
+    status.job_count = max_train_steps
+    status.job_no = global_step
+    status.textinfo = f"Training step: {global_step}/{max_train_steps}"
     loss_avg = AverageMeter()
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
     training_complete = False
@@ -852,46 +860,47 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
                     logs = {"loss": loss_avg.avg.item(), "lr": lr_scheduler.get_last_lr()[0],
                             "vram": f"{allocated}/{cached}GB"}
+                    status.textinfo2 = f"loss: {loss_avg.avg.item()}, lr: {lr_scheduler.get_last_lr()[0]}" \
+                                       f"vram: {allocated}/{cached}GB"
                     progress_bar.set_postfix(**logs)
                     accelerator.log(logs, step=args.revision)
                     loss_avg.reset()
 
-                actual_steps = args.train_batch_size * args.gradient_accumulation_steps
-                progress_bar.update(actual_steps)
-                global_step += actual_steps
-                args.revision += actual_steps
-                dream_state.status.job_no = global_step
+                progress_bar.update()
+                global_step += 1
+                args.revision += 1
+                status.job_no = global_step
 
                 # Check training complete before save check
-                training_complete = global_step >= actual_train_steps or dream_state.status.interrupted
+                training_complete = global_step >= max_train_steps or status.interrupted
 
                 weights_saved = check_save()
 
                 # Reset the job count after saving images
-                dream_state.status.job_count = actual_train_steps
+                status.job_count = max_train_steps
 
                 # Check again after possibly saving
-                if dream_state.status.interrupted:
+                if status.interrupted:
                     training_complete = True
-
-                dream_state.status.textinfo = f"Training, step {global_step}/{actual_train_steps} current," \
-                                              f" {args.revision}/{actual_train_steps + lifetime_step} lifetime"
+                tot_step = global_step + lifetime_step
+                status.textinfo = f"Steps: {global_step}/{max_train_steps} (Current)," \
+                                  f" {args.revision}/{tot_step} (Lifetime), Epoch: {args.epoch}"
 
                 # Log completion message
                 if training_complete:
                     print("  Training complete.")
-                    if dream_state.status.interrupted:
+                    if status.interrupted:
                         state = "cancelled"
                     else:
                         state = "complete"
 
-                    dream_state.status.textinfo = f"Training {state} {global_step}/{actual_train_steps}, {args.revision}" \
-                                                  f" total."
+                    status.textinfo = f"Training {state} {global_step}/{max_train_steps}, {args.revision}" \
+                                      f" total."
 
                     break
 
             # Check after epoch
-            training_complete = global_step >= actual_train_steps or dream_state.status.interrupted
+            training_complete = global_step >= max_train_steps or status.interrupted
             accelerator.wait_for_everyone()
 
             if not args.not_cache_latents:
@@ -910,7 +919,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             mem_summary = torch.cuda.memory_summary()
             print(mem_summary)
             break
-        if dream_state.status.interrupted:
+        if status.interrupted:
             training_complete = True
 
         args.epoch += 1
@@ -918,13 +927,13 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         args.save()
         if not weights_saved:
             check_save()
-        dream_state.status.job_count = actual_train_steps
+        status.job_count = max_train_steps
 
         if args.epoch_pause_frequency > 0 and args.epoch_pause_time > 0:
             if not global_epoch % args.epoch_pause_frequency:
                 print(f"Giving the GPU a break for {args.epoch_pause_time} seconds.")
                 for i in range(args.epoch_pause_time):
-                    if dream_state.status.interrupted:
+                    if status.interrupted:
                         training_complete = True
                         break
                     time.sleep(1)
