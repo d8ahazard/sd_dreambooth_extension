@@ -283,7 +283,7 @@ def train_imagic(args: DreamboothConfig, mem_record):
     def train_loop(pbar, optim):
         loss_avg = AverageMeter()
         for step in pbar:
-            if dream_state.status.interrupted:
+            if status.interrupted:
                 break
             status.job_no += 1
             with accelerator.accumulate(unet):
