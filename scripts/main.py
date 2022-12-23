@@ -365,49 +365,49 @@ def on_ui_tabs():
                 db_preview = gr.Image(elem_id='db_preview', visible=False)
                 db_check_progress = gr.Button("Check Progress", elem_id=f"db_check_progress", visible=False)
 
-                db_refresh_button.click(
-                    fn=create_secret,
-                    inputs=[],
-                    outputs=[db_secret]
-                )
+            db_refresh_button.click(
+                fn=create_secret,
+                inputs=[],
+                outputs=[db_secret]
+            )
 
-                def update_labels(x):
-                    if x:
-                        unit = "Epochs"
-                        value = 25
-                    else:
-                        unit = "Steps"
-                        value = 500
-                    print(f"Units set to {unit}")
-                    return gr.update(label=f'Save Model Frequency ({unit})', value=value), \
-                        gr.update(label=f'Save Preview(s) Frequency ({unit})', value=value), \
-                        gr.update(label=f"Use Lifetime {unit} When Saving")
+            def update_labels(x):
+                if x:
+                    unit = "Epochs"
+                    value = 25
+                else:
+                    unit = "Steps"
+                    value = 500
+                print(f"Units set to {unit}")
+                return gr.update(label=f'Save Model Frequency ({unit})', value=value), \
+                    gr.update(label=f'Save Preview(s) Frequency ({unit})', value=value), \
+                    gr.update(label=f"Use Lifetime {unit} When Saving")
 
-                db_save_use_epochs.change(
-                    fn=update_labels,
-                    inputs=[db_save_use_epochs],
-                    outputs=[db_save_embedding_every, db_save_preview_every, db_save_use_global_counts]
-                )
+            db_save_use_epochs.change(
+                fn=update_labels,
+                inputs=[db_save_use_epochs],
+                outputs=[db_save_embedding_every, db_save_preview_every, db_save_use_global_counts]
+            )
 
-                db_clear_secret.click(
-                    fn=clear_secret,
-                    inputs=[],
-                    outputs=[db_secret]
-                )
+            db_clear_secret.click(
+                fn=clear_secret,
+                inputs=[],
+                outputs=[db_secret]
+            )
 
-                db_check_progress.click(
-                    fn=lambda: check_progress_call(),
-                    show_progress=False,
-                    inputs=[],
-                    outputs=[db_progressbar, db_preview, db_preview, db_status, db_check_progress_initial],
-                )
+            db_check_progress.click(
+                fn=lambda: check_progress_call(),
+                show_progress=False,
+                inputs=[],
+                outputs=[db_progressbar, db_preview, db_preview, db_status, db_check_progress_initial],
+            )
 
-                db_check_progress_initial.click(
-                    fn=lambda: check_progress_call_initial(),
-                    show_progress=False,
-                    inputs=[],
-                    outputs=[db_progressbar, db_preview, db_preview, db_status, db_check_progress_initial],
-                )
+            db_check_progress_initial.click(
+                fn=lambda: check_progress_call_initial(),
+                show_progress=False,
+                inputs=[],
+                outputs=[db_progressbar, db_preview, db_preview, db_status, db_check_progress_initial],
+            )
 
         global params_to_save
 
