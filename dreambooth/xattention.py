@@ -283,12 +283,13 @@ def replace_unet_cross_attn_to_xformers():
         raise ImportError(
             "xformers not installed. Re-launch webui with --xformers.")
 
-    def forward_xformers(self, x, context=None, attention_mask=None):
+    def forward_xformers(self, x, encoder_hidden_states=None, context=None, attention_mask=None, mask=None):
+
         h = self.heads
         q_in = self.to_q(x)
 
         context_k = default(context, x)
-        context_v = context.to(x.dtype)
+        context_v = context_k.to(x.dtype)
 
         k_in = self.to_k(context_k)
         v_in = self.to_v(context_v)

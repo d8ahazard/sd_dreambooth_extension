@@ -180,7 +180,8 @@ def performance_wizard():
         msg = f"An exception occurred calculating performance values: {e}"
         pass
 
-    log_dict = {"Attention": attention, "Gradient Checkpointing": gradient_checkpointing, "Precision": mixed_precision,
+    log_dict = {"Attention": attention, "Gradient Checkpointing": gradient_checkpointing,
+                "Accumulation Steps": gradient_accumulation_steps, "Precision": mixed_precision,
                 "Cache Latents": not not_cache_latents, "Training Batch Size": train_batch_size,
                 "Class Generation Batch Size": sample_batch_size,
                 "Train Text Encoder": train_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "LORA": use_lora}
