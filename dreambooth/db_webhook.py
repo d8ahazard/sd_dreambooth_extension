@@ -1,7 +1,5 @@
-from typing import Optional, Union, List
+from typing import Union
 from enum import Enum
-from io import BytesIO
-from PIL import Image
 import hashlib
 
 
@@ -32,6 +30,10 @@ def send_training_update(
     target = __detect_webhook_target(url)
     if target == DreamboothWebhookTarget.DISCORD:
         __send_discord_training_update(url, image, model_name, prompt, training_step, global_step)
+
+
+def is_valid_notification_target(url: str) -> bool:
+    return __detect_webhook_target(url) != DreamboothWebhookTarget.UNKNOWN
 
 
 def __detect_webhook_target(url: str) -> DreamboothWebhookTarget:

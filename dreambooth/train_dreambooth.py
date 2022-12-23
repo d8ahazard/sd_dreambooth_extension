@@ -26,6 +26,7 @@ from extensions.sd_dreambooth_extension.dreambooth import xattention
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
+from extensions.sd_dreambooth_extension.dreambooth.db_webhook import is_valid_notification_target, send_training_update
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import encode_hidden_state, \
     EMAModel, generate_classifiers
@@ -743,16 +744,19 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         s_pipeline.set_progress_bar_config(disable=True)
                         sample_dir = os.path.join(save_dir, "samples")
                         os.makedirs(sample_dir, exist_ok=True)
+                        
                         with accelerator.autocast(), torch.inference_mode():
                             prompts = gen_dataset.get_sample_prompts()
                             ci = 0
                             samples = []
                             last_samples = []
+                            
                             for c in prompts:
                                 seed = c.seed
                                 if seed is None or seed == '' or seed == -1:
                                     seed = int(random.randrange(21474836147))
                                 g_cuda = torch.Generator(device=accelerator.device).manual_seed(seed)
+                                
                                 for si in tqdm(range(c.n_samples), desc="Generating samples"):
                                     s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
                                                          guidance_scale=c.scale,
@@ -760,20 +764,33 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                                          height=args.resolution,
                                                          width=args.resolution,
                                                          generator=g_cuda).images[0]
+                                    
                                     status.current_image = s_image
                                     samples.append(s_image)
                                     image_name = os.path.join(sample_dir, f"sample_{args.revision}-{ci}{si}.png")
                                     txt_name = image_name.replace(".jpg", ".txt")
+                                    
                                     with open(txt_name, "w", encoding="utf8") as txt_file:
                                         txt_file.write(c.prompt)
+                                        
                                     s_image.save(image_name)
+                                    
+                                    notification_target = args.notification_webhook_url
+                                    if is_valid_notification_target(notification_target):
+                                        send_training_update(notification_target, s_image, 
+                                                             args.model_name, c.prompt,
+                                                             global_step, args.revision)
+                                        
                                 ci += 1
+                                
                             for sample in samples:
                                 last_samples.append(sample)
+                                
                             if len(samples) > 1:
                                 img_grid = images.image_grid(samples)
                                 status.current_image = img_grid
                                 del samples
+                                
                         log_images = parse_logs(model_name=args.model_name)
                         for log_image in log_images:
                             last_samples.insert(0, log_image)

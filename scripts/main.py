@@ -4,6 +4,7 @@ import gradio as gr
 
 from extensions.sd_dreambooth_extension.dreambooth.db_config import save_config
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
+from extensions.sd_dreambooth_extension.dreambooth.db_webhook import test_webhook
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generate_prompts
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
@@ -353,6 +354,31 @@ def on_ui_tabs():
                         db_sample_steps = gr.Number(label="Sample Steps", value=60, precision=0)
                         db_sample_scale = gr.Number(label="Sample CFG Scale", value=7.5, precision=2)
                         db_generate_sample = gr.Button(value="Generate Sample Images")
+                with gr.Tab("Notifications"):
+                    with gr.Column():
+                        # In the future change this to something more generic and list the supported types
+                        # from DreamboothWebhookTarget enum; for now, Discord is what I use ;)
+                        # Add options to include notifications on training complete and exceptions that halt training
+                        gr.HTML("<p>Send training samples to a Discord channel after generation.</p>")
+                        
+                        with gr.Row():
+                            notification_webhook_url = gr.Textbox(label="Discord Webhook", placeholder="https://discord.com/api/webhooks/XXX/XXXX", value="")
+                        
+                        # with gr.Row():
+                            # gr.HTML(value="Send on Events:")
+                            # notification_on_training_complete = gr.Checkbox(label="Training Complete", value=True)
+                            # notification_on_halt = gr.Checkbox(label="Training Halted (OOM Exception, etc)", value=True)  
+                        
+                        with gr.Row():
+                            notification_webhook_test_btn = gr.Button(value="Send Test Notification")
+                        
+                        notification_webhook_test_results = gr.HTML("Ready.")
+                        
+                        notification_webhook_test_btn.click(
+                            fn=test_webhook,
+                            inputs=[notification_webhook_url],
+                            outputs=[notification_webhook_test_results]
+                        )
 
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")
@@ -474,6 +500,7 @@ def on_ui_tabs():
             db_use_ema,
             db_use_lora,
             db_v2,
+            notification_webhook_url,
             c1_class_data_dir,
             c1_class_guidance_scale,
             c1_class_infer_steps,
@@ -596,6 +623,7 @@ def on_ui_tabs():
                 db_use_concepts,
                 db_use_ema,
                 db_use_lora,
+                notification_webhook_url,
                 c1_class_data_dir,
                 c1_class_guidance_scale,
                 c1_class_infer_steps,
