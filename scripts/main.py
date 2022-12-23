@@ -53,10 +53,11 @@ def check_progress_call():
     """
     Check the progress from share dreamstate and return appropriate UI elements.
     @return:
-    pspan: Progress bar span
+    pspan: Progress bar span contents
     show_preview: Preview visibility
     image: Output Image
     textinfo_result: Primary status
+    check_progress_initial: Hides the manual 'check progress' button
     """
     if status.job_count == 0:
         return "", gr_show(False), gr_show(False), gr_show(True), gr_show(False)
@@ -782,8 +783,17 @@ def on_ui_tabs():
         db_generate_sample.click(
             fn=wrap_gpu_call(ui_samples),
             _js="db_start_sample",
-            inputs=[db_model_name, db_sample_prompt, db_sample_negative, db_sample_seed, db_num_samples,
-                    db_sample_steps, db_sample_scale],
+            inputs=[db_model_name,
+                    db_sample_prompt,
+                    db_num_samples,
+                    db_sample_batch_size,
+                    db_lora_model_name,
+                    db_lora_weight,
+                    db_lora_txt_weight,
+                    db_sample_negative,
+                    db_sample_seed,
+                    db_sample_steps,
+                    db_sample_scale],
             outputs=[db_gallery, db_status]
         )
 
@@ -848,7 +858,7 @@ def on_ui_tabs():
             _js="db_start_classes",
             fn=wrap_gpu_call(ui_classifiers),
             inputs=[db_model_name, db_lora_model_name, db_lora_weight, db_lora_txt_weight, db_use_txt2img],
-            outputs=[db_status, db_gallery]
+            outputs=[db_gallery, db_status]
         )
 
         db_cancel.click(

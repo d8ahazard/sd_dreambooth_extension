@@ -1,6 +1,7 @@
 import argparse
 import os
 from pathlib import Path
+from typing import List
 
 import torch
 import torch.nn.functional as F
@@ -21,6 +22,13 @@ from extensions.sd_dreambooth_extension.dreambooth.utils import list_features, i
 from modules import shared
 
 logger = get_logger(__name__)
+
+
+class TrainResult:
+    config: DreamboothConfig = None
+    mem_record: List = []
+    msg: str = ""
+    samples: [Image] = []
 
 
 def parse_args():
@@ -163,6 +171,7 @@ def parse_args():
 def train_imagic(args: DreamboothConfig, mem_record):
     logging_dir = os.path.join(args.model_dir, "logging")
     printm("Initializing imagic.")
+    result = TrainResult()
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
@@ -362,4 +371,7 @@ def train_imagic(args: DreamboothConfig, mem_record):
 
     accelerator.end_training()
     printm("Training complete")
-    return mem_record
+    result.mem_record = mem_record
+    result.msg = "IMagic training complete."
+    result.samples = []
+    return result
