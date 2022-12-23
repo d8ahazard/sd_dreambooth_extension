@@ -386,7 +386,7 @@ def on_ui_tabs():
                 db_save_use_epochs.change(
                     fn=update_labels,
                     inputs=[db_save_use_epochs],
-                    outputs=[db_save_preview_every, db_save_embedding_every, db_save_use_global_counts]
+                    outputs=[db_save_embedding_every, db_save_preview_every, db_save_use_global_counts]
                 )
 
                 db_clear_secret.click(
