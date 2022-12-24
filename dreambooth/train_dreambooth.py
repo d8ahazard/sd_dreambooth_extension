@@ -770,7 +770,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                 ci += 1
                             for sample in samples:
                                 last_samples.append(sample)
-                                del samples
+                            del samples
 
 
                     except Exception as em:
