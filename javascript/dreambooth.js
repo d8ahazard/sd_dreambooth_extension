@@ -50,7 +50,7 @@ function db_start(numArgs, save, startProgress, args) {
 }
 
 function db_start_sample() {
-    return db_start(7, false, true, arguments);
+    return db_start(11, false, true, arguments);
 }
 
 // Performance wizard

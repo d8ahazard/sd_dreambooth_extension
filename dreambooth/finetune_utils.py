@@ -275,8 +275,7 @@ class ImageBuilder:
                         gradient_accumulation_steps=config.gradient_accumulation_steps,
                         mixed_precision=config.mixed_precision,
                         log_with="tensorboard",
-                        logging_dir=os.path.join(config.model_dir, "logging"),
-                        cpu=config.use_cpu
+                        logging_dir=os.path.join(config.model_dir, "logging")
                     )
                     self.accelerator = accelerator
                     self.del_accelerator = True

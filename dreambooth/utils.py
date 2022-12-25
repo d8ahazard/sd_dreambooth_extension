@@ -329,8 +329,7 @@ def parse_logs(model_name: str, sort_by=None):
             converted_loss, converted_lr, converted_ram = convert_tfevent(file_full_path)
             out_loss.append(converted_loss)
             out_lr.append(converted_lr)
-            if converted_ram.__len__() > 0:
-                out_ram.append(converted_ram)
+            out_ram.append(converted_ram)
 
     # Concatenate (and sort) all partial individual dataframes
     all_df_loss = pd.concat(out_loss)[columns_order]
@@ -355,7 +354,7 @@ def parse_logs(model_name: str, sort_by=None):
 
     out_images = [log_pil, log_lr]
 
-    if len(out_ram):
+    try:
         all_df_ram = pd.concat(out_ram)[columns_order]
         all_df_ram = all_df_ram.sort_values("Wall_time")
         all_df_ram = all_df_ram.reset_index(drop=True)
@@ -366,5 +365,6 @@ def parse_logs(model_name: str, sort_by=None):
         plotted_ram.figure.savefig(ram_img)
         log_ram = Image.open(ram_img)
         out_images.append(log_ram)
-
+    except:
+       pass
     return out_images

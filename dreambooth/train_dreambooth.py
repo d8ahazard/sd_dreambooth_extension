@@ -420,7 +420,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     train_dataloader = torch.utils.data.DataLoader(
         # train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, num_workers=1
-        train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True, num_workers=1
+        train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
     )
     # Move text_encoder and VAE to GPU.
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
@@ -785,15 +785,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                 
                             for sample in samples:
                                 last_samples.append(sample)
-                                
-                            if len(samples) > 1:
-                                img_grid = images.image_grid(samples)
-                                status.current_image = img_grid
-                                del samples
-                                
-                        log_images = parse_logs(model_name=args.model_name)
-                        for log_image in log_images:
-                            last_samples.insert(0, log_image)
+                            del samples
 
                     except Exception as em:
                         print(f"Exception with the stupid image again: {em}")
@@ -806,6 +798,17 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             if save_image:
                 if g_cuda:
                     del g_cuda
+                try:
+                    log_images = parse_logs(model_name=args.model_name)
+                    for log_image in log_images:
+                        last_samples.append(log_image)
+                    del log_images
+                except:
+                    pass
+
+            if len(last_samples) > 1:
+                img_grid = images.image_grid(last_samples)
+                status.current_image = img_grid
 
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
@@ -911,7 +914,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
                     log_loss = loss_avg.avg.item()
                     last_lr = lr_scheduler.get_last_lr()[0]
-                    logs = {"loss": log_loss, "lr": last_lr, "vram_usage": f"{allocated}"}
+                    logs = {"loss": log_loss, "lr": last_lr, "vram_usage": allocated}
                     status.textinfo2 = f"Loss: {'%.2f' % log_loss}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
                                        f"VRAM: {allocated}/{cached} GB"
                     progress_bar.set_postfix(**logs)

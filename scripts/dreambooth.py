@@ -234,10 +234,10 @@ def ui_samples(model_dir: str,
         pd.scale = scale
         pd.seed = seed
         prompts = [pd] * batch_size
-        while len(images) > num_samples:
+        while len(images) < num_samples:
             out_images = img_builder.generate_images(prompts)
             for img in out_images:
-                if len(images) > num_samples:
+                if len(images) < num_samples:
                     images.append(img)
         img_builder.unload()
     except Exception as e:
@@ -245,6 +245,7 @@ def ui_samples(model_dir: str,
         print(msg)
         traceback.print_exc()
     reload_system_models()
+    print(f"Returning {len(images)} samples.")
     return images, msg
 
 
@@ -538,7 +539,7 @@ def ui_classifiers(model_name: str, lora_model: str, lora_weight: float, lora_tx
     if msg:
         status.textinfo = msg
         print(msg)
-        return msg
+        return [], msg
 
     images = []
     try:
@@ -552,4 +553,4 @@ def ui_classifiers(model_name: str, lora_model: str, lora_weight: float, lora_tx
     except Exception as e:
         msg = f"Exception generating concepts: {str(e)}"
         traceback.print_exc()
-    return msg, images
+    return images, msg
