@@ -114,7 +114,6 @@ def get_compute_capability(cuda):
 
 def evaluate_cuda_setup():
     if os.name == "nt":
-        print("Using magick windows DLL!")
         return "libbitsandbytes_cudaall.dll"  # $$$
 
     binary_name = "libbitsandbytes_cpu.so"

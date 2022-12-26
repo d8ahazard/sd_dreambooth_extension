@@ -274,7 +274,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     )
 
     if args.attention == "xformers":
-        print("Setting diffusers unet flags for xformers.")
+        # print("Setting diffusers unet flags for xformers.")
         set_diffusers_xformers_flag(unet, True)
 
     printm("Loaded model.")
@@ -629,7 +629,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             else:
                 if training_save_interval == 0:
                     save_model = False
-                elif training_save_check - last_save_step:
+                elif training_save_check - last_save_step >= training_save_interval:
                     save_model = True
                     last_save_step = training_save_check
 
@@ -639,7 +639,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             else:
                 if training_image_interval == 0:
                     save_image = False
-                elif training_save_check - last_img_step:
+                elif training_save_check - last_img_step >= training_image_interval:
                     save_image = True
                     last_img_step = training_save_check
 
@@ -811,12 +811,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             status.current_image = last_samples
 
     # Only show the progress bar once on each machine.
-    progress_bar = tqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
+    real_steps = max_train_steps * args.train_batch_size * args.gradient_accumulation_steps
+    progress_bar = tqdm(range(global_step, real_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
     lifetime_step = args.revision
-    status.job_count = max_train_steps
+    status.job_count = real_steps
     status.job_no = global_step
-    status.textinfo = f"Training step: {global_step}/{max_train_steps}"
     loss_avg = AverageMeter()
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
     training_complete = False

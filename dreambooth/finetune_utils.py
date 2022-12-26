@@ -314,7 +314,6 @@ class ImageBuilder:
                 apply_lora_weights(lora_model, self.image_pipe.unet, self.image_pipe.text_encoder, lora_weight,
                                    lora_txt_weight,
                                    accelerator.device)
-            print("Diffusers model configured.")
         else:
             print("Loading SD model.")
             current_model = sd_models.select_checkpoint()
