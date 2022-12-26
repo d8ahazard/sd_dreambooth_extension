@@ -82,7 +82,7 @@ def check_progress_call():
         gallery = gr.update(visible=True, value=None)
     else:
         if isinstance(image, List):
-            if len(image > 1):
+            if len(image) > 1:
                 preview = gr.update(visible=False, value=None)
                 gallery = gr.update(visible=True, value=image)
             else:
