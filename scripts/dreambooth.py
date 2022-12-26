@@ -159,8 +159,8 @@ def performance_wizard():
         gb = math.ceil(t / 1073741824)
         print(f"Total VRAM: {gb}")
         if gb >= 24:
-            not_cache_latents = False
             sample_batch_size = 4
+            gradient_accumulation_steps = train_batch_size
             train_batch_size = 2
             train_text_encoder = True
             use_ema = True
@@ -168,7 +168,6 @@ def performance_wizard():
                 attention = "no"
                 train_batch_size = 1
         if 24 > gb >= 16:
-            not_cache_latents = False
             train_text_encoder = True
             use_ema = True
         if 16 > gb >= 10:

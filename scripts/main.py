@@ -80,7 +80,7 @@ def check_progress_call():
     image = status.current_image
 
     if image is None:
-        preview = gr.update(visible=None, value=None)
+        preview = gr.update(visible=False, value=None)
         gallery = gr.update(visible=True, value=None)
     else:
         if isinstance(image, List):
@@ -90,7 +90,9 @@ def check_progress_call():
             else:
                 preview = gr.update(visible=True, value=image)
                 gallery = gr.update(visible=True, value=None)
-
+        else:
+            preview = gr.update(visible=True, value=image)
+            gallery = gr.update(visible=True, value=None)
     if status.textinfo is not None:
         textinfo_result = status.textinfo
     else:
@@ -269,7 +271,6 @@ def on_ui_tabs():
                                     db_attention = gr.Dropdown(
                                         label="Memory Attention", value="default",
                                         choices=list_attention())
-
                                     db_not_cache_latents = gr.Checkbox(label="Don't Cache Latents", value=True)
                                     db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
                                     db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
@@ -356,13 +357,13 @@ def on_ui_tabs():
                         db_generate_classes = gr.Button(value="Generate Class Images")
                         db_generate_prompts = gr.Button(value="Preview Prompts")
                         db_generate_graph = gr.Button(value="Generate Graph")
+                        db_generate_sample = gr.Button(value="Generate Sample Images")
                         db_sample_prompt = gr.Textbox(label="Sample Prompt")
                         db_sample_negative = gr.Textbox(label="Sample Negative Prompt")
                         db_sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
                         db_num_samples = gr.Number(label="Number of Samples to Generate", value=1, precision=0)
                         db_sample_steps = gr.Number(label="Sample Steps", value=60, precision=0)
                         db_sample_scale = gr.Number(label="Sample CFG Scale", value=7.5, precision=2)
-                        db_generate_sample = gr.Button(value="Generate Sample Images")
 
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")

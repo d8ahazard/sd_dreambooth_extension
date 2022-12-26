@@ -33,7 +33,7 @@ from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_
 from extensions.sd_dreambooth_extension.dreambooth.xattention import get_scheduler
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, apply_lora_weights
 from extensions.sd_dreambooth_extension.scripts.dreambooth import printm
-from modules import shared, paths, images
+from modules import shared, paths
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -137,7 +137,21 @@ class TrainResult:
     mem_record: List = []
     msg: str = ""
     samples: [Image] = []
-    
+
+
+def set_diffusers_xformers_flag(model, valid):
+    # Recursively walk through all the children.
+    # Any children which exposes the set_use_memory_efficient_attention_xformers method
+    # gets the message
+    def fn_recursive_set_mem_eff(module: torch.nn.Module):
+        if hasattr(module, 'set_use_memory_efficient_attention_xformers'):
+            module.set_use_memory_efficient_attention_xformers(valid)
+
+        for child in module.children():
+            fn_recursive_set_mem_eff(child)
+
+    fn_recursive_set_mem_eff(model)
+
 
 def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lora_alpha=1.0, lora_txt_alpha=1.0,
          custom_model_name="", use_txt2img=True) -> TrainResult:
@@ -258,6 +272,10 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         revision=args.revision,
         torch_dtype=torch.float32
     )
+
+    if args.attention == "xformers":
+        print("Setting diffusers unet flags for xformers.")
+        set_diffusers_xformers_flag(unet, True)
 
     printm("Loaded model.")
 
@@ -417,8 +435,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         return output
 
     train_dataloader = torch.utils.data.DataLoader(
-        # train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, num_workers=1
-        train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
+        train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, num_workers=0,
+        pin_memory=False
     )
     # Move text_encoder and VAE to GPU.
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
@@ -451,9 +469,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             )
         else:
             dataset = orig_dataset
-
         dataloader = torch.utils.data.DataLoader(
-            dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True
+            dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, num_workers=0, pin_memory=False
         )
         latents_cache = []
         text_encoder_cache = []
@@ -472,8 +489,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     text_encoder_cache.append(text_encoder(d_batch["input_ids"])[0])
                 concepts_cache.append(dataset.current_concept)
         dataset = LatentsDataset(latents_cache, text_encoder_cache, concepts_cache)
+        n_workers = min(8, os.cpu_count() - 1)
         dataloader = accelerator.prepare(
-            torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda z: z, shuffle=True))
+            torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda z: z, shuffle=True, num_workers=0, pin_memory=False))
         if enc_vae is not None:
             del enc_vae
         return dataset, dataloader
@@ -612,6 +630,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 if training_save_check - last_save_step >= training_save_interval:
                     save_model = True
                     last_save_step = training_save_check
+
             if last_img_step == -1:
                 save_image = False
                 last_img_step = 0
@@ -785,8 +804,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     pass
 
             if len(last_samples) > 1:
-                img_grid = images.image_grid(last_samples)
-                status.current_image = img_grid
+                status.current_image = last_samples
 
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)

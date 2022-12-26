@@ -660,7 +660,7 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
             if generated >= set_len:
                 break
 
-        status.current_image = images.image_grid(new_images)
+        status.current_image = new_images
     builder.unload()
     del prompt_dataset
     cleanup()

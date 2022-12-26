@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional, Union, Tuple
 
 import pandas as pd
+import tensorflow
 import torch
 from PIL import features, Image
 from huggingface_hub import HfFolder, whoami

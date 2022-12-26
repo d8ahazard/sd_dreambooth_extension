@@ -258,14 +258,34 @@ class SuperDataset(Dataset):
         if self.tokenizer_max_length > self.tokenizer.model_max_length:
             input_ids = input_ids.squeeze(0)
             iids_list = []
-            for i in range(1, self.tokenizer_max_length - self.tokenizer.model_max_length + 2,
-                           self.tokenizer.model_max_length - 2):
-                iid = (input_ids[0].unsqueeze(0),
-                       input_ids[i:i + self.tokenizer.model_max_length - 2],
-                       input_ids[-1].unsqueeze(0))
-                iid = torch.cat(iid)
-                iids_list.append(iid)
-            input_ids = torch.stack(iids_list)  # 3,77
+            # v1
+            if self.tokenizer.pad_token_id == self.tokenizer.eos_token_id:
+                for i in range(1, self.tokenizer_max_length - self.tokenizer.model_max_length + 2, self.tokenizer.model_max_length - 2):  # (1, 152, 75)
+                    ids_chunk = (
+                        input_ids[0].unsqueeze(0),
+                        input_ids[i: i + self.tokenizer.model_max_length - 2],
+                        input_ids[-1].unsqueeze(0),
+                    )
+                    ids_chunk = torch.cat(ids_chunk)
+                    iids_list.append(ids_chunk)
+            else:
+                # v2
+                for i in range(1, self.tokenizer_max_length - self.tokenizer.model_max_length + 2, self.tokenizer.model_max_length - 2):
+                    ids_chunk = (
+                        input_ids[0].unsqueeze(0),  # BOS
+                        input_ids[i: i + self.tokenizer.model_max_length - 2],
+                        input_ids[-1].unsqueeze(0),
+                    )
+                    ids_chunk = torch.cat(ids_chunk)
+
+                    if ids_chunk[-2] != self.tokenizer.eos_token_id and ids_chunk[-2] != self.tokenizer.pad_token_id:
+                        ids_chunk[-1] = self.tokenizer.eos_token_id
+
+                    if ids_chunk[1] == self.tokenizer.pad_token_id:
+                        ids_chunk[1] = self.tokenizer.eos_token_id
+                    iids_list.append(ids_chunk)
+
+            input_ids = torch.stack(iids_list)
 
         return input_ids
 
