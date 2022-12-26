@@ -120,23 +120,22 @@ class PromptDataset(Dataset):
         self.with_prior = False
         for concept in concepts:
             cur_class_images = 0
-            print(f"Checking concept: {concept}")
             text_getter = FilenameTextGetter(shuffle_tags)
-            print(f"Concept requires {concept.num_class_images} images.")
 
             if concept.num_class_images > 0:
                 self.with_prior = True
                 class_images_dir = concept["class_data_dir"]
                 if class_images_dir == "" or class_images_dir is None or class_images_dir == db_shared.script_path:
                     class_images_dir = os.path.join(model_dir, f"classifiers_{c_idx}")
-                    print(f"Class image dir is not set, defaulting to {class_images_dir}")
+                    print(f"Class image dir is not set, defaulting to {class_images_dir}.")
+                else:
+                    print(f"Using class images from {class_images_dir}.")
                 class_images_dir = Path(class_images_dir)
                 class_images_dir.mkdir(parents=True, exist_ok=True)
                 from extensions.sd_dreambooth_extension.dreambooth.utils import get_images
                 class_images = get_images(class_images_dir)
                 for _ in class_images:
                     cur_class_images += 1
-                print(f"Class dir {class_images_dir} has {cur_class_images} images.")
                 if cur_class_images < concept.num_class_images:
                     num_new_images = concept.num_class_images - cur_class_images
                     instance_images = get_images(concept.instance_data_dir)
@@ -285,7 +284,6 @@ class ImageBuilder:
                     else:
                         msg = f"Exception initializing accelerator: {e}"
                     print(msg)
-            print("Setting up diffusers image generator...")
             torch_dtype = torch.float16 if shared.device.type == "cuda" else torch.float32
 
             self.image_pipe = DiffusionPipeline.from_pretrained(
@@ -315,7 +313,6 @@ class ImageBuilder:
                                    lora_txt_weight,
                                    accelerator.device)
         else:
-            print("Loading SD model.")
             current_model = sd_models.select_checkpoint()
             new_model_info = get_checkpoint_match(config.src)
             if new_model_info is not None and current_model is not None:
@@ -326,7 +323,6 @@ class ImageBuilder:
             if new_model_info is not None and current_model is None:
                 sd_models.load_model(new_model_info)
             shared.sd_model.to(shared.device)
-            print("SD model loaded.")
 
     def generate_images(self, prompt_data: list[PromptData]) -> [Image]:
         def update_latent(step: int, timestep: int, latents: torch.FloatTensor):
@@ -360,7 +356,6 @@ class ImageBuilder:
                 do_not_reload_embeddings=True
             )
             processed = process_txt2img(p)
-            print(f"Processed: {positive_prompts}")
             p.close()
             output = processed
         else:
@@ -528,7 +523,6 @@ def process_txt2img(p: StableDiffusionProcessing) -> [Image]:
 
 
 def generate_prompts(model_dir):
-    print("Generating prompts.")
     status.job_count = 4
     from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
     if model_dir is None or model_dir == "":
@@ -601,7 +595,6 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
     with_prior: Whether prior preservation should be used
     images: A list of strings with paths to images.
     """
-    printm("Generating class images...")
     out_images = []
     try:
         prompt_dataset = PromptDataset(args.concepts_list, args.model_dir, args.shuffle_tags)
@@ -613,13 +606,12 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
 
     set_len = prompt_dataset.__len__()
     if set_len == 0:
-        print("Nothing to generate.")
         return 0, prompt_dataset.with_prior, []
 
+    printm(f"Generating {set_len} class images for training...")
     status.textinfo = f"Generating {set_len} class images for training..."
     status.job_count = set_len
     status.job_no = 0
-    print(f"Creating image builder {args.sample_batch_size}...")
     builder = ImageBuilder(args, use_txt2img=use_txt2img, lora_model=lora_model, lora_weight=lora_weight,
                            lora_txt_weight=lora_text_weight, batch_size=args.sample_batch_size, accelerator=accelerator)
     generated = 0
@@ -640,7 +632,6 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
                 pd = prompts[i_idx]
                 image_base = hashlib.sha1(image.tobytes()).hexdigest()
                 image_filename = os.path.join(pd.out_dir, f"{image_base}.png")
-                print(f"Trying to save: {image_filename}")
                 image.save(image_filename)
                 out_images.append(image_filename)
                 txt_filename = image_filename.replace(".png", ".txt")
