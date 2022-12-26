@@ -61,7 +61,7 @@ def check_progress_call():
     check_progress_initial: Hides the manual 'check progress' button
     """
     if status.job_count == 0:
-        return "", gr.update(visible=False), gr.update(visible=True), gr_show(True), gr_show(False)
+        return "", gr.update(visible=False, value=None), gr.update(visible=True), gr_show(True), gr_show(False)
     progress = 0
 
     if status.job_count > 0:
@@ -75,8 +75,6 @@ def check_progress_call():
 
     progressbar = f"""<div class='progressDiv'><div class='progress' style="overflow:visible;width:{progress * 100}%;white-space:nowrap;">{"&nbsp;" * 2 + str(int(progress * 100)) + "%" + time_left if progress > 0.01 else ""}</div></div>"""
     status.set_current_image()
-    preview = gr.update(visible=False)
-    gallery = gr.update(visible=True)
     image = status.current_image
 
     if image is None:

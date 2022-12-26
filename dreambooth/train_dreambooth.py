@@ -546,7 +546,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     if overrode_max_train_steps:
         max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
     # Afterwards we recalculate our number of training epochs
-    args.num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
+    max_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
@@ -581,7 +581,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     print("  ***** Running training *****")
     print(f"  Num examples = {len(train_dataset)}")
     print(f"  Num batches each epoch = {len(train_dataloader)}")
-    print(f"  Num Epochs = {args.num_train_epochs}")
+    print(f"  Num Epochs = {max_train_epochs}")
     print(f"  Instantaneous batch size per device = {args.train_batch_size}")
     print(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     print(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
@@ -606,7 +606,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
         training_save_interval = args.save_embedding_every
         training_image_interval = args.save_preview_every
-        training_completed_count = args.num_train_epochs if args.num_train_epochs > 1 else max_train_steps
+        training_completed_count = max_train_epochs if args.num_train_epochs > 1 else max_train_steps
         if args.save_use_epochs:
             if args.save_use_global_counts:
                 training_save_check = global_epoch
@@ -627,7 +627,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 save_model = False
                 last_save_step = 0
             else:
-                if training_save_check - last_save_step >= training_save_interval:
+                if training_save_check - last_save_step >= training_save_interval > 0:
                     save_model = True
                     last_save_step = training_save_check
 
@@ -635,7 +635,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 save_image = False
                 last_img_step = 0
             else:
-                if training_save_check - last_img_step >= training_image_interval:
+                if training_save_check - last_img_step >= training_image_interval > 0:
                     save_image = True
                     last_img_step = training_save_check
 
@@ -651,7 +651,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         if save_model:
             if save_canceled:
                 save_lora = args.save_lora_cancel
-                save_snapshot = args.save_state_during
+                save_snapshot = args.save_state_cancel
                 save_checkpoint = args.save_ckpt_cancel
             elif save_completed:
                 save_lora = args.save_lora_after
@@ -728,12 +728,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                             out_file = None
                             if save_snapshot:
                                 status.textinfo = f"Saving snapshot at step {args.revision}..."
-                                print(f"Saving snapshot: {args.revision}")
+                                print(f"Saving snapshot at step: {args.revision}")
                                 accelerator.save_state(os.path.join(args.model_dir, "checkpoints",
                                                                     f"checkpoint-{args.revision}"))
                             else:
                                 status.textinfo = f"Saving diffusion model at step {args.revision}..."
-                                print(f"Saving diffusion weights: {args.revision}.")
+                                print(f"Saving diffusion weights at step: {args.revision}.")
                                 s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"))
 
                         if save_checkpoint:
@@ -750,7 +750,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 save_dir = args.model_dir
 
                 if save_image:
-                    status.textinfo = f"Saving preview image at step {args.revision}..."
+                    samples = []
+                    last_samples = []
+                    status.textinfo = f"Saving preview image(s) at step {args.revision}..."
                     try:
                         s_pipeline.set_progress_bar_config(disable=True)
                         sample_dir = os.path.join(save_dir, "samples")
@@ -758,8 +760,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         with accelerator.autocast(), torch.inference_mode():
                             prompts = gen_dataset.get_sample_prompts()
                             ci = 0
-                            samples = []
-                            last_samples = []
                             for c in prompts:
                                 seed = c.seed
                                 if seed is None or seed == '' or seed == -1:
@@ -772,10 +772,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                                          height=args.resolution,
                                                          width=args.resolution,
                                                          generator=g_cuda).images[0]
-                                    status.current_image = s_image
                                     samples.append(s_image)
                                     image_name = os.path.join(sample_dir, f"sample_{args.revision}-{ci}{si}.png")
-                                    txt_name = image_name.replace(".jpg", ".txt")
+                                    txt_name = image_name.replace(".png", ".txt")
                                     with open(txt_name, "w", encoding="utf8") as txt_file:
                                         txt_file.write(c.prompt)
                                     s_image.save(image_name)
@@ -803,8 +802,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 except:
                     pass
 
-            if len(last_samples) > 1:
-                status.current_image = last_samples
+            status.current_image = last_samples
 
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
@@ -818,7 +816,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     training_complete = False
     msg = ""
     weights_saved = False
-    for epoch in range(first_epoch, args.num_train_epochs):
+    for epoch in range(first_epoch, max_train_epochs):
         if training_complete:
             break
         try:
@@ -893,14 +891,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         loss = f.mse_loss(noise_pred.float(), noise.float(), reduction="mean")
 
                     accelerator.backward(loss)
-                    # # This was disabled in Shiviam's repo, not sure why.
-                    # if accelerator.sync_gradients:
-                    #     params_to_clip = (
-                    #         itertools.chain(unet.parameters(), text_encoder.parameters())
-                    #         if args.train_text_encoder
-                    #         else unet.parameters()
-                    #     )
-                    #     accelerator.clip_grad_norm_(params_to_clip, 1.0)
 
                     optimizer.step()
                     lr_scheduler.step()
@@ -933,7 +923,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 accelerator.log(logs, step=args.revision)
 
                 # Check training complete before save check
-                if args.num_train_epochs <= 1:
+                if max_train_epochs <= 1:
                     training_complete = global_step >= max_train_steps or status.interrupted
                     if training_complete:
                         print("Stepss met, ending training.")
@@ -993,7 +983,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         global_epoch += 1
         args.save()
         if args.num_train_epochs > 1:
-            training_complete = global_epoch >= args.num_train_epochs
+            training_complete = global_epoch >= max_train_epochs
             if training_complete:
                 print("Epochs met, ending training.")
         if not weights_saved:
