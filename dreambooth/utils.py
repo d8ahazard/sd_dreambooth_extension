@@ -300,6 +300,8 @@ def parse_logs(model_name: str, sort_by=None):
                     loss_events.append(parsed)
                 elif parsed["Name"] == "vram_usage":
                     ram_events.append(parsed)
+                else:
+                    print(f"Skipping: {parsed['Name']}")
         return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events)
 
     def parse_tfevent(tfevent):

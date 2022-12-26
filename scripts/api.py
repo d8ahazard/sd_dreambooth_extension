@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from pydantic.dataclasses import Union
 from pydantic.types import List
 
-import modules.script_callbacks as script_callbacks
+from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
@@ -27,7 +27,6 @@ from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
 from extensions.sd_dreambooth_extension.dreambooth.utils import wrap_gpu_call, get_images
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import ui_samples
-from modules import shared
 
 
 class InstanceData(BaseModel):
@@ -93,6 +92,7 @@ class DreamboothParameters(BaseModel):
     epoch_pause_time: int = 60
     gradient_accumulation_steps: int = 1
     gradient_checkpointing: bool = True
+    gradient_set_to_none: bool = True
     half_model: bool = False
     hflip: bool = True
     learning_rate: float = 0.000002
@@ -354,8 +354,8 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if save_model_name == "" or save_model_name is None:
             save_model_name = model_name
         if skip_build:
-            ckpt_dir = shared.cmd_opts.ckpt_dir
-            models_path = os.path.join(shared.models_path, "Stable-diffusion")
+            ckpt_dir = db_shared.ckpt_dir
+            models_path = os.path.join(db_shared.models_path, "Stable-diffusion")
             if ckpt_dir is not None:
                 models_path = ckpt_dir
             use_subdir = False
@@ -476,7 +476,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         for concept_key in concept_dict:
             concept = concept_dict[concept_key]
             class_images_dir = concept["class_data_dir"]
-            if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:
+            if class_images_dir == "" or class_images_dir is None or class_images_dir == db_shared.script_path:
                 class_images_dir = os.path.join(config.model_dir, f"classifiers_{concept_key}")
                 print(f"Class image dir is not set, defaulting to {class_images_dir}")
             if os.path.exists(class_images_dir):
@@ -511,7 +511,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if key_check is not None:
             return key_check
 
-        root_img_path = os.path.join(shared.script_path, "..", "InstanceImages")
+        root_img_path = os.path.join(db_shared.script_path, "..", "InstanceImages")
         if not os.path.exists(root_img_path):
             print(f"Creating root instance dir: {root_img_path}")
             os.makedirs(root_img_path)
@@ -551,6 +551,11 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         return JSONResponse(inst_datas)
 
 
-script_callbacks.on_app_started(dreambooth_api)
+try:
+    import modules.script_callbacks as script_callbacks
+    script_callbacks.on_app_started(dreambooth_api)
+    print("SD-Webui API layer loaded")
+except:
+    pass
 
-print("Dreambooth API layer loaded")
+

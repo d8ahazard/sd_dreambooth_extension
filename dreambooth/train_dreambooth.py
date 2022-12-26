@@ -226,7 +226,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                                 lora_text_weight=lora_txt_alpha,
                                                 use_txt2img=use_txt2img, accelerator=accelerator)
     if use_txt2img and count > 0:
-        print("Unloading system models (again).")
         unload_system_models()
 
     # Load the tokenizer
@@ -524,9 +523,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 unet, optimizer, train_dataloader, lr_scheduler
             )
 
-    printm("Scheduler, EMA Loaded.")
-    # Scheduler and math around the number of training steps.
-
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
     if overrode_max_train_steps:
@@ -561,7 +557,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         global_step = args.revision
         resume_from_checkpoint = True
         resume_global_step = global_step
-        first_epoch = resume_global_step // num_update_steps_per_epoch // args.train_batch_size
+        first_epoch = args.epoch
         resume_step = resume_global_step % num_update_steps_per_epoch
 
     print("  ***** Running training *****")
@@ -592,7 +588,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
         training_save_interval = args.save_embedding_every
         training_image_interval = args.save_preview_every
-
+        training_completed_count = args.num_train_epochs if args.num_train_epochs > 1 else max_train_steps
         if args.save_use_epochs:
             if args.save_use_global_counts:
                 training_save_check = global_epoch
@@ -604,7 +600,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             else:
                 training_save_check = args.revision
 
-        save_completed = global_step >= max_train_steps
+        save_completed = training_save_check >= training_completed_count
         save_canceled = status.interrupted
         save_image = False
         save_model = False
@@ -648,7 +644,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 save_checkpoint = args.save_ckpt_during
 
         if save_checkpoint or save_snapshot or save_lora or save_image or save_model:
-            print(f"Save fired {save_lora}, {save_checkpoint}, {save_snapshot}, {save_image}")
             save_weights(save_image, save_model, save_snapshot, save_checkpoint, save_lora)
 
         return save_model
@@ -689,7 +684,6 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
             with accelerator.autocast(), torch.inference_mode():
                 if save_model:
-                    print(" SAVE MODEL IS SET.")
                     try:
                         if args.use_lora and save_lora:
                             lora_model_name = args.model_name if custom_model_name == "" else custom_model_name
@@ -711,17 +705,16 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                                  out_txt,
                                                  target_replace_module=["CLIPAttention"],
                                                  )
-                            print(f"\nLora weights successfully saved to {out_file}")
                         else:
                             out_file = None
                             if save_snapshot:
                                 status.textinfo = f"Saving snapshot at step {args.revision}..."
-                                print("Saving snapshot.")
+                                print(f"Saving snapshot: {args.revision}")
                                 accelerator.save_state(os.path.join(args.model_dir, "checkpoints",
                                                                     f"checkpoint-{args.revision}"))
                             else:
                                 status.textinfo = f"Saving diffusion model at step {args.revision}..."
-                                print("Saving diffusion models.")
+                                print(f"Saving diffusion weights: {args.revision}.")
                                 s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"))
 
                         if save_checkpoint:
@@ -772,9 +765,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                 last_samples.append(sample)
                             del samples
 
-
                     except Exception as em:
-                        print(f"Exception with the stupid image again: {em}")
+                        print(f"Exception saving sample: {em}")
                         traceback.print_exc()
                         pass
 
@@ -883,37 +875,52 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         loss = f.mse_loss(noise_pred.float(), noise.float(), reduction="mean")
 
                     accelerator.backward(loss)
+                    # # This was disabled in Shiviam's repo, not sure why.
+                    # if accelerator.sync_gradients:
+                    #     params_to_clip = (
+                    #         itertools.chain(unet.parameters(), text_encoder.parameters())
+                    #         if args.train_text_encoder
+                    #         else unet.parameters()
+                    #     )
+                    #     accelerator.clip_grad_norm_(params_to_clip, 1.0)
+
                     optimizer.step()
                     lr_scheduler.step()
-                    optimizer.zero_grad(set_to_none=True)
-                    if profile_memory:
-                        loss_avg.update(loss.cpu().float(), bsz)
-                    else:
-                        loss_avg.update(loss.detach_(), bsz)
+                    optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
 
-                    # Update EMA
-                    if args.use_ema and ema_unet is not None:
-                        ema_unet.step(unet.parameters())
+                    # Checks if the accelerator has performed an optimization step behind the scenes
+                if accelerator.sync_gradients:
+                    progress_bar.update(1)
+                    global_step += 1
+                    args.revision += 1
+                    status.job_no += 1
 
-                if not global_step % args.train_batch_size:
-                    allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
-                    cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
-                    log_loss = loss_avg.avg.item()
-                    last_lr = lr_scheduler.get_last_lr()[0]
-                    logs = {"loss": log_loss, "lr": last_lr, "vram_usage": allocated}
-                    status.textinfo2 = f"Loss: {'%.2f' % log_loss}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
-                                       f"VRAM: {allocated}/{cached} GB"
-                    progress_bar.set_postfix(**logs)
-                    accelerator.log(logs, step=args.revision)
-                    loss_avg.reset()
+                if profile_memory:
+                    loss_avg.update(loss.cpu().float(), bsz)
+                else:
+                    loss_avg.update(loss.detach_(), bsz)
 
-                progress_bar.update()
-                global_step += 1
-                args.revision += 1
-                status.job_no = global_step
+                # Update EMA
+                if args.use_ema and ema_unet is not None:
+                    ema_unet.step(unet.parameters())
+
+                allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
+                cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
+                log_loss = loss_avg.avg.item()
+                last_lr = lr_scheduler.get_last_lr()[0]
+                logs = {"loss": log_loss, "lr": last_lr, "vram_usage": float(allocated)}
+                status.textinfo2 = f"Loss: {'%.2f' % log_loss}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
+                                   f"VRAM: {allocated}/{cached} GB"
+                progress_bar.set_postfix(**logs)
+                accelerator.log(logs, step=args.revision)
 
                 # Check training complete before save check
-                training_complete = global_step >= max_train_steps or status.interrupted
+                if args.num_train_epochs <= 1:
+                    training_complete = global_step >= max_train_steps or status.interrupted
+                    if training_complete:
+                        print("Stepss met, ending training.")
+                else:
+                    training_complete = status.interrupted
 
                 weights_saved = check_save()
 
@@ -940,8 +947,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
                     break
 
+            # Reset loss average each epoch, which should be a better actual average?
+            loss_avg.reset()
             # Check after epoch
-            training_complete = global_step >= max_train_steps or status.interrupted
             accelerator.wait_for_everyone()
 
             if not args.not_cache_latents:
@@ -966,6 +974,10 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         args.epoch += 1
         global_epoch += 1
         args.save()
+        if args.num_train_epochs > 1:
+            training_complete = global_epoch >= args.num_train_epochs
+            if training_complete:
+                print("Epochs met, ending training.")
         if not weights_saved:
             check_save()
         status.job_count = max_train_steps
@@ -976,6 +988,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 for i in range(args.epoch_pause_time):
                     if status.interrupted:
                         training_complete = True
+                        print("Training complete, interrupted.")
                         break
                     time.sleep(1)
 

@@ -116,7 +116,7 @@ class SuperDataset(Dataset):
         self.lifetime_steps = lifetime_steps
         self.current_concept = 0
         self.shuffle_tags = shuffle_tags
-
+        needs_crop = False
         total_images = 0
 
         for concept_dict in concepts_list:
@@ -151,6 +151,13 @@ class SuperDataset(Dataset):
                 instance_data = []
                 concept_images = get_images(concept.instance_data_dir)
                 for file in concept_images:
+                    try:
+                        img = Image.open(file)
+                        if img.width != size or img.height != size:
+                            needs_crop = True
+                    except Exception as e:
+                        print(f"Exception parsing instance image: {e}")
+                        continue
                     file_text = self.text_getter.read_text(file)
                     file_prompt = self.text_getter.create_text(instance_prompt, file_text, instance_token,
                                                                class_token, False)
@@ -163,6 +170,14 @@ class SuperDataset(Dataset):
                 if concept_with_prior:
                     concept_images = get_images(concept.class_data_dir)
                     for file in concept_images:
+                        try:
+                            img = Image.open(file)
+                            if img.width != size or img.height != size:
+                                needs_crop = True
+                        except Exception as e:
+                            print(f"Exception parsing instance image: {e}")
+                            continue
+
                         file_text = self.text_getter.read_text(file)
                         file_prompt = self.text_getter.create_text(class_prompt, file_text, instance_token,
                                                                    class_token, True)
@@ -183,16 +198,20 @@ class SuperDataset(Dataset):
 
         # We do this above when creating the dict of instance images
         self._length = total_images
+        transforms_list = []
 
-        self.image_transforms = transforms.Compose(
-            [
-                transforms.RandomHorizontalFlip(0.5 * hflip),
-                transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
-                transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
-                transforms.ToTensor(),
-                transforms.Normalize([0.5], [0.5]),
-            ]
-        )
+        if hflip:
+            transforms_list.append(transforms.RandomHorizontalFlip(0.5 * hflip))
+
+        if needs_crop:
+            transforms_list.append(transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size))
+            transforms_list.append(transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR))
+
+        transforms_list.append(transforms.ToTensor())
+        transforms_list.append(transforms.Normalize([0.5], [0.5]))
+
+        # Less transforms should be more better, right?
+        self.image_transforms = transforms.Compose(transforms_list)
 
     def generate_sample_prompts(self, instance_data: [TrainingData], concept: Concept):
         prompts = []
@@ -220,11 +239,10 @@ class SuperDataset(Dataset):
                 if "," in prompt and self.shuffle_tags:
                     prompt_tags = prompt.split(",")
                     first_tag = prompt_tags.pop(0)
-                    prompt = f"{first_tag}"
                     # Shuffle tags in sample prompt
                     if len(prompt_tags) > 1:
                         random.shuffle(prompt_tags)
-                        prompt = f"{prompt_tags}, {','.join(prompt_tags)}"
+                        prompt_tags.insert(0, first_tag)
                 out_prompts.append(prompt)
             prompts = out_prompts
         return prompts
@@ -232,7 +250,7 @@ class SuperDataset(Dataset):
     def tokenize(self, text):
         if not self.pad_tokens:
             input_ids = self.tokenizer(text, padding="do_not_pad", truncation=True,
-                                       max_length=self.tokenizer.model_max_length).input_ids
+                                       max_length=self.tokenizer.model_max_length, return_tensors="pt").input_ids
             return input_ids
 
         input_ids = self.tokenizer(text, padding="max_length", truncation=True, max_length=self.tokenizer_max_length,

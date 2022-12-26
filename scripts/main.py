@@ -1,4 +1,5 @@
 import time
+from typing import List
 
 import gradio as gr
 
@@ -54,13 +55,13 @@ def check_progress_call():
     Check the progress from share dreamstate and return appropriate UI elements.
     @return:
     pspan: Progress bar span contents
-    show_preview: Preview visibility
-    image: Output Image
+    preview: Preview Image/Visibility
+    gallery: Gallery Image/Visibility
     textinfo_result: Primary status
     check_progress_initial: Hides the manual 'check progress' button
     """
     if status.job_count == 0:
-        return "", gr_show(False), gr_show(False), gr_show(True), gr_show(False)
+        return "", gr.update(visible=False), gr.update(visible=True), gr_show(True), gr_show(False)
     progress = 0
 
     if status.job_count > 0:
@@ -74,13 +75,21 @@ def check_progress_call():
 
     progressbar = f"""<div class='progressDiv'><div class='progress' style="overflow:visible;width:{progress * 100}%;white-space:nowrap;">{"&nbsp;" * 2 + str(int(progress * 100)) + "%" + time_left if progress > 0.01 else ""}</div></div>"""
     status.set_current_image()
-    show_preview = gr_show(False)
+    preview = gr.update(visible=False)
+    gallery = gr.update(visible=True)
     image = status.current_image
 
     if image is None:
-        image = gr.update(value=None)
+        preview = gr.update(visible=None, value=None)
+        gallery = gr.update(visible=True, value=None)
     else:
-        show_preview = gr_show(True)
+        if isinstance(image, List):
+            if len(image > 1):
+                preview = gr.update(visible=False, value=None)
+                gallery = gr.update(visible=True, value=image)
+            else:
+                preview = gr.update(visible=True, value=image)
+                gallery = gr.update(visible=True, value=None)
 
     if status.textinfo is not None:
         textinfo_result = status.textinfo
@@ -91,7 +100,7 @@ def check_progress_call():
         textinfo_result = f"{textinfo_result}<br>{status.textinfo2}"
 
     pspan = f"<span id='db_progress_span' style='display: none'>{time.time()}</span><p>{progressbar}</p>"
-    return pspan, show_preview, image, textinfo_result, gr_show(False)
+    return pspan, preview, gallery, textinfo_result, gr_show(False)
 
 
 def check_progress_call_initial():
@@ -110,7 +119,6 @@ def ui_gen_ckpt(model_name: str, half: bool, use_subdir: bool = False, lora_path
                 lora_txt_alpha=1.0, custom_model_name=""):
     res = compile_checkpoint(model_name, half, use_subdir, lora_path, lora_alpha, lora_txt_alpha, custom_model_name,
                              True, True)
-    print(f"Res: {res}")
     return res
 
 
@@ -197,14 +205,14 @@ def on_ui_tabs():
                             db_epoch_pause_frequency = gr.Number(label='Pause After N Epochs', value=0)
                             db_epoch_pause_time = gr.Number(label='Amount of time to pause between Epochs (s)',
                                                             value=60)
-                            db_save_use_epochs = gr.Checkbox(label="Use Epoch Values for Save Frequency")
-                            db_save_use_global_counts = gr.Checkbox(label='Use Lifetime Steps/Epochs When Saving',
+                            db_save_use_epochs = gr.Checkbox(label="Use Epoch Values for Save Frequency", value=True)
+                            db_save_use_global_counts = gr.Checkbox(label='Use Lifetime Epochs When Saving',
                                                                     value=True)
                             db_save_embedding_every = gr.Number(
-                                label='Save Model Frequency (Epochs)', value=500,
+                                label='Save Model Frequency (Epochs)', value=25,
                                 precision=0)
                             db_save_preview_every = gr.Number(
-                                label='Save Preview(s) Frequency (Epochs)', value=500,
+                                label='Save Preview(s) Frequency (Epochs)', value=25,
                                 precision=0)
 
                         with gr.Column():
@@ -275,6 +283,7 @@ def on_ui_tabs():
                                     db_gradient_accumulation_steps = gr.Number(label="Gradient Accumulation Steps",
                                                                                precision=0,
                                                                                value=1)
+                                    db_gradient_set_to_none = gr.Checkbox(label="Set Gradients to None When Zeroing", value=True)
 
                                 with gr.Column():
                                     gr.HTML("Adam Advanced")
@@ -379,15 +388,26 @@ def on_ui_tabs():
                     else:
                         unit = "Steps"
                         value = 500
-                    print(f"Units set to {unit}")
                     return gr.update(label=f'Save Model Frequency ({unit})', value=value), \
                         gr.update(label=f'Save Preview(s) Frequency ({unit})', value=value), \
                         gr.update(label=f"Use Lifetime {unit} When Saving")
+
+                def update_pad_tokens(x):
+                    if not x:
+                        return gr.update(value=False)
+                    else:
+                        return gr.update(visible=True)
 
                 db_save_use_epochs.change(
                     fn=update_labels,
                     inputs=[db_save_use_epochs],
                     outputs=[db_save_preview_every, db_save_embedding_every, db_save_use_global_counts]
+                )
+
+                db_train_text_encoder.change(
+                    fn=update_pad_tokens,
+                    inputs=[db_train_text_encoder],
+                    outputs=[db_pad_tokens]
                 )
 
                 db_clear_secret.click(
@@ -400,14 +420,14 @@ def on_ui_tabs():
                     fn=lambda: check_progress_call(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_preview, db_status, db_check_progress_initial],
+                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_check_progress_initial],
                 )
 
                 db_check_progress_initial.click(
                     fn=lambda: check_progress_call_initial(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_preview, db_status, db_check_progress_initial],
+                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_check_progress_initial],
                 )
 
         global params_to_save
@@ -427,6 +447,7 @@ def on_ui_tabs():
             db_epoch_pause_time,
             db_gradient_accumulation_steps,
             db_gradient_checkpointing,
+            db_gradient_set_to_none,
             db_half_model,
             db_has_ema,
             db_hflip,
@@ -555,6 +576,7 @@ def on_ui_tabs():
                 db_epoch_pause_time,
                 db_gradient_accumulation_steps,
                 db_gradient_checkpointing,
+                db_gradient_set_to_none,
                 db_half_model,
                 db_hflip,
                 db_learning_rate,

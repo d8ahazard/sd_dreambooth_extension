@@ -34,6 +34,7 @@ class DreamboothConfig:
                  epoch_pause_time: int = 0,
                  gradient_accumulation_steps: int = 1,
                  gradient_checkpointing: bool = True,
+                 gradient_set_to_none: bool = True,
                  half_model: bool = False,
                  has_ema: bool = False,
                  hflip: bool = False,
@@ -165,6 +166,7 @@ class DreamboothConfig:
         self.epoch_pause_time = epoch_pause_time
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.gradient_checkpointing = gradient_checkpointing
+        self.gradient_set_to_none = gradient_set_to_none
         self.half_model = half_model
         self.hflip = hflip
         self.learning_rate = learning_rate

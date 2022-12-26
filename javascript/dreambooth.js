@@ -178,6 +178,7 @@ let db_titles = {
     "Save Preview(s) Frequency (Step)": "Generate preview images every N steps. Must be divisible by batch number.",
     "Scale Learning Rate": "Scale the learning rate by the number of GPUs, gradient accumulation steps, and batch size.",
     "Scheduler": "Schedule to use for official training stuff.",
+    "Set Gradients to None When Zeroing": "Can increase training speed at the cost of a slight increase in VRAM usage.",
     "Shuffle After Epoch": "When enabled, will shuffle the dataset after the first epoch. Will enable text encoder training and latent caching (More VRAM).",
     "Source Checkpoint": "The source checkpoint to extract for training.",
     "Total Number of Class/Reg Images": "Total number of classification/regularization images to use. If no images exist, they will be generated. Set to 0 to disable prior preservation.",
