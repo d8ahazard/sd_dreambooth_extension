@@ -627,7 +627,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 save_model = False
                 last_save_step = 0
             else:
-                if training_save_check - last_save_step >= training_save_interval > 0:
+                if training_save_interval == 0:
+                    save_model = False
+                elif training_save_check - last_save_step:
                     save_model = True
                     last_save_step = training_save_check
 
@@ -635,7 +637,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 save_image = False
                 last_img_step = 0
             else:
-                if training_save_check - last_img_step >= training_image_interval > 0:
+                if training_image_interval == 0:
+                    save_image = False
+                elif training_save_check - last_img_step:
                     save_image = True
                     last_img_step = training_save_check
 
@@ -650,10 +654,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
         if save_model:
             if save_canceled:
+                print("Canceled, enabling saves.")
                 save_lora = args.save_lora_cancel
                 save_snapshot = args.save_state_cancel
                 save_checkpoint = args.save_ckpt_cancel
             elif save_completed:
+                print("Completed, enabling saves.")
                 save_lora = args.save_lora_after
                 save_snapshot = args.save_state_after
                 save_checkpoint = args.save_ckpt_after
@@ -931,16 +937,16 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     training_complete = status.interrupted
 
                 weights_saved = check_save()
-
+                real_steps = max_train_steps * args.train_batch_size * args.gradient_accumulation_steps
                 # Reset the job count after saving images
-                status.job_count = max_train_steps
+                status.job_count = real_steps
 
                 # Check again after possibly saving
                 if status.interrupted:
                     training_complete = True
                 tot_step = global_step + lifetime_step
-                status.textinfo = f"Steps: {global_step}/{max_train_steps} (Current)," \
-                                  f" {args.revision}/{tot_step + args.lifetime_revision} (Lifetime), Epoch: {args.epoch}"
+                status.textinfo = f"Steps: {global_step}/{real_steps} (Current)," \
+                                  f" {args.revision}/{tot_step + lifetime_step} (Lifetime), Epoch: {args.epoch}"
 
                 # Log completion message
                 if training_complete:
