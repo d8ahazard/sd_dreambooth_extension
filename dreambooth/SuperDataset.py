@@ -245,6 +245,7 @@ class SuperDataset(Dataset):
                         prompt_tags.insert(0, first_tag)
                 out_prompts.append(prompt)
             prompts = out_prompts
+            random.shuffle(prompts)
         return prompts
 
     def tokenize(self, text):
