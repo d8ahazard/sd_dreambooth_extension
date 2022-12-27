@@ -820,7 +820,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
     # Afterwards we recalculate our number of training epochs
     args.num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
-    actual_train_steps = max_train_steps * args.train_batch_size
+    actual_train_steps = max_train_steps * args.train_batch_size * args.gradient_accumulation_steps
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
