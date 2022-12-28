@@ -105,7 +105,7 @@ def check_progress_call():
     prompts = ""
     if len(status.sample_prompts) > 0:
         if len(status.sample_prompts) > 1:
-            prompts = ",".join(status.sample_prompts)
+            prompts = "<br>".join(status.sample_prompts)
         else:
             prompts = status.sample_prompts[0]
 
@@ -390,8 +390,7 @@ def on_ui_tabs():
                 db_progressbar = gr.HTML(elem_id="db_progressbar")
                 db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery').style(grid=4)
                 db_preview = gr.Image(elem_id='db_preview', visible=False)
-                db_prompt_info = gr.HTML(elem_id="db_prompt_info", value="Testing")
-                db_prompt_list = gr.HTML(elem_id="db_prompt_list", value="", visible=False)
+                db_prompt_list = gr.HTML(elem_id="db_prompt_list", value="")
                 db_check_progress = gr.Button("Check Progress", elem_id=f"db_check_progress", visible=False)
 
                 db_refresh_button.click(

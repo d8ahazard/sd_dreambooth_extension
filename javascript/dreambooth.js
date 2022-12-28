@@ -331,7 +331,6 @@ function checkDbGallery(){
                 let scrollY = window.scrollY;
 
                 galleryButtons[prevSelectedIndex].click();
-                showDbGalleryImage();
 
                 // When the gallery button is clicked, it gains focus and scrolls itself into view
                 // We need to scroll back to the previous position
@@ -393,37 +392,3 @@ function requestMoreDbProgress(){
     }
 }
 
-function showDbGalleryImage() {
-    setTimeout(function() {
-        let fullImg_preview = gradioApp().querySelectorAll('img.w-full.object-contain')
-
-        if (fullImg_preview != null) {
-            let im_idx = 0;
-            fullImg_preview.forEach(function function_name(e) {
-                if (e.dataset.modded) return;
-                e.dataset.modded = true;
-                if(e && e.parentElement.tagName === 'DIV'){
-                    e.style.cursor='pointer'
-                    e.style.userSelect='none'
-                    e.addEventListener('click', function (evt) {
-                        if(!opts.js_modal_lightbox) return;
-                        modalZoomSet(gradioApp().getElementById('modalImage'), opts.js_modal_lightbox_initially_zoomed);
-                        showModal(evt);
-                        let prompts_elem = gradioApp().getElementById("db_prompt_list");
-                        let prompt_info = gradioApp().getElementById("db_prompt_info");
-                        let prompt = "";
-                        if (prompts_elem && prompt_info) {
-                            let prompts = prompts_elem.innerHTML.split(",");
-                            if (im_idx < prompts.length) {
-                                prompt = prompts[im_idx];
-                            }
-                        }
-                        prompt_info.innerHTML = prompt;
-                        }, true);
-                    im_idx += 1;
-                }
-            });
-        }
-
-    }, 100);
-}
