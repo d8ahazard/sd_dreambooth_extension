@@ -441,7 +441,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         n_workers = 0
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, num_workers=n_workers,
-        pin_memory=True
+        pin_memory=False
     )
     # Move text_encoder and VAE to GPU.
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
@@ -479,7 +479,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             n_workers = 0
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, num_workers=n_workers,
-            pin_memory=True
+            pin_memory=False
         )
         latents_cache = []
         text_encoder_cache = []
@@ -500,7 +500,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         dataset = LatentsDataset(latents_cache, text_encoder_cache, concepts_cache)
         dataloader = accelerator.prepare(
             torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda z: z, shuffle=True,
-                                        num_workers=n_workers, pin_memory=True))
+                                        num_workers=n_workers, pin_memory=False))
         if enc_vae is not None:
             del enc_vae
         return dataset, dataloader
