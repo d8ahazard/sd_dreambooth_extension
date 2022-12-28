@@ -127,9 +127,6 @@ class PromptDataset(Dataset):
                 class_images_dir = concept["class_data_dir"]
                 if class_images_dir == "" or class_images_dir is None or class_images_dir == db_shared.script_path:
                     class_images_dir = os.path.join(model_dir, f"classifiers_{c_idx}")
-                    print(f"Class image dir is not set, defaulting to {class_images_dir}.")
-                else:
-                    print(f"Using class images from {class_images_dir}.")
                 class_images_dir = Path(class_images_dir)
                 class_images_dir.mkdir(parents=True, exist_ok=True)
                 from extensions.sd_dreambooth_extension.dreambooth.utils import get_images
@@ -566,7 +563,6 @@ def generate_prompts(model_dir):
         class_images_dir = Path(concept["class_data_dir"])
         if class_images_dir == "" or class_images_dir is None or class_images_dir == db_shared.script_path:
             class_images_dir = os.path.join(config.model_dir, f"classifiers_{c_idx}")
-            print(f"Class image dir is not set, defaulting to {class_images_dir}")
         class_images_dir.mkdir(parents=True, exist_ok=True)
         cur_class_images = len(get_images(class_images_dir))
         if cur_class_images < concept.num_class_images:
@@ -638,17 +634,18 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
                 with open(txt_filename, "w", encoding="utf8") as file:
                     file.write(pd.prompt)
                 status.job_no += 1
-                status.textinfo = f"Class image {generated}/{set_len}, Prompt: '{pd.prompt}'"
+                i_idx += 1
+                generated += 1
+                status.textinfo = f"Class image {status.job_no}/{set_len}, Prompt: '{pd.prompt}'"
+                status.current_image = image
+                if pbar is not None:
+                    pbar.update()
+
+                if generated >= set_len:
+                    break
             except Exception as e:
                 print(f"Exception generating images: {e}")
                 traceback.print_exc()
-            i_idx += 1
-            status.current_image = image
-            if pbar is not None:
-                pbar.update()
-            generated += 1
-            if generated >= set_len:
-                break
 
         status.current_image = new_images
     builder.unload()

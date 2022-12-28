@@ -7,15 +7,16 @@ import sys
 import traceback
 from io import StringIO
 from pathlib import Path
-from typing import Optional, Union, Tuple
+from typing import Optional, Union, Tuple, List
 
+import matplotlib
 import pandas as pd
 import tensorflow
 import torch
 from PIL import features, Image
 from huggingface_hub import HfFolder, whoami
 from pandas import DataFrame
-from tensorflow.python.summary.summary_iterator import summary_iterator
+from tensorboard.compat.proto import event_pb2
 
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from modules import shared, paths, sd_models
@@ -268,6 +269,72 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
+def plot_multi(
+    data: pd.DataFrame,
+    x: Union[str, None] = None,
+    y: Union[List[str], None] = None,
+    spacing: float = 0.1,
+    **kwargs
+) -> matplotlib.axes.Axes:
+    """Plot multiple Y axes on the same chart with same x axis.
+
+    Args:
+        data: dataframe which contains x and y columns
+        x: column to use as x axis. If None, use index.
+        y: list of columns to use as Y axes. If None, all columns are used
+            except x column.
+        spacing: spacing between the plots
+        **kwargs: keyword arguments to pass to data.plot()
+
+    Returns:
+        a matplotlib.axes.Axes object returned from data.plot()
+
+    Example:
+
+    See Also:
+        This code is mentioned in https://stackoverflow.com/q/11640243/2593810
+    """
+    from pandas.plotting._matplotlib.style import get_standard_colors
+
+    # Get default color style from pandas - can be changed to any other color list
+    if y is None:
+        y = data.columns
+
+    # remove x_col from y_cols
+    if x:
+        y = [col for col in y if col != x]
+
+    if len(y) == 0:
+        return
+    colors = get_standard_colors(num_colors=len(y))
+
+    if "legend" not in kwargs:
+        kwargs["legend"] = False  # prevent multiple legends
+
+    # First axis
+    ax = data.plot(x=x, y=y[0], color=colors[0], **kwargs)
+    ax.set_ylabel(ylabel=y[0])
+    lines, labels = ax.get_legend_handles_labels()
+
+    for i in range(1, len(y)):
+        # Multiple y-axes
+        ax_new = ax.twinx()
+        ax_new.spines["right"].set_position(("axes", 1 + spacing * (i - 1)))
+        data.plot(
+            ax=ax_new, x=x, y=y[i], color=colors[i % len(colors)], **kwargs
+        )
+        ax_new.set_ylabel(ylabel=y[i])
+
+        # Proper legend position
+        line, label = ax_new.get_legend_handles_labels()
+        lines += line
+        labels += label
+
+    ax.legend(lines, labels, loc=0)
+
+    return ax
+
+
 def parse_logs(model_name: str, sort_by=None):
     """Convert local TensorBoard data into Pandas DataFrame.
 
@@ -288,11 +355,14 @@ def parse_logs(model_name: str, sort_by=None):
         pandas.DataFrame with [wall_time, name, step, value] columns.
 
     """
-    def convert_tfevent(filepath) -> Tuple[DataFrame, DataFrame, DataFrame]:
+
+    def convert_tfevent(filepath) -> Tuple[DataFrame, DataFrame, DataFrame, bool]:
         loss_events = []
         lr_events = []
         ram_events = []
-        for e in summary_iterator(filepath):
+        serialized_examples = tensorflow.data.TFRecordDataset(filepath)
+        for serialized_example in serialized_examples:
+            e = event_pb2.Event.FromString(serialized_example.numpy())
             if len(e.summary.value):
                 parsed = parse_tfevent(e)
                 if parsed["Name"] == "lr":
@@ -301,9 +371,22 @@ def parse_logs(model_name: str, sort_by=None):
                     loss_events.append(parsed)
                 elif parsed["Name"] == "vram_usage":
                     ram_events.append(parsed)
-                else:
-                    print(f"Skipping: {parsed['Name']}")
-        return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events)
+
+        merged_events = []
+
+        has_all = True
+        for le in loss_events:
+            lr = next((item for item in lr_events if item["Step"] == le["Step"]), None)
+            if lr is not None:
+                le["LR"] = lr["Value"]
+                le["Loss"] = le["Value"]
+                merged_events.append(le)
+            else:
+                has_all = False
+        if has_all:
+            loss_events = merged_events
+
+        return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events), has_all
 
     def parse_tfevent(tfevent):
         return {
@@ -324,39 +407,51 @@ def parse_logs(model_name: str, sort_by=None):
     out_loss = []
     out_lr = []
     out_ram = []
+    has_all_lr = True
     for (root, _, filenames) in os.walk(root_dir):
         for filename in filenames:
             if "events.out.tfevents" not in filename:
                 continue
             file_full_path = os.path.join(root, filename)
-            converted_loss, converted_lr, converted_ram = convert_tfevent(file_full_path)
+            converted_loss, converted_lr, converted_ram, merged = convert_tfevent(file_full_path)
             out_loss.append(converted_loss)
             out_lr.append(converted_lr)
             out_ram.append(converted_ram)
+            if not merged:
+                has_all_lr = False
 
+    loss_columns = columns_order
+    if has_all_lr:
+        loss_columns = ['Wall_time', 'Name', 'Step', 'Loss', "LR"]
     # Concatenate (and sort) all partial individual dataframes
-    all_df_loss = pd.concat(out_loss)[columns_order]
+    all_df_loss = pd.concat(out_loss)[loss_columns]
     all_df_loss = all_df_loss.sort_values("Wall_time")
     all_df_loss = all_df_loss.reset_index(drop=True)
-
-    all_df_lr = pd.concat(out_lr)[columns_order]
-    all_df_lr = all_df_lr.sort_values("Wall_time")
-    all_df_lr = all_df_lr.reset_index(drop=True)
-
-    plotted_loss = all_df_loss.plot(x="Step", y="Value", title="Loss Averages")
-    plotted_lr = all_df_lr.plot(x="Step", y="Value", title="Learning Rate")
+    out_images = []
+    out_names = []
+    loss_name = ""
+    if has_all_lr:
+        plotted_loss = plot_multi(all_df_loss, "Step", ["Loss", "LR"], title=f"Loss Average/Learning Rate ({model_config.lr_scheduler})")
+        loss_name = "Loss Average/Learning Rate"
+    else:
+        plotted_loss = all_df_loss.plot(x="Step", y="Value", title="Loss Averages")
+        loss_name = "Loss Averages"
+        all_df_lr = pd.concat(out_lr)[columns_order]
+        all_df_lr = all_df_lr.sort_values("Wall_time")
+        all_df_lr = all_df_lr.reset_index(drop=True)
+        plotted_lr = all_df_lr.plot(x="Step", y="Value", title="Learning Rate")
+        lr_img = os.path.join(model_config.model_dir, "logging", f"lr_plot_{model_config.revision}.png")
+        plotted_lr.figure.savefig(lr_img)
+        log_lr = Image.open(lr_img)
+        out_images.append(log_lr)
+        out_names.append("Learning Rate")
 
     loss_img = os.path.join(model_config.model_dir, "logging", f"loss_plot_{model_config.revision}.png")
-    lr_img = os.path.join(model_config.model_dir, "logging", f"lr_plot_{model_config.revision}.png")
-
     plotted_loss.figure.savefig(loss_img)
-    plotted_lr.figure.savefig(lr_img)
 
     log_pil = Image.open(loss_img)
-    log_lr = Image.open(lr_img)
-
-    out_images = [log_pil, log_lr]
-
+    out_images.append(log_pil)
+    out_names.append(loss_name)
     try:
         all_df_ram = pd.concat(out_ram)[columns_order]
         all_df_ram = all_df_ram.sort_values("Wall_time")
@@ -368,6 +463,8 @@ def parse_logs(model_name: str, sort_by=None):
         plotted_ram.figure.savefig(ram_img)
         log_ram = Image.open(ram_img)
         out_images.append(log_ram)
+        out_names.append("VRAM Usage")
     except:
-       pass
-    return out_images
+        pass
+
+    return out_images, out_names

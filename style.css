@@ -12,6 +12,15 @@
   margin-top: -18px;
 }
 
+#db_prompt_info {
+    position: absolute;
+    z-index: 1000;
+    bottom: 10px;
+    width: 100%;
+    text-align: center;
+    margin: -8px;
+    padding: 0;
+}
 
 #refresh_db_models, #refresh_lora_models, #refresh_sd_models, #refresh_secret, #clear_secret, #db_check_progress_initial {
     margin-top: 0.75em;
@@ -24,6 +33,10 @@
     position: absolute;
     top: 0px;
     right: 10px;
+}
+
+#db_gen_ckpt_during, #db_train_sample {
+    display: none;
 }
 
 .hh {

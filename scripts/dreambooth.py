@@ -317,6 +317,8 @@ def load_params(model_dir):
                "db_prior_loss_weight",
                "db_resolution",
                "db_sample_batch_size",
+               "db_sanity_prompt",
+               "db_sanity_seed",
                "db_save_ckpt_after",
                "db_save_ckpt_cancel",
                "db_save_ckpt_during",
@@ -522,9 +524,6 @@ def ui_classifiers(model_name: str, lora_model: str, lora_weight: float, lora_tx
     if config.attention == "xformers":
         if config.mixed_precision == "no":
             msg = "Using xformers, please set mixed precision to 'fp16' or 'bf16' to continue."
-    if config.use_cpu:
-        if config.use_8bit_adam or config.mixed_precision != "no":
-            msg = "CPU Training detected, please disable 8Bit Adam and set mixed precision to 'no' to continue."
     if not len(config.concepts_list):
         msg = "Please configure some concepts."
     if not os.path.exists(config.pretrained_model_name_or_path):

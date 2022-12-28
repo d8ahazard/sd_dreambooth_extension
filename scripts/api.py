@@ -118,6 +118,8 @@ class DreamboothParameters(BaseModel):
     resolution: int = 512
     revision: int = 0
     sample_batch_size: int = 1
+    sanity_prompt: str = ""
+    sanity_seed: int = 420420
     save_ckpt_after: bool = True
     save_ckpt_cancel: bool = True
     save_ckpt_during: bool = True

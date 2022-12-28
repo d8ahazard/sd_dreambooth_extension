@@ -58,10 +58,12 @@ def check_progress_call():
     preview: Preview Image/Visibility
     gallery: Gallery Image/Visibility
     textinfo_result: Primary status
+    sample_prompts: List = A list of prompts corresponding with gallery contents
     check_progress_initial: Hides the manual 'check progress' button
     """
     if status.job_count == 0:
-        return "", gr.update(visible=False, value=None), gr.update(visible=True), gr_show(True), gr_show(False)
+        return "", gr.update(visible=False, value=None), gr.update(visible=True), gr_show(True), gr_show(True), \
+               gr_show(False)
     progress = 0
 
     if status.job_count > 0:
@@ -100,8 +102,15 @@ def check_progress_call():
     if status.textinfo2 is not None:
         textinfo_result = f"{textinfo_result}<br>{status.textinfo2}"
 
+    prompts = ""
+    if len(status.sample_prompts) > 0:
+        if len(status.sample_prompts) > 1:
+            prompts = ",".join(status.sample_prompts)
+        else:
+            prompts = status.sample_prompts[0]
+
     pspan = f"<span id='db_progress_span' style='display: none'>{time.time()}</span><p>{progressbar}</p>"
-    return pspan, preview, gallery, textinfo_result, gr_show(False)
+    return pspan, preview, gallery, textinfo_result, gr.update(value=prompts), gr_show(False)
 
 
 def check_progress_call_initial():
@@ -128,8 +137,10 @@ def on_ui_tabs():
         with gr.Row(equal_height=True):
             db_load_params = gr.Button(value='Load Settings', elem_id="db_load_params")
             db_save_params = gr.Button(value="Save Settings", elem_id="db_save_config")
-            db_train_model = gr.Button(value="Train", variant='primary')
-            db_generate_checkpoint = gr.Button(value="Generate Ckpt")
+            db_train_model = gr.Button(value="Train", variant='primary', elem_id="db_train")
+            db_generate_checkpoint = gr.Button(value="Generate Ckpt", elem_id="db_gen_ckpt")
+            db_generate_checkpoint_during = gr.Button(value="Generate Ckpt", elem_id="db_gen_ckpt_during")
+            db_train_sample = gr.Button(value="Generate Samples", elem_id="db_train_sample")
             db_cancel = gr.Button(value="Cancel", elem_id="db_cancel")
         with gr.Row().style(equal_height=False):
             with gr.Column(variant="panel"):
@@ -222,9 +233,18 @@ def on_ui_tabs():
                             db_sample_batch_size = gr.Number(label="Class Batch Size", precision=0, value=1)
 
                         with gr.Column():
+                            gr.HTML("Gradients")
+                            db_gradient_checkpointing = gr.Checkbox(label="Gradient Checkpointing", value=True)
+                            db_gradient_accumulation_steps = gr.Number(label="Gradient Accumulation Steps",
+                                                                       precision=0,
+                                                                       value=1)
+                            db_gradient_set_to_none = gr.Checkbox(label="Set Gradients to None When Zeroing",
+                                                                  value=True)
+
+                        with gr.Column():
                             gr.HTML(value="Learning Rate")
                             db_lr_scheduler = gr.Dropdown(label="Learning Rate Scheduler", value="constant",
-                                                          choices=["linear", "cosine", "cosine_with_restarts",
+                                                          choices=["linear", "cosine", "cosine_with_restarts", "cosine_annealing_restarts",
                                                                    "polynomial", "constant",
                                                                    "constant_with_warmup"])
                             db_learning_rate = gr.Number(label='Learning Rate', value=2e-6)
@@ -241,8 +261,13 @@ def on_ui_tabs():
                             gr.HTML(value="Image Processing")
                             db_resolution = gr.Number(label="Resolution", precision=0, value=512)
                             db_center_crop = gr.Checkbox(label="Center Crop", value=False)
-                            db_hflip = gr.Checkbox(label="Apply Horizontal Flip", value=True)
-
+                            db_hflip = gr.Checkbox(label="Apply Horizontal Flip", value=False)
+                            db_sanity_prompt = gr.Textbox(label="Sanity Sample Prompt", placeholder="A generic prompt "
+                                                                                                    "used to generate"
+                                                                                                    " a sample image "
+                                                                                                    "to verify model "
+                                                                                                    "fidelity.")
+                            db_sanity_seed = gr.Number(label="Sanity Sample Seed", value=420420)
                         with gr.Column():
                             gr.HTML(value="Miscellaneous")
                             db_pretrained_vae_name_or_path = gr.Textbox(label='Pretrained VAE Name or Path',
@@ -274,17 +299,9 @@ def on_ui_tabs():
                                     db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
                                     db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
-                                    db_shuffle_tags = gr.Checkbox(label="Shuffle Tags", value=False)
+                                    db_shuffle_tags = gr.Checkbox(label="Shuffle Tags", value=True)
                                     db_max_token_length = gr.Slider(label="Max Token Length", minimum=75, maximum=300,
                                                                     step=75)
-                                with gr.Column():
-                                    gr.HTML("Gradients")
-                                    db_gradient_checkpointing = gr.Checkbox(label="Gradient Checkpointing", value=True)
-                                    db_gradient_accumulation_steps = gr.Number(label="Gradient Accumulation Steps",
-                                                                               precision=0,
-                                                                               value=1)
-                                    db_gradient_set_to_none = gr.Checkbox(label="Set Gradients to None When Zeroing", value=True)
-
                                 with gr.Column():
                                     gr.HTML("Adam Advanced")
                                     db_adam_beta1 = gr.Number(label="Adam Beta 1", precision=1, value=0.9)
@@ -348,7 +365,7 @@ def on_ui_tabs():
                         db_save_state_during = gr.Checkbox(
                             label="Save separate diffusers snapshots when saving during training.")
                         db_save_state_after = gr.Checkbox(
-                            label="Save separate diffusers snapshots when training completes.", value=True)
+                            label="Save separate diffusers snapshots when training completes.")
                         db_save_state_cancel = gr.Checkbox(
                             label="Save separate diffusers snapshots when training is canceled.")
                 with gr.Tab("Generate"):
@@ -373,6 +390,8 @@ def on_ui_tabs():
                 db_progressbar = gr.HTML(elem_id="db_progressbar")
                 db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery').style(grid=4)
                 db_preview = gr.Image(elem_id='db_preview', visible=False)
+                db_prompt_info = gr.HTML(elem_id="db_prompt_info", value="Testing")
+                db_prompt_list = gr.HTML(elem_id="db_prompt_list", value="", visible=False)
                 db_check_progress = gr.Button("Check Progress", elem_id=f"db_check_progress", visible=False)
 
                 db_refresh_button.click(
@@ -396,7 +415,7 @@ def on_ui_tabs():
                     if not x:
                         return gr.update(value=False)
                     else:
-                        return gr.update(visible=True)
+                        return gr.update(value=True)
 
                 db_save_use_epochs.change(
                     fn=update_labels,
@@ -420,14 +439,14 @@ def on_ui_tabs():
                     fn=lambda: check_progress_call(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_check_progress_initial],
+                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, db_check_progress_initial],
                 )
 
                 db_check_progress_initial.click(
                     fn=lambda: check_progress_call_initial(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_check_progress_initial],
+                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, db_check_progress_initial],
                 )
 
         global params_to_save
@@ -472,6 +491,8 @@ def on_ui_tabs():
             db_resolution,
             db_revision,
             db_sample_batch_size,
+            db_sanity_prompt,
+            db_sanity_seed,
             db_save_ckpt_after,
             db_save_ckpt_cancel,
             db_save_ckpt_during,
@@ -598,6 +619,8 @@ def on_ui_tabs():
                 db_prior_loss_weight,
                 db_resolution,
                 db_sample_batch_size,
+                db_sanity_prompt,
+                db_sanity_seed,
                 db_save_ckpt_after,
                 db_save_ckpt_cancel,
                 db_save_ckpt_during,
@@ -836,6 +859,24 @@ def on_ui_tabs():
             ]
         )
 
+        def set_gen_ckpt():
+            status.do_save_model = True
+
+        def set_gen_sample():
+            status.do_save_samples = True
+
+        db_generate_checkpoint_during.click(
+            fn=set_gen_ckpt,
+            inputs=[],
+            outputs=[]
+        )
+
+        db_train_sample.click(
+            fn=set_gen_sample,
+            inputs=[],
+            outputs=[]
+        )
+
         db_create_model.click(
             fn=wrap_gpu_call(extract_checkpoint),
             _js="db_start_create",
@@ -849,7 +890,7 @@ def on_ui_tabs():
                 db_new_model_extract_ema
             ],
             outputs=[
-                db_model_name, db_model_path, db_revision, db_scheduler, db_src, db_has_ema, db_v2, db_resolution,
+                db_model_name, db_model_path, db_revision, db_epochs, db_scheduler, db_src, db_has_ema, db_v2, db_resolution,
                 db_status
             ]
         )

@@ -393,11 +393,19 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
         state_dict = {"db_global_step": config.revision, "db_epoch": config.epoch, "state_dict": state_dict}
         printi(f"Saving checkpoint to {checkpoint_path}...")
         torch.save(state_dict, checkpoint_path)
-        if v2:
+        cfg_file = None
+        new_name = os.path.join(config.model_dir, f"{config.model_name}.yaml")
+        if os.path.exists(new_name):
+            cfg_file = new_name
+
+        if v2 and cfg_file is None:
             cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs", "v2-inference-v.yaml")
+
+        if cfg_file is not None:
             cfg_dest = checkpoint_path.replace(".ckpt", ".yaml")
-            printi(f"Copying config file to {cfg_dest}", log=log)
+            printi(f"Copying config file from {cfg_dest} to {cfg_dest}", log=log)
             shutil.copyfile(cfg_file, cfg_dest)
+
     except Exception as e:
         msg = f"Exception compiling checkpoint: {e}"
         print(msg)

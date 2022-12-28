@@ -338,7 +338,8 @@ class SuperDataset(Dataset):
     def get_sample_prompts(self) -> [SampleData]:
         prompts = []
         for concept in self.concepts:
-            s_data = SampleData(concept.get_sample_prompt(), concept.concept)
-            prompts.append(s_data)
+            for n in range(concept.concept.n_save_sample):
+                s_data = SampleData(concept.get_sample_prompt(), concept.concept)
+                prompts.append(s_data)
         random.shuffle(prompts)
         return prompts

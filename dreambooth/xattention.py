@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import inspect
 import math
+import os
+import traceback
 from typing import Any, Dict, List, Union, Optional
 
 import diffusers

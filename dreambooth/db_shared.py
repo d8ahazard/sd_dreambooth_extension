@@ -1,6 +1,7 @@
 # One wrapper we're going to use to not depend so much on the main app.
 import datetime
 import math
+import os
 import time
 
 import torch
@@ -8,7 +9,7 @@ from PIL import Image
 
 dreambooth_models_path = ""
 models_path = ""
-script_path = ""
+script_path = os.path.dirname(os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
 ckpt_dir = ""
 lora_models_path = ""
 show_progress_every_n_steps = 10
@@ -22,6 +23,7 @@ ckptfix = False
 medvram = False
 lowvram = False
 CLIP_stop_at_last_layers = 2
+config = os.path.join(script_path, "configs", "v1-inference.yaml")
 
 
 def image_grid(imgs, batch_size=1, rows=None):
@@ -51,8 +53,9 @@ def load_auto_settings():
     try:
         from modules import shared as ws, devices, images
         from modules import paths
-        models_path = ws.models_path
-        script_path = ws.script_path
+        from modules.paths import models_path as mp, script_path as sp, sd_path as sdp
+        models_path = mp
+        script_path = sp
         ckpt_dir = ws.cmd_opts.ckpt_dir
         device_id = ws.cmd_opts.device_id
         CLIP_stop_at_last_layers = ws.opts.CLIP_stop_at_last_layers
@@ -94,6 +97,8 @@ class DreamState:
     interrupted = False
     interrupted_after_save = False
     interrupted_after_epoch = False
+    do_save_model = False
+    do_save_samples = False
     skipped = False
     job = ""
     job_no = 0
@@ -106,6 +111,7 @@ class DreamState:
     current_image_sampling_step = 0
     textinfo = None
     textinfo2 = None
+    sample_prompts = []
     time_start = None
     need_restart = False
 
@@ -118,15 +124,24 @@ class DreamState:
     def interrupt_after_epoch(self):
         self.interrupted_after_epoch = True
 
+    def save_samples(self):
+        self.do_save_samples = True
+
+    def save_model(self):
+        self.do_save_model = True
+
     def dict(self):
         obj = {
+            "do_save_model": self.do_save_model,
+            "do_save_samples": self.do_save_samples,
             "interrupted": self.interrupted,
             "job": self.job,
             "job_count": self.job_count,
             "job_no": self.job_no,
             "sampling_step": self.sampling_step,
             "sampling_steps": self.sampling_steps,
-            "last_status": self.textinfo
+            "last_status": self.textinfo,
+            "sample_prompts": self.sample_prompts
         }
 
         return obj
@@ -141,6 +156,7 @@ class DreamState:
         self.current_image_sampling_step = 0
         self.interrupted = False
         self.textinfo = None
+        self.sample_prompts = []
         self.time_start = time.time()
         torch_gc()
 

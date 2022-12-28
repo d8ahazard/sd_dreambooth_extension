@@ -59,6 +59,8 @@ class DreamboothConfig:
                  resolution: int = 512,
                  revision: int = 0,
                  sample_batch_size: int = 1,
+                 sanity_prompt: str = "",
+                 sanity_seed: int = 420420,
                  save_ckpt_after: bool = True,
                  save_ckpt_cancel: bool = True,
                  save_ckpt_during: bool = True,
@@ -144,7 +146,6 @@ class DreamboothConfig:
             revision = 0
         if epoch == "" or epoch is None:
             epoch = 0
-        print(f"Extra args: {model_path} and {kwargs}")
         model_name = "".join(x for x in model_name if (x.isalnum() or x in "._- "))
         models_path = shared.dreambooth_models_path
         if models_path == "" or models_path is None:
@@ -192,6 +193,8 @@ class DreamboothConfig:
         self.resolution = resolution
         self.revision = int(revision)
         self.sample_batch_size = sample_batch_size
+        self.sanity_prompt = sanity_prompt
+        self.sanity_seed = sanity_seed
         self.save_ckpt_after = save_ckpt_after
         self.save_ckpt_cancel = save_ckpt_cancel
         self.save_ckpt_during = save_ckpt_during
@@ -281,7 +284,6 @@ class DreamboothConfig:
                             if not os.path.exists(class_dir):
                                 os.makedirs(class_dir)
                             concept.class_data_dir = class_dir
-                        print(f"Concept {c_count} class dir is {concept.class_data_dir}")
                         self.concepts_list.append(concept)
                     c_count += 1
         else:
@@ -327,7 +329,7 @@ def save_config(*args):
     config = DreamboothConfig(*args)
     print("Saved settings.")
     config.save()
-    return "Saved settings."
+    return f"Saved settings for model: {config.model_name}"
 
 
 def from_file(model_name):

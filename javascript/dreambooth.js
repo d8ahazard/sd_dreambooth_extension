@@ -170,6 +170,8 @@ let db_titles = {
     "Sample Negative Prompt": "A negative prompt to use when generating preview images.",
     "Sample Seed": "The seed to use when generating samples. Set to -1 to use a random seed every time.",
     "Sample Steps": "The number of steps to use when generating classifier/regularization images.",
+    "Sanity Sample Prompt": "A prompt used to generate a 'baseline' image that will be created with other samples to verify model fidelity.",
+    "Sanity Sample Seed": "The seed to use when generating the validation sample image. -1 is not supported.",
     "Save Checkpoint to Subdirectory": "When enabled, checkpoints will be saved to a subdirectory in the selected checkpoints folder.",
     "Save Params": "Save the current training parameters to the model config file.",
     "Save Model Frequency (Epoch)": "Save a checkpoint every N epochs.",
@@ -246,6 +248,10 @@ function db_progressbar(){
 
     // let skip = id_skip ? gradioApp().getElementById(id_skip) : null;
     let interrupt = gradioApp().getElementById("db_cancel");
+    let gen_sample = gradioApp().getElementById("db_train_sample");
+    let gen_ckpt = gradioApp().getElementById("db_gen_ckpt");
+    let gen_ckpt_during = gradioApp().getElementById("db_gen_ckpt_during")
+    let train = gradioApp().getElementById("db_train");
     
     if(progressbar && progressbar.offsetParent){
         if(progressbar.innerText){
@@ -285,6 +291,10 @@ function db_progressbar(){
                     }, 500);
                 } else{
                     interrupt.style.display = "none";
+                    gen_sample.style.display = "none";
+                    gen_ckpt_during.style.display = "none";
+                    gen_ckpt.style.display = "block";
+                    train.style.display = "block";
 			
                     //disconnect observer once generation finished, so user can close selected image if they want
                     if (galleryObserver) {
@@ -321,7 +331,7 @@ function checkDbGallery(){
                 let scrollY = window.scrollY;
 
                 galleryButtons[prevSelectedIndex].click();
-                showGalleryImage();
+                showDbGalleryImage();
 
                 // When the gallery button is clicked, it gains focus and scrolls itself into view
                 // We need to scroll back to the previous position
@@ -370,10 +380,50 @@ function requestMoreDbProgress(){
     // TODO: Eventually implement other skip/cancel buttons.
     // let skip = id_skip ? gradioApp().getElementById("db_skip") : null;
     let interrupt = gradioApp().getElementById("db_cancel");
-    if(progressDiv && interrupt){
-        // if (skip) {
-        //     skip.style.display = "block";
-        // }
+    let train = gradioApp().getElementById("db_train");
+    let gen_sample = gradioApp().getElementById("db_train_sample");
+    let gen_ckpt = gradioApp().getElementById("db_gen_ckpt");
+    let gen_ckpt_during = gradioApp().getElementById("db_gen_ckpt_during");
+    if(progressDiv && interrupt && train && gen_sample){
+        gen_sample.style.display = "block";
+        train.style.display = "none";
         interrupt.style.display = "block";
+        gen_ckpt.style.display = "none";
+        gen_ckpt_during.style.display = "block";
     }
+}
+
+function showDbGalleryImage() {
+    setTimeout(function() {
+        let fullImg_preview = gradioApp().querySelectorAll('img.w-full.object-contain')
+
+        if (fullImg_preview != null) {
+            let im_idx = 0;
+            fullImg_preview.forEach(function function_name(e) {
+                if (e.dataset.modded) return;
+                e.dataset.modded = true;
+                if(e && e.parentElement.tagName === 'DIV'){
+                    e.style.cursor='pointer'
+                    e.style.userSelect='none'
+                    e.addEventListener('click', function (evt) {
+                        if(!opts.js_modal_lightbox) return;
+                        modalZoomSet(gradioApp().getElementById('modalImage'), opts.js_modal_lightbox_initially_zoomed);
+                        showModal(evt);
+                        let prompts_elem = gradioApp().getElementById("db_prompt_list");
+                        let prompt_info = gradioApp().getElementById("db_prompt_info");
+                        let prompt = "";
+                        if (prompts_elem && prompt_info) {
+                            let prompts = prompts_elem.innerHTML.split(",");
+                            if (im_idx < prompts.length) {
+                                prompt = prompts[im_idx];
+                            }
+                        }
+                        prompt_info.innerHTML = prompt;
+                        }, true);
+                    im_idx += 1;
+                }
+            });
+        }
+
+    }, 100);
 }

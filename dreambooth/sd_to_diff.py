@@ -16,6 +16,7 @@
 import os
 import re
 import shutil
+import traceback
 
 import gradio as gr
 import torch
@@ -733,6 +734,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         db_new_model_name: Gr.dropdown populated with our model name, if applicable.
         db_config.model_dir: The directory where our model was created.
         db_config.revision: Model revision
+        db_config.epoch: Model epoch
         db_config.scheduler: The scheduler being used
         db_config.src: The source checkpoint, if not from hub.
         db_has_ema: Whether the model had EMA weights and they were extracted. If weights were not present or
@@ -757,6 +759,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
 
     reset_safe = stop_safe_unpickle()
     db_shared.status.job_count = 11
+    original_config_file = None
     try:
         new_model_name = sanitize_name(new_model_name)
         db_shared.status.job_no = 0
@@ -768,25 +771,21 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                 map_location = torch.device('cpu')
         except:
             print("UPDATE YOUR WEBUI!!!!")
-            return "", "", 0, "", "", "", "", 512, "", "UPDATE YOUR WEBUI!"
+            return "", "", 0, 0, "", "", "", "", 512, "", "UPDATE YOUR WEBUI!"
+
 
         # Try to determine if v1 or v2 model
         if not from_hub:
             printi("Loading model from checkpoint.")
             checkpoint_info = get_checkpoint_match(ckpt_path)
 
-            if checkpoint_info is None:
-                print("Unable to find checkpoint file!")
+            if checkpoint_info is None or not os.path.exists(checkpoint_info.filename):
+                err_msg = "Unable to find checkpoint file!"
+                print(err_msg)
                 db_shared.status.job_no = 8
-                return "", "", 0, "", "", "", "", 512, "", "Unable to find base checkpoint."
+                return "", "", 0, 0, "", "", "", "", 512, "", err_msg
 
-            if not os.path.exists(checkpoint_info.filename):
-                print("Unable to find checkpoint file!")
-                db_shared.status.job_no = 8
-                return "", "", 0, "", "", "", "", 512, "", "Unable to find base checkpoint."
-
-            ckpt_path = checkpoint_info[0]
-
+            ckpt_path = checkpoint_info.filename
             printi("Loading checkpoint...")
             checkpoint = torch.load(ckpt_path)
             checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
@@ -821,7 +820,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             if new_model_token == "" or new_model_token is None:
                 msg = "Please provide a token to load models from the hub."
                 print(msg)
-                return "", "", 0, "", "", "", "", 512, "", msg
+                return "", "", 0, 0, "", "", "", "", 512, "", msg
             printi("Loading model from hub.")
             v2 = new_model_url == "stabilityai/stable-diffusion-2"
 
@@ -846,6 +845,11 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         db_config.lifetime_revision = revision
         db_config.epoch = epoch
         print(f"{'v2' if v2 else 'v1'} model loaded.")
+
+        # Use existing YAML if present
+        if ckpt_path is not None:
+            if os.path.exists(ckpt_path.replace(".ckpt", ".yaml")):
+                original_config_file = ckpt_path.replace(".ckpt", ".yaml")
 
         original_config = OmegaConf.load(original_config_file)
 
@@ -961,12 +965,16 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                 pipe = LDMTextToImagePipeline(vqvae=vae, bert=text_model, tokenizer=tokenizer, unet=unet,
                                               scheduler=scheduler)
     except Exception as e:
+        print(f"Exception setting up output: {e}")
         pipe = None
-        result_status = f"Exception while extracting model: {e}"
+        traceback.print_exc()
 
     if pipe is None or db_config is None:
-        print("Pipeline or config is not set, unable to continue.")
+        msg = "Pipeline or config is not set, unable to continue."
+        print(msg)
+        return "", "", 0, 0, "", "", "", "", 512, "", msg
     else:
+        resolution = db_config.resolution
         printi("Saving diffusers model...")
         pipe.save_pretrained(db_config.pretrained_model_name_or_path)
         result_status = f"Checkpoint successfully extracted to {db_config.pretrained_model_name_or_path}"
@@ -975,6 +983,13 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         scheduler = db_config.scheduler
         src = db_config.src
         required_dirs = ["unet", "vae", "text_encoder", "scheduler", "tokenizer"]
+        if original_config_file is not None and os.path.exists(original_config_file):
+            shutil.copy(original_config_file, db_config.model_dir)
+            basename = os.path.basename(original_config_file)
+            new_ex_path = os.path.join(db_config.model_dir, basename)
+            new_name = os.path.join(db_config.model_dir, f"{db_config.model_name}.yaml")
+            os.rename(new_ex_path, new_name)
+
         for req_dir in required_dirs:
             full_path = os.path.join(db_config.pretrained_model_name_or_path, req_dir)
             if not os.path.exists(full_path):
@@ -993,9 +1008,10 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
     return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), \
            model_dir, \
            revision, \
+           epoch, \
            scheduler, \
            src, \
            "True" if has_ema else "False", \
            "True" if v2 else "False", \
-           db_config.resolution, \
+           resolution, \
            result_status

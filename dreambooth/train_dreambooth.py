@@ -22,8 +22,8 @@ from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, PretrainedConfig, CLIPTextModel
 
-from extensions.sd_dreambooth_extension.dreambooth import xattention
-from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
+from extensions.sd_dreambooth_extension.dreambooth import xattention, db_shared
+from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset, SampleData
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
@@ -130,7 +130,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 
 
 last_samples = []
-
+last_prompts = []
 
 class TrainResult:
     config: DreamboothConfig = None
@@ -168,10 +168,11 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     @return: TrainResult
     """
     global last_samples
+    global last_prompts
     logging_dir = Path(args.model_dir, "logging")
     result = TrainResult
     result.config = args
-    
+
     if profile_memory:
         cleanup(True)
         prof = profile(
@@ -308,11 +309,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         unet_lora_params, text_encoder_lora_params = apply_lora_weights(lora_model, unet, text_encoder, lora_alpha,
                                                                         lora_txt_alpha, accelerator.device)
 
+    learning_rate = args.learning_rate
+    new_lr = .000001 * (args.train_batch_size + math.sqrt(args.gradient_accumulation_steps)) * accelerator.num_processes
     if args.scale_lr:
-        args.learning_rate = (
-                args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size *
-                accelerator.num_processes
-        )
+        learning_rate = (args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size *
+                         accelerator.num_processes
+                         )
 
     # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
     use_adam = False
@@ -345,7 +347,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     optimizer = optimizer_class(
         params_to_optimize,
-        lr=args.learning_rate,
+        lr=learning_rate,
         betas=(args.adam_beta1, args.adam_beta2),
         weight_decay=args.adam_weight_decay,
         eps=args.adam_epsilon,
@@ -434,9 +436,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         }
         return output
 
+    n_workers = min(8, os.cpu_count() - 1)
+    if os.name == "nt":
+        n_workers = 0
     train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, num_workers=0,
-        pin_memory=False
+        train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, num_workers=n_workers,
+        pin_memory=True
     )
     # Move text_encoder and VAE to GPU.
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
@@ -469,8 +474,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             )
         else:
             dataset = orig_dataset
+        n_workers = min(8, os.cpu_count() - 1)
+        if os.name == "nt":
+            n_workers = 0
         dataloader = torch.utils.data.DataLoader(
-            dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, num_workers=0, pin_memory=False
+            dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, num_workers=n_workers,
+            pin_memory=True
         )
         latents_cache = []
         text_encoder_cache = []
@@ -489,9 +498,9 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     text_encoder_cache.append(text_encoder(d_batch["input_ids"])[0])
                 concepts_cache.append(dataset.current_concept)
         dataset = LatentsDataset(latents_cache, text_encoder_cache, concepts_cache)
-        n_workers = min(8, os.cpu_count() - 1)
         dataloader = accelerator.prepare(
-            torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda z: z, shuffle=True, num_workers=0, pin_memory=False))
+            torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=lambda z: z, shuffle=True,
+                                        num_workers=n_workers, pin_memory=True))
         if enc_vae is not None:
             del enc_vae
         return dataset, dataloader
@@ -509,15 +518,18 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
         overrode_max_train_steps = True
 
-    lr_scheduler = get_scheduler(
-        args.lr_scheduler,
-        optimizer=optimizer,
-        num_warmup_steps=args.lr_warmup_steps * args.gradient_accumulation_steps,
-        num_training_steps=max_train_steps * args.gradient_accumulation_steps,
-        num_cycles=args.lr_cycles,
-        power=args.lr_power,
-    )
-
+    if args.lr_scheduler != "cosine_annealing_restarts":
+        lr_scheduler = get_scheduler(
+            args.lr_scheduler,
+            optimizer=optimizer,
+            num_warmup_steps=args.lr_warmup_steps * args.gradient_accumulation_steps,
+            num_training_steps=max_train_steps * args.gradient_accumulation_steps,
+            num_cycles=args.lr_cycles,
+            power=args.lr_power,
+        )
+    else:
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2,
+                                                                            eta_min=0.000001, last_epoch=-1)
     # create ema, fix OOM
     if args.use_ema:
         ema_unet = EMAModel(unet.parameters())
@@ -547,6 +559,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
     # Afterwards we recalculate our number of training epochs
     max_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
+    real_steps = max_train_steps * args.train_batch_size * args.gradient_accumulation_steps
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
@@ -569,14 +582,17 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
             no_safe = shared.cmd_opts.disable_safe_unpickle
         except:
             no_safe = False
-        shared.cmd_opts.disable_safe_unpickle = True
-        accelerator.load_state(new_hotness)
-        shared.cmd_opts.disable_safe_unpickle = no_safe
-        global_step = args.revision
-        resume_from_checkpoint = True
-        resume_global_step = global_step
-        first_epoch = args.epoch
-        resume_step = resume_global_step % num_update_steps_per_epoch
+        try:
+            shared.cmd_opts.disable_safe_unpickle = True
+            accelerator.load_state(new_hotness)
+            shared.cmd_opts.disable_safe_unpickle = no_safe
+            global_step = args.revision
+            resume_from_checkpoint = True
+            resume_global_step = global_step
+            first_epoch = args.epoch
+            resume_step = resume_global_step
+        except Exception as lex:
+            print(f"Exception loading checkpoint: {lex}")
 
     print("  ***** Running training *****")
     print(f"  Num examples = {len(train_dataset)}")
@@ -585,13 +601,13 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
     print(f"  Instantaneous batch size per device = {args.train_batch_size}")
     print(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     print(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
-    print(f"  Total optimization steps = {max_train_steps}")
+    print(f"  Total optimization steps = {real_steps}")
     print(f"  Resuming from checkpoint: {resume_from_checkpoint}")
     print(f"  First resume epoch: {first_epoch}")
     print(f"  First resume step: {resume_step}")
     print(f"  Lora: {args.use_lora}, Adam: {use_adam}, Prec: {args.mixed_precision}")
     print(f"  Grad: {args.gradient_checkpointing}, Text: {args.train_text_encoder}, EMA: {args.use_ema}")
-    print(f"  LR: {args.learning_rate})")
+    print(f"  LR: {learning_rate})")
 
     last_img_step = -1
     last_save_step = -1
@@ -651,6 +667,13 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
         save_snapshot = False
         save_lora = False
         save_checkpoint = False
+        if db_shared.status.do_save_samples:
+            save_image = True
+            db_shared.status.do_save_samples = False
+
+        if db_shared.status.do_save_model:
+            save_model = True
+            db_shared.status.do_save_model = False
 
         if save_model:
             if save_canceled:
@@ -675,6 +698,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
     def save_weights(save_image, save_model, save_snapshot, save_checkpoint, save_lora):
         global last_samples
+        global last_prompts
         # Create the pipeline using the trained modules and save it.
         if accelerator.is_main_process:
             g_cuda = None
@@ -737,10 +761,11 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                                 print(f"Saving snapshot at step: {args.revision}")
                                 accelerator.save_state(os.path.join(args.model_dir, "checkpoints",
                                                                     f"checkpoint-{args.revision}"))
-                            else:
-                                status.textinfo = f"Saving diffusion model at step {args.revision}..."
-                                print(f"Saving diffusion weights at step: {args.revision}.")
-                                s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"))
+
+                            # We should save this regardless, because it's our fallback if no snapshot exists.
+                            status.textinfo = f"Saving diffusion model at step {args.revision}..."
+                            print(f"Saving diffusion weights at step: {args.revision}.")
+                            s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"))
 
                         if save_checkpoint:
                             compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
@@ -754,10 +779,11 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         traceback.print_exc()
                         pass
                 save_dir = args.model_dir
-
                 if save_image:
                     samples = []
+                    sample_prompts = []
                     last_samples = []
+                    last_prompts = []
                     status.textinfo = f"Saving preview image(s) at step {args.revision}..."
                     try:
                         s_pipeline.set_progress_bar_config(disable=True)
@@ -765,28 +791,34 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                         os.makedirs(sample_dir, exist_ok=True)
                         with accelerator.autocast(), torch.inference_mode():
                             prompts = gen_dataset.get_sample_prompts()
+                            if args.sanity_prompt != "" and args.sanity_prompt is not None:
+                                extra = SampleData(args.sanity_prompt, concept=args.concepts_list[0])
+                                extra.seed = args.sanity_seed
+                                prompts.append(extra)
                             ci = 0
                             for c in prompts:
-                                seed = c.seed
+                                seed = int(c.seed)
                                 if seed is None or seed == '' or seed == -1:
                                     seed = int(random.randrange(21474836147))
                                 g_cuda = torch.Generator(device=accelerator.device).manual_seed(seed)
-                                for si in tqdm(range(c.n_samples), desc="Generating samples"):
-                                    s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
-                                                         guidance_scale=c.scale,
-                                                         negative_prompt=c.negative_prompt,
-                                                         height=args.resolution,
-                                                         width=args.resolution,
-                                                         generator=g_cuda).images[0]
-                                    samples.append(s_image)
-                                    image_name = os.path.join(sample_dir, f"sample_{args.revision}-{ci}{si}.png")
-                                    txt_name = image_name.replace(".png", ".txt")
-                                    with open(txt_name, "w", encoding="utf8") as txt_file:
-                                        txt_file.write(c.prompt)
-                                    s_image.save(image_name)
+                                s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
+                                                     guidance_scale=c.scale,
+                                                     negative_prompt=c.negative_prompt,
+                                                     height=args.resolution,
+                                                     width=args.resolution,
+                                                     generator=g_cuda).images[0]
+                                sample_prompts.append(c.prompt)
+                                samples.append(s_image)
+                                image_name = os.path.join(sample_dir, f"sample_{args.revision}-{ci}.png")
+                                txt_name = image_name.replace(".png", ".txt")
+                                with open(txt_name, "w", encoding="utf8") as txt_file:
+                                    txt_file.write(c.prompt)
+                                s_image.save(image_name)
                                 ci += 1
                             for sample in samples:
                                 last_samples.append(sample)
+                            for prompt in sample_prompts:
+                                last_prompts.append(prompt)
                             del samples
 
                     except Exception as em:
@@ -801,9 +833,12 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 if g_cuda:
                     del g_cuda
                 try:
-                    log_images = parse_logs(model_name=args.model_name)
+                    log_images, log_names = parse_logs(model_name=args.model_name)
                     for log_image in log_images:
                         last_samples.append(log_image)
+                    for log_name in log_names:
+                        last_prompts.append(log_name)
+                    db_shared.status.sample_prompts = last_prompts
                     del log_images
                 except:
                     pass
@@ -900,23 +935,24 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
                     optimizer.step()
                     lr_scheduler.step()
+                    # Update EMA
+                    if args.use_ema and ema_unet is not None:
+                        ema_unet.step(unet.parameters())
+
                     optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
 
                     # Checks if the accelerator has performed an optimization step behind the scenes
                 if accelerator.sync_gradients:
-                    progress_bar.update(1)
-                    global_step += 1
-                    args.revision += 1
-                    status.job_no += 1
+                    step_size = args.train_batch_size * args.gradient_accumulation_steps
+                    progress_bar.update(step_size)
+                    global_step += step_size
+                    args.revision += step_size
+                    status.job_no += step_size
 
                 if profile_memory:
                     loss_avg.update(loss.cpu().float(), bsz)
                 else:
                     loss_avg.update(loss.detach_(), bsz)
-
-                # Update EMA
-                if args.use_ema and ema_unet is not None:
-                    ema_unet.step(unet.parameters())
 
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
@@ -930,7 +966,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
 
                 # Check training complete before save check
                 if max_train_epochs <= 1:
-                    training_complete = global_step >= max_train_steps or status.interrupted
+                    training_complete = global_step >= real_steps or status.interrupted
                     if training_complete:
                         print("Stepss met, ending training.")
                 else:
@@ -944,9 +980,8 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 # Check again after possibly saving
                 if status.interrupted:
                     training_complete = True
-                tot_step = global_step + lifetime_step
                 status.textinfo = f"Steps: {global_step}/{real_steps} (Current)," \
-                                  f" {args.revision}/{tot_step + lifetime_step} (Lifetime), Epoch: {args.epoch}"
+                                  f" {args.revision}/{lifetime_step + real_steps} (Lifetime), Epoch: {args.epoch}"
 
                 # Log completion message
                 if training_complete:
@@ -956,7 +991,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                     else:
                         state = "complete"
 
-                    status.textinfo = f"Training {state} {global_step}/{max_train_steps}, {args.revision}" \
+                    status.textinfo = f"Training {state} {global_step}/{real_steps}, {args.revision}" \
                                       f" total."
 
                     break
@@ -994,7 +1029,7 @@ def main(args: DreamboothConfig, memory_record, use_subdir, lora_model=None, lor
                 print("Epochs met, ending training.")
         if not weights_saved:
             check_save()
-        status.job_count = max_train_steps
+        status.job_count = real_steps
 
         if args.epoch_pause_frequency > 0 and args.epoch_pause_time > 0:
             if not global_epoch % args.epoch_pause_frequency:
