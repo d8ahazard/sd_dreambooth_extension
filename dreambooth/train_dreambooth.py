@@ -5,14 +5,13 @@
 import gc
 import itertools
 import logging
-import math
 import os
 import random
 import time
 import traceback
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -139,6 +138,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 
 last_samples = []
 last_prompts = []
+
 
 class TrainResult:
     config: DreamboothConfig = None
@@ -507,7 +507,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             train_dataset, batch_size=1, shuffle=False, collate_fn=collate_fn, num_workers=n_workers)
 
         max_train_steps = args.num_train_epochs * len(train_dataloader) * gradient_accumulation_steps
-        
+
         if args.lr_scheduler != "cosine_annealing_restarts":
             lr_scheduler = get_scheduler(
                 args.lr_scheduler,
@@ -897,7 +897,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     if args.use_ema and ema_unet is not None:
                         ema_unet.step(unet.parameters())
 
-
                     optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
 
                 # Checks if the accelerator has performed an optimization step behind the scenes
@@ -993,7 +992,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
             if training_complete:
                 break
-
 
         if profile_memory and prof is not None:
             prof.stop()

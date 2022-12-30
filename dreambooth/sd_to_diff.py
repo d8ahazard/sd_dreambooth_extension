@@ -988,6 +988,8 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             basename = os.path.basename(original_config_file)
             new_ex_path = os.path.join(db_config.model_dir, basename)
             new_name = os.path.join(db_config.model_dir, f"{db_config.model_name}.yaml")
+            if os.path.exists(new_name):
+                os.remove(new_name)
             os.rename(new_ex_path, new_name)
 
         for req_dir in required_dirs:
