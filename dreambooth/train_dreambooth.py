@@ -12,7 +12,7 @@ import time
 import traceback
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import cv2
 import numpy as np
@@ -139,7 +139,6 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 
 last_samples = []
 last_prompts = []
-
 
 class TrainResult:
     config: DreamboothConfig = None
@@ -827,6 +826,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         for epoch in range(first_epoch, max_train_epochs):
             if training_complete:
                 break
+
             unet.train()
             train_tenc = args.stop_text_encoder == -1 or epoch < args.stop_text_encoder
             text_encoder.train(train_tenc)
@@ -897,6 +897,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     if args.use_ema and ema_unet is not None:
                         ema_unet.step(unet.parameters())
 
+
                     optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
 
                 # Checks if the accelerator has performed an optimization step behind the scenes
@@ -959,6 +960,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             accelerator.wait_for_everyone()
 
             if training_complete:
+
                 if profile_memory and prof is not None:
                     prof.step()
 
@@ -991,6 +993,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
             if training_complete:
                 break
+
 
         if profile_memory and prof is not None:
             prof.stop()

@@ -243,6 +243,7 @@ def on_ui_tabs():
                                                           choices=["linear", "cosine", "cosine_with_restarts", "cosine_annealing_restarts",
                                                                    "polynomial", "constant",
                                                                    "constant_with_warmup"])
+
                             db_learning_rate = gr.Number(label='Learning Rate', value=2e-6)
                             db_lr_cycles = gr.Number(label="Number of Hard Resets", value=1, precision=0, visible=False)
                             db_lr_power = gr.Number(label="Polynomial Power", value=1.0, precision=1, visible=False)
@@ -251,6 +252,7 @@ def on_ui_tabs():
                                 db_lora_txt_learning_rate = gr.Number(label='Lora Text Encoder Learning Rate',
                                                                       value=2e-4)
                             db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=500)
+
 
                         with gr.Column():
                             gr.HTML(value="Image Processing")
