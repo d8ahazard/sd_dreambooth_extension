@@ -310,7 +310,7 @@ def plot_multi(
     return ax
 
 
-def parse_logs(model_name: str, sort_by=None):
+def parse_logs(model_name: str):
     """Convert local TensorBoard data into Pandas DataFrame.
 
     Function takes the root directory path and recursively parses
@@ -324,7 +324,7 @@ def parse_logs(model_name: str, sort_by=None):
 
     Paramters:
         root_dir: (str) path to root dir with tensorboard data.
-        sort_by: (optional str) column name to sort by.
+        smoothing window: (int) Number of steps to smooth data by.
 
     Returns:
         pandas.DataFrame with [wall_time, name, step, value] columns.
@@ -376,6 +376,7 @@ def parse_logs(model_name: str, sort_by=None):
     if model_config is None:
         print("Unable to load model config!")
         return None
+    smoothing_window = model_config.graph_smoothing
     root_dir = os.path.join(model_config.model_dir, "logging", "dreambooth")
     columns_order = ['Wall_time', 'Name', 'Step', 'Value']
 
@@ -402,6 +403,7 @@ def parse_logs(model_name: str, sort_by=None):
     all_df_loss = pd.concat(out_loss)[loss_columns]
     all_df_loss = all_df_loss.sort_values("Wall_time")
     all_df_loss = all_df_loss.reset_index(drop=True)
+    all_df_loss = all_df_loss.rolling(smoothing_window).mean()
     out_images = []
     out_names = []
     loss_name = ""
@@ -414,6 +416,7 @@ def parse_logs(model_name: str, sort_by=None):
         all_df_lr = pd.concat(out_lr)[columns_order]
         all_df_lr = all_df_lr.sort_values("Wall_time")
         all_df_lr = all_df_lr.reset_index(drop=True)
+        all_df_lr = all_df_lr.rolling(smoothing_window).mean()
         plotted_lr = all_df_lr.plot(x="Step", y="Value", title="Learning Rate")
         lr_img = os.path.join(model_config.model_dir, "logging", f"lr_plot_{model_config.revision}.png")
         plotted_lr.figure.savefig(lr_img)
@@ -431,7 +434,7 @@ def parse_logs(model_name: str, sort_by=None):
         all_df_ram = pd.concat(out_ram)[columns_order]
         all_df_ram = all_df_ram.sort_values("Wall_time")
         all_df_ram = all_df_ram.reset_index(drop=True)
-
+        all_df_ram = all_df_ram.rolling(smoothing_window).mean()
         plotted_ram = all_df_ram.plot(x="Step", y="Value", title="VRAM Usage")
 
         ram_img = os.path.join(model_config.model_dir, "logging", f"ram_plot_{model_config.revision}.png")

@@ -291,6 +291,7 @@ def load_params(model_dir):
                "db_gradient_accumulation_steps",
                "db_gradient_checkpointing",
                "db_gradient_set_to_none",
+               "db_graph_smoothing",
                "db_half_model",
                "db_hflip",
                "db_learning_rate",

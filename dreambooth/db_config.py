@@ -33,6 +33,7 @@ class DreamboothConfig:
                  gradient_accumulation_steps: int = 1,
                  gradient_checkpointing: bool = True,
                  gradient_set_to_none: bool = True,
+                 graph_smoothing: int = 50,
                  half_model: bool = False,
                  has_ema: bool = False,
                  hflip: bool = False,
@@ -162,6 +163,7 @@ class DreamboothConfig:
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.gradient_checkpointing = gradient_checkpointing
         self.gradient_set_to_none = gradient_set_to_none
+        self.graph_smoothing = graph_smoothing
         self.half_model = half_model
         self.hflip = hflip
         self.learning_rate = learning_rate

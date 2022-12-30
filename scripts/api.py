@@ -90,6 +90,7 @@ class DreamboothParameters(BaseModel):
     gradient_accumulation_steps: int = 1
     gradient_checkpointing: bool = True
     gradient_set_to_none: bool = True
+    graph_smoothing: int = 50
     half_model: bool = False
     hflip: bool = True
     learning_rate: float = 0.000002

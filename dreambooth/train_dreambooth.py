@@ -383,9 +383,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             if nci > 0 and cdd is not None and cdd != "" and os.path.exists(cdd):
                 print("prepare reg images.")
                 reg_dirs = os.listdir(cdd)
-                for cl_dir in reg_dirs:
-                    img_caps = load_dreambooth_dir(os.path.join(nci, cl_dir), conc)
-                    reg_img_path_captions.extend(img_caps)
+                img_caps = load_dreambooth_dir(cdd, conc)
+                reg_img_path_captions.extend(img_caps)
             print(f"{len(reg_img_path_captions)} reg images.")
 
         # TODO: Add UI stuff for these
@@ -411,7 +410,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
         print("prepare dataset")
         train_dataset = DreamBoothOrFineTuningDataset(
-            batch_size=args.train_batch_size,
+            batch_size=train_batch_size,
             fine_tuning=False,
             train_img_path_captions=train_img_path_captions,
             reg_img_path_captions=reg_img_path_captions,

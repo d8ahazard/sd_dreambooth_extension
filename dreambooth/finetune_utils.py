@@ -617,19 +617,27 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
     builder = ImageBuilder(args, use_txt2img=use_txt2img, lora_model=lora_model, lora_weight=lora_weight,
                            lora_txt_weight=lora_text_weight, batch_size=args.sample_batch_size, accelerator=accelerator)
     generated = 0
-    pbar = tqdm(total=set_len - 1)
+    pbar = tqdm(total=set_len)
 
-    for i in range(set_len):
+    for i in range(int(set_len / args.sample_batch_size)):
         if status.interrupted:
             break
+        if generated >= set_len:
+            break
         prompts = []
-        for b in range(args.sample_batch_size):
+        if set_len - generated < args.sample_batch_size:
+            batch_size = set_len - generated
+        else:
+            batch_size = args.sample_batch_size
+        for b in range(batch_size):
             pd = prompt_dataset.__getitem__(i)
             prompts.append(pd)
 
         new_images = builder.generate_images(prompts)
         i_idx = 0
         for image in new_images:
+            if generated >= set_len:
+                break
             try:
                 pd = prompts[i_idx]
                 image_base = hashlib.sha1(image.tobytes()).hexdigest()
@@ -646,9 +654,6 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
                 status.current_image = image
                 if pbar is not None:
                     pbar.update()
-
-                if generated >= set_len:
-                    break
             except Exception as e:
                 print(f"Exception generating images: {e}")
                 traceback.print_exc()

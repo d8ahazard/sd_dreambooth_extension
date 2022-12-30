@@ -369,6 +369,7 @@ def on_ui_tabs():
                         db_generate_classes = gr.Button(value="Generate Class Images")
                         db_generate_prompts = gr.Button(value="Preview Prompts")
                         db_generate_graph = gr.Button(value="Generate Graph")
+                        db_graph_smoothing = gr.Number(value=50, label="Graph Smoothing Steps")
                         db_generate_sample = gr.Button(value="Generate Sample Images")
                         db_sample_prompt = gr.Textbox(label="Sample Prompt")
                         db_sample_negative = gr.Textbox(label="Sample Negative Prompt")
@@ -455,6 +456,7 @@ def on_ui_tabs():
             db_gradient_accumulation_steps,
             db_gradient_checkpointing,
             db_gradient_set_to_none,
+            db_graph_smoothing,
             db_half_model,
             db_has_ema,
             db_hflip,
@@ -582,6 +584,7 @@ def on_ui_tabs():
                 db_gradient_accumulation_steps,
                 db_gradient_checkpointing,
                 db_gradient_set_to_none,
+                db_graph_smoothing,
                 db_half_model,
                 db_hflip,
                 db_learning_rate,
