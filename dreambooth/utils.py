@@ -310,7 +310,7 @@ def plot_multi(
     return ax
 
 
-def parse_logs(model_name: str):
+def parse_logs(model_name: str, for_ui: bool = False):
     """Convert local TensorBoard data into Pandas DataFrame.
 
     Function takes the root directory path and recursively parses
@@ -323,8 +323,8 @@ def parse_logs(model_name: str):
     too long then narrow it to some sub-directories.
 
     Paramters:
-        root_dir: (str) path to root dir with tensorboard data.
-        smoothing window: (int) Number of steps to smooth data by.
+        model_name: (str) path to db model config/dir.
+        for_ui: (bool) Generate UI-formatted text outputs.
 
     Returns:
         pandas.DataFrame with [wall_time, name, step, value] columns.
@@ -376,7 +376,7 @@ def parse_logs(model_name: str):
     if model_config is None:
         print("Unable to load model config!")
         return None
-    smoothing_window = model_config.graph_smoothing
+    smoothing_window = int(model_config.graph_smoothing)
     root_dir = os.path.join(model_config.model_dir, "logging", "dreambooth")
     columns_order = ['Wall_time', 'Name', 'Step', 'Value']
 
@@ -442,6 +442,8 @@ def parse_logs(model_name: str):
         log_ram = Image.open(ram_img)
         out_images.append(log_ram)
         out_names.append("VRAM Usage")
+        if for_ui:
+            out_names = "<br>".join(out_names)
     except:
         pass
 

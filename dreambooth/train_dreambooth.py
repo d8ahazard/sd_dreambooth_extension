@@ -858,7 +858,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     else:
                         enc_out = text_encoder(batch["input_ids"], output_hidden_states=True, return_dict=True)
                         encoder_hidden_states = enc_out['hidden_states'][-int(args.clip_skip)]
-                        encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states)
+                        encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states.to(dtype=weight_dtype))
 
                     # Predict the noise residual
                     noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample

@@ -758,8 +758,8 @@ def on_ui_tabs():
 
         db_generate_graph.click(
             fn=parse_logs,
-            inputs=[db_model_name],
-            outputs=[db_gallery]
+            inputs=[db_model_name, gr.Checkbox(value=True)],
+            outputs=[db_gallery, db_prompt_list]
         )
 
         db_performance_wizard.click(
