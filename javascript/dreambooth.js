@@ -179,6 +179,7 @@ let db_titles = {
     "Set Gradients to None When Zeroing": "Can increase training speed at the cost of a slight increase in VRAM usage.",
     "Shuffle After Epoch": "When enabled, will shuffle the dataset after the first epoch. Will enable text encoder training and latent caching (More VRAM).",
     "Source Checkpoint": "The source checkpoint to extract for training.",
+    "Text Encoder Epochs": "The number of steps per image (Epoch) to train the text encoder for. Set to -1 to train the same amount as the Unet.",
     "Total Number of Class/Reg Images": "Total number of classification/regularization images to use. If no images exist, they will be generated. Set to 0 to disable prior preservation.",
     "Train Text Encoder": "Enabling this will provide better results and editability, but cost more VRAM.",
     "Train": "Start training.",

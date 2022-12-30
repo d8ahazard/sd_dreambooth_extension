@@ -46,7 +46,6 @@ class DreamboothConfig:
                  lr_scheduler: str = 'constant',
                  lr_warmup_steps: int = 0,
                  max_token_length: int = 75,
-                 max_train_steps: int = 1000,
                  mixed_precision: str = "fp16",
                  model_path: str = "",
                  num_train_epochs: int = 1,
@@ -69,8 +68,6 @@ class DreamboothConfig:
                  save_state_after: bool = True,
                  save_state_cancel: bool = False,
                  save_state_during: bool = False,
-                 save_use_global_counts: bool = False,
-                 save_use_epochs: bool = False,
                  scheduler: str = "ddim",
                  src: str = "",
                  shuffle_tags: bool = False,
@@ -174,7 +171,6 @@ class DreamboothConfig:
         self.lr_scheduler = lr_scheduler
         self.lr_warmup_steps = lr_warmup_steps
         self.max_token_length = max_token_length
-        self.max_train_steps = max_train_steps
         self.mixed_precision = mixed_precision
         self.model_dir = model_dir
         self.model_name = model_name
@@ -199,8 +195,6 @@ class DreamboothConfig:
         self.save_state_after = save_state_after
         self.save_state_cancel = save_state_cancel
         self.save_state_during = save_state_during
-        self.save_use_global_counts = save_use_global_counts
-        self.save_use_epochs = save_use_epochs
         self.src = src
         self.shuffle_tags = shuffle_tags
         self.train_batch_size = train_batch_size

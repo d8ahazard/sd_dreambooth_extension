@@ -4,19 +4,18 @@ from pathlib import Path
 from typing import List
 
 import torch
-import torch.nn.functional as F
 import torch.utils.checkpoint
 from PIL import Image
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from diffusers import AutoencoderKL, DDPMScheduler, StableDiffusionPipeline, UNet2DConditionModel
+from torch.nn import functional
 from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import AverageMeter
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils import list_features, is_image
 from modules import shared
 
@@ -84,12 +83,6 @@ def parse_args():
         "--emb_train_steps",
         type=int,
         default=500,
-        help="Total number of training steps to perform.",
-    )
-    parser.add_argument(
-        "--max_train_steps",
-        type=int,
-        default=1000,
         help="Total number of training steps to perform.",
     )
     parser.add_argument(
@@ -264,21 +257,19 @@ def train_imagic(args: DreamboothConfig):
     optimized_embeddings.requires_grad_(True)
     optimizer = optimizer_class(
         [optimized_embeddings],  # only optimize embeddings
-        lr=1e-3,
-        betas=(args.adam_beta1, args.adam_beta2),
-        eps=args.adam_epsilon,
+        lr=1e-3
     )
 
     unet, optimizer = accelerator.prepare(unet, optimizer)
 
     # We need to initialize the trackers we use, and also store our configuration.
-    # The trackers initializes automatically on the main process.
+    # The trackers will initialize automatically on the main process.
     if accelerator.is_main_process:
         accelerator.init_trackers("imagic")
 
     def train_loop(pbar, optim):
-        loss_avg = AverageMeter()
         for step in pbar:
+            loss_total = 0
             if status.interrupted:
                 break
             status.job_no += 1
@@ -298,22 +289,22 @@ def train_imagic(args: DreamboothConfig):
 
                 noise_pred = unet(noisy_latents, timesteps, optimized_embeddings).sample
 
-                loss = F.mse_loss(noise_pred.float(), noise.float(), reduction="mean")
-
-                accelerator.backward(loss)
+                current_loss = functional.mse_loss(noise_pred.float(), noise.float(), reduction="mean")
+                loss_total += current_loss
+                avg_loss = loss_total / (step + 1)
+                accelerator.backward(current_loss)
                 optim.step()
                 optim.zero_grad(set_to_none=True)
-                loss_avg.update(loss.detach_(), bsz)
 
             if not step % 10:
-                logs = {"loss": loss_avg.avg.item()}
+                logs = {"loss": avg_loss}
                 progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=step)
 
         accelerator.wait_for_everyone()
 
-    status.job_count = args.max_train_steps * 2
-    progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
+    status.job_count = args.num_train_epochs * 2
+    progress_bar = tqdm(range(args.num_train_epochs), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Optimizing embedding")
     status.textinfo = "Optimizing Embedding"
     print(status.textinfo)
@@ -330,14 +321,11 @@ def train_imagic(args: DreamboothConfig):
     # Fine tune the diffusion model.
     optimizer = optimizer_class(
         accelerator.unwrap_model(unet).parameters(),
-        lr=args.learning_rate,
-        betas=(args.adam_beta1, args.adam_beta2),
-        # weight_decay=args.adam_weight_decay,
-        eps=args.adam_epsilon,
+        lr=args.learning_rate
     )
     # Accelerator.prepare takes a list?
     optimizer = accelerator.prepare([optimizer])
-    progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
+    progress_bar = tqdm(range(args.num_train_epochs), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Fine Tuning")
     status.textinfo = "Fine Tuning"
     print(status.textinfo)

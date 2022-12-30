@@ -39,7 +39,6 @@ def training_wizard_person(model_dir):
 def training_wizard(model_dir, is_person=False):
     """
     Calculate the number of steps based on our learning rate, return the following:
-    db_max_train_steps,
     db_num_train_epochs,
     c1_max_steps,
     c1_num_class_images,
@@ -50,13 +49,13 @@ def training_wizard(model_dir, is_person=False):
     db_status
     """
     if model_dir == "" or model_dir is None:
-        return "Please select a model.", 1000, -1, 0, -1, 0, -1, 0
+        return -1, 0, -1, 0, -1, 0, "Please select a model."
     # Load config, get total steps
     config = from_file(model_dir)
 
     if config is None:
         w_status = "Unable to load config."
-        return w_status, 0, 100, -1, 0, -1, 0, -1
+        return 100, -1, 0, -1, 0, -1, w_status
     else:
         # Build concepts list using current settings
         concepts = config.concepts_list
@@ -108,7 +107,7 @@ def training_wizard(model_dir, is_person=False):
 
         print(w_status)
 
-    return 0, int(step_mult), -1, c_list[0], -1, c_list[1], -1, c_list[2], w_status
+    return int(step_mult), -1, c_list[0], -1, c_list[1], -1, c_list[2], w_status
 
 
 def performance_wizard():
@@ -304,7 +303,6 @@ def load_params(model_dir):
                "db_lr_scheduler",
                "db_lr_warmup_steps",
                "db_max_token_length",
-               "db_max_train_steps",
                "db_mixed_precision",
                "db_num_train_epochs",
                "db_pad_tokens",
@@ -325,8 +323,6 @@ def load_params(model_dir):
                "db_save_state_after",
                "db_save_state_cancel",
                "db_save_state_during",
-               "db_save_use_global_counts",
-               "db_save_use_epochs",
                "db_shuffle_tags",
                "db_train_batch_size",
                "db_stop_text_encoder",

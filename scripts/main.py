@@ -121,8 +121,8 @@ def check_progress_call_initial():
     status.textinfo2 = None
     status.time_start = time.time()
     status.time_left_force_display = False
-
-    return check_progress_call()
+    pspan, preview, gallery, textinfo_result, prompts_result, pbutton_result = check_progress_call()
+    return pspan, gr_show(False), gr.update(value=[]), textinfo_result, gr.update(value=[]), gr_show(False)
 
 
 def ui_gen_ckpt(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1.0,
@@ -213,13 +213,9 @@ def on_ui_tabs():
                             gr.HTML(value="Intervals")
                             db_num_train_epochs = gr.Number(label="Training Steps Per Image (Epochs)", precision=0,
                                                             value=100)
-                            db_max_train_steps = gr.Number(label='Max Training Steps', value=0, precision=0)
                             db_epoch_pause_frequency = gr.Number(label='Pause After N Epochs', value=0)
                             db_epoch_pause_time = gr.Number(label='Amount of time to pause between Epochs (s)',
                                                             value=60)
-                            db_save_use_epochs = gr.Checkbox(label="Use Epoch Values for Save Frequency", value=True)
-                            db_save_use_global_counts = gr.Checkbox(label='Use Lifetime Epochs When Saving',
-                                                                    value=True)
                             db_save_embedding_every = gr.Number(
                                 label='Save Model Frequency (Epochs)', value=25,
                                 precision=0)
@@ -295,7 +291,7 @@ def on_ui_tabs():
                                         label="Memory Attention", value="default",
                                         choices=list_attention())
                                     db_cache_latents = gr.Checkbox(label="Cache Latents", value=False)
-                                    db_stop_text_encoder = gr.Number(label="Text Encoder Steps", value=0)
+                                    db_stop_text_encoder = gr.Number(label="Text Encoder Epochs", value=-1)
                                     db_clip_skip = gr.Number(label="Clip Skip", value=1)
                                     db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
@@ -410,11 +406,6 @@ def on_ui_tabs():
                     else:
                         return gr.update(value=True)
 
-                db_save_use_epochs.change(
-                    fn=update_labels,
-                    inputs=[db_save_use_epochs],
-                    outputs=[db_save_preview_every, db_save_embedding_every, db_save_use_global_counts]
-                )
 
                 db_stop_text_encoder.change(
                     fn=update_pad_tokens,
@@ -471,7 +462,6 @@ def on_ui_tabs():
             db_lr_scheduler,
             db_lr_warmup_steps,
             db_max_token_length,
-            db_max_train_steps,
             db_mixed_precision,
             db_model_path,
             db_num_train_epochs,
@@ -494,8 +484,6 @@ def on_ui_tabs():
             db_save_state_after,
             db_save_state_cancel,
             db_save_state_during,
-            db_save_use_global_counts,
-            db_save_use_epochs,
             db_scheduler,
             db_src,
             db_shuffle_tags,
@@ -597,7 +585,6 @@ def on_ui_tabs():
                 db_lr_scheduler,
                 db_lr_warmup_steps,
                 db_max_token_length,
-                db_max_train_steps,
                 db_mixed_precision,
                 db_num_train_epochs,
                 db_pad_tokens,
@@ -618,8 +605,6 @@ def on_ui_tabs():
                 db_save_state_after,
                 db_save_state_cancel,
                 db_save_state_during,
-                db_save_use_global_counts,
-                db_save_use_epochs,
                 db_shuffle_tags,
                 db_train_batch_size,
                 db_stop_text_encoder,
@@ -779,7 +764,6 @@ def on_ui_tabs():
                 db_model_name
             ],
             outputs=[
-                db_max_train_steps,
                 db_num_train_epochs,
                 c1_max_steps,
                 c1_num_class_images,
@@ -798,7 +782,6 @@ def on_ui_tabs():
                 db_model_name
             ],
             outputs=[
-                db_max_train_steps,
                 db_num_train_epochs,
                 c1_max_steps,
                 c1_num_class_images,

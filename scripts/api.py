@@ -102,7 +102,6 @@ class DreamboothParameters(BaseModel):
     lr_scheduler: str = "constant"
     lr_warmup_steps: int = 500
     max_token_length: int = 75
-    max_train_steps: int = 0
     mixed_precision: str = "no"
     model_dir: Union[str, None] = ""
     model_name: str = ""
@@ -128,8 +127,6 @@ class DreamboothParameters(BaseModel):
     save_state_after: bool = True
     save_state_cancel: bool = False
     save_state_during: bool = False
-    save_use_global_counts: bool = True
-    save_use_epochs: bool = False
     src: Union[str, None] = ""
     shuffle_tags: bool = False
     train_batch_size: int = 1

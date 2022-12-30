@@ -12,7 +12,7 @@ import time
 import traceback
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -56,8 +56,6 @@ except Exception:
 
 if profile_memory:
     from torch.profiler import profile
-
-with_prior = False
 
 torch.backends.cudnn.benchmark = not profile_memory
 
@@ -195,8 +193,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
     else:
         prof = None
 
-    global with_prior
-
     @find_executable_batch_size(starting_batch_size=args.train_batch_size,
                                 starting_grad_size=args.gradient_accumulation_steps)
     def inner_loop(train_batch_size, gradient_accumulation_steps):
@@ -204,7 +200,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         args.tokenizer_name = None
         global last_samples
         global last_prompts
-        max_train_steps = args.max_train_steps
         n_workers = min(8, os.cpu_count() - 1)
         if os.name == "nt":
             n_workers = 0
@@ -241,8 +236,9 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             result.msg = msg
             result.config = args
             return result
-        # Currently, it's not possible to do gradient accumulation when training two models with accelerate.accumulate
-        # This will be enabled soon in accelerate. For now, we don't allow gradient accumulation when training two models.
+        # Currently, it's not possible to do gradient accumulation when training two models with
+        # accelerate.accumulate This will be enabled soon in accelerate. For now, we don't allow gradient
+        # accumulation when training two models.
         # TODO (patil-suraj): Remove this check when gradient accumulation with two models is enabled in accelerate.
         if args.stop_text_encoder != 0 and gradient_accumulation_steps > 1 and accelerator.num_processes > 1:
             msg = "Gradient accumulation is not supported when training the text encoder in distributed training. " \
@@ -252,9 +248,9 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             status.textinfo = msg
             args.stop_text_encoder = 0
 
-        count, with_prior, _ = generate_classifiers(args, lora_model, lora_weight=lora_alpha,
-                                                    lora_text_weight=lora_txt_alpha,
-                                                    use_txt2img=use_txt2img, accelerator=accelerator)
+        count, _, _ = generate_classifiers(args, lora_model, lora_weight=lora_alpha,
+                                           lora_text_weight=lora_txt_alpha,
+                                           use_txt2img=use_txt2img, accelerator=accelerator)
         if use_txt2img and count > 0:
             unload_system_models()
 
@@ -401,8 +397,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         resolution = (args.resolution, args.resolution)
         enable_bucket = True
         debug_bucket = False
-        min_bucket_reso = 256
-        max_bucket_reso = 1024
+        min_bucket_reso = int(args.resolution * 0.28125)  # 16x9 / 2
+        max_bucket_reso = args.resolution
         # Enable to crop faces? (2.0,4.0)
         face_crop_aug_range = None
 
@@ -410,12 +406,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             resolution = (resolution[0], resolution[0])
         assert len(resolution) == 2, \
             f"resolution must be 'size' or 'width,height' / resolutionは'サイズ'または'幅','高さ'で指定してください: {args.resolution}"
-
-        if enable_bucket:
-            assert min(
-                resolution) >= min_bucket_reso, f"Min_bucket_reso must be equal or greater than resolution / min_bucket_reso"
-            assert max(
-                resolution) <= max_bucket_reso, f"max_bucket_reso must be equal or less than resolution / max_bucket_resoは解像度の数値以下で指定してください"
 
         if face_crop_aug_range is not None and isinstance(face_crop_aug_range, str):
             face_crop_aug_range = tuple([float(r) for r in face_crop_aug_range.split(',')])
@@ -444,7 +434,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         )
 
         if debug_bucket:
-            train_dataset.make_buckets_with_caching(enable_bucket, None, min_bucket_reso, max_bucket_reso)
+            train_dataset.make_buckets_with_caching(enable_bucket, None, min_bucket_reso, max_bucket_reso,
+                                                    device=accelerator.device, dtype=weight_dtype)
             print(f"Total dataset length (steps): {len(train_dataset)}")
             print("Escape for exit.")
             for example in train_dataset:
@@ -494,7 +485,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             vae.requires_grad_(False)
             vae.eval()
 
-        unet.requires_grad_(True)                   # 念のため追加
+        unet.requires_grad_(True)  # 念のため追加
         text_encoder.requires_grad_(True)
 
         if args.gradient_checkpointing:
@@ -516,11 +507,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset, batch_size=1, shuffle=False, collate_fn=collate_fn, num_workers=n_workers)
 
-        # This needs to be done before we set up the optimizer, for reasons that should have been obvious.
-        overrode_max_train_steps = False
-        if max_train_steps is None or max_train_steps < 1:
-            max_train_steps = args.num_train_epochs * len(train_dataloader)
-            overrode_max_train_steps = True
+        max_train_steps = args.num_train_epochs * len(train_dataloader)
+        overrode_max_train_steps = True
 
         if args.lr_scheduler != "cosine_annealing_restarts":
             lr_scheduler = get_scheduler(
@@ -591,18 +579,21 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                 print(f"Exception loading checkpoint: {lex}")
 
         print("  ***** Running training *****")
-        print(f"  Num examples = {len(train_dataset)}")
+        print(f"  Instance Images: {train_dataset.num_train_images}")
+        print(f"  Class Images: {train_dataset.num_reg_images}")
+        print(f"  Total Examples: {train_dataset.num_train_images * (2 if train_dataset.enable_reg_images else 1)}")
         print(f"  Num batches each epoch = {len(train_dataloader)}")
         print(f"  Num Epochs = {max_train_epochs}")
-        print(f"  Instantaneous batch size per device = {train_batch_size}")
-        print(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
+        print(f"  Batch Size Per Device = {train_batch_size}")
         print(f"  Gradient Accumulation steps = {gradient_accumulation_steps}")
+        print(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
         print(f"  Total optimization steps = {real_steps}")
         print(f"  Resuming from checkpoint: {resume_from_checkpoint}")
         print(f"  First resume epoch: {first_epoch}")
         print(f"  First resume step: {resume_step}")
         print(f"  Lora: {args.use_lora}, Adam: {use_adam}, Prec: {args.mixed_precision}")
-        print(f"  Grad: {args.gradient_checkpointing}, Text: {args.stop_text_encoder}, EMA: {args.use_ema}")
+        print(f"  Gradient Checkpointing: {args.gradient_checkpointing}, Text Enc Steps: {args.stop_text_encoder}")
+        print(f"  EMA: {args.use_ema}")
         print(f"  LR: {args.learning_rate})")
 
         last_img_step = -1
@@ -618,18 +609,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
             training_save_interval = args.save_embedding_every
             training_image_interval = args.save_preview_every
-            training_completed_count = max_train_epochs if args.num_train_epochs > 1 else max_train_steps
-            if args.save_use_epochs:
-                if args.save_use_global_counts:
-                    training_save_check = global_epoch
-                else:
-                    training_save_check = args.epoch
-            else:
-                if args.save_use_global_counts:
-                    training_save_check = global_step
-                else:
-                    training_save_check = args.revision
-
+            training_completed_count = max_train_epochs
+            training_save_check = global_epoch
             save_completed = training_save_check >= training_completed_count
             save_canceled = status.interrupted
             save_image = False
@@ -848,7 +829,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         lifetime_step = args.revision
         status.job_count = real_steps
         status.job_no = global_step
-        loss_avg = AverageMeter()
         training_complete = False
         msg = ""
         weights_saved = False
@@ -856,18 +836,12 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             if training_complete:
                 break
             unet.train()
-            train_text_encoder = args.stop_text_encoder is None or global_step < args.stop_text_encoder
-            if args.stop_text_encoder == -1:
-                train_text_encoder = True
-            if train_text_encoder:
-                text_encoder.train()
+            train_tenc = args.stop_text_encoder == -1 or epoch < args.stop_text_encoder
+            text_encoder.train(train_tenc)
+            text_encoder.requires_grad_(train_tenc)
+
+            loss_total = 0
             for step, batch in enumerate(train_dataloader):
-                stop_text_encoder_training = args.stop_text_encoder is not None and global_step >= args.stop_text_encoder
-                if args.stop_text_encoder == -1:
-                    stop_text_encoder_training = False
-                if stop_text_encoder_training:
-                    text_encoder.train(False)
-                    text_encoder.requires_grad_(False)
                 # Skip steps until we reach the resumed step
                 if resume_from_checkpoint and epoch == first_epoch and step < resume_step:
                     if step % gradient_accumulation_steps == 0:
@@ -942,17 +916,14 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     status.job_no += step_size
 
                 current_loss = loss.detach().item()
-                if profile_memory:
-                    loss_avg.update(current_loss, b_size)
-                else:
-                    loss_avg.update(current_loss, b_size)
+                loss_total += current_loss
+                avg_loss = loss_total / (step + 1)
 
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
-                log_loss = loss_avg.avg * .1
                 last_lr = lr_scheduler.get_last_lr()[0]
-                logs = {"loss": log_loss, "lr": last_lr, "vram_usage": float(allocated)}
-                status.textinfo2 = f"Loss: {'%.2f' % log_loss}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
+                logs = {"loss": float(current_loss), "loss_avg": avg_loss, "lr": last_lr, "vram_usage": float(cached)}
+                status.textinfo2 = f"Loss: {'%.2f' % current_loss}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
                                    f"VRAM: {allocated}/{cached} GB"
                 progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=args.revision)
@@ -964,6 +935,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                         print("Stepss met, ending training.")
                 else:
                     training_complete = status.interrupted
+                logs = {"epoch_loss": loss_total / len(train_dataloader)}
+                accelerator.log(logs, step=global_step)
 
                 weights_saved = check_save()
 
