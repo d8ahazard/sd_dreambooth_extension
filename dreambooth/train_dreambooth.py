@@ -507,15 +507,14 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset, batch_size=1, shuffle=False, collate_fn=collate_fn, num_workers=n_workers)
 
-        max_train_steps = args.num_train_epochs * len(train_dataloader)
-        overrode_max_train_steps = True
-
+        max_train_steps = args.num_train_epochs * len(train_dataloader) * gradient_accumulation_steps
+        
         if args.lr_scheduler != "cosine_annealing_restarts":
             lr_scheduler = get_scheduler(
                 args.lr_scheduler,
                 optimizer=optimizer,
                 num_warmup_steps=args.lr_warmup_steps * gradient_accumulation_steps,
-                num_training_steps=max_train_steps * gradient_accumulation_steps,
+                num_training_steps=max_train_steps,
                 num_cycles=args.lr_cycles,
                 power=args.lr_power,
             )
@@ -537,13 +536,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
         if not args.cache_latents and vae is not None:
             vae.to(accelerator.device, dtype=weight_dtype)
-        # We need to recalculate our total training steps as the size of the training dataloader may have changed.
-        num_update_steps_per_epoch = math.ceil(len(train_dataloader) / gradient_accumulation_steps)
-        if overrode_max_train_steps:
-            max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
         # Afterwards we recalculate our number of training epochs
-        max_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
-        real_steps = max_train_steps * train_batch_size * gradient_accumulation_steps
         # We need to initialize the trackers we use, and also store our configuration.
         # The trackers will initialize automatically on the main process.
         if accelerator.is_main_process:
@@ -551,7 +544,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
         # Train!
         total_batch_size = train_batch_size * accelerator.num_processes * gradient_accumulation_steps
-
+        max_train_epochs = args.num_train_epochs
         global_step = 0
         global_epoch = 0
         last_save_step = 0
@@ -587,7 +580,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         print(f"  Batch Size Per Device = {train_batch_size}")
         print(f"  Gradient Accumulation steps = {gradient_accumulation_steps}")
         print(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
-        print(f"  Total optimization steps = {real_steps}")
+        print(f"  Total optimization steps = {max_train_steps}")
         print(f"  Resuming from checkpoint: {resume_from_checkpoint}")
         print(f"  First resume epoch: {first_epoch}")
         print(f"  First resume step: {resume_step}")
@@ -823,11 +816,10 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                 status.current_image = last_samples
 
         # Only show the progress bar once on each machine.
-        real_steps = max_train_steps * train_batch_size * gradient_accumulation_steps
-        progress_bar = tqdm(range(global_step, real_steps), disable=not accelerator.is_local_main_process)
+        progress_bar = tqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
         progress_bar.set_description("Steps")
         lifetime_step = args.revision
-        status.job_count = real_steps
+        status.job_count = max_train_steps
         status.job_no = global_step
         training_complete = False
         msg = ""
@@ -930,7 +922,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
                 # Check training complete before save check
                 if max_train_epochs <= 1:
-                    training_complete = global_step >= real_steps or status.interrupted
+                    training_complete = global_step >= max_train_steps or status.interrupted
                     if training_complete:
                         print("Stepss met, ending training.")
                 else:
@@ -943,10 +935,10 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                 # Check again after possibly saving
                 if status.interrupted:
                     training_complete = True
-                status.job_count = real_steps
+                status.job_count = max_train_steps
                 status.job_no = global_step
-                status.textinfo = f"Steps: {global_step}/{real_steps} (Current)," \
-                                  f" {args.revision}/{lifetime_step + real_steps} (Lifetime), Epoch: {args.epoch}"
+                status.textinfo = f"Steps: {global_step}/{max_train_steps} (Current)," \
+                                  f" {args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {args.epoch}"
 
                 # Log completion message
                 if training_complete:
@@ -956,7 +948,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     else:
                         state = "complete"
 
-                    status.textinfo = f"Training {state} {global_step}/{real_steps}, {args.revision}" \
+                    status.textinfo = f"Training {state} {global_step}/{max_train_steps}, {args.revision}" \
                                       f" total."
 
                     break
@@ -985,7 +977,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     print("Epochs met, ending training.")
             if not weights_saved:
                 check_save()
-            status.job_count = real_steps
+            status.job_count = max_train_steps
             status.job_no = global_step
             if args.epoch_pause_frequency > 0 and args.epoch_pause_time > 0:
                 if not global_epoch % args.epoch_pause_frequency:

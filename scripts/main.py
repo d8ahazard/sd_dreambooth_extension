@@ -563,10 +563,10 @@ def on_ui_tabs():
             ],
             outputs=[
                 db_attention,
+                db_cache_latents,
                 db_center_crop,
                 db_clip_skip,
                 db_concepts_path,
-                db_cache_latents,
                 db_custom_model_name,
                 db_epoch_pause_frequency,
                 db_epoch_pause_time,
