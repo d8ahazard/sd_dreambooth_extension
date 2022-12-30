@@ -7,6 +7,7 @@ import os.path as osp
 import re
 import shutil
 import traceback
+from typing import Dict
 
 import torch
 from diffusers import DiffusionPipeline
@@ -212,7 +213,7 @@ textenc_pattern = re.compile("|".join(protected.keys()))
 code2idx = {'q': 0, 'k': 1, 'v': 2}
 
 
-def convert_text_enc_state_dict_v20(text_enc_dict: dict[str, torch.Tensor]):
+def convert_text_enc_state_dict_v20(text_enc_dict: Dict[str, torch.Tensor]):
     new_state_dict = {}
     capture_qkv_weight = {}
     capture_qkv_bias = {}
@@ -254,7 +255,7 @@ def convert_text_enc_state_dict_v20(text_enc_dict: dict[str, torch.Tensor]):
     return new_state_dict
 
 
-def convert_text_enc_state_dict(text_enc_dict: dict[str, torch.Tensor]):
+def convert_text_enc_state_dict(text_enc_dict: Dict[str, torch.Tensor]):
     return text_enc_dict
 
 
