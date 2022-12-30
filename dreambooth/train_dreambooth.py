@@ -949,7 +949,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
-                log_loss = loss_avg.avg * .01
+                log_loss = loss_avg.avg * .1
                 last_lr = lr_scheduler.get_last_lr()[0]
                 logs = {"loss": log_loss, "lr": last_lr, "vram_usage": float(allocated)}
                 status.textinfo2 = f"Loss: {'%.2f' % log_loss}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
