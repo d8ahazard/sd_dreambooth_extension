@@ -387,7 +387,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             nci = conc.num_class_images
             if nci > 0 and cdd is not None and cdd != "" and os.path.exists(cdd):
                 print("prepare reg images.")
-                reg_dirs = os.listdir(nci)
+                reg_dirs = os.listdir(cdd)
                 for cl_dir in reg_dirs:
                     img_caps = load_dreambooth_dir(os.path.join(nci, cl_dir), conc)
                     reg_img_path_captions.extend(img_caps)
