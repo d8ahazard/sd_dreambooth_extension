@@ -497,13 +497,14 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset, batch_size=1, shuffle=False, collate_fn=collate_fn, num_workers=n_workers)
 
-        max_train_steps = args.num_train_epochs * len(train_dataloader) * gradient_accumulation_steps
+        # Eureka?!
+        max_train_steps = args.num_train_epochs * train_dataset.num_train_images
 
         lr_scheduler = get_scheduler(
             args.lr_scheduler,
             optimizer=optimizer,
             num_warmup_steps=args.lr_warmup_steps * gradient_accumulation_steps,
-            total_training_steps=max_train_steps / gradient_accumulation_steps,
+            total_training_steps=max_train_steps,
             num_cycles=args.lr_cycles,
             power=args.lr_power,
             factor=args.lr_factor,
@@ -533,7 +534,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             accelerator.init_trackers("dreambooth")
 
         # Train!
-        total_batch_size = train_batch_size * accelerator.num_processes * gradient_accumulation_steps
+        total_batch_size = len(train_dataloader) * accelerator.num_processes * gradient_accumulation_steps
         max_train_epochs = args.num_train_epochs
         global_step = 0
         global_epoch = 0
@@ -824,6 +825,9 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             text_encoder.requires_grad_(train_tenc)
 
             loss_total = 0
+            grad_steps = 0
+            real_steps = 0
+
             for step, batch in enumerate(train_dataloader):
                 # Skip steps until we reach the resumed step
                 if resume_from_checkpoint and epoch == first_epoch and step < resume_step:
@@ -890,14 +894,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
                     optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
 
-                # Checks if the accelerator has performed an optimization step behind the scenes
-                if accelerator.sync_gradients:
-                    step_size = total_batch_size
-                    progress_bar.update(step_size)
-                    global_step += step_size
-                    args.revision += step_size
-                    status.job_no += step_size
-
                 current_loss = loss.detach().item()
                 loss_total += current_loss
                 avg_loss = loss_total / (step + 1)
@@ -905,9 +901,14 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
                 last_lr = lr_scheduler.get_last_lr()[0]
+                global_step += train_batch_size
+                args.revision += train_batch_size
+                status.job_no += train_batch_size
+
                 logs = {"loss": float(current_loss), "loss_avg": avg_loss, "lr": last_lr, "vram_usage": float(cached)}
                 status.textinfo2 = f"Loss: {'%.2f' % current_loss}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
                                    f"VRAM: {allocated}/{cached} GB"
+                progress_bar.update(train_batch_size)
                 progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=args.revision)
 
