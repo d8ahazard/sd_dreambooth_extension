@@ -21,12 +21,10 @@ class DreamboothConfig:
 
     def __init__(self,
                  model_name: str = "",
-                 adam_beta1: float = 0.9,
-                 adam_beta2: float = 0.999,
-                 adam_epsilon: float = 1e-8,
-                 adam_weight_decay: float = 0.01,
                  attention: str = "default",
+                 cache_latents=True,
                  center_crop: bool = True,
+                 clip_skip: int = 1,
                  concepts_path: str = "",
                  custom_model_name: str = "",
                  epoch: int = 0,
@@ -51,7 +49,6 @@ class DreamboothConfig:
                  max_train_steps: int = 1000,
                  mixed_precision: str = "fp16",
                  model_path: str = "",
-                 not_cache_latents=False,
                  num_train_epochs: int = 1,
                  pad_tokens: bool = True,
                  pretrained_vae_name_or_path: str = "",
@@ -74,12 +71,11 @@ class DreamboothConfig:
                  save_state_during: bool = False,
                  save_use_global_counts: bool = False,
                  save_use_epochs: bool = False,
-                 scale_lr: bool = False,
                  scheduler: str = "ddim",
                  src: str = "",
                  shuffle_tags: bool = False,
                  train_batch_size: int = 1,
-                 train_text_encoder: bool = True,
+                 stop_text_encoder: int = 0,
                  use_8bit_adam: bool = True,
                  use_concepts: bool = False,
                  use_ema: bool = True,
@@ -154,12 +150,10 @@ class DreamboothConfig:
         working_dir = os.path.join(model_dir, "working")
         if not os.path.exists(working_dir):
             os.makedirs(working_dir)
-        self.adam_beta1 = adam_beta1
-        self.adam_beta2 = adam_beta2
-        self.adam_epsilon = adam_epsilon
-        self.adam_weight_decay = adam_weight_decay
         self.attention = attention
+        self.cache_latents = cache_latents
         self.center_crop = center_crop
+        self.clip_skip = clip_skip
         self.concepts_path = concepts_path
         self.custom_model_name = custom_model_name
         self.epoch = epoch
@@ -184,7 +178,6 @@ class DreamboothConfig:
         self.mixed_precision = mixed_precision
         self.model_dir = model_dir
         self.model_name = model_name
-        self.not_cache_latents = not_cache_latents
         self.num_train_epochs = num_train_epochs
         self.pad_tokens = pad_tokens
         self.pretrained_model_name_or_path = working_dir
@@ -208,11 +201,10 @@ class DreamboothConfig:
         self.save_state_during = save_state_during
         self.save_use_global_counts = save_use_global_counts
         self.save_use_epochs = save_use_epochs
-        self.scale_lr = scale_lr
         self.src = src
         self.shuffle_tags = shuffle_tags
         self.train_batch_size = train_batch_size
-        self.train_text_encoder = train_text_encoder
+        self.stop_text_encoder = stop_text_encoder
         self.use_8bit_adam = use_8bit_adam
         self.use_concepts = use_concepts
         self.use_ema = False if use_ema is None else use_ema
@@ -368,6 +360,9 @@ def from_file(model_name):
             concept_dict = {}
             has_old_concept = False
             # Ensure we aren't using any old keys
+            if "not_cache_latents" in config_dict:
+                config_dict["cache_latents"] = not config_dict["not_cache_latents"]
+                config_dict.pop("not_cache_latents")
             for skip_key in skip_keys:
                 if skip_key in config_dict:
                     config_dict.pop(skip_key)

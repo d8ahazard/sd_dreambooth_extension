@@ -102,31 +102,7 @@ mem_record = {}
 
 
 def printm(msg="", reset=False):
-    global mem_record
-    try:
-        allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
-        reserved = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
-        if not mem_record:
-            mem_record = {}
-        if reset:
-            max_allocated = round(torch.cuda.max_memory_allocated(0) / 1024 ** 3, 1)
-            max_reserved = round(torch.cuda.max_memory_reserved(0) / 1024 ** 3, 1)
-            output = f" Allocated {allocated}/{max_allocated}GB \n Reserved: {reserved}/{max_reserved}GB \n"
-            torch.cuda.reset_peak_memory_stats()
-            print(output)
-            mem_record = {}
-        else:
-            mem_record[msg] = f"{allocated}/{reserved}GB"
-            output = f' {msg} \n Allocated: {allocated}GB \n Reserved: {reserved}GB \n'
-            print(output)
-    except:
-        output = "Error parsing memory stats. Do you have a NVIDIA GPU?"
-    return output
-
-
-def log_memory():
-    mem = printm("", True)
-    return f"Current memory usage: {mem}"
+    print(msg)
 
 
 def cleanup(do_print: bool = False):
@@ -138,7 +114,7 @@ def cleanup(do_print: bool = False):
     except:
         pass
     if do_print:
-        printm("Cleanup completed.")
+        print("Cleanup completed.")
 
 
 def unload_system_models():
@@ -150,7 +126,6 @@ def unload_system_models():
         except:
             pass
     cleanup()
-    printm("", True)
 
 
 def list_attention():
@@ -184,7 +159,7 @@ def list_floats():
 def reload_system_models():
     if shared.sd_model is not None:
         shared.sd_model.to(shared.device)
-    printm("Restored system models.")
+    print("Restored system models.")
 
 
 def wrap_gpu_call(func, extra_outputs=None):

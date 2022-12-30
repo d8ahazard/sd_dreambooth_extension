@@ -16,7 +16,6 @@ from transformers import CLIPTextModel, CLIPTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
-from extensions.sd_dreambooth_extension.scripts.dreambooth import printm
 from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import AverageMeter
 from extensions.sd_dreambooth_extension.dreambooth.utils import list_features, is_image
 from modules import shared
@@ -117,12 +116,6 @@ def parse_args():
         help="Learning rate for fine tuning the model.",
     )
     parser.add_argument(
-        "--scale_lr",
-        action="store_true",
-        default=False,
-        help="Scale the learning rate by the number of GPUs, gradient accumulation steps, and batch size.",
-    )
-    parser.add_argument(
         "--use_8bit_adam", action="store_true", help="Whether or not to use 8-bit Adam from bitsandbytes."
     )
     parser.add_argument("--adam_beta1", type=float, default=0.9, help="The beta1 parameter for the Adam optimizer.")
@@ -168,9 +161,9 @@ def parse_args():
     return args
 
 
-def train_imagic(args: DreamboothConfig, mem_record):
+def train_imagic(args: DreamboothConfig):
     logging_dir = os.path.join(args.model_dir, "logging")
-    printm("Initializing imagic.")
+    print("Initializing imagic.")
     result = TrainResult()
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
@@ -191,12 +184,6 @@ def train_imagic(args: DreamboothConfig, mem_record):
 
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
-
-    if args.scale_lr:
-        args.learning_rate = (
-                args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size *
-                accelerator.num_processes
-        )
 
     # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
     optimizer_class = torch.optim.Adam
@@ -329,13 +316,13 @@ def train_imagic(args: DreamboothConfig, mem_record):
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Optimizing embedding")
     status.textinfo = "Optimizing Embedding"
-    printm(status.textinfo)
+    print(status.textinfo)
     train_loop(progress_bar, optimizer)
 
     optimized_embeddings.requires_grad_(False)
     if accelerator.is_main_process:
         status.textinfo = "Saving embedding(s)."
-        printm(status.textinfo)
+        print(status.textinfo)
         emb_dir = shared.cmd_opts.embeddings_dir
         torch.save(target_embeddings.cpu(), os.path.join(emb_dir, f"{args.model_name}.pt"))
         torch.save(optimized_embeddings.cpu(), os.path.join(emb_dir, f"{args.model_name}_optimized.pt"))
@@ -353,7 +340,7 @@ def train_imagic(args: DreamboothConfig, mem_record):
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Fine Tuning")
     status.textinfo = "Fine Tuning"
-    printm(status.textinfo)
+    print(status.textinfo)
     unet.train()
 
     train_loop(progress_bar, optimizer)
@@ -361,7 +348,7 @@ def train_imagic(args: DreamboothConfig, mem_record):
     # Create the pipeline using the trained modules and save it.
     if accelerator.is_main_process:
         status.textinfo = "Saving pretrained model."
-        printm(status.textinfo)
+        print(status.textinfo)
         pipeline = StableDiffusionPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             unet=accelerator.unwrap_model(unet),
@@ -370,8 +357,7 @@ def train_imagic(args: DreamboothConfig, mem_record):
         pipeline.save_pretrained(args.pretrained_model_name_or_path)
 
     accelerator.end_training()
-    printm("Training complete")
-    result.mem_record = mem_record
+    print("Training complete")
     result.msg = "IMagic training complete."
     result.samples = []
     return result

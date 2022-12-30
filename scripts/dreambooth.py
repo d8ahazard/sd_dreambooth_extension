@@ -13,8 +13,8 @@ from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, PromptData
-from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, printm, \
-    get_images, get_lora_models
+from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, get_images, \
+    get_lora_models
 from modules import shared, devices
 
 try:
@@ -28,8 +28,6 @@ console.setLevel(logging.DEBUG)
 logger.addHandler(console)
 logger.setLevel(logging.DEBUG)
 dl.set_verbosity_error()
-
-mem_record = {}
 
 
 def training_wizard_person(model_dir):
@@ -124,7 +122,7 @@ def performance_wizard():
     not_cache_latents: Latent caching.
     sample_batch_size: Batch size to use when creating class images.
     train_batch_size: Batch size to use when training.
-    train_text_encoder: Whether to train text encoder or not.
+    stop_text_encoder: Whether to train text encoder or not.
     use_8bit_adam: Use 8bit adam. Defaults to true.
     use_lora: Train using LORA. Better than "use CPU".
     use_ema: Train using EMA.
@@ -134,10 +132,10 @@ def performance_wizard():
     gradient_checkpointing = True
     gradient_accumulation_steps = 1
     mixed_precision = 'fp16'
-    not_cache_latents = True
+    cache_latents = False
     sample_batch_size = 1
     train_batch_size = 1
-    train_text_encoder = False
+    stop_text_encoder = False
     use_8bit_adam = True
     use_lora = False
     use_ema = False
@@ -162,13 +160,13 @@ def performance_wizard():
             sample_batch_size = 4
             gradient_accumulation_steps = train_batch_size
             train_batch_size = 2
-            train_text_encoder = True
+            stop_text_encoder = True
             use_ema = True
             if attention != "xformers":
                 attention = "no"
                 train_batch_size = 1
         if 24 > gb >= 16:
-            train_text_encoder = True
+            stop_text_encoder = True
             use_ema = True
         if 16 > gb >= 10:
             use_lora = True
@@ -181,13 +179,13 @@ def performance_wizard():
 
     log_dict = {"Attention": attention, "Gradient Checkpointing": gradient_checkpointing,
                 "Accumulation Steps": gradient_accumulation_steps, "Precision": mixed_precision,
-                "Cache Latents": not not_cache_latents, "Training Batch Size": train_batch_size,
+                "Cache Latents": cache_latents, "Training Batch Size": train_batch_size,
                 "Class Generation Batch Size": sample_batch_size,
-                "Train Text Encoder": train_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "LORA": use_lora}
+                "Train Text Encoder": stop_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "LORA": use_lora}
     for key in log_dict:
         msg += f"<br>{key}: {log_dict[key]}"
-    return attention, gradient_checkpointing, gradient_accumulation_steps, mixed_precision, not_cache_latents, \
-        sample_batch_size, train_batch_size, train_text_encoder, use_8bit_adam, use_lora, use_ema, msg
+    return attention, gradient_checkpointing, gradient_accumulation_steps, mixed_precision, cache_latents, \
+        sample_batch_size, train_batch_size, stop_text_encoder, use_8bit_adam, use_lora, use_ema, msg
 
 
 def ui_samples(model_dir: str,
@@ -283,12 +281,10 @@ def load_params(model_dir):
             ui_dict[f"c{c_idx}_{key}"] = ui_concept[key]
         c_idx += 1
     ui_dict["db_status"] = msg
-    ui_keys = ["db_adam_beta1",
-               "db_adam_beta2",
-               "db_adam_epsilon",
-               "db_adam_weight_decay",
-               "db_attention",
+    ui_keys = ["db_attention",
+               "db_cache_latents",
                "db_center_crop",
+               "db_clip_skip",
                "db_concepts_path",
                "db_custom_model_name",
                "db_epoch_pause_frequency",
@@ -310,7 +306,6 @@ def load_params(model_dir):
                "db_max_token_length",
                "db_max_train_steps",
                "db_mixed_precision",
-               "db_not_cache_latents",
                "db_num_train_epochs",
                "db_pad_tokens",
                "db_pretrained_vae_name_or_path",
@@ -332,10 +327,9 @@ def load_params(model_dir):
                "db_save_state_during",
                "db_save_use_global_counts",
                "db_save_use_epochs",
-               "db_scale_lr",
                "db_shuffle_tags",
                "db_train_batch_size",
-               "db_train_text_encoder",
+               "db_stop_text_encoder",
                "db_use_8bit_adam",
                "db_use_concepts",
                "db_use_ema",
@@ -420,7 +414,6 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     images: Output images from training.
     status: Any relevant messages.
     """
-    global mem_record
     if model_dir == "" or model_dir is None:
         print("Invalid model name.")
         msg = "Create or select a model first."
@@ -464,21 +457,20 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
             status.textinfo = "Initializing imagic training..."
             print(status.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_imagic import train_imagic
-            mem_record = train_imagic(config, mem_record)
+            result = train_imagic(config)
         else:
             status.textinfo = "Initializing dreambooth training..."
             print(status.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
-            result = main(config, mem_record, use_subdir=use_subdir, lora_model=lora_model_name,
+            result = main(config, use_subdir=use_subdir, lora_model=lora_model_name,
                           lora_alpha=lora_alpha, lora_txt_alpha=lora_txt_alpha,
                           custom_model_name=custom_model_name, use_txt2img=use_txt2img)
 
-            config = result.config
-            mem_record = result.mem_record
-            images = result.samples
-            print(f"We have {len(images)} sample image(s).")
-            if config.revision != total_steps:
-                config.save()
+        config = result.config
+        images = result.samples
+        print(f"We have {len(images)} sample image(s).")
+        if config.revision != total_steps:
+            config.save()
         total_steps = config.revision
         res = f"Training {'interrupted' if status.interrupted else 'finished'}. " \
               f"Total lifetime steps: {total_steps} \n"
@@ -489,8 +481,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
 
     devices.torch_gc()
     gc.collect()
-    printm("Training completed, reloading SD Model.")
-    print(f'Memory output: {mem_record}')
+    print("Training completed, reloading SD Model.")
     reload_system_models()
     if lora_model_name != "" and lora_model_name is not None:
         lora_model_name = f"{config.model_name}_{total_steps}.pt"

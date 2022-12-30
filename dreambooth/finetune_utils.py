@@ -23,10 +23,9 @@ from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, from_file
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from extensions.sd_dreambooth_extension.dreambooth.utils import printm, cleanup, get_checkpoint_match, get_images
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, get_checkpoint_match, get_images
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import apply_lora_weights
-from modules import shared, devices, sd_models, images, sd_hijack, prompt_parser, lowvram
-
+from modules import shared, devices, sd_models, sd_hijack, prompt_parser, lowvram
 from modules.processing import StableDiffusionProcessingTxt2Img, StableDiffusionProcessing, Processed, \
     get_fixed_seed, create_infotext, decode_first_stage
 from modules.sd_hijack import model_hijack
@@ -102,6 +101,13 @@ class FilenameTextGetter:
 
         # Append the filename text to the template first...THEN shuffle it all.
         output = text_template.replace("[filewords]", filename_text)
+        # Remove underscores, double-spaces, and other characters that will cause issues.
+        output.replace("_", " ")
+        output.replace("  ", " ")
+        strip_chars = ["(", ")", "/", "\\", ":", "[", "]"]
+        for s_char in strip_chars:
+            output.replace(s_char, "")
+
         tags = output.split(',')
         if self.shuffle_tags and len(tags) > 2:
             first_tag = tags.pop(0)
@@ -604,7 +610,7 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
     if set_len == 0:
         return 0, prompt_dataset.with_prior, []
 
-    printm(f"Generating {set_len} class images for training...")
+    print(f"Generating {set_len} class images for training...")
     status.textinfo = f"Generating {set_len} class images for training..."
     status.job_count = set_len
     status.job_no = 0
@@ -651,7 +657,7 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
     builder.unload()
     del prompt_dataset
     cleanup()
-    printm(f"Generated {generated} new class images.")
+    print(f"Generated {generated} new class images.")
     return generated, with_prior, out_images
 
 

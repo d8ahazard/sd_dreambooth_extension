@@ -68,6 +68,7 @@ def load_auto_settings():
         ckptfix = ws.cmd_opts.ckptfix
         medvram = ws.cmd_opts.medvram
         lowvram = ws.cmd_opts.lowvram
+        config = ws.cmd_opts.config
         try:
             dreambooth_models_path = ws.cmd_opts.dreambooth_models_path
             lora_models_path = ws.cmd_opts.lora_models_path

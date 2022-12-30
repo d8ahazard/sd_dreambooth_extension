@@ -254,7 +254,6 @@ def on_ui_tabs():
                                 db_lora_learning_rate = gr.Number(label='Lora UNET Learning Rate', value=2e-4)
                                 db_lora_txt_learning_rate = gr.Number(label='Lora Text Encoder Learning Rate',
                                                                       value=2e-4)
-                            db_scale_lr = gr.Checkbox(label="Scale Learning Rate", value=False)
                             db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=500)
 
                         with gr.Column():
@@ -295,19 +294,14 @@ def on_ui_tabs():
                                     db_attention = gr.Dropdown(
                                         label="Memory Attention", value="default",
                                         choices=list_attention())
-                                    db_not_cache_latents = gr.Checkbox(label="Don't Cache Latents", value=True)
-                                    db_train_text_encoder = gr.Checkbox(label="Train Text Encoder", value=True)
+                                    db_cache_latents = gr.Checkbox(label="Cache Latents", value=False)
+                                    db_stop_text_encoder = gr.Number(label="Text Encoder Steps", value=0)
+                                    db_clip_skip = gr.Number(label="Clip Skip", value=1)
                                     db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
                                     db_shuffle_tags = gr.Checkbox(label="Shuffle Tags", value=True)
                                     db_max_token_length = gr.Slider(label="Max Token Length", minimum=75, maximum=300,
                                                                     step=75)
-                                with gr.Column():
-                                    gr.HTML("Adam Advanced")
-                                    db_adam_beta1 = gr.Number(label="Adam Beta 1", precision=1, value=0.9)
-                                    db_adam_beta2 = gr.Number(label="Adam Beta 2", precision=3, value=0.999)
-                                    db_adam_weight_decay = gr.Number(label="Adam Weight Decay", precision=3, value=0.01)
-                                    db_adam_epsilon = gr.Number(label="Adam Epsilon", precision=8, value=0.00000001)
 
                     with gr.Row():
                         with gr.Column(scale=2):
@@ -412,7 +406,7 @@ def on_ui_tabs():
 
                 def update_pad_tokens(x):
                     if not x:
-                        return gr.update(value=False)
+                        return gr.update(visible=True)
                     else:
                         return gr.update(value=True)
 
@@ -422,9 +416,9 @@ def on_ui_tabs():
                     outputs=[db_save_preview_every, db_save_embedding_every, db_save_use_global_counts]
                 )
 
-                db_train_text_encoder.change(
+                db_stop_text_encoder.change(
                     fn=update_pad_tokens,
-                    inputs=[db_train_text_encoder],
+                    inputs=[db_stop_text_encoder],
                     outputs=[db_pad_tokens]
                 )
 
@@ -452,12 +446,10 @@ def on_ui_tabs():
 
         params_to_save = [
             db_model_name,
-            db_adam_beta1,
-            db_adam_beta2,
-            db_adam_epsilon,
-            db_adam_weight_decay,
             db_attention,
+            db_cache_latents,
             db_center_crop,
+            db_clip_skip,
             db_concepts_path,
             db_custom_model_name,
             db_epochs,
@@ -482,7 +474,6 @@ def on_ui_tabs():
             db_max_train_steps,
             db_mixed_precision,
             db_model_path,
-            db_not_cache_latents,
             db_num_train_epochs,
             db_pad_tokens,
             db_pretrained_vae_name_or_path,
@@ -505,12 +496,11 @@ def on_ui_tabs():
             db_save_state_during,
             db_save_use_global_counts,
             db_save_use_epochs,
-            db_scale_lr,
             db_scheduler,
             db_src,
             db_shuffle_tags,
             db_train_batch_size,
-            db_train_text_encoder,
+            db_stop_text_encoder,
             db_use_8bit_adam,
             db_use_concepts,
             db_use_ema,
@@ -584,13 +574,11 @@ def on_ui_tabs():
                 db_model_name
             ],
             outputs=[
-                db_adam_beta1,
-                db_adam_beta2,
-                db_adam_epsilon,
-                db_adam_weight_decay,
                 db_attention,
                 db_center_crop,
+                db_clip_skip,
                 db_concepts_path,
+                db_cache_latents,
                 db_custom_model_name,
                 db_epoch_pause_frequency,
                 db_epoch_pause_time,
@@ -611,7 +599,6 @@ def on_ui_tabs():
                 db_max_token_length,
                 db_max_train_steps,
                 db_mixed_precision,
-                db_not_cache_latents,
                 db_num_train_epochs,
                 db_pad_tokens,
                 db_pretrained_vae_name_or_path,
@@ -633,10 +620,9 @@ def on_ui_tabs():
                 db_save_state_during,
                 db_save_use_global_counts,
                 db_save_use_epochs,
-                db_scale_lr,
                 db_shuffle_tags,
                 db_train_batch_size,
-                db_train_text_encoder,
+                db_stop_text_encoder,
                 db_use_8bit_adam,
                 db_use_concepts,
                 db_use_ema,
@@ -775,10 +761,10 @@ def on_ui_tabs():
                 db_gradient_checkpointing,
                 db_gradient_accumulation_steps,
                 db_mixed_precision,
-                db_not_cache_latents,
+                db_cache_latents,
                 db_sample_batch_size,
                 db_train_batch_size,
-                db_train_text_encoder,
+                db_stop_text_encoder,
                 db_use_8bit_adam,
                 db_use_lora,
                 db_use_ema,

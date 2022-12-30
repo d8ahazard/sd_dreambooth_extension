@@ -80,12 +80,9 @@ class DreamboothConcept(BaseModel):
 # API Representation of db config
 class DreamboothParameters(BaseModel):
     concepts_list: list[DreamboothConcept]
-    adam_beta1: float = 0.9
-    adam_beta2: float = 0.999
-    adam_epsilon: float = 1e-8
-    adam_weight_decay: float = 0.01
     attention: str = "default"
     center_crop: bool = False
+    clip_skip: int = 1
     concepts_path: Union[str, None] = ""
     custom_model_name: Union[str, None] = ""
     epoch_pause_frequency: int = 0
@@ -133,11 +130,10 @@ class DreamboothParameters(BaseModel):
     save_state_during: bool = False
     save_use_global_counts: bool = True
     save_use_epochs: bool = False
-    scale_lr: bool = False
     src: Union[str, None] = ""
     shuffle_tags: bool = False
     train_batch_size: int = 1
-    train_text_encoder: bool = True
+    stop_text_encoder: int = 0
     use_8bit_adam: bool = False
 
 

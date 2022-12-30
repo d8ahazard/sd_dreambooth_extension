@@ -24,8 +24,8 @@ import torch
 from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, sanitize_name
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import stop_safe_unpickle
+from extensions.sd_dreambooth_extension.dreambooth.utils import printi, get_db_models, get_checkpoint_match
 from extensions.sd_dreambooth_extension.scripts.dreambooth import reload_system_models
-from extensions.sd_dreambooth_extension.dreambooth.utils import printi, printm, get_db_models, get_checkpoint_match
 from modules import shared
 
 try:
@@ -767,7 +767,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         map_location = shared.device
         try:
             if db_shared.ckptfix or db_shared.medvram or db_shared.lowvram:
-                printm(f"Using CPU for extraction.")
+                print(f"Using CPU for extraction.")
                 map_location = torch.device('cpu')
         except:
             print("UPDATE YOUR WEBUI!!!!")
@@ -975,7 +975,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         return "", "", 0, 0, "", "", "", "", 512, "", msg
     else:
         resolution = db_config.resolution
-        printi("Saving diffusers model...")
+        printi("Saving diffusion model...")
         pipe.save_pretrained(db_config.pretrained_model_name_or_path)
         result_status = f"Checkpoint successfully extracted to {db_config.pretrained_model_name_or_path}"
         model_dir = db_config.model_dir
@@ -1001,7 +1001,6 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         db_shared.start_safe_unpickle()
 
     reload_system_models()
-    printm(result_status, True)
     printi(result_status)
     dirs = get_db_models()
 

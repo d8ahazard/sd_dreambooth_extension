@@ -250,7 +250,7 @@ class SuperDataset(Dataset):
 
     def tokenize(self, text):
         if not self.pad_tokens:
-            input_ids = self.tokenizer(text, padding="do_not_pad", truncation=True,
+            input_ids = self.tokenizer(text, padding="max_length", truncation=True,
                                        max_length=self.tokenizer.model_max_length, return_tensors="pt").input_ids
             return input_ids
 
