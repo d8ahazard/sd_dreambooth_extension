@@ -237,21 +237,25 @@ def on_ui_tabs():
                             db_gradient_set_to_none = gr.Checkbox(label="Set Gradients to None When Zeroing",
                                                                   value=True)
 
+                        schedulers = ["linear", "linear_with_warmup", "cosine", "cosine_annealing",
+                                      "cosine_annealing_with_restarts", "cosine_with_restarts", "polynomial",
+                                      "constant", "constant_with_warmup"]
                         with gr.Column():
                             gr.HTML(value="Learning Rate")
-                            db_lr_scheduler = gr.Dropdown(label="Learning Rate Scheduler", value="constant",
-                                                          choices=["linear", "cosine", "cosine_with_restarts", "cosine_annealing_restarts",
-                                                                   "polynomial", "constant",
-                                                                   "constant_with_warmup"])
+                            db_lr_scheduler = gr.Dropdown(label="Learning Rate Scheduler", value="constant_with_warmup",
+                                                          choices=schedulers)
 
                             db_learning_rate = gr.Number(label='Learning Rate', value=2e-6)
+                            db_learning_rate_min = gr.Number(label='Min Learning Rate', value=1e-6)
                             db_lr_cycles = gr.Number(label="Number of Hard Resets", value=1, precision=0, visible=False)
+                            db_lr_factor = gr.Number(label="Constant/Linear Starting Factor", value=0.5, precision=2, visible=False)
                             db_lr_power = gr.Number(label="Polynomial Power", value=1.0, precision=1, visible=False)
+                            db_lr_scale_pos = gr.Slider(label="Scale Position", value=0.5, minimum=0, maximum=1, step=0.1, visible=False)
                             with gr.Row(visible=False) as lora_lr_row:
                                 db_lora_learning_rate = gr.Number(label='Lora UNET Learning Rate', value=2e-4)
                                 db_lora_txt_learning_rate = gr.Number(label='Lora Text Encoder Learning Rate',
                                                                       value=2e-4)
-                            db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=500)
+                            db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=0)
 
 
                         with gr.Column():
@@ -455,12 +459,15 @@ def on_ui_tabs():
             db_has_ema,
             db_hflip,
             db_learning_rate,
+            db_learning_rate_min,
             db_lora_learning_rate,
             db_lora_txt_learning_rate,
             db_lora_txt_weight,
             db_lora_weight,
             db_lr_cycles,
+            db_lr_factor,
             db_lr_power,
+            db_lr_scale_pos,
             db_lr_scheduler,
             db_lr_warmup_steps,
             db_max_token_length,
@@ -578,12 +585,15 @@ def on_ui_tabs():
                 db_half_model,
                 db_hflip,
                 db_learning_rate,
+                db_learning_rate_min,
                 db_lora_learning_rate,
                 db_lora_txt_learning_rate,
                 db_lora_txt_weight,
                 db_lora_weight,
                 db_lr_cycles,
+                db_lr_factor,
                 db_lr_power,
+                db_lr_scale_pos,
                 db_lr_scheduler,
                 db_lr_warmup_steps,
                 db_max_token_length,
@@ -685,12 +695,22 @@ def on_ui_tabs():
             db_use_lora.interactive = not x
 
         def toggle_lr_min(sched):
-            if sched == "polynomial":
-                return gr.update(visible=True), gr.update(visible=False)
-            elif sched == "cosine_with_restarts":
-                return gr.update(visible=False), gr.update(visible=True)
+            show_scale_pos = gr.update(visible=False)
+            show_min_lr = gr.update(visible=False)
+            show_lr_factor = gr.update(visible=False)
+            show_lr_warmup = gr.update(visible=False)
+            show_lr_power = gr.update(visible=sched == "polynomial")
+            show_lr_cycles = gr.update(visible=sched == "cosine_with_restarts")
+            scale_scheds = ["constant", "linear", "cosine_annealing", "cosine_annealing_with_restarts"]
+            if sched in scale_scheds:
+                show_scale_pos = gr.update(visible=True)
             else:
-                return gr.update(visible=False), gr.update(visible=False)
+                show_lr_warmup = gr.update(visible=True)
+            if sched == "cosine_annealing" or sched == "cosine_annealing_with_restarts":
+                show_min_lr = gr.update(visible=True)
+            if sched == "linear" or sched == "constant":
+                show_lr_factor = gr.update(visible=True)
+            return show_lr_power, show_lr_cycles, show_scale_pos, show_lr_factor, show_min_lr, show_lr_warmup
 
         db_use_lora.change(
             fn=disable_ema,
@@ -701,7 +721,7 @@ def on_ui_tabs():
         db_lr_scheduler.change(
             fn=toggle_lr_min,
             inputs=[db_lr_scheduler],
-            outputs=[db_lr_power, db_lr_cycles]
+            outputs=[db_lr_power, db_lr_cycles, db_lr_scale_pos, db_lr_factor, db_learning_rate_min, db_lr_warmup_steps]
         )
 
         db_use_ema.change(

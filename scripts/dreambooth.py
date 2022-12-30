@@ -184,7 +184,7 @@ def performance_wizard():
     for key in log_dict:
         msg += f"<br>{key}: {log_dict[key]}"
     return attention, gradient_checkpointing, gradient_accumulation_steps, mixed_precision, cache_latents, \
-        sample_batch_size, train_batch_size, stop_text_encoder, use_8bit_adam, use_lora, use_ema, msg
+           sample_batch_size, train_batch_size, stop_text_encoder, use_8bit_adam, use_lora, use_ema, msg
 
 
 def ui_samples(model_dir: str,
@@ -294,12 +294,15 @@ def load_params(model_dir):
                "db_half_model",
                "db_hflip",
                "db_learning_rate",
+               "db_learning_rate_min",
                "db_lora_learning_rate",
                "db_lora_txt_learning_rate",
                "db_lora_txt_weight",
                "db_lora_weight",
                "db_lr_cycles",
+               "db_lr_factor",
                "db_lr_power",
+               "db_lr_scale_pos",
                "db_lr_scheduler",
                "db_lr_warmup_steps",
                "db_max_token_length",

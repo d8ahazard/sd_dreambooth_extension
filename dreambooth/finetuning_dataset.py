@@ -106,7 +106,7 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
         )
 
     # bucketingを行わない場合も呼び出し必須（ひとつだけbucketを作る）
-    def make_buckets_with_caching(self, enable_bucket, vae, min_size, max_size, device, dtype):
+    def make_buckets_with_caching(self, enable_bucket, vae, min_size, max_size):
         self.enable_bucket = enable_bucket
 
         cache_latents = vae is not None
@@ -151,7 +151,7 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
 
             if cache_latents:
                 img_tensor = self.image_transforms(image)
-                img_tensor = img_tensor.unsqueeze(0).to(device=device, dtype=dtype)
+                img_tensor = img_tensor.unsqueeze(0).to(device=vae.device, dtype=vae.dtype)
                 latents = vae.encode(img_tensor).latent_dist.sample().squeeze(0).to("cpu")
             else:
                 latents = None
@@ -344,7 +344,7 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
         example = {'loss_weights': torch.FloatTensor(loss_weights), 'input_ids': input_ids}
         if images[0] is not None:
             images = torch.stack(images)
-            images = images.to(memory_format=torch.contiguous_format, dtype=self.dtype)
+            images = images.to(memory_format=torch.contiguous_format)
         else:
             images = None
         example['pixel_values'] = images

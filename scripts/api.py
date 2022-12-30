@@ -93,12 +93,15 @@ class DreamboothParameters(BaseModel):
     half_model: bool = False
     hflip: bool = True
     learning_rate: float = 0.000002
+    learning_rate_min: float = 0.000001
     lora_learning_rate: float = 0.0002
     lora_txt_learning_rate: float = 0.0002
     lora_txt_weight: int = 1
     lora_weight: int = 1
     lr_cycles: int = 1
+    lr_factor: float = 0.5
     lr_power: float = 1.0
+    lr_scale_pos: float = 0.5
     lr_scheduler: str = "constant"
     lr_warmup_steps: int = 500
     max_token_length: int = 75

@@ -31,6 +31,7 @@ from extensions.sd_dreambooth_extension.dreambooth import xattention, db_shared
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SampleData
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.db_optimization import get_scheduler
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import EMAModel, generate_classifiers, \
@@ -39,7 +40,6 @@ from extensions.sd_dreambooth_extension.dreambooth.finetuning_dataset import Dre
 from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
 from extensions.sd_dreambooth_extension.dreambooth.sample_dataset import SampleDataset
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models, parse_logs, get_images
-from extensions.sd_dreambooth_extension.dreambooth.xattention import get_scheduler
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, apply_lora_weights
 from modules import shared, paths
 
@@ -288,19 +288,15 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             # print("Setting diffusers unet flags for xformers.")
             set_diffusers_xformers_flag(unet, True)
 
-        def create_vae():
-            vae_path = args.pretrained_vae_name_or_path if args.pretrained_vae_name_or_path else \
-                args.pretrained_model_name_or_path
-            new_vae = AutoencoderKL.from_pretrained(
-                vae_path,
-                subfolder=None if args.pretrained_vae_name_or_path else "vae",
-                revision=args.revision
-            )
-            new_vae.requires_grad_(False)
-            new_vae.to(accelerator.device, dtype=weight_dtype)
-            return new_vae
-
-        vae = create_vae()
+        vae_path = args.pretrained_vae_name_or_path if args.pretrained_vae_name_or_path else \
+            args.pretrained_model_name_or_path
+        vae = AutoencoderKL.from_pretrained(
+            vae_path,
+            subfolder=None if args.pretrained_vae_name_or_path else "vae",
+            revision=args.revision
+        )
+        vae.requires_grad_(False)
+        vae.to(accelerator.device, dtype=weight_dtype)
 
         unet_lora_params = None
         text_encoder_lora_params = None
@@ -433,8 +429,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         )
 
         if debug_bucket:
-            train_dataset.make_buckets_with_caching(enable_bucket, None, min_bucket_reso, max_bucket_reso,
-                                                    device=accelerator.device, dtype=weight_dtype)
+            train_dataset.make_buckets_with_caching(enable_bucket, None, min_bucket_reso, max_bucket_reso)
             print(f"Total dataset length (steps): {len(train_dataset)}")
             print("Escape for exit.")
             for example in train_dataset:
@@ -465,22 +460,19 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         if args.stop_text_encoder == 0:
             text_encoder.to(accelerator.device, dtype=weight_dtype)
 
-        vae = vae if vae is not None else create_vae()
 
         if args.cache_latents:
             vae.to(accelerator.device, dtype=weight_dtype)
             vae.requires_grad_(False)
             vae.eval()
             with torch.no_grad():
-                train_dataset.make_buckets_with_caching(enable_bucket, vae, min_bucket_reso, max_bucket_reso,
-                                                        accelerator.device, weight_dtype)
+                train_dataset.make_buckets_with_caching(enable_bucket, vae, min_bucket_reso, max_bucket_reso)
             vae.to("cpu")
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             gc.collect()
         else:
-            train_dataset.make_buckets_with_caching(enable_bucket, None, min_bucket_reso, max_bucket_reso,
-                                                    accelerator.device, weight_dtype)
+            train_dataset.make_buckets_with_caching(enable_bucket, None, min_bucket_reso, max_bucket_reso)
             vae.requires_grad_(False)
             vae.eval()
 
@@ -508,18 +500,18 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
         max_train_steps = args.num_train_epochs * len(train_dataloader) * gradient_accumulation_steps
 
-        if args.lr_scheduler != "cosine_annealing_restarts":
-            lr_scheduler = get_scheduler(
-                args.lr_scheduler,
-                optimizer=optimizer,
-                num_warmup_steps=args.lr_warmup_steps * gradient_accumulation_steps,
-                num_training_steps=max_train_steps,
-                num_cycles=args.lr_cycles,
-                power=args.lr_power,
-            )
-        else:
-            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2,
-                                                                                eta_min=0.000001, last_epoch=-1)
+        lr_scheduler = get_scheduler(
+            args.lr_scheduler,
+            optimizer=optimizer,
+            num_warmup_steps=args.lr_warmup_steps * gradient_accumulation_steps,
+            total_training_steps=max_train_steps / gradient_accumulation_steps,
+            num_cycles=args.lr_cycles,
+            power=args.lr_power,
+            factor=args.lr_factor,
+            scale_pos=args.lr_scale_pos,
+            min_lr=args.learning_rate_min
+        )
+
         # create ema, fix OOM
         if args.use_ema:
             ema_unet = EMAModel(unet.parameters())
@@ -686,7 +678,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     args.pretrained_model_name_or_path,
                     unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=True),
                     text_encoder=accelerator.unwrap_model(text_encoder, keep_fp32_wrapper=True),
-                    vae=vae if vae is not None else create_vae(),
+                    vae=vae,
                     scheduler=scheduler,
                     torch_dtype=torch.float16,
                     revision=args.revision,
@@ -901,7 +893,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
                 # Checks if the accelerator has performed an optimization step behind the scenes
                 if accelerator.sync_gradients:
-                    step_size = train_batch_size * gradient_accumulation_steps
+                    step_size = total_batch_size
                     progress_bar.update(step_size)
                     global_step += step_size
                     args.revision += step_size
