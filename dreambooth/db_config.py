@@ -52,7 +52,7 @@ class DreamboothConfig:
                  max_token_length: int = 75,
                  mixed_precision: str = "fp16",
                  model_path: str = "",
-                 num_train_epochs: int = 1,
+                 num_train_epochs: int = 100,
                  pad_tokens: bool = True,
                  pretrained_vae_name_or_path: str = "",
                  prior_loss_weight: float = 1.0,
@@ -62,14 +62,14 @@ class DreamboothConfig:
                  sanity_prompt: str = "",
                  sanity_seed: int = 420420,
                  save_ckpt_after: bool = True,
-                 save_ckpt_cancel: bool = True,
+                 save_ckpt_cancel: bool = False,
                  save_ckpt_during: bool = True,
-                 save_embedding_every: int = 500,
+                 save_embedding_every: int = 25,
                  save_lora_after: bool = True,
-                 save_lora_cancel: bool = True,
+                 save_lora_cancel: bool = False,
                  save_lora_during: bool = True,
-                 save_preview_every: int = 500,
-                 save_state_after: bool = True,
+                 save_preview_every: int = 5,
+                 save_state_after: bool = False,
                  save_state_cancel: bool = False,
                  save_state_during: bool = False,
                  scheduler: str = "ddim",
@@ -323,7 +323,7 @@ def save_config(*args):
     config = DreamboothConfig(*args)
     print("Saved settings.")
     config.save()
-    return f"Saved settings for model: {config.model_name}"
+    #return f"Saved settings for model: {config.model_name}"
 
 
 def from_file(model_name):

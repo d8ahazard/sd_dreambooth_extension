@@ -1,18 +1,56 @@
 // Save our current training params before doing a thing
 
 const id_part = "db_";
+let params_loaded = false;
 
 // Click a button. Whee.
 function save_config() {
     let btn = gradioApp().getElementById("db_save_config");
     if (btn == null) return;
-    console.log("Saving config...");
-    btn.click();
+    let do_save = true;
+    if (params_loaded === false) {
+        do_save = confirm("Warning: You are about to save model parameters that may be empty or from another model. This may erase or overwrite existing settings. If you still wish to continue, click 'OK'.");
+    }
+    if (do_save === true) {
+        console.log("Saving config...");
+        btn.click();
+    } else {
+        console.log("Saving canceled.")
+    }
 }
 
-function log_save() {
-    console.log("Saving: ", arguments);
-    return arguments;
+function check_save() {
+    let do_save = true;
+    if (params_loaded === false) {
+        do_save = confirm("Warning: You are about to save model parameters that may be empty or from another model. This may erase or overwrite existing settings. If you still wish to continue, click 'OK'.");
+    }
+    if (do_save === true) {
+        console.log("Saving config...");
+        let filtered = filterArgs(arguments.length, arguments);
+        console.log("Filtered args: ", filtered, filtered.length);
+        let status = getRealElement("db_status");
+        status.innerHTML = "Config saved.";
+        return filtered;
+    } else {
+        console.log("Saving canceled.")
+        return null;
+    }
+}
+
+function clear_loaded() {
+    params_loaded = false;
+    return filterArgs(1, arguments);
+}
+
+function update_params() {
+    if (params_loaded === false) {
+        params_loaded = true;
+    }
+    setTimeout(function(){
+        let btn = gradioApp().getElementById("db_update_params");
+        if (btn == null) return;
+        btn.click();
+    },500);
 }
 
 function getRealElement(selector) {
@@ -32,17 +70,13 @@ function getRealElement(selector) {
 function db_start(numArgs, save, startProgress, args) {
     if (save) save_config();
     if (startProgress) requestDbProgress();
-    console.log("Clearing statuses.");
-    let items = ['db_status', 'db_status2', "db_progressbar"];
+    let items = ['db_status', 'db_prompt_list', 'db_gallery_prompt', "db_progressbar"];
     for (let elem in items) {
         let sel = items[elem];
         let outcomeDiv = getRealElement(sel);
         if (outcomeDiv) {
             outcomeDiv.innerHTML = '';
-        } else {
-            console.log("YOU SUCK: ", sel);
         }
-
     }
 
 
@@ -55,7 +89,7 @@ function db_start_sample() {
 
 // Performance wizard
 function db_start_pwizard() {
-    return db_start(0, false, false, arguments);
+    return db_start(1, false, false, arguments);
 }
 
 // Training wizard
@@ -71,6 +105,11 @@ function db_start_checkpoint() {
 // Generate sample prompts
 function db_start_prompts() {
     return db_start(1, true, false, arguments);
+}
+
+function db_start_load_params() {
+    update_params();
+    return db_start(1, false, false, arguments);
 }
 
 // Create new checkpoint
@@ -91,12 +130,11 @@ function db_start_classes() {
 // Return only the number of arguments given as an input
 function filterArgs(argsCount, arguments) {
     let args_out = [];
-    if (arguments.length > argsCount && argsCount !== 0) {
+    if (arguments.length >= argsCount && argsCount !== 0) {
         for (let i = 0; i < argsCount; i++) {
             args_out.push(arguments[i]);
         }
     }
-    console.log("Filtered args ("+argsCount+"): ", args_out);
     return args_out;
 }
 
@@ -175,6 +213,7 @@ let db_titles = {
     "Save Preview(s) Frequency (Epoch)": "Generate preview images every N epochs.",
     "Save Model Frequency (Step)": "Save a checkpoint every N epochs. Must be divisible by batch number.",
     "Save Preview(s) Frequency (Step)": "Generate preview images every N steps. Must be divisible by batch number.",
+    "Save Weights": "Save weights/checkpoint/snapshot as specified in the saving section for saving 'during' training.",
     "Scheduler": "Schedule to use for official training stuff.",
     "Set Gradients to None When Zeroing": "Can increase training speed at the cost of a slight increase in VRAM usage.",
     "Shuffle After Epoch": "When enabled, will shuffle the dataset after the first epoch. Will enable text encoder training and latent caching (More VRAM).",
@@ -234,7 +273,6 @@ onUiUpdate(function () {
         btn.onchange = function() {
             // Dummy function so we don't keep setting up the observer.
         }
-        console.log("Setting up observer?");
         checkPrompts();
         const options = {
             attributes: true
@@ -259,12 +297,10 @@ function checkPrompts() {
     let desc_list = getRealElement("db_prompt_list");
     let des_box = getRealElement("db_gallery_prompt");
     let prompts = desc_list.innerHTML;
-    console.log("Prompts: ", prompts);
     if (prompts.includes("<br>")) {
         let prompt_list = prompts.split("<br>");
         if (prevSelectedIndex !== -1 && prevSelectedIndex < prompt_list.length) {
             des_box.innerHTML = prompt_list[prevSelectedIndex];
-            console.log("Set prompt to ", prompt_list[prevSelectedIndex])
         }
     }
 }
@@ -368,7 +404,6 @@ function checkDbGallery(){
             let galleryBtnSelected = gradioApp().querySelector('#db_gallery .gallery-item.\\!ring-2');
             if (prevSelectedIndex !== -1 && galleryButtons.length>prevSelectedIndex && !galleryBtnSelected) {
                 // automatically re-open previously selected index (if exists)
-                console.log("Mutated!");
                 let activeElement = gradioApp().activeElement;
                 let scrollX = window.scrollX;
                 let scrollY = window.scrollY;
@@ -404,7 +439,6 @@ function requestDbProgress(){
         console.log("Can't find da button!.")
         return;
     }
-    console.log("Requesting progress start...");
     btn.click();
     db_progressbar();
 }
@@ -415,7 +449,6 @@ function requestMoreDbProgress(){
         console.log("Check progress button is null!");
         return;
     }
-    console.log("MORE PROGRESS!");
     btn.click();
     progressTimeout = null;
     let progressDiv = gradioApp().querySelectorAll('#db_progress_span').length > 0;

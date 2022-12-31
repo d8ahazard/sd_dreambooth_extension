@@ -20,6 +20,7 @@ A collection of utilities for ensuring that training can always occur. Heavily i
 import functools
 import gc
 import inspect
+import traceback
 
 import torch
 
@@ -92,6 +93,7 @@ def find_executable_batch_size(function: callable = None, starting_batch_size: i
                     if grad_size == 0:
                         grad_size = 1
                     print(f"OOM Detected, reducing batch/grad size to {batch_size}/{grad_size}.")
+                    traceback.print_exc()
                 else:
                     raise
 

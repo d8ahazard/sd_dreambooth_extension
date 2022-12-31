@@ -52,7 +52,7 @@ def make_bucket_resolutions(
 class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
     def __init__(self, batch_size, fine_tuning, train_img_path_captions, reg_img_path_captions, tokenizer, resolution,
                  prior_loss_weight, flip_aug, color_aug, face_crop_aug_range, random_crop, shuffle_caption,
-                 disable_padding, debug_dataset, dtype) -> None:
+                 disable_padding, debug_dataset, device, dtype) -> None:
         super().__init__()
 
         self.buckets = []
@@ -74,6 +74,7 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
         self.disable_padding = disable_padding
         self.latents_cache = None
         self.enable_bucket = False
+        self.device = device
         self.dtype = dtype
         
         # augmentation
@@ -104,7 +105,6 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
             ]
         )
 
-    # bucketingを行わない場合も呼び出し必須（ひとつだけbucketを作る）
     def make_buckets_with_caching(self, enable_bucket, vae, min_size, max_size):
         self.enable_bucket = enable_bucket
 

@@ -139,7 +139,7 @@ def on_ui_tabs():
             db_save_params = gr.Button(value="Save Settings", elem_id="db_save_config")
             db_train_model = gr.Button(value="Train", variant='primary', elem_id="db_train")
             db_generate_checkpoint = gr.Button(value="Generate Ckpt", elem_id="db_gen_ckpt")
-            db_generate_checkpoint_during = gr.Button(value="Generate Ckpt", elem_id="db_gen_ckpt_during")
+            db_generate_checkpoint_during = gr.Button(value="Save Weights", elem_id="db_gen_ckpt_during")
             db_train_sample = gr.Button(value="Generate Samples", elem_id="db_train_sample")
             db_cancel = gr.Button(value="Cancel", elem_id="db_cancel")
         with gr.Row().style(equal_height=False):
@@ -220,7 +220,7 @@ def on_ui_tabs():
                                 label='Save Model Frequency (Epochs)', value=25,
                                 precision=0)
                             db_save_preview_every = gr.Number(
-                                label='Save Preview(s) Frequency (Epochs)', value=25,
+                                label='Save Preview(s) Frequency (Epochs)', value=5,
                                 precision=0)
 
                         with gr.Column():
@@ -296,9 +296,9 @@ def on_ui_tabs():
                                     db_attention = gr.Dropdown(
                                         label="Memory Attention", value="default",
                                         choices=list_attention())
-                                    db_cache_latents = gr.Checkbox(label="Cache Latents", value=False)
+                                    db_cache_latents = gr.Checkbox(label="Cache Latents", value=True)
                                     db_stop_text_encoder = gr.Number(label="Text Encoder Epochs", value=-1)
-                                    db_clip_skip = gr.Number(label="Clip Skip", value=1)
+                                    db_clip_skip = gr.Slider(label="Clip Skip", value=1, minimum=1, maximum=12, step=1)
                                     db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
                                     db_shuffle_tags = gr.Checkbox(label="Shuffle Tags", value=True)
@@ -344,9 +344,9 @@ def on_ui_tabs():
                     with gr.Column():
                         gr.HTML("Checkpoints")
                         db_half_model = gr.Checkbox(label="Half Model", value=False)
-                        db_use_subdir = gr.Checkbox(label="Save Checkpoint to Subdirectory", value=False)
+                        db_use_subdir = gr.Checkbox(label="Save Checkpoint to Subdirectory", value=True)
                         db_save_ckpt_during = gr.Checkbox(label="Generate a .ckpt file when saving during training.")
-                        db_save_ckpt_after = gr.Checkbox(label="Generate a .ckpt file when training completes.")
+                        db_save_ckpt_after = gr.Checkbox(label="Generate a .ckpt file when training completes.", value=True)
                         db_save_ckpt_cancel = gr.Checkbox(label="Generate a .ckpt file when training is canceled.")
                     with gr.Column(visible=False) as lora_save_col:
                         gr.HTML("Lora")
@@ -354,7 +354,7 @@ def on_ui_tabs():
                         db_lora_txt_weight = gr.Slider(label="Lora Text Weight", value=1, minimum=0.1, maximum=1,
                                                        step=0.1)
                         db_save_lora_during = gr.Checkbox(label="Generate lora weights when saving during training.")
-                        db_save_lora_after = gr.Checkbox(label="Generate lora weights when training completes.")
+                        db_save_lora_after = gr.Checkbox(label="Generate lora weights when training completes.", value=True)
                         db_save_lora_cancel = gr.Checkbox(label="Generate lora weights when training is canceled.")
                     with gr.Column():
                         gr.HTML("Diffusion Weights")
@@ -390,6 +390,43 @@ def on_ui_tabs():
                 db_prompt_list = gr.HTML(elem_id="db_prompt_list", value="", visible=False)
                 db_gallery_prompt = gr.HTML(elem_id="db_gallery_prompt", value="")
                 db_check_progress = gr.Button("Check Progress", elem_id=f"db_check_progress", visible=False)
+                db_update_params = gr.Button("Update Parameters", elem_id="db_update_params", visible=False)
+
+                def check_toggles(use_ema, use_lora, lr_scheduler, stop_text_enc):
+                    pad_tokens = update_pad_tokens(stop_text_enc)
+                    show_ema, lora_save, lora_lr, lora_model = disable_ema(use_lora)
+                    if not use_lora and use_ema:
+                        disable_lora(use_ema)
+                    lr_power, lr_cycles, lr_scale_pos, lr_factor, learning_rate_min, lr_warmup_steps = toggle_lr_min(
+                        lr_scheduler)
+                    return pad_tokens,\
+                        show_ema,\
+                        lora_save,\
+                        lora_lr,\
+                        lora_model,\
+                        lr_power,\
+                        lr_cycles,\
+                        lr_scale_pos,\
+                        lr_factor,\
+                        learning_rate_min,\
+                        lr_warmup_steps
+
+                db_update_params.click(
+                    fn=check_toggles,
+                    inputs=[db_use_ema, db_use_lora, db_lr_scheduler, db_stop_text_encoder],
+                    outputs=[db_pad_tokens,
+                             db_use_ema,
+                             lora_save_col,
+                             lora_lr_row,
+                             lora_model_row,
+                             db_lr_power,
+                             db_lr_cycles,
+                             db_lr_scale_pos,
+                             db_lr_factor,
+                             db_learning_rate_min,
+                             db_lr_warmup_steps]
+
+                )
 
                 db_refresh_button.click(
                     fn=create_secret,
@@ -397,19 +434,9 @@ def on_ui_tabs():
                     outputs=[db_secret]
                 )
 
-                def update_labels(x):
-                    if x:
-                        unit = "Epochs"
-                        value = 25
-                    else:
-                        unit = "Steps"
-                        value = 500
-                    return gr.update(label=f'Save Model Frequency ({unit})', value=value), \
-                        gr.update(label=f'Save Preview(s) Frequency ({unit})', value=value), \
-                        gr.update(label=f"Use Lifetime {unit} When Saving")
 
                 def update_pad_tokens(x):
-                    if not x:
+                    if x == 0:
                         return gr.update(visible=True)
                     else:
                         return gr.update(value=True)
@@ -563,12 +590,16 @@ def on_ui_tabs():
         ]
 
         db_save_params.click(
+            _js="check_save",
             fn=save_config,
             inputs=params_to_save,
-            outputs=[db_status]
+            outputs=[]
         )
 
+
+
         db_load_params.click(
+            _js="db_start_load_params",
             fn=dreambooth.load_params,
             inputs=[
                 db_model_name
@@ -735,6 +766,7 @@ def on_ui_tabs():
         )
 
         db_model_name.change(
+            _js="clear_loaded",
             fn=load_model_params,
             inputs=[db_model_name],
             outputs=[db_model_path, db_revision, db_epochs, db_v2, db_has_ema, db_src, db_scheduler, db_status]
@@ -766,7 +798,7 @@ def on_ui_tabs():
         db_performance_wizard.click(
             fn=performance_wizard,
             _js="db_start_pwizard",
-            inputs=[],
+            inputs=[db_model_name],
             outputs=[
                 db_attention,
                 db_gradient_checkpointing,

@@ -424,6 +424,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             shuffle_caption=args.shuffle_tags,
             disable_padding=not args.pad_tokens,
             debug_dataset=True,
+            device=accelerator.device,
             dtype=weight_dtype
         )
 
@@ -456,9 +457,9 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             result.config = args
             return result
 
-        if args.stop_text_encoder == 0:
-            text_encoder.to(accelerator.device, dtype=weight_dtype)
-
+        # if args.stop_text_encoder != 0:
+        #     text_encoder.to(accelerator.device, dtype=weight_dtype)
+        #
 
         if args.cache_latents:
             vae.to(accelerator.device, dtype=weight_dtype)
@@ -466,7 +467,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             vae.eval()
             with torch.no_grad():
                 train_dataset.make_buckets_with_caching(enable_bucket, vae, min_bucket_reso, max_bucket_reso)
-            vae.to("cpu")
+            del vae
+            vae = None
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             gc.collect()
@@ -484,22 +486,23 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         if args.use_lora:
             params_to_optimize = ([
                 {"params": itertools.chain(*unet_lora_params), "lr": args.lora_learning_rate},
-                {"params": itertools.chain(*text_encoder_lora_params),
-                 "lr": args.lora_txt_learning_rate},
+                {"params": itertools.chain(*text_encoder_lora_params),"lr": args.lora_txt_learning_rate}
             ])
         else:
             params_to_optimize = (
                 itertools.chain(unet.parameters(), text_encoder.parameters())
             )
 
-        optimizer = optimizer_class(params_to_optimize, lr=args.learning_rate)
+        optimizer = optimizer_class(params_to_optimize, lr=args.learning_rate if not args.use_lora else args.lora_learning_rate)
 
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset, batch_size=1, shuffle=False, collate_fn=collate_fn, num_workers=n_workers)
 
-        # Eureka?!
-        sched_train_steps = args.num_train_epochs * train_dataset.num_train_images
         max_train_steps = args.num_train_epochs * len(train_dataloader) * train_batch_size
+
+        # This is separate, because optimizer.step is only called once per "step" in training, so it's not
+        # affected by batch size
+        sched_train_steps = args.num_train_epochs * train_dataset.num_train_images
 
         lr_scheduler = get_scheduler(
             args.lr_scheduler,
@@ -663,7 +666,9 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         def save_weights(save_image, save_model, save_snapshot, save_checkpoint, save_lora):
             global last_samples
             global last_prompts
+            nonlocal vae
             # Create the pipeline using the trained modules and save it.
+            del_vae = False
             if accelerator.is_main_process:
                 g_cuda = None
                 pred_type = "epsilon"
@@ -675,6 +680,18 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                 if args.use_ema:
                     ema_unet.store(unet.parameters())
                     ema_unet.copy_to(unet.parameters())
+
+                if vae is None:
+                    vae_path = args.pretrained_vae_name_or_path if args.pretrained_vae_name_or_path else \
+                        args.pretrained_model_name_or_path
+                    vae = AutoencoderKL.from_pretrained(
+                        vae_path,
+                        subfolder=None if args.pretrained_vae_name_or_path else "vae",
+                        revision=args.revision
+                    )
+                    vae.requires_grad_(False)
+                    vae.to(accelerator.device, dtype=weight_dtype)
+                    del_vae = True
 
                 s_pipeline = DiffusionPipeline.from_pretrained(
                     args.pretrained_model_name_or_path,
@@ -792,6 +809,9 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
                 del s_pipeline
                 del scheduler
+                if del_vae:
+                    del vae
+                    vae = None
                 if save_image:
                     if g_cuda:
                         del g_cuda
@@ -805,7 +825,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                         del log_images
                     except:
                         pass
-
+                if args.use_lora:
+                    cleanup()
                 status.current_image = last_samples
 
         # Only show the progress bar once on each machine.
@@ -856,13 +877,10 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     # (this is the forward diffusion process)
                     noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
-                    # Get the text embedding for conditioning
-                    if args.clip_skip is None or args.clip_skip == 0:
-                        encoder_hidden_states = text_encoder(batch["input_ids"])[0]
-                    else:
-                        enc_out = text_encoder(batch["input_ids"], output_hidden_states=True, return_dict=True)
-                        encoder_hidden_states = enc_out['hidden_states'][-int(args.clip_skip)].to(device=accelerator.device, dtype=weight_dtype)
-                        encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states)
+                    enc_out = text_encoder(batch["input_ids"], output_hidden_states=True, return_dict=True)
+                    encoder_hidden_states = enc_out['hidden_states'][-int(args.clip_skip)]
+                    # encoder_hidden_states = encoder_hidden_states.to(device=accelerator.device, dtype=weight_dtype)
+                    encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states)
 
                     # Predict the noise residual
                     noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample

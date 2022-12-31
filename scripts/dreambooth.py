@@ -67,12 +67,10 @@ def training_wizard(model_dir, is_person=False):
 
         # Set "base" value, which is 100 steps/image at LR of .000002
         if is_person:
-            lr_scale = .000002 / config.learning_rate
-            class_mult = 10
+            class_mult = 1
         else:
             class_mult = 0
-            lr_scale = .0000025 / config.learning_rate
-        step_mult = 100 * lr_scale
+        step_mult = 150 if is_person else 100
 
         for concept in concepts:
             if not os.path.exists(concept.instance_data_dir):
@@ -87,7 +85,7 @@ def training_wizard(model_dir, is_person=False):
                 c_dict = {
                     "concept": concept,
                     "images": image_count,
-                    "classifiers": round(image_count * class_mult)
+                    "classifiers": image_count * class_mult
                 }
                 counts_list.append(c_dict)
 
@@ -109,8 +107,65 @@ def training_wizard(model_dir, is_person=False):
 
     return int(step_mult), -1, c_list[0], -1, c_list[1], -1, c_list[2], w_status
 
+def largest_prime_factor(n):
+    # Special case for n = 2
+    if n == 2:
+        return 2
 
-def performance_wizard():
+    # Start with the first prime number, 2
+    largest_factor = 2
+
+    # Divide n by 2 as many times as possible
+    while n % 2 == 0:
+        n = n // 2
+
+    # Check the remaining odd factors of n
+    for i in range(3, int(n ** 0.5) + 1, 2):
+        # Divide n by i as many times as possible
+        while n % i == 0:
+            largest_factor = i
+            n = n // i
+
+    # If there is a prime factor larger than the square root, it will be the remaining value of n
+    if n > 2:
+        largest_factor = n
+
+    return largest_factor
+
+def closest_factors_to_sqrt(n):
+    # Find the square root of n
+    sqrt_n = int(n ** 0.5)
+
+    # Initialize the factors to the square root and 1
+    f1, f2 = sqrt_n, 1
+
+    # Check if n is a prime number
+    if math.sqrt(n) == sqrt_n:
+        return (sqrt_n, sqrt_n)
+
+    # Find the first pair of factors that are closest in value
+    while n % f1 != 0:
+        f1 -= 1
+        f2 = n // f1
+
+    # Initialize the closest difference to the difference between the square root and f1
+    closest_diff = abs(sqrt_n - f1)
+    closest_factors = (f1, f2)
+
+    # Check the pairs of factors below the square root
+    for i in range(sqrt_n-1, 1, -1):
+        if n % i == 0:
+            # Calculate the difference between the square root and the factors
+            diff = min(abs(sqrt_n - i), abs(sqrt_n - (n // i)))
+            # Update the closest difference and factors if necessary
+            if diff < closest_diff:
+                closest_diff = diff
+                closest_factors = (i, n // i)
+
+    return closest_factors
+
+
+def performance_wizard(model_name):
     """
     Calculate performance settings based on available resources.
     @return:
@@ -131,16 +186,44 @@ def performance_wizard():
     gradient_checkpointing = True
     gradient_accumulation_steps = 1
     mixed_precision = 'fp16'
-    cache_latents = False
+    cache_latents = True
     sample_batch_size = 1
     train_batch_size = 1
-    stop_text_encoder = False
+    stop_text_encoder = 0
     use_8bit_adam = True
     use_lora = False
     use_ema = False
-
+    config = None
+    if model_name == "" or model_name is None:
+        print("Can't load config, specify a model name!")
+    else:
+        config = from_file(model_name)
     if torch.cuda.is_bf16_supported():
         mixed_precision = 'bf16'
+    if config is not None:
+        total_images = 0
+        for concept in config.concepts_list:
+            idd = concept.instance_data_dir
+            if idd != "" and idd is not None and os.path.exists(idd):
+                images = get_images(idd)
+                total_images += len(images)
+        print(f"Total images: {total_images}")
+        if total_images != 0:
+            best_factors = closest_factors_to_sqrt(total_images)
+            largest_prime = largest_prime_factor(total_images)
+            largest_factor = best_factors[0] if best_factors[0] > best_factors[1] else best_factors[1]
+            smallest_factor = best_factors[0] if best_factors[0] < best_factors[1] else best_factors[1]
+            factor_diff = largest_factor - smallest_factor
+            print(f"Largest prime: {largest_prime}")
+            print(f"Best factors: {best_factors}")
+            if largest_prime <= factor_diff:
+                train_batch_size = largest_prime
+                gradient_accumulation_steps = largest_prime
+            else:
+                train_batch_size = largest_factor
+                gradient_accumulation_steps = smallest_factor
+
+
 
     has_xformers = False
     try:
@@ -152,24 +235,28 @@ def performance_wizard():
     if has_xformers:
         attention = "xformers"
     try:
+        stop_text_encoder = 75
+        if config is not None:
+            stop_text_encoder = int(config.num_train_epochs * .75)
         t = torch.cuda.get_device_properties(0).total_memory
         gb = math.ceil(t / 1073741824)
         print(f"Total VRAM: {gb}")
         if gb >= 24:
             sample_batch_size = 4
-            gradient_accumulation_steps = train_batch_size
-            train_batch_size = 2
-            stop_text_encoder = True
+            stop_text_encoder = 75
             use_ema = True
             if attention != "xformers":
                 attention = "no"
                 train_batch_size = 1
+                gradient_accumulation_steps = 1
         if 24 > gb >= 16:
-            stop_text_encoder = True
             use_ema = True
         if 16 > gb >= 10:
             use_lora = True
             use_ema = False
+            stop_text_encoder = 0
+            gradient_accumulation_steps = 1
+            train_batch_size = 1
 
         msg = f"Calculated training params based on {gb}GB of VRAM:"
     except Exception as e:
@@ -180,11 +267,11 @@ def performance_wizard():
                 "Accumulation Steps": gradient_accumulation_steps, "Precision": mixed_precision,
                 "Cache Latents": cache_latents, "Training Batch Size": train_batch_size,
                 "Class Generation Batch Size": sample_batch_size,
-                "Train Text Encoder": stop_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "LORA": use_lora}
+                "Text Encoder Epochs": stop_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "LORA": use_lora}
     for key in log_dict:
         msg += f"<br>{key}: {log_dict[key]}"
     return attention, gradient_checkpointing, gradient_accumulation_steps, mixed_precision, cache_latents, \
-           sample_batch_size, train_batch_size, stop_text_encoder, use_8bit_adam, use_lora, use_ema, msg
+        sample_batch_size, train_batch_size, stop_text_encoder, use_8bit_adam, use_lora, use_ema, msg
 
 
 def ui_samples(model_dir: str,
@@ -389,13 +476,13 @@ def load_model_params(model_name):
     else:
         msg = f"Selected model: '{model_name}'."
         return data.model_dir, \
-               data.revision, \
-               data.epoch, \
-               "True" if data.v2 else "False", \
-               "True" if data.has_ema else "False", \
-               data.src, \
-               data.scheduler, \
-               msg
+            data.revision, \
+            data.epoch, \
+            "True" if data.v2 else "False", \
+            "True" if data.has_ema else "False", \
+            data.src, \
+            data.scheduler, \
+            msg
 
 
 def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora_txt_alpha: float, imagic_only: bool,
