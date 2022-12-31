@@ -205,6 +205,7 @@ def ui_samples(model_dir: str,
     config = from_file(model_dir)
     msg = f"Generated {num_samples} sample(s)."
     images = []
+    prompts_out = []
     try:
         print(f"Loading model from {config.model_dir}.")
         status.job_no = 1
@@ -231,6 +232,7 @@ def ui_samples(model_dir: str,
         pd.seed = seed
         prompts = [pd] * batch_size
         while len(images) < num_samples:
+            prompts_out.append(save_sample_prompt)
             out_images = img_builder.generate_images(prompts)
             for img in out_images:
                 if len(images) < num_samples:
@@ -242,7 +244,8 @@ def ui_samples(model_dir: str,
         traceback.print_exc()
     reload_system_models()
     print(f"Returning {len(images)} samples.")
-    return images, msg
+    prompt_str = "<br>".join(prompts_out)
+    return images, prompt_str, msg
 
 
 def load_params(model_dir):

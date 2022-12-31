@@ -498,13 +498,14 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             train_dataset, batch_size=1, shuffle=False, collate_fn=collate_fn, num_workers=n_workers)
 
         # Eureka?!
-        max_train_steps = args.num_train_epochs * train_dataset.num_train_images
+        sched_train_steps = args.num_train_epochs * train_dataset.num_train_images
+        max_train_steps = args.num_train_epochs * len(train_dataloader) * train_batch_size
 
         lr_scheduler = get_scheduler(
             args.lr_scheduler,
             optimizer=optimizer,
             num_warmup_steps=args.lr_warmup_steps * gradient_accumulation_steps,
-            total_training_steps=max_train_steps,
+            total_training_steps=sched_train_steps,
             num_cycles=args.lr_cycles,
             power=args.lr_power,
             factor=args.lr_factor,
@@ -571,7 +572,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         print(f"  Batch Size Per Device = {train_batch_size}")
         print(f"  Gradient Accumulation steps = {gradient_accumulation_steps}")
         print(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
-        print(f"  Total optimization steps = {max_train_steps}")
+        print(f"  Total optimization steps = {sched_train_steps}")
+        print(f"  Total training steps = {max_train_steps}")
         print(f"  Resuming from checkpoint: {resume_from_checkpoint}")
         print(f"  First resume epoch: {first_epoch}")
         print(f"  First resume step: {resume_step}")
@@ -702,7 +704,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                                 out_file = os.path.join(model_dir, "lora")
                                 os.makedirs(out_file, exist_ok=True)
                                 out_file = os.path.join(out_file, f"{lora_model_name}_{args.revision}.pt")
-                                print(f"\nSaving lora weights at step {args.revision}")
+                                # print(f"\nSaving lora weights at step {args.revision}")
                                 # Save a pt file
                                 save_lora_weight(s_pipeline.unet, out_file)
                                 if args.stop_text_encoder:
@@ -715,13 +717,13 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                                 out_file = None
                                 if save_snapshot:
                                     status.textinfo = f"Saving snapshot at step {args.revision}..."
-                                    print(f"Saving snapshot at step: {args.revision}")
+                                    # print(f"Saving snapshot at step: {args.revision}")
                                     accelerator.save_state(os.path.join(args.model_dir, "checkpoints",
                                                                         f"checkpoint-{args.revision}"))
 
                                 # We should save this regardless, because it's our fallback if no snapshot exists.
                                 status.textinfo = f"Saving diffusion model at step {args.revision}..."
-                                print(f"Saving diffusion weights at step: {args.revision}.")
+                                # print(f"Saving diffusion weights at step: {args.revision}.")
                                 s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"))
 
                             if save_checkpoint:
@@ -928,7 +930,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                 status.job_count = max_train_steps
                 status.job_no = global_step
                 status.textinfo = f"Steps: {global_step}/{max_train_steps} (Current)," \
-                                  f" {args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {args.epoch}"
+                                  f" {args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
 
                 # Log completion message
                 if training_complete:

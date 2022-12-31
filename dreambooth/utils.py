@@ -11,6 +11,7 @@ from typing import Optional, Union, Tuple, List
 
 import matplotlib
 import pandas as pd
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow
 import torch
 from PIL import features, Image

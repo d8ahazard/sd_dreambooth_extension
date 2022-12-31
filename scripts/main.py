@@ -387,7 +387,8 @@ def on_ui_tabs():
                 db_progressbar = gr.HTML(elem_id="db_progressbar")
                 db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery').style(grid=4)
                 db_preview = gr.Image(elem_id='db_preview', visible=False)
-                db_prompt_list = gr.HTML(elem_id="db_prompt_list", value="")
+                db_prompt_list = gr.HTML(elem_id="db_prompt_list", value="", visible=False)
+                db_gallery_prompt = gr.HTML(elem_id="db_gallery_prompt", value="")
                 db_check_progress = gr.Button("Check Progress", elem_id=f"db_check_progress", visible=False)
 
                 db_refresh_button.click(
@@ -758,7 +759,7 @@ def on_ui_tabs():
 
         db_generate_graph.click(
             fn=parse_logs,
-            inputs=[db_model_name, gr.Checkbox(value=True)],
+            inputs=[db_model_name, gr.Checkbox(value=True, visible=False)],
             outputs=[db_gallery, db_prompt_list]
         )
 
@@ -832,7 +833,7 @@ def on_ui_tabs():
                     db_sample_seed,
                     db_sample_steps,
                     db_sample_scale],
-            outputs=[db_gallery, db_status]
+            outputs=[db_gallery, db_prompt_list, db_status]
         )
 
         db_generate_checkpoint.click(

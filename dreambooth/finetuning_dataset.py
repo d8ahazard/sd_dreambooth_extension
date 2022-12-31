@@ -11,6 +11,8 @@ from PIL import Image
 from torchvision.transforms import transforms
 from tqdm import tqdm
 
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
+
 
 def make_bucket_resolutions(
         max_reso, min_size=256, max_size=1024, divisible=64
@@ -95,9 +97,6 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
         self.num_reg_images = len(self.reg_img_path_captions)
         self.enable_reg_images = self.num_reg_images > 0
 
-        if self.enable_reg_images and self.num_train_images < self.num_reg_images:
-            print("some of reg images are not used / 正則化画像の数が多いので、一部使用されない正則化画像があります")
-
         self.image_transforms = transforms.Compose(
             [
                 transforms.ToTensor(),
@@ -112,14 +111,16 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
         cache_latents = vae is not None
         if cache_latents:
             if enable_bucket:
-                print("cache latents with bucketing")
+                state = "Caching latents with buckets..."
             else:
-                print("cache latents")
+                state = "Caching latents without buckets..."
         else:
             if enable_bucket:
-                print("make buckets")
+                state = "Preparing dataset with buckets..."
             else:
-                print("prepare dataset")
+                state = "Preparing dataset without buckets..."
+        print(state)
+        status.textinfo = state
 
         if enable_bucket:
             bucket_resos, bucket_aspect_ratios = make_bucket_resolutions((self.width, self.height), min_size, max_size)
@@ -179,11 +180,9 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
             split_to_buckets(True, caps)
 
         if enable_bucket:
-            print("number of images with repeats / 繰り返し回数込みの各bucketの画像枚数")
             for i, (reso, images) in enumerate(zip(bucket_resos, self.buckets)):
-                print(f"bucket {i}: resolution {reso}, count: {len(images)}")
+                print(f"Bucket {i}: Resolution {reso}, Count: {len(images)}")
             img_ar_errors = np.array(img_ar_errors)
-            print(f"mean ar error: {np.mean(np.abs(img_ar_errors))}")
 
         for bucket_index, bucket in enumerate(self.buckets):
             batch_count = int(math.ceil(len(bucket) / self.batch_size))
@@ -197,13 +196,13 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
         image_height, image_width = image.shape[0:2]
         ar_img = image_width / image_height
         ar_reso = reso[0] / reso[1]
-        if ar_img > ar_reso:  # 横が長い→縦を合わせる
+        if ar_img > ar_reso:
             scale = reso[1] / image_height
         else:
             scale = reso[0] / image_width
         resized_size = (int(image_width * scale + .5), int(image_height * scale + .5))
 
-        image = cv2.resize(image, resized_size, interpolation=cv2.INTER_AREA)  # INTER_AREAでやりたいのでcv2でリサイズ
+        image = cv2.resize(image, resized_size, interpolation=cv2.INTER_AREA)
         if resized_size[0] > reso[0]:
             trim_size = resized_size[0] - reso[0]
             image = image[:, trim_size // 2:trim_size // 2 + reso[0]]

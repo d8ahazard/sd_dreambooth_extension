@@ -201,11 +201,13 @@ let db_titles = {
 onUiUpdate(function () {
     db_progressbar();
 
-    gradioApp().querySelectorAll('span, button, select, p').forEach(function(span){
+    gradioApp().querySelectorAll('span, button, select, p').forEach(function (span) {
         let tooltip = db_titles[span.textContent];
-        if(!tooltip){tooltip = db_titles[span.value];}
+        if (!tooltip) {
+            tooltip = db_titles[span.value];
+        }
 
-        if(!tooltip){
+        if (!tooltip) {
             for (const c of span.classList) {
                 if (c in db_titles) {
                     tooltip = db_titles[c];
@@ -214,16 +216,58 @@ onUiUpdate(function () {
             }
         }
 
-        if(tooltip){span.title = tooltip;}
+        if (tooltip) {
+            span.title = tooltip;
+        }
 
     });
 
-	gradioApp().querySelectorAll('select').forEach(function(select){
-	    if (select.onchange != null) return;
-	    select.onchange = function(){select.title = db_titles[select.value] || "";}
-	});
+    gradioApp().querySelectorAll('select').forEach(function (select) {
+        if (select.onchange != null) return;
+        select.onchange = function () {
+            select.title = db_titles[select.value] || "";
+        }
+    });
 
+    gradioApp().querySelectorAll('.gallery-item').forEach(function (btn) {
+        if (btn.onchange != null) return;
+        btn.onchange = function() {
+            // Dummy function so we don't keep setting up the observer.
+        }
+        console.log("Setting up observer?");
+        checkPrompts();
+        const options = {
+            attributes: true
+        }
+
+        function callback(mutationList, observer) {
+            mutationList.forEach(function (mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    checkPrompts();
+                }
+            });
+        }
+
+        const observer = new MutationObserver(callback);
+        observer.observe(btn, options);
+
+    });
 });
+
+function checkPrompts() {
+    let prevSelectedIndex = selected_gallery_index();
+    let desc_list = getRealElement("db_prompt_list");
+    let des_box = getRealElement("db_gallery_prompt");
+    let prompts = desc_list.innerHTML;
+    console.log("Prompts: ", prompts);
+    if (prompts.includes("<br>")) {
+        let prompt_list = prompts.split("<br>");
+        if (prevSelectedIndex !== -1 && prevSelectedIndex < prompt_list.length) {
+            des_box.innerHTML = prompt_list[prevSelectedIndex];
+            console.log("Set prompt to ", prompt_list[prevSelectedIndex])
+        }
+    }
+}
 
 let progressTimeout = null;
 let galleryObserver = null;
@@ -317,12 +361,14 @@ function checkDbGallery(){
         }
         // Get the last selected item in the gallery.
         let prevSelectedIndex = selected_gallery_index();
+
         // Make things clickable?
         galleryObserver = new MutationObserver(function (){
             let galleryButtons = gradioApp().querySelectorAll('#db_gallery .gallery-item');
             let galleryBtnSelected = gradioApp().querySelector('#db_gallery .gallery-item.\\!ring-2');
             if (prevSelectedIndex !== -1 && galleryButtons.length>prevSelectedIndex && !galleryBtnSelected) {
                 // automatically re-open previously selected index (if exists)
+                console.log("Mutated!");
                 let activeElement = gradioApp().activeElement;
                 let scrollX = window.scrollX;
                 let scrollY = window.scrollY;
