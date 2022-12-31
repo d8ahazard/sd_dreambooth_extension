@@ -14,6 +14,7 @@ function save_config() {
     if (do_save === true) {
         console.log("Saving config...");
         btn.click();
+        params_loaded = true;
     } else {
         console.log("Saving canceled.")
     }
@@ -30,6 +31,7 @@ function check_save() {
         console.log("Filtered args: ", filtered, filtered.length);
         let status = getRealElement("db_status");
         status.innerHTML = "Config saved.";
+        params_loaded = true;
         return filtered;
     } else {
         console.log("Saving canceled.")
