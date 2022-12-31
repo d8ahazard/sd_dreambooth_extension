@@ -709,6 +709,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
                 with accelerator.autocast(), torch.inference_mode():
                     if save_model:
+                        # We are saving weights, we need to ensure revision is saved
+                        args.save()
                         try:
                             if args.use_lora and save_lora:
                                 lora_model_name = args.model_name if custom_model_name == "" else custom_model_name
