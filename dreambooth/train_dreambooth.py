@@ -726,13 +726,13 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                                 # print(f"\nSaving lora weights at step {args.revision}")
                                 # Save a pt file
                                 save_lora_weight(s_pipeline.unet, out_file)
-                                if args.stop_text_encoder:
+                                if args.stop_text_encoder != 0:
                                     out_txt = out_file.replace(".pt", "_txt.pt")
                                     save_lora_weight(s_pipeline.text_encoder,
                                                      out_txt,
                                                      target_replace_module=["CLIPAttention"],
                                                      )
-                            else:
+                            elif not args.use_lora:
                                 out_file = None
                                 if save_snapshot:
                                     status.textinfo = f"Saving snapshot at step {args.revision}..."
