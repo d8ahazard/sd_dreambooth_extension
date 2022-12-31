@@ -825,8 +825,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             text_encoder.requires_grad_(train_tenc)
 
             loss_total = 0
-            grad_steps = 0
-            real_steps = 0
 
             for step, batch in enumerate(train_dataloader):
                 # Skip steps until we reach the resumed step
@@ -857,12 +855,12 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
                     # Get the text embedding for conditioning
-                    if args.clip_skip is None:
+                    if args.clip_skip is None or args.clip_skip == 0:
                         encoder_hidden_states = text_encoder(batch["input_ids"])[0]
                     else:
                         enc_out = text_encoder(batch["input_ids"], output_hidden_states=True, return_dict=True)
-                        encoder_hidden_states = enc_out['hidden_states'][-int(args.clip_skip)]
-                        encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states.to(dtype=weight_dtype))
+                        encoder_hidden_states = enc_out['hidden_states'][-int(args.clip_skip)].to(device=accelerator.device, dtype=weight_dtype)
+                        encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states)
 
                     # Predict the noise residual
                     noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
