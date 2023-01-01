@@ -1,15 +1,44 @@
 import gc
+import hashlib
+import json
 import os
 import random
 import re
+import traceback
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
 
+import numpy as np
 import torch
 import torch.utils.checkpoint
+from PIL import Image
+from accelerate import Accelerator
+from diffusers import DiffusionPipeline, AutoencoderKL
 from torch.utils.data import Dataset
-from transformers import CLIPTextModel
+from tqdm import tqdm
+from transformers import CLIPTextModel, AutoTokenizer
 
-from modules import shared, devices
+from extensions.sd_dreambooth_extension.dreambooth import db_shared
+from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, from_file
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, get_checkpoint_match, get_images
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import apply_lora_weights
+from modules import shared, devices, sd_models, sd_hijack, prompt_parser, lowvram
+from modules.processing import StableDiffusionProcessingTxt2Img, StableDiffusionProcessing, Processed, \
+    get_fixed_seed, create_infotext, decode_first_stage
+from modules.sd_hijack import model_hijack
+
+
+@dataclass
+class PromptData:
+    prompt = ""
+    negative_prompt = ""
+    steps = 60
+    scale = 7.5
+    out_dir = ""
+    seed = -1
 
 
 class FilenameTextGetter:
@@ -18,8 +47,8 @@ class FilenameTextGetter:
     re_numbers_at_start = re.compile(r"^[-\d]+\s*")
 
     def __init__(self, shuffle_tags=False):
-        self.re_word = re.compile(shared.opts.dataset_filename_word_regex) if len(
-            shared.opts.dataset_filename_word_regex) > 0 else None
+        self.re_word = re.compile(db_shared.dataset_filename_word_regex) if len(
+            db_shared.dataset_filename_word_regex) > 0 else None
         self.shuffle_tags = shuffle_tags
 
     def read_text(self, img_path):
@@ -34,7 +63,7 @@ class FilenameTextGetter:
             filename_text = re.sub(self.re_numbers_at_start, '', filename_text)
             if self.re_word:
                 tokens = self.re_word.findall(filename_text)
-                filename_text = (shared.opts.dataset_filename_join_string or "").join(tokens)
+                filename_text = (db_shared.dataset_filename_join_string or "").join(tokens)
 
         filename_text = filename_text.replace("\\", "")  # work with \(franchies\)
         return filename_text
@@ -70,46 +99,70 @@ class FilenameTextGetter:
                         # Description only, insert both at the front?
                         filename_text = f"{instance_token} {class_token}, {filename_text}"
 
-        tags = filename_text.split(',')
-        if self.shuffle_tags:
+        # Append the filename text to the template first...THEN shuffle it all.
+        output = text_template.replace("[filewords]", filename_text)
+        # Remove underscores, double-spaces, and other characters that will cause issues.
+        output.replace("_", " ")
+        output.replace("  ", " ")
+        strip_chars = ["(", ")", "/", "\\", ":", "[", "]"]
+        for s_char in strip_chars:
+            output.replace(s_char, "")
+
+        tags = output.split(',')
+        if self.shuffle_tags and len(tags) > 2:
+            first_tag = tags.pop(0)
             random.shuffle(tags)
-        output = text_template.replace("[filewords]", ','.join(tags))
+            tags.insert(0, first_tag)
+        output = ','.join(tags)
         return output
 
 
 class PromptDataset(Dataset):
     """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
 
-    def __init__(self, prompt: str, num_samples: int, filename_texts, class_token: str,
-                 instance_token: str):
-        self.prompt = prompt
-        self.instance_token = instance_token
-        self.class_token = class_token
-        self.num_samples = num_samples
-        self.filename_texts = filename_texts
+    def __init__(self, concepts: [Concept], model_dir: str, shuffle_tags: bool):
+        c_idx = 0
+        prompts = []
+        self.with_prior = False
+        for concept in concepts:
+            cur_class_images = 0
+            text_getter = FilenameTextGetter(shuffle_tags)
 
-    def __len__(self):
-        return self.num_samples
+            if concept.num_class_images > 0:
+                self.with_prior = True
+                class_images_dir = concept["class_data_dir"]
+                if class_images_dir == "" or class_images_dir is None or class_images_dir == db_shared.script_path:
+                    class_images_dir = os.path.join(model_dir, f"classifiers_{c_idx}")
+                class_images_dir = Path(class_images_dir)
+                class_images_dir.mkdir(parents=True, exist_ok=True)
+                from extensions.sd_dreambooth_extension.dreambooth.utils import get_images
+                class_images = get_images(class_images_dir)
+                for _ in class_images:
+                    cur_class_images += 1
+                if cur_class_images < concept.num_class_images:
+                    num_new_images = concept.num_class_images - cur_class_images
+                    instance_images = get_images(concept.instance_data_dir)
+                    filename_texts = [text_getter.read_text(x) for x in instance_images]
 
-    def __getitem__(self, index):
-        example = {"filename_text": self.filename_texts[index % len(self.filename_texts)] if len(
-            self.filename_texts) > 0 else ""}
-        prompt = example["filename_text"]
-        if self.instance_token != "" and self.instance_token is not None:
-            if self.instance_token in prompt and self.class_token is not None and self.class_token != "":
-                class_token = self.class_token
-                # If the token is already in the prompt, just remove the instance token, don't swap it
-                class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
-                for token in class_tokens:
-                    if token in prompt:
-                        prompt = prompt.replace(self.instance_token, "")
-                    else:
-                        prompt = prompt.replace(self.instance_token, self.class_token)
+                    for i in range(num_new_images):
+                        text = filename_texts[i % len(filename_texts)]
+                        prompt = text_getter.create_text(concept.class_prompt, text, concept.instance_token,
+                                                         concept.class_token)
+                        pd = PromptData()
+                        pd.prompt = prompt
+                        pd.negative_prompt = concept.class_negative_prompt
+                        pd.steps = concept.class_infer_steps
+                        pd.scale = concept.class_guidance_scale
+                        pd.out_dir = class_images_dir
+                        prompts.append(pd)
+        random.shuffle(prompts)
+        self.prompts = prompts
 
-        prompt = self.prompt.replace("[filewords]", prompt)
-        example["prompt"] = prompt
-        example["index"] = index
-        return example
+    def __len__(self) -> int:
+        return len(self.prompts)
+
+    def __getitem__(self, index) -> PromptData:
+        return self.prompts[index]
 
 
 class EMAModel:
@@ -146,7 +199,7 @@ class EMAModel:
             else:
                 s_param.copy_(param)
 
-        devices.torch_gc()
+        db_shared.torch_gc()
 
     def copy_to(self, parameters: Iterable[torch.nn.Parameter]) -> None:
         """
@@ -201,14 +254,425 @@ class EMAModel:
         ]
 
 
+class ImageBuilder:
+    def __init__(self, config: DreamboothConfig, use_txt2img: bool, lora_model: str = None, lora_weight: float = 1,
+                 lora_txt_weight: float = 1, batch_size: int = 1, accelerator: Accelerator = None):
+        self.image_pipe = None
+        self.txt_pipe = None
+        self.resolution = config.resolution
+        self.last_model = None
+        self.batch_size = batch_size
+        if not os.path.exists(config.src) and use_txt2img:
+            print("Source model is from hub, can't use txt2image.")
+            use_txt2img = False
+
+        self.use_txt2img = use_txt2img
+        self.del_accelerator = False
+
+        if not self.use_txt2img:
+            self.accelerator = accelerator
+            if accelerator is None:
+                try:
+                    accelerator = Accelerator(
+                        gradient_accumulation_steps=config.gradient_accumulation_steps,
+                        mixed_precision=config.mixed_precision,
+                        log_with="tensorboard",
+                        logging_dir=os.path.join(config.model_dir, "logging")
+                    )
+                    self.accelerator = accelerator
+                    self.del_accelerator = True
+                except Exception as e:
+                    if "AcceleratorState" in str(e):
+                        msg = "Change in precision detected, please restart the webUI entirely to use new precision."
+                    else:
+                        msg = f"Exception initializing accelerator: {e}"
+                    print(msg)
+            torch_dtype = torch.float16 if shared.device.type == "cuda" else torch.float32
+
+            self.image_pipe = DiffusionPipeline.from_pretrained(
+                config.pretrained_model_name_or_path,
+                vae=AutoencoderKL.from_pretrained(
+                    config.pretrained_vae_name_or_path or config.pretrained_model_name_or_path,
+                    subfolder=None if config.pretrained_vae_name_or_path else "vae",
+                    revision=config.revision,
+                    torch_dtype=torch_dtype
+                ),
+                torch_dtype=torch_dtype,
+                requires_safety_checker=False,
+                safety_checker=None,
+                revision=config.revision
+            )
+
+            self.image_pipe.to(accelerator.device)
+            new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
+            if os.path.exists(new_hotness):
+                accelerator.print(f"Resuming from checkpoint {new_hotness}")
+                no_safe = db_shared.stop_safe_unpickle()
+                accelerator.load_state(new_hotness)
+                if no_safe:
+                    db_shared.start_safe_unpickle()
+            if config.use_lora and lora_model is not None and lora_model != "":
+                apply_lora_weights(lora_model, self.image_pipe.unet, self.image_pipe.text_encoder, lora_weight,
+                                   lora_txt_weight,
+                                   accelerator.device)
+        else:
+            current_model = sd_models.select_checkpoint()
+            new_model_info = get_checkpoint_match(config.src)
+            if new_model_info is not None and current_model is not None:
+                if new_model_info[0] != current_model[0]:
+                    self.last_model = current_model
+                    print(f"Loading model: {new_model_info[0]}")
+                    sd_models.load_model(new_model_info)
+            if new_model_info is not None and current_model is None:
+                sd_models.load_model(new_model_info)
+            shared.sd_model.to(shared.device)
+
+    def generate_images(self, prompt_data: list[PromptData]) -> [Image]:
+        def update_latent(step: int, timestep: int, latents: torch.FloatTensor):
+            status.sampling_step = step
+            decoded = self.image_pipe.decode_latents(latents)
+            status.current_latent = self.image_pipe.numpy_to_pil(decoded)
+
+        positive_prompts = []
+        negative_prompts = []
+        seed = -1
+        scale = 7.5
+        steps = 60
+        for prompt in prompt_data:
+            positive_prompts.append(prompt.prompt)
+            negative_prompts.append(prompt.negative_prompt)
+            scale = prompt.scale
+            steps = prompt.steps
+            seed = prompt.seed
+        if self.use_txt2img:
+            p = StableDiffusionProcessingTxt2Img(
+                sd_model=shared.sd_model,
+                prompt=positive_prompts,
+                negative_prompt=negative_prompts,
+                batch_size=self.batch_size,
+                steps=steps,
+                cfg_scale=scale,
+                width=self.resolution,
+                height=self.resolution,
+                do_not_save_grid=True,
+                do_not_save_samples=True,
+                do_not_reload_embeddings=True
+            )
+            processed = process_txt2img(p)
+            p.close()
+            output = processed
+        else:
+            preview_every = db_shared.show_progress_every_n_steps
+
+            with self.accelerator.autocast(), torch.inference_mode():
+                if seed is None or seed == '' or seed == -1:
+                    seed = int(random.randrange(21474836147))
+                g_cuda = torch.Generator(device=self.accelerator.device).manual_seed(seed)
+
+                if preview_every > 0:
+                    output = self.image_pipe(
+                        positive_prompts,
+                        num_inference_steps=steps,
+                        guidance_scale=scale,
+                        height=self.resolution,
+                        width=self.resolution,
+                        callback_steps=preview_every,
+                        callback=update_latent,
+                        generator=g_cuda,
+                        negative_prompt=negative_prompts).images
+
+                else:
+                    output = self.image_pipe(
+                        positive_prompts,
+                        num_inference_steps=steps,
+                        guidance_scale=scale,
+                        height=self.resolution,
+                        width=self.resolution,
+                        generator=g_cuda,
+                        negative_prompt=negative_prompts).images
+        return output
+
+    def unload(self):
+        # If we have an image pipe, delete it
+        if self.image_pipe is not None:
+            del self.image_pipe
+        if self.del_accelerator:
+            del self.accelerator
+        # If there was a model loaded already, reload it
+        if self.last_model is not None:
+            sd_models.load_model(self.last_model)
+
+
+def process_txt2img(p: StableDiffusionProcessing) -> [Image]:
+    """this is the main loop that both txt2img and img2img use; it calls func_init once inside all the scopes and func_sample once per batch"""
+
+    if type(p.prompt) == list:
+        assert (len(p.prompt) > 0)
+    else:
+        assert p.prompt is not None
+
+    devices.torch_gc()
+
+    seed = get_fixed_seed(p.seed)
+    subseed = get_fixed_seed(p.subseed)
+
+    sd_hijack.model_hijack.clear_comments()
+
+    comments = {}
+
+    if type(p.prompt) == list:
+        p.all_prompts = [shared.prompt_styles.apply_styles_to_prompt(x, p.styles) for x in p.prompt]
+    else:
+        p.all_prompts = p.batch_size * p.n_iter * [shared.prompt_styles.apply_styles_to_prompt(p.prompt, p.styles)]
+
+    if type(p.negative_prompt) == list:
+        p.all_negative_prompts = [shared.prompt_styles.apply_negative_styles_to_prompt(x, p.styles) for x in
+                                  p.negative_prompt]
+    else:
+        p.all_negative_prompts = p.batch_size * p.n_iter * [
+            shared.prompt_styles.apply_negative_styles_to_prompt(p.negative_prompt, p.styles)]
+
+    if type(seed) == list:
+        p.all_seeds = seed
+    else:
+        p.all_seeds = [int(seed) + (x if p.subseed_strength == 0 else 0) for x in range(len(p.all_prompts))]
+
+    if type(subseed) == list:
+        p.all_subseeds = subseed
+    else:
+        p.all_subseeds = [int(subseed) + x for x in range(len(p.all_prompts))]
+
+    def infotext(iteration=0, position_in_batch=0):
+        return create_infotext(p, p.all_prompts, p.all_seeds, p.all_subseeds, comments, iteration, position_in_batch)
+
+    with open(os.path.join(db_shared.script_path, "params.txt"), "w", encoding="utf8") as file:
+        processed = Processed(p, [], p.seed, "")
+        file.write(processed.infotext(p, 0))
+
+    infotexts = []
+    output_images = []
+
+    with torch.no_grad(), p.sd_model.ema_scope():
+        with devices.autocast():
+            p.init(p.all_prompts, p.all_seeds, p.all_subseeds)
+
+        if status.job_count == -1:
+            status.job_count = p.n_iter
+
+        for n in range(p.n_iter):
+            if status.skipped:
+                status.skipped = False
+
+            if status.interrupted:
+                break
+
+            prompts = p.all_prompts[n * p.batch_size:(n + 1) * p.batch_size]
+            negative_prompts = p.all_negative_prompts[n * p.batch_size:(n + 1) * p.batch_size]
+            seeds = p.all_seeds[n * p.batch_size:(n + 1) * p.batch_size]
+            subseeds = p.all_subseeds[n * p.batch_size:(n + 1) * p.batch_size]
+
+            if len(prompts) == 0:
+                break
+
+            with devices.autocast():
+                uc = prompt_parser.get_learned_conditioning(shared.sd_model, negative_prompts, p.steps)
+                c = prompt_parser.get_multicond_learned_conditioning(shared.sd_model, prompts, p.steps)
+
+            if len(model_hijack.comments) > 0:
+                for comment in model_hijack.comments:
+                    comments[comment] = 1
+
+            if p.n_iter > 1:
+                status.job = f"Batch {n + 1} out of {p.n_iter}"
+
+            with devices.autocast():
+                samples_ddim = p.sample(conditioning=c, unconditional_conditioning=uc, seeds=seeds, subseeds=subseeds,
+                                        subseed_strength=p.subseed_strength, prompts=prompts)
+
+            x_samples_ddim = [decode_first_stage(p.sd_model, samples_ddim[i:i + 1].to(dtype=devices.dtype_vae))[0].cpu()
+                              for i in range(samples_ddim.size(0))]
+            x_samples_ddim = torch.stack(x_samples_ddim).float()
+            x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
+
+            del samples_ddim
+
+            if db_shared.lowvram or db_shared.medvram:
+                lowvram.send_everything_to_cpu()
+
+            devices.torch_gc()
+
+            for i, x_sample in enumerate(x_samples_ddim):
+                x_sample = 255. * np.moveaxis(x_sample.cpu().numpy(), 0, 2)
+                x_sample = x_sample.astype(np.uint8)
+
+                image = Image.fromarray(x_sample)
+
+                text = infotext(n, i)
+                infotexts.append(text)
+                image.info["parameters"] = text
+                output_images.append(image)
+
+            del x_samples_ddim
+
+            devices.torch_gc()
+
+            status.nextjob()
+
+        p.color_corrections = None
+
+    devices.torch_gc()
+
+    return output_images
+
+
+def generate_prompts(model_dir):
+    status.job_count = 4
+    from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
+    if model_dir is None or model_dir == "":
+        return "Please select a model."
+    config = from_file(model_dir)
+    tokenizer = AutoTokenizer.from_pretrained(
+        os.path.join(config.pretrained_model_name_or_path, "tokenizer"),
+        revision=config.revision,
+        use_fast=False,
+    )
+    status.job_no = 1
+    status.textinfo = "Building dataset from existing files..."
+    train_dataset = SuperDataset(
+        concepts_list=config.concepts_list,
+        tokenizer=tokenizer,
+        size=config.resolution,
+        center_crop=config.center_crop,
+        lifetime_steps=config.revision,
+        pad_tokens=config.pad_tokens,
+        hflip=config.hflip,
+        max_token_length=config.max_token_length,
+        shuffle_tags=config.shuffle_tags
+    )
+
+    output = {"instance_prompts": [], "existing_class_prompts": [], "new_class_prompts": [], "sample_prompts": []}
+    status.job_no = 2
+    status.textinfo = "Appending instance and class prompts from existing files..."
+    for i in range(train_dataset.__len__()):
+        item = train_dataset.__getitem__(i)
+        output["instance_prompts"].append(item["instance_prompt"])
+        if "class_prompt" in item:
+            output["existing_class_prompts"].append(item["class_prompt"])
+    sample_prompts = train_dataset.get_sample_prompts()
+    for prompt in sample_prompts:
+        output["sample_prompts"].append(prompt.prompt)
+
+    status.job_no = 3
+    status.textinfo = "Building dataset for 'new' class images..."
+    for concept in config.concepts_list:
+        c_idx = 0
+        class_images_dir = Path(concept["class_data_dir"])
+        if class_images_dir == "" or class_images_dir is None or class_images_dir == db_shared.script_path:
+            class_images_dir = os.path.join(config.model_dir, f"classifiers_{c_idx}")
+        class_images_dir.mkdir(parents=True, exist_ok=True)
+        cur_class_images = len(get_images(class_images_dir))
+        if cur_class_images < concept.num_class_images:
+            sample_dataset = PromptDataset(config.concepts_list, config.model_dir, config.shuffle_tags)
+            for i in range(sample_dataset.__len__()):
+                prompt = sample_dataset.__getitem__(i)
+                output["new_class_prompts"].append(prompt.prompt)
+        c_idx += 1
+    status.job_no = 4
+    status.textinfo = "Prompt generation complete."
+    return json.dumps(output)
+
+
+def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weight: float = 1.0,
+                         lora_text_weight: float = 1.0, use_txt2img: bool = True, accelerator: Accelerator = None):
+    """
+
+    @param args: A DreamboothConfig
+    @param lora_model: Optional path to a lora model to use. You probably don't want to use this.
+    @param lora_weight: Alpha to use when merging lora unet.
+    @param lora_text_weight: Alpha to use when merging lora text encoder.
+    @param use_txt2img: Generate images using txt2image. Does not use lora.
+    @param accelerator: An optional existing accelerator to use.
+    @return:
+    generated: Number of images generated
+    with_prior: Whether prior preservation should be used
+    images: A list of strings with paths to images.
+    """
+    out_images = []
+    try:
+        prompt_dataset = PromptDataset(args.concepts_list, args.model_dir, args.shuffle_tags)
+    except Exception as p:
+        print(f"Exception generating dataset: {str(p)}")
+        return 0, False
+
+    with_prior = prompt_dataset.with_prior
+
+    set_len = prompt_dataset.__len__()
+    if set_len == 0:
+        return 0, prompt_dataset.with_prior, []
+
+    print(f"Generating {set_len} class images for training...")
+    status.textinfo = f"Generating {set_len} class images for training..."
+    status.job_count = set_len
+    status.job_no = 0
+    builder = ImageBuilder(args, use_txt2img=use_txt2img, lora_model=lora_model, lora_weight=lora_weight,
+                           lora_txt_weight=lora_text_weight, batch_size=args.sample_batch_size, accelerator=accelerator)
+    generated = 0
+    pbar = tqdm(total=set_len)
+
+    for i in range(int(set_len / args.sample_batch_size)):
+        if status.interrupted:
+            break
+        if generated >= set_len:
+            break
+        prompts = []
+        if set_len - generated < args.sample_batch_size:
+            batch_size = set_len - generated
+        else:
+            batch_size = args.sample_batch_size
+        for b in range(batch_size):
+            pd = prompt_dataset.__getitem__(i)
+            prompts.append(pd)
+
+        new_images = builder.generate_images(prompts)
+        i_idx = 0
+        for image in new_images:
+            if generated >= set_len:
+                break
+            try:
+                pd = prompts[i_idx]
+                image_base = hashlib.sha1(image.tobytes()).hexdigest()
+                image_filename = os.path.join(pd.out_dir, f"{image_base}.png")
+                image.save(image_filename)
+                out_images.append(image_filename)
+                txt_filename = image_filename.replace(".png", ".txt")
+                with open(txt_filename, "w", encoding="utf8") as file:
+                    file.write(pd.prompt)
+                status.job_no += 1
+                i_idx += 1
+                generated += 1
+                status.textinfo = f"Class image {status.job_no}/{set_len}, Prompt: '{pd.prompt}'"
+                status.current_image = image
+                if pbar is not None:
+                    pbar.update()
+            except Exception as e:
+                print(f"Exception generating images: {e}")
+                traceback.print_exc()
+
+        status.current_image = new_images
+    builder.unload()
+    del prompt_dataset
+    cleanup()
+    print(f"Generated {generated} new class images.")
+    return generated, with_prior, out_images
+
+
 # Implementation from https://github.com/bmaltais/kohya_ss
 def encode_hidden_state(text_encoder: CLIPTextModel, input_ids, pad_tokens, b_size, max_token_length,
                         tokenizer_max_length):
-
     if pad_tokens:
         input_ids = input_ids.reshape((-1, tokenizer_max_length))  # batch_size*3, 77
 
-    clip_skip = shared.opts.CLIP_stop_at_last_layers
+    clip_skip = db_shared.CLIP_stop_at_last_layers
     if clip_skip <= 1:
         encoder_hidden_states = text_encoder(input_ids)[0]
     else:

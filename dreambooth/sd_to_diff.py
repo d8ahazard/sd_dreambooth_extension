@@ -16,14 +16,16 @@
 import os
 import re
 import shutil
+import traceback
 
 import gradio as gr
 import torch
 
-import modules.sd_models
+from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, sanitize_name
-from extensions.sd_dreambooth_extension.dreambooth.dreambooth import reload_system_models
-from extensions.sd_dreambooth_extension.dreambooth.utils import printi, printm, get_db_models
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import stop_safe_unpickle
+from extensions.sd_dreambooth_extension.dreambooth.utils import printi, get_db_models, get_checkpoint_match
+from extensions.sd_dreambooth_extension.scripts.dreambooth import reload_system_models
 from modules import shared
 
 try:
@@ -427,6 +429,7 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
             resnets = [key for key in output_blocks[i] if f"output_blocks.{i}.0" in key]
             attentions = [key for key in output_blocks[i] if f"output_blocks.{i}.1" in key]
 
+            # resnet_0_paths = renew_resnet_paths(resnets)
             paths = renew_resnet_paths(resnets)
 
             meta_path = {"old": f"output_blocks.{i}.0", "new": f"up_blocks.{block_id}.resnets.{layer_in_block_id}"}
@@ -632,8 +635,8 @@ def convert_ldm_clip_checkpoint(checkpoint):
 
     for key in keys:
         if key.startswith("cond_stage_model.transformer"):
-            if key.find ("text_model") == -1:
-                text_model_dict["text_model."+ key[len("cond_stage_model.transformer."):]] = checkpoint[key]
+            if key.find("text_model") == -1:
+                text_model_dict["text_model." + key[len("cond_stage_model.transformer."):]] = checkpoint[key]
             else:
                 text_model_dict[key[len("cond_stage_model.transformer."):]] = checkpoint[key]
 
@@ -731,6 +734,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         db_new_model_name: Gr.dropdown populated with our model name, if applicable.
         db_config.model_dir: The directory where our model was created.
         db_config.revision: Model revision
+        db_config.epoch: Model epoch
         db_config.scheduler: The scheduler being used
         db_config.src: The source checkpoint, if not from hub.
         db_has_ema: Whether the model had EMA weights and they were extracted. If weights were not present or
@@ -740,7 +744,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         status
     """
     db_config = None
-    status = ""
+    result_status = ""
     has_ema = False
     v2 = False
     is_512 = True
@@ -749,48 +753,44 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
     src = ""
     revision = 0
     epoch = 0
+    upcast_attention = False
 
     # Needed for V2 models so we can create the right text encoder.
 
-    reset_safe = False
-    if not shared.cmd_opts.disable_safe_unpickle:
-        reset_safe = True
-        shared.cmd_opts.disable_safe_unpickle = True
-
+    reset_safe = stop_safe_unpickle()
+    db_shared.status.job_count = 11
+    original_config_file = None
     try:
         new_model_name = sanitize_name(new_model_name)
-        shared.state.job_no = 0
+        db_shared.status.job_no = 0
         checkpoint = None
         map_location = shared.device
-        if shared.cmd_opts.ckptfix or shared.cmd_opts.medvram or shared.cmd_opts.lowvram:
-            printm(f"Using CPU for extraction.")
-            map_location = torch.device('cpu')
+        try:
+            if db_shared.ckptfix or db_shared.medvram or db_shared.lowvram:
+                print(f"Using CPU for extraction.")
+                map_location = torch.device('cpu')
+        except:
+            print("UPDATE YOUR WEBUI!!!!")
+            return "", "", 0, 0, "", "", "", "", 512, "", "UPDATE YOUR WEBUI!"
+
 
         # Try to determine if v1 or v2 model
         if not from_hub:
             printi("Loading model from checkpoint.")
-            checkpoint_info = modules.sd_models.get_closet_checkpoint_match(ckpt_path)
+            checkpoint_info = get_checkpoint_match(ckpt_path)
 
-            if checkpoint_info is None:
-                print("Unable to find checkpoint file!")
-                shared.state.job_no = 8
-                return "", "", 0, "", "", "", "", 512, "", "Unable to find base checkpoint."
+            if checkpoint_info is None or not os.path.exists(checkpoint_info.filename):
+                err_msg = "Unable to find checkpoint file!"
+                print(err_msg)
+                db_shared.status.job_no = 8
+                return "", "", 0, 0, "", "", "", "", 512, "", err_msg
 
-            if not os.path.exists(checkpoint_info.filename):
-                print("Unable to find checkpoint file!")
-                shared.state.job_no = 8
-                return "", "", 0, "", "", "", "", 512, "", "Unable to find base checkpoint."
-
-            ckpt_path = checkpoint_info[0]
-
+            ckpt_path = checkpoint_info.filename
             printi("Loading checkpoint...")
             checkpoint = torch.load(ckpt_path)
-            # Todo: Decide if we should store this separately in the db_config and append it when re-compiling models.
-            # global_step = checkpoint["global_step"]
             checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
             rev_keys = ["db_global_step", "global_step"]
             epoch_keys = ["db_epoch", "epoch"]
-
             for key in rev_keys:
                 if key in checkpoint:
                     revision = checkpoint[key]
@@ -804,6 +804,9 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             key_name = "model.diffusion_model.input_blocks.2.1.transformer_blocks.0.attn2.to_k.weight"
 
             if key_name in checkpoint and checkpoint[key_name].shape[-1] == 1024:
+                if revision == 110000:
+                    # v2.1 needs to upcast attention
+                    upcast_attention = True
                 if revision == 875000 or revision == 220000:
                     print(f"Model revision is {revision}, assuming v2, 512 model.")
                     is_512 = True
@@ -817,7 +820,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             if new_model_token == "" or new_model_token is None:
                 msg = "Please provide a token to load models from the hub."
                 print(msg)
-                return "", "", 0, "", "", "", "", 512, "", msg
+                return "", "", 0, 0, "", "", "", "", 512, "", msg
             printi("Loading model from hub.")
             v2 = new_model_url == "stabilityai/stable-diffusion-2"
 
@@ -837,10 +840,16 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                                                     "v1-inference.yaml")
 
         db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type, v2=v2,
-                                     src=ckpt_path if not from_hub else new_model_url, resolution=512 if is_512 else 768)
+                                     src=ckpt_path if not from_hub else new_model_url,
+                                     resolution=image_size)
         db_config.lifetime_revision = revision
         db_config.epoch = epoch
         print(f"{'v2' if v2 else 'v1'} model loaded.")
+
+        # Use existing YAML if present
+        if ckpt_path is not None:
+            if os.path.exists(ckpt_path.replace(".ckpt", ".yaml")):
+                original_config_file = ckpt_path.replace(".ckpt", ".yaml")
 
         original_config = OmegaConf.load(original_config_file)
 
@@ -858,16 +867,8 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             set_alpha_to_one=False,
             prediction_type=prediction_type,
         )
-        print("Creating scheduler...")
-        if v2:
-            # All the 2.0 models use OpenCLIP and all use DDIM scheduler by default.
-            text_model_type = original_config.model.params.cond_stage_config.target.split(".")[-1]
-            if text_model_type == "FrozenOpenCLIPEmbedder":
-                scheduler_type = "ddim"
-            else:
-                scheduler_type = "pndm"
-            db_config.scheduler = scheduler_type
-            db_config.save()
+        # make sure scheduler works correctly with DDIM
+        scheduler.register_to_config(clip_sample=False)
         if scheduler_type == "pndm":
             config = dict(scheduler.config)
             config["skip_prk_steps"] = True
@@ -893,12 +894,13 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             pipe = DiffusionPipeline.from_pretrained(new_model_url, use_auth_token=new_model_token,
                                                      scheduler=scheduler, device_map=map_location)
             printi("Model loaded.")
-            shared.state.job_no = 7
+            db_shared.status.job_no = 7
 
         else:
             printi("Converting unet...")
             # Convert the UNet2DConditionModel model.
             unet_config = create_unet_diffusers_config(original_config, image_size=image_size)
+            unet_config["upcast_attention"] = upcast_attention
             unet = UNet2DConditionModel(**unet_config)
 
             converted_unet_checkpoint, has_ema = convert_ldm_unet_checkpoint(
@@ -930,6 +932,18 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                     feature_extractor=None,
                     requires_safety_checker=False,
                 )
+            # elif text_model_type == "PaintByExample":
+            #     vision_model = convert_paint_by_example_checkpoint(checkpoint)
+            #     tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
+            #     feature_extractor = AutoFeatureExtractor.from_pretrained("CompVis/stable-diffusion-safety-checker")
+            #     pipe = PaintByExamplePipeline(
+            #         vae=vae,
+            #         image_encoder=vision_model,
+            #         unet=unet,
+            #         scheduler=scheduler,
+            #         safety_checker=None,
+            #         feature_extractor=feature_extractor,
+            #     )
             elif text_model_type == "FrozenCLIPEmbedder":
                 text_model = convert_ldm_clip_checkpoint(checkpoint)
                 tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
@@ -951,41 +965,54 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                 pipe = LDMTextToImagePipeline(vqvae=vae, bert=text_model, tokenizer=tokenizer, unet=unet,
                                               scheduler=scheduler)
     except Exception as e:
+        print(f"Exception setting up output: {e}")
         pipe = None
-        status = f"Exception while extracting model: {e}"
+        traceback.print_exc()
 
     if pipe is None or db_config is None:
-        print("Pipeline or config is not set, unable to continue.")
+        msg = "Pipeline or config is not set, unable to continue."
+        print(msg)
+        return "", "", 0, 0, "", "", "", "", 512, "", msg
     else:
-        printi("Saving diffusers model...")
+        resolution = db_config.resolution
+        printi("Saving diffusion model...")
         pipe.save_pretrained(db_config.pretrained_model_name_or_path)
-        status = f"Checkpoint successfully extracted to {db_config.pretrained_model_name_or_path}"
+        result_status = f"Checkpoint successfully extracted to {db_config.pretrained_model_name_or_path}"
         model_dir = db_config.model_dir
         revision = db_config.revision
         scheduler = db_config.scheduler
         src = db_config.src
         required_dirs = ["unet", "vae", "text_encoder", "scheduler", "tokenizer"]
+        if original_config_file is not None and os.path.exists(original_config_file):
+            shutil.copy(original_config_file, db_config.model_dir)
+            basename = os.path.basename(original_config_file)
+            new_ex_path = os.path.join(db_config.model_dir, basename)
+            new_name = os.path.join(db_config.model_dir, f"{db_config.model_name}.yaml")
+            if os.path.exists(new_name):
+                os.remove(new_name)
+            os.rename(new_ex_path, new_name)
+
         for req_dir in required_dirs:
             full_path = os.path.join(db_config.pretrained_model_name_or_path, req_dir)
             if not os.path.exists(full_path):
-                status = f"Missing model directory, removing model: {full_path}"
+                result_status = f"Missing model directory, removing model: {full_path}"
                 shutil.rmtree(db_config.model_dir, ignore_errors=False, onerror=None)
                 break
 
     if reset_safe:
-        shared.cmd_opts.disable_safe_unpickle = False
+        db_shared.start_safe_unpickle()
 
     reload_system_models()
-    printm(status, True)
-    printi(status)
+    printi(result_status)
     dirs = get_db_models()
 
     return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), \
-        model_dir, \
-        revision, \
-        scheduler, \
-        src, \
-        "True" if has_ema else "False", \
-        "True" if v2 else "False", \
-        db_config.resolution, \
-        status
+           model_dir, \
+           revision, \
+           epoch, \
+           scheduler, \
+           src, \
+           "True" if has_ema else "False", \
+           "True" if v2 else "False", \
+           resolution, \
+           result_status

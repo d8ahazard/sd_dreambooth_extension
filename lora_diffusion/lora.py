@@ -1,16 +1,27 @@
+import os
+from typing import List
+
 import torch
 import torch.nn as nn
 
+from modules import shared, paths
+
 
 class LoraInjectedLinear(nn.Module):
-    def __init__(self, in_features, out_features, bias=False):
+    def __init__(self, in_features, out_features, bias=False, r=4):
         super().__init__()
+
+        if r >= min(in_features, out_features):
+            raise ValueError(
+                f"LoRA rank {r} must be less than {min(in_features, out_features)}"
+            )
+
         self.linear = nn.Linear(in_features, out_features, bias)
-        self.lora_down = nn.Linear(in_features, 4, bias=False)
-        self.lora_up = nn.Linear(4, out_features, bias=False)
+        self.lora_down = nn.Linear(in_features, r, bias=False)
+        self.lora_up = nn.Linear(r, out_features, bias=False)
         self.scale = 1.0
 
-        nn.init.normal_(self.lora_down.weight, std=1 / 16)
+        nn.init.normal_(self.lora_down.weight, std=1 / r ** 2)
         nn.init.zeros_(self.lora_up.weight)
 
     def forward(self, input):
@@ -18,14 +29,14 @@ class LoraInjectedLinear(nn.Module):
 
 
 def inject_trainable_lora(
-    model: nn.Module, target_replace_module=None
+        model: nn.Module,
+        target_replace_module: List[str] = ["CrossAttention", "Attention"],
+        r: int = 4,
 ):
     """
     inject lora into model, and returns lora parameter groups.
     """
 
-    if target_replace_module is None:
-        target_replace_module = ["CrossAttention", "Attention"]
     require_grad_params = []
     names = []
 
@@ -41,6 +52,7 @@ def inject_trainable_lora(
                         _child_module.in_features,
                         _child_module.out_features,
                         _child_module.bias is not None,
+                        r,
                     )
                     _tmp.linear.weight = weight
                     if bias is not None:
@@ -73,19 +85,17 @@ def extract_lora_ups_down(model, target_replace_module=None):
             for _child_module in _module.modules():
                 if _child_module.__class__.__name__ == "LoraInjectedLinear":
                     no_injection = False
-                    yield (_child_module.lora_up, _child_module.lora_down)
+                    yield _child_module.lora_up, _child_module.lora_down
     if no_injection:
         raise ValueError("No lora injected.")
 
 
 def save_lora_weight(
-    model, path="./lora.pt", target_replace_module=None
+        model, path="./lora.pt", target_replace_module=["CrossAttention", "Attention"]
 ):
-    if target_replace_module is None:
-        target_replace_module = ["CrossAttention", "Attention"]
     weights = []
     for _up, _down in extract_lora_ups_down(
-        model, target_replace_module=target_replace_module
+            model, target_replace_module=target_replace_module
     ):
         weights.append(_up.weight)
         weights.append(_down.weight)
@@ -115,15 +125,12 @@ def save_lora_as_json(model, path="./lora.json"):
 
 
 def weight_apply_lora(
-    model, loras, target_replace_module=None, alpha=1.0
+        model, loras, target_replace_module=["CrossAttention", "Attention"], alpha=1.0
 ):
-    if target_replace_module is None:
-        target_replace_module = ["CrossAttention", "Attention"]
     for _module in model.modules():
         if _module.__class__.__name__ in target_replace_module:
             for _child_module in _module.modules():
                 if _child_module.__class__.__name__ == "Linear":
-
                     weight = _child_module.weight
 
                     up_weight = loras.pop(0).detach().to(weight.device)
@@ -136,8 +143,34 @@ def weight_apply_lora(
                     _child_module.weight = nn.Parameter(weight)
 
 
+def apply_lora_weights(lora_model, target_unet, target_text_encoder, lora_alpha=1, lora_txt_alpha=1, device=None):
+    if device is None:
+        device = shared.device
+    target_unet.requires_grad_(False)
+    lora_path = os.path.join(paths.models_path, "lora", lora_model)
+    lora_txt = lora_path.replace(".pt", "_txt.pt")
+    if os.path.exists(lora_path) and os.path.isfile(lora_path):
+        print("Applying lora unet weights before training...")
+        loras = torch.load(lora_path, map_location=device)
+        weight_apply_lora(target_unet, loras, alpha=lora_alpha)
+    print("Injecting trainable lora...")
+    unet_lora_params, _ = inject_trainable_lora(target_unet)
+    text_encoder_lora_params = None
+
+    if target_text_encoder is not None:
+        target_text_encoder.requires_grad_(False)
+        if os.path.exists(lora_txt) and os.path.isfile(lora_txt):
+            print("Applying lora text_encoder weights before training...")
+            loras = torch.load(lora_txt, map_location=device)
+            weight_apply_lora(target_text_encoder, loras, target_replace_module=["CLIPAttention"], alpha=lora_txt_alpha)
+        text_encoder_lora_params, _ = inject_trainable_lora(target_text_encoder,
+                                                            target_replace_module=["CLIPAttention"])
+
+    return unet_lora_params, text_encoder_lora_params
+
+
 def monkeypatch_lora(
-    model, loras, target_replace_module=None
+        model, loras, target_replace_module=None
 ):
     if target_replace_module is None:
         target_replace_module = ["CrossAttention", "Attention"]

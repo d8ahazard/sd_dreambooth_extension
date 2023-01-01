@@ -3,7 +3,7 @@ import os
 import traceback
 
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
-from modules import images, shared
+from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared
 
 
 def sanitize_name(name):
@@ -21,52 +21,64 @@ class DreamboothConfig:
 
     def __init__(self,
                  model_name: str = "",
-                 adam_beta1: float = 0.9,
-                 adam_beta2: float = 0.999,
-                 adam_epsilon: float = 1e-8,
-                 adam_weight_decay: float = 0.01,
                  attention: str = "default",
+                 cache_latents=True,
                  center_crop: bool = True,
+                 clip_skip: int = 1,
                  concepts_path: str = "",
                  custom_model_name: str = "",
+                 epoch: int = 0,
                  epoch_pause_frequency: int = 0,
                  epoch_pause_time: int = 0,
                  gradient_accumulation_steps: int = 1,
                  gradient_checkpointing: bool = True,
+                 gradient_set_to_none: bool = True,
+                 graph_smoothing: int = 50,
                  half_model: bool = False,
                  has_ema: bool = False,
                  hflip: bool = False,
-                 learning_rate: float = 0.00000172,
+                 learning_rate: float = 5e-6,
+                 learning_rate_min: float = 1e-6,
                  lora_learning_rate: float = 1e-4,
                  lora_txt_learning_rate: float = 5e-5,
+                 lora_txt_weight: float = 1.0,
+                 lora_weight: float = 1.0,
+                 lr_cycles: int = 1,
+                 lr_factor: float = 0.5,
+                 lr_power: float = 1.0,
+                 lr_scale_pos: float = 0.5,
                  lr_scheduler: str = 'constant',
                  lr_warmup_steps: int = 0,
                  max_token_length: int = 75,
-                 max_train_steps: int = 1000,
                  mixed_precision: str = "fp16",
                  model_path: str = "",
-                 not_cache_latents=False,
-                 num_train_epochs: int = 1,
+                 num_train_epochs: int = 100,
                  pad_tokens: bool = True,
                  pretrained_vae_name_or_path: str = "",
                  prior_loss_weight: float = 1.0,
                  resolution: int = 512,
                  revision: int = 0,
                  sample_batch_size: int = 1,
-                 save_class_txt: bool = False,
-                 save_embedding_every: int = 500,
-                 save_preview_every: int = 500,
-                 save_use_global_counts: bool = False,
-                 save_use_epochs: bool = False,
-                 scale_lr: bool = False,
+                 sanity_prompt: str = "",
+                 sanity_seed: int = 420420,
+                 save_ckpt_after: bool = True,
+                 save_ckpt_cancel: bool = False,
+                 save_ckpt_during: bool = True,
+                 save_embedding_every: int = 25,
+                 save_lora_after: bool = True,
+                 save_lora_cancel: bool = False,
+                 save_lora_during: bool = True,
+                 save_preview_every: int = 5,
+                 save_state_after: bool = False,
+                 save_state_cancel: bool = False,
+                 save_state_during: bool = False,
                  scheduler: str = "ddim",
                  src: str = "",
                  shuffle_tags: bool = False,
                  train_batch_size: int = 1,
-                 train_text_encoder: bool = True,
+                 stop_text_encoder: int = 0,
                  use_8bit_adam: bool = True,
                  use_concepts: bool = False,
-                 use_cpu: bool = False,
                  use_ema: bool = True,
                  use_lora: bool = False,
                  v2: bool = False,
@@ -129,39 +141,47 @@ class DreamboothConfig:
                  ):
         if revision == "" or revision is None:
             revision = 0
+        if epoch == "" or epoch is None:
+            epoch = 0
         model_name = "".join(x for x in model_name if (x.isalnum() or x in "._- "))
-        models_path = shared.cmd_opts.dreambooth_models_path
+        models_path = shared.dreambooth_models_path
         if models_path == "" or models_path is None:
             models_path = os.path.join(shared.models_path, "dreambooth")
         model_dir = os.path.join(models_path, model_name)
         working_dir = os.path.join(model_dir, "working")
         if not os.path.exists(working_dir):
             os.makedirs(working_dir)
-        self.adam_beta1 = adam_beta1
-        self.adam_beta2 = adam_beta2
-        self.adam_epsilon = adam_epsilon
-        self.adam_weight_decay = adam_weight_decay
         self.attention = attention
+        self.cache_latents = cache_latents
         self.center_crop = center_crop
+        self.clip_skip = clip_skip
         self.concepts_path = concepts_path
         self.custom_model_name = custom_model_name
+        self.epoch = epoch
         self.epoch_pause_frequency = epoch_pause_frequency
         self.epoch_pause_time = epoch_pause_time
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.gradient_checkpointing = gradient_checkpointing
+        self.gradient_set_to_none = gradient_set_to_none
+        self.graph_smoothing = graph_smoothing
         self.half_model = half_model
         self.hflip = hflip
         self.learning_rate = learning_rate
+        self.learning_rate_min = learning_rate_min
         self.lora_learning_rate = lora_learning_rate
         self.lora_txt_learning_rate = lora_txt_learning_rate
+        self.lora_txt_weight = lora_txt_weight
+        self.lora_weight = lora_weight
+        self.lr_cycles = lr_cycles
+        self.lr_factor = lr_factor
+        self.lr_power = lr_power
+        self.lr_scale_pos = lr_scale_pos
         self.lr_scheduler = lr_scheduler
         self.lr_warmup_steps = lr_warmup_steps
         self.max_token_length = max_token_length
-        self.max_train_steps = max_train_steps
         self.mixed_precision = mixed_precision
         self.model_dir = model_dir
         self.model_name = model_name
-        self.not_cache_latents = not_cache_latents
         self.num_train_epochs = num_train_epochs
         self.pad_tokens = pad_tokens
         self.pretrained_model_name_or_path = working_dir
@@ -170,19 +190,25 @@ class DreamboothConfig:
         self.resolution = resolution
         self.revision = int(revision)
         self.sample_batch_size = sample_batch_size
-        self.save_class_txt = save_class_txt
+        self.sanity_prompt = sanity_prompt
+        self.sanity_seed = sanity_seed
+        self.save_ckpt_after = save_ckpt_after
+        self.save_ckpt_cancel = save_ckpt_cancel
+        self.save_ckpt_during = save_ckpt_during
         self.save_embedding_every = save_embedding_every
+        self.save_lora_after = save_lora_after
+        self.save_lora_cancel = save_lora_cancel
+        self.save_lora_during = save_lora_during
         self.save_preview_every = save_preview_every
-        self.save_use_global_counts = save_use_global_counts
-        self.save_use_epochs = save_use_epochs
-        self.scale_lr = scale_lr
+        self.save_state_after = save_state_after
+        self.save_state_cancel = save_state_cancel
+        self.save_state_during = save_state_during
         self.src = src
         self.shuffle_tags = shuffle_tags
         self.train_batch_size = train_batch_size
-        self.train_text_encoder = train_text_encoder
+        self.stop_text_encoder = stop_text_encoder
         self.use_8bit_adam = use_8bit_adam
         self.use_concepts = use_concepts
-        self.use_cpu = use_cpu
         self.use_ema = False if use_ema is None else use_ema
         self.use_lora = False if use_lora is None else use_lora
         if scheduler is not None:
@@ -252,7 +278,6 @@ class DreamboothConfig:
                             if not os.path.exists(class_dir):
                                 os.makedirs(class_dir)
                             concept.class_data_dir = class_dir
-                        print(f"Concept {c_count} class dir is {concept.class_data_dir}")
                         self.concepts_list.append(concept)
                     c_count += 1
         else:
@@ -264,7 +289,7 @@ class DreamboothConfig:
         Save the config file
         """
         self.lifetime_revision = self.initial_revision + self.revision
-        models_path = shared.cmd_opts.dreambooth_models_path
+        models_path = shared.dreambooth_models_path
         if models_path == "" or models_path is None:
             models_path = os.path.join(shared.models_path, "dreambooth")
 
@@ -273,9 +298,32 @@ class DreamboothConfig:
             json.dump(self.__dict__, outfile, indent=4)
 
 
+def save_json(model_name: str, json_cfg: str):
+    """
+    Save the config file
+    """
+    models_path = shared.dreambooth_models_path
+    if models_path == "" or models_path is None:
+        models_path = os.path.join(shared.models_path, "dreambooth")
+    if not os.path.exists(os.path.join(models_path, model_name)):
+        os.makedirs(os.path.join(models_path, model_name))
+    config_file = os.path.join(models_path, model_name, "db_config.json")
+    try:
+        loaded = json.loads(json_cfg)
+        with open(config_file, "w") as outfile:
+            json.dump(loaded, outfile, indent=4)
+
+        return json.dumps(loaded)
+    except Exception as e:
+        traceback.print_exc()
+        return {"exception": f"{e}"}
+
+
 def save_config(*args):
     config = DreamboothConfig(*args)
+    print("Saved settings.")
     config.save()
+    #return f"Saved settings for model: {config.model_name}"
 
 
 def from_file(model_name):
@@ -292,7 +340,7 @@ def from_file(model_name):
     if isinstance(model_name, list):
         model_name = model_name[0]
     model_name = sanitize_name(model_name)
-    models_path = shared.cmd_opts.dreambooth_models_path
+    models_path = shared.dreambooth_models_path
     if models_path == "" or models_path is None:
         models_path = os.path.join(shared.models_path, "dreambooth")
     working_dir = os.path.join(models_path, model_name, "working")
@@ -300,6 +348,9 @@ def from_file(model_name):
     try:
         with open(config_file, 'r') as openfile:
             config_dict = json.load(openfile)
+            if config_dict is None:
+                print("Invalid config dict.")
+                return config_dict
             concept_keys = ["instance_data_dir", "class_data_dir", "instance_prompt",
                             "class_prompt", "save_sample_prompt", "save_sample_template", "instance_token",
                             "class_token", "num_class_images",
@@ -311,6 +362,9 @@ def from_file(model_name):
             concept_dict = {}
             has_old_concept = False
             # Ensure we aren't using any old keys
+            if "not_cache_latents" in config_dict:
+                config_dict["cache_latents"] = not config_dict["not_cache_latents"]
+                config_dict.pop("not_cache_latents")
             for skip_key in skip_keys:
                 if skip_key in config_dict:
                     config_dict.pop(skip_key)
@@ -343,10 +397,12 @@ def from_file(model_name):
                 config.revision = 0
             else:
                 config.revision = int(config.revision)
+            if config.epoch == "" or config.epoch is None:
+                config.epoch = 0
+            else:
+                config.epoch = int(config.epoch)
             return config
     except Exception as e:
         print(f"Exception loading config: {e}")
         traceback.print_exc()
         return None
-
-

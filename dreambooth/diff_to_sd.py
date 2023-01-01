@@ -12,11 +12,12 @@ from typing import Dict
 import torch
 from diffusers import DiffusionPipeline
 
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.utils import printi, unload_system_models, \
     reload_system_models
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
-from modules import shared, paths
+from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -239,17 +240,17 @@ def convert_text_enc_state_dict_v20(text_enc_dict: Dict[str, torch.Tensor]):
 
         new_state_dict[relabelled_key] = v
 
-    for k_pre, tensors in capture_qkv_weight.items():
-        if None in tensors:
-            raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
-        relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
-        new_state_dict[relabelled_key + '.in_proj_weight'] = torch.cat(tensors)
-
-    for k_pre, tensors in capture_qkv_bias.items():
-        if None in tensors:
-            raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
-        relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
-        new_state_dict[relabelled_key + '.in_proj_bias'] = torch.cat(tensors)
+    re_keys = {
+        '.in_proj_weight': capture_qkv_weight,
+        '.in_proj_bias': capture_qkv_bias
+    }
+    for new_key in re_keys:
+        for k_pre, tensors in re_keys[new_key].items():
+            for t in tensors:
+                if t is None:
+                    raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
+            relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
+            new_state_dict[relabelled_key + new_key] = torch.cat(tensors)
 
     return new_state_dict
 
@@ -258,10 +259,13 @@ def convert_text_enc_state_dict(text_enc_dict: Dict[str, torch.Tensor]):
     return text_enc_dict
 
 
-def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1.0, lora_txt_alpha=1.0, custom_model_name="",
+def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1.0,
+                       lora_txt_alpha=1.0, custom_model_name="",
                        reload_models=True, log=True):
     """
 
+    @param lora_txt_alpha:
+    @param custom_model_name:
     @param model_name: The model name to compile
     @param half: Use FP16 when compiling the model
     @param use_subdir: The model will be saved to a subdirectory of the checkpoints folder
@@ -272,9 +276,9 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     @return: status: What happened, path: Checkpoint path
     """
     unload_system_models()
-    shared.state.textinfo = "Compiling checkpoint."
-    shared.state.job_no = 0
-    shared.state.job_count = 7
+    status.textinfo = "Compiling checkpoint."
+    status.job_no = 0
+    status.job_count = 7
 
     save_model_name = model_name if custom_model_name == "" else custom_model_name
     if custom_model_name == "":
@@ -283,9 +287,11 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
         printi(f"Compiling checkpoint for {model_name} with a custom name {custom_model_name}")
 
     if not model_name:
-        return "Select a model to compile.", "No model selected."
+        msg = "Select a model to compile."
+        print(msg)
+        return msg
 
-    ckpt_dir = shared.cmd_opts.ckpt_dir
+    ckpt_dir = shared.ckpt_dir
     models_path = os.path.join(shared.models_path, "Stable-diffusion")
     if ckpt_dir is not None:
         models_path = ckpt_dir
@@ -303,22 +309,31 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
         checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}.ckpt")
 
     model_path = config.pretrained_model_name_or_path
-    unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")
+    new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
+
+    if os.path.exists(new_hotness):
+        print(f"Loading snapshot paths from {new_hotness}")
+        unet_path = osp.join(new_hotness, "pytorch_model.bin")
+        text_enc_path = osp.join(new_hotness, "pytorch_model_1.bin")
+    else:
+        unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")
+        text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
+
     vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.bin")
-    text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
+
     try:
         printi("Converting unet...", log=log)
-        loaded_pipeline = DiffusionPipeline.from_pretrained(model_path).to("cpu")
 
         if lora_path is not None and lora_path != "":
+            loaded_pipeline = DiffusionPipeline.from_pretrained(model_path).to("cpu")
             lora_diffusers = config.pretrained_model_name_or_path + "_lora"
             os.makedirs(lora_diffusers, exist_ok=True)
             if not os.path.exists(lora_path):
                 try:
-                    cmd_lora_models_path = shared.cmd_opts.lora_models_path
+                    cmd_lora_models_path = shared.lora_models_path
                 except:
                     cmd_lora_models_path = None
-                model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else paths.models_path
+                model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else shared.models_path
                 lora_path = os.path.join(model_dir, "lora", lora_path)
             printi(f"Loading lora from {lora_path}", log=log)
             if os.path.exists(lora_path):
@@ -333,10 +348,10 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
                 printi(f"Applying lora weight of alpha: {lora_txt_alpha} to text encoder...")
                 weight_apply_lora(loaded_pipeline.text_encoder, torch.load(lora_txt), alpha=lora_txt_alpha)
                 printi("Saving lora text encoder...")
-                loaded_pipeline.text_encoder.save_pretrained(os.path.join(config.pretrained_model_name_or_path, "text_encoder_lora"))
+                loaded_pipeline.text_encoder.save_pretrained(
+                    os.path.join(config.pretrained_model_name_or_path, "text_encoder_lora"))
                 text_enc_path = osp.join(config.pretrained_model_name_or_path, "text_encoder_lora", "pytorch_model.bin")
-
-        del loaded_pipeline
+            del loaded_pipeline
 
         # Convert the UNet model
         unet_state_dict = torch.load(unet_path, map_location="cpu")
@@ -379,15 +394,24 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
         state_dict = {"db_global_step": config.revision, "db_epoch": config.epoch, "state_dict": state_dict}
         printi(f"Saving checkpoint to {checkpoint_path}...")
         torch.save(state_dict, checkpoint_path)
-        if v2:
+        cfg_file = None
+        new_name = os.path.join(config.model_dir, f"{config.model_name}.yaml")
+        if os.path.exists(new_name):
+            cfg_file = new_name
+
+        if v2 and cfg_file is None:
             cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs", "v2-inference-v.yaml")
+
+        if cfg_file is not None:
             cfg_dest = checkpoint_path.replace(".ckpt", ".yaml")
-            printi(f"Copying config file to {cfg_dest}", log=log)
+            printi(f"Copying config file from {cfg_dest} to {cfg_dest}", log=log)
             shutil.copyfile(cfg_file, cfg_dest)
+
     except Exception as e:
-        print("Exception compiling checkpoint!")
+        msg = f"Exception compiling checkpoint: {e}"
+        print(msg)
         traceback.print_exc()
-        return f"Exception compiling: {e}", ""
+        return msg
 
     try:
         del unet_state_dict
@@ -401,4 +425,6 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     # cleanup()
     if reload_models:
         reload_system_models()
-    return "Checkpoint compiled successfully.", "Checkpoint compiled successfully."
+    msg = f"Checkpoint compiled successfully: {checkpoint_path}"
+    printi(msg)
+    return msg

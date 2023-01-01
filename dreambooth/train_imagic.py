@@ -1,25 +1,32 @@
 import argparse
 import os
 from pathlib import Path
+from typing import List
 
 import torch
-import torch.nn.functional as F
 import torch.utils.checkpoint
 from PIL import Image
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from diffusers import AutoencoderKL, DDPMScheduler, StableDiffusionPipeline, UNet2DConditionModel
+from torch.nn import functional
 from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.dreambooth import printm
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils import list_features, is_image
-from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import AverageMeter
 from modules import shared
 
 logger = get_logger(__name__)
+
+
+class TrainResult:
+    config: DreamboothConfig = None
+    mem_record: List = []
+    msg: str = ""
+    samples: [Image] = []
 
 
 def parse_args():
@@ -79,12 +86,6 @@ def parse_args():
         help="Total number of training steps to perform.",
     )
     parser.add_argument(
-        "--max_train_steps",
-        type=int,
-        default=1000,
-        help="Total number of training steps to perform.",
-    )
-    parser.add_argument(
         "--gradient_accumulation_steps",
         type=int,
         default=1,
@@ -106,12 +107,6 @@ def parse_args():
         type=float,
         default=1e-6,
         help="Learning rate for fine tuning the model.",
-    )
-    parser.add_argument(
-        "--scale_lr",
-        action="store_true",
-        default=False,
-        help="Scale the learning rate by the number of GPUs, gradient accumulation steps, and batch size.",
     )
     parser.add_argument(
         "--use_8bit_adam", action="store_true", help="Whether or not to use 8-bit Adam from bitsandbytes."
@@ -159,9 +154,10 @@ def parse_args():
     return args
 
 
-def train_imagic(args: DreamboothConfig, mem_record):
+def train_imagic(args: DreamboothConfig):
     logging_dir = os.path.join(args.model_dir, "logging")
-    printm("Initializing imagic.")
+    print("Initializing imagic.")
+    result = TrainResult()
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
@@ -181,12 +177,6 @@ def train_imagic(args: DreamboothConfig, mem_record):
 
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
-
-    if args.scale_lr:
-        args.learning_rate = (
-                args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size *
-                accelerator.num_processes
-        )
 
     # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
     optimizer_class = torch.optim.Adam
@@ -267,26 +257,26 @@ def train_imagic(args: DreamboothConfig, mem_record):
     optimized_embeddings.requires_grad_(True)
     optimizer = optimizer_class(
         [optimized_embeddings],  # only optimize embeddings
-        lr=1e-3,
-        betas=(args.adam_beta1, args.adam_beta2),
-        eps=args.adam_epsilon,
+        lr=1e-3
     )
 
     unet, optimizer = accelerator.prepare(unet, optimizer)
 
     # We need to initialize the trackers we use, and also store our configuration.
-    # The trackers initializes automatically on the main process.
+    # The trackers will initialize automatically on the main process.
     if accelerator.is_main_process:
         accelerator.init_trackers("imagic")
 
     def train_loop(pbar, optim):
-        loss_avg = AverageMeter()
         for step in pbar:
-            if shared.state.interrupted:
+            loss_total = 0
+            if status.interrupted:
                 break
-            shared.state.job_no += 1
+            status.job_no += 1
             with accelerator.accumulate(unet):
                 noise = torch.randn_like(init_latents)
+                # Not sure if this matters, but technically, add_noise should take a FloatTensor
+                noise = noise.float()
                 bsz = init_latents.shape[0]
                 # Sample a random timestep for each image
                 timesteps = torch.randint(0, 1000, (bsz,),
@@ -299,30 +289,31 @@ def train_imagic(args: DreamboothConfig, mem_record):
 
                 noise_pred = unet(noisy_latents, timesteps, optimized_embeddings).sample
 
-                loss = F.mse_loss(noise_pred.float(), noise.float(), reduction="mean")
-
-                accelerator.backward(loss)
+                current_loss = functional.mse_loss(noise_pred.float(), noise.float(), reduction="mean")
+                loss_total += current_loss
+                avg_loss = loss_total / (step + 1)
+                accelerator.backward(current_loss)
                 optim.step()
                 optim.zero_grad(set_to_none=True)
-                loss_avg.update(loss.detach_(), bsz)
 
             if not step % 10:
-                logs = {"loss": loss_avg.avg.item()}
+                logs = {"loss": avg_loss}
                 progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=step)
 
         accelerator.wait_for_everyone()
-    shared.state.job_count = args.max_train_steps * 2
-    progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
+
+    status.job_count = args.num_train_epochs * 2
+    progress_bar = tqdm(range(args.num_train_epochs), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Optimizing embedding")
-    shared.state.textinfo = "Optimizing Embedding"
-    printm(shared.state.textinfo)
+    status.textinfo = "Optimizing Embedding"
+    print(status.textinfo)
     train_loop(progress_bar, optimizer)
 
     optimized_embeddings.requires_grad_(False)
     if accelerator.is_main_process:
-        shared.state.textinfo = "Saving embedding(s)."
-        printm(shared.state.textinfo)
+        status.textinfo = "Saving embedding(s)."
+        print(status.textinfo)
         emb_dir = shared.cmd_opts.embeddings_dir
         torch.save(target_embeddings.cpu(), os.path.join(emb_dir, f"{args.model_name}.pt"))
         torch.save(optimized_embeddings.cpu(), os.path.join(emb_dir, f"{args.model_name}_optimized.pt"))
@@ -330,24 +321,22 @@ def train_imagic(args: DreamboothConfig, mem_record):
     # Fine tune the diffusion model.
     optimizer = optimizer_class(
         accelerator.unwrap_model(unet).parameters(),
-        lr=args.learning_rate,
-        betas=(args.adam_beta1, args.adam_beta2),
-        # weight_decay=args.adam_weight_decay,
-        eps=args.adam_epsilon,
+        lr=args.learning_rate
     )
-    optimizer = accelerator.prepare(optimizer)
-    progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
+    # Accelerator.prepare takes a list?
+    optimizer = accelerator.prepare([optimizer])
+    progress_bar = tqdm(range(args.num_train_epochs), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Fine Tuning")
-    shared.state.textinfo = "Fine Tuning"
-    printm(shared.state.textinfo)
+    status.textinfo = "Fine Tuning"
+    print(status.textinfo)
     unet.train()
 
     train_loop(progress_bar, optimizer)
 
     # Create the pipeline using the trained modules and save it.
     if accelerator.is_main_process:
-        shared.state.textinfo = "Saving pretrained model."
-        printm(shared.state.textinfo)
+        status.textinfo = "Saving pretrained model."
+        print(status.textinfo)
         pipeline = StableDiffusionPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             unet=accelerator.unwrap_model(unet),
@@ -356,5 +345,7 @@ def train_imagic(args: DreamboothConfig, mem_record):
         pipeline.save_pretrained(args.pretrained_model_name_or_path)
 
     accelerator.end_training()
-    printm("Training complete")
-    return mem_record
+    print("Training complete")
+    result.msg = "IMagic training complete."
+    result.samples = []
+    return result

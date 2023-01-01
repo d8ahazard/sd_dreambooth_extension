@@ -1,21 +1,26 @@
+from __future__ import annotations
+
 import gc
-import json
+import html
 import os
-import random
+import sys
 import traceback
 from io import StringIO
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union, Tuple, List
 
+import matplotlib
+import pandas as pd
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import tensorflow
 import torch
-from PIL import features
-from diffusers import StableDiffusionPipeline, EulerAncestralDiscreteScheduler
+from PIL import features, Image
 from huggingface_hub import HfFolder, whoami
-from transformers import AutoTokenizer, CLIPTextModel
+from pandas import DataFrame
+from tensorboard.compat.proto import event_pb2
 
-from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, PromptDataset
-from modules import shared, paths
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
+from modules import shared, paths, sd_models
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -30,9 +35,9 @@ except:
 
 def printi(msg, params=None, log=True):
     if log:
-        shared.state.textinfo = msg
-        if shared.state.job_count > shared.state.job_no:
-            shared.state.job_no += 1
+        status.textinfo = msg
+        if status.job_count > status.job_no:
+            status.job_no += 1
         if params:
             print(msg, params)
         else:
@@ -59,7 +64,8 @@ def get_lora_models():
         dirs = os.listdir(out_dir)
         for found in dirs:
             if os.path.isfile(os.path.join(out_dir, found)):
-                output.append(found)
+                if "_txt.pt" not in found and ".pt" in found:
+                    output.append(found)
     return output
 
 
@@ -79,13 +85,12 @@ def get_images(image_path):
     return output
 
 
-
 def sanitize_tags(name):
     tags = name.split(",")
     name = ""
     for tag in tags:
         tag = tag.replace(" ", "_").strip()
-        tag = "".join(x for x in tag if (x.isalnum() or x in "._-"))
+        name = "".join(x for x in tag if (x.isalnum() or x in "._-"))
     name = name.replace(" ", "_")
     return "".join(x for x in name if (x.isalnum() or x in "._-,"))
 
@@ -98,31 +103,7 @@ mem_record = {}
 
 
 def printm(msg="", reset=False):
-    global mem_record
-    try:
-        allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
-        reserved = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
-        if not mem_record:
-            mem_record = {}
-        if reset:
-            max_allocated = round(torch.cuda.max_memory_allocated(0) / 1024 ** 3, 1)
-            max_reserved = round(torch.cuda.max_memory_reserved(0) / 1024 ** 3, 1)
-            output = f" Allocated {allocated}/{max_allocated}GB \n Reserved: {reserved}/{max_reserved}GB \n"
-            torch.cuda.reset_peak_memory_stats()
-            print(output)
-            mem_record = {}
-        else:
-            mem_record[msg] = f"{allocated}/{reserved}GB"
-            output = f' {msg} \n Allocated: {allocated}GB \n Reserved: {reserved}GB \n'
-            print(output)
-    except:
-        output = "Error parsing memory stats. Do you have a NVIDIA GPU?"
-    return output
-
-
-def log_memory():
-    mem = printm("", True)
-    return f"Current memory usage: {mem}"
+    print(msg)
 
 
 def cleanup(do_print: bool = False):
@@ -134,7 +115,7 @@ def cleanup(do_print: bool = False):
     except:
         pass
     if do_print:
-        printm("Cleanup completed.")
+        print("Cleanup completed.")
 
 
 def unload_system_models():
@@ -146,7 +127,6 @@ def unload_system_models():
         except:
             pass
     cleanup()
-    printm("", True)
 
 
 def list_attention():
@@ -180,123 +160,46 @@ def list_floats():
 def reload_system_models():
     if shared.sd_model is not None:
         shared.sd_model.to(shared.device)
-    printm("Restored system models.")
+    print("Restored system models.")
 
 
-def debug_prompts(model_dir):
-    from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SuperDataset
-    if model_dir is None or model_dir == "":
-        return "Please select a model."
-    config = from_file(model_dir)
-    tokenizer = AutoTokenizer.from_pretrained(
-        os.path.join(config.pretrained_model_name_or_path, "tokenizer"),
-        revision=config.revision,
-        use_fast=False,
-    )
-    train_dataset = SuperDataset(
-        concepts_list=config.concepts_list,
-        tokenizer=tokenizer,
-        size=config.resolution,
-        center_crop=config.center_crop,
-        lifetime_steps=config.revision,
-        pad_tokens=config.pad_tokens,
-        hflip=config.hflip,
-        max_token_length=config.max_token_length,
-        shuffle_tags=config.shuffle_tags
-    )
+def wrap_gpu_call(func, extra_outputs=None):
+    def f(*args, extra_outputs_array=extra_outputs, **kwargs):
+        try:
+            status.begin()
+            res = func(*args, **kwargs)
+            status.end()
 
-    output = {"instance_prompts": [], "existing_class_prompts": [], "new_class_prompts": [], "sample_prompts": []}
+        except Exception as e:
+            # When printing out our debug argument list, do not print out more than a MB of text
+            max_debug_str_len = 131072  # (1024*1024)/8
 
-    for i in range(train_dataset.__len__()):
-        item = train_dataset.__getitem__(i)
-        output["instance_prompts"].append(item["instance_prompt"])
-        if "class_prompt" in item:
-            output["existing_class_prompts"].append(item["class_prompt"])
-    sample_prompts = train_dataset.get_sample_prompts()
-    for prompt in sample_prompts:
-        output["sample_prompts"].append(prompt.prompt)
+            print("Error completing request", file=sys.stderr)
+            arg_str = f"Arguments: {str(args)} {str(kwargs)}"
+            print(arg_str[:max_debug_str_len], file=sys.stderr)
+            if len(arg_str) > max_debug_str_len:
+                print(f"(Argument list truncated at {max_debug_str_len}/{len(arg_str)} characters)", file=sys.stderr)
 
-    for concept in config.concepts_list:
-        text_getter = FilenameTextGetter(config.shuffle_tags)
-        c_idx = 0
-        class_images_dir = Path(concept["class_data_dir"])
-        if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:
-            class_images_dir = os.path.join(config.model_dir, f"classifiers_{c_idx}")
-            print(f"Class image dir is not set, defaulting to {class_images_dir}")
-        class_images_dir.mkdir(parents=True, exist_ok=True)
-        pil_features = list_features()
-        cur_class_images = len(get_images(class_images_dir))
-        if cur_class_images < concept.num_class_images:
-            num_new_images = concept.num_class_images - cur_class_images
-            instance_images = get_images(concept.instance_data_dir)
-            filename_texts = [text_getter.read_text(x) for x in instance_images]
-            sample_dataset = PromptDataset(concept.class_prompt, num_new_images, filename_texts, concept.class_token,
-                                           concept.instance_token)
-            for i in range(sample_dataset.__len__()):
-                output["new_class_prompts"].append(sample_dataset.__getitem__(i)["prompt"])
-        c_idx += 1
+            print(traceback.format_exc(), file=sys.stderr)
 
-    return json.dumps(output)
+            status.job = ""
+            status.job_count = 0
+
+            if extra_outputs_array is None:
+                extra_outputs_array = [None, '']
+
+            res = extra_outputs_array + [f"<div class='error'>{html.escape(type(e).__name__ + ': ' + str(e))}</div>"]
+
+        status.skipped = False
+        status.interrupted = False
+        status.job_count = 0
+
+        return res
+
+    return f
 
 
-def generate_sample_img(model_dir: str, save_sample_prompt: str, seed: str):
-    if model_dir is None or model_dir == "":
-        return "Please select a model."
-    config = from_file(model_dir)
-    unload_system_models()
-    model_path = config.pretrained_model_name_or_path
-    image = None
-    if not os.path.exists(config.pretrained_model_name_or_path):
-        print(f"Model path '{config.pretrained_model_name_or_path}' doesn't exist.")
-        return f"Can't find diffusers model at {config.pretrained_model_name_or_path}.", None
-    try:
-        print(f"Loading model from {model_path}.")
-        text_enc_model = CLIPTextModel.from_pretrained(config.pretrained_model_name_or_path,
-                                                       subfolder="text_encoder", revision=config.revision)
-        pipeline = StableDiffusionPipeline.from_pretrained(
-            config.pretrained_model_name_or_path,
-            text_encoder=text_enc_model,
-            torch_dtype=torch.float16,
-            revision=config.revision,
-            safety_checker=None,
-            feature_extractor=None,
-            requires_safety_checker=False
-        )
-        pipeline = pipeline.to(shared.device)
-        pil_features = list_features()
-        save_dir = os.path.join(shared.sd_path, "outputs", "dreambooth")
-        db_model_path = config.model_dir
-        if save_sample_prompt is None:
-            msg = "Please provide a sample prompt."
-            print(msg)
-            return msg, None
-        shared.state.textinfo = f"Generating preview image for model {db_model_path}..."
-        # I feel like this might not actually be necessary...but what the heck.
-        if seed is None or seed == '' or seed == -1:
-            seed = int(random.randrange(21474836147))
-        g_cuda = torch.Generator(device=shared.device).manual_seed(seed)
-        sample_dir = os.path.join(save_dir, "samples")
-        os.makedirs(sample_dir, exist_ok=True)
-        file_count = 0
-        shared.state.job_count = 1
-        with torch.autocast("cuda"), torch.inference_mode():
-            image = pipeline(save_sample_prompt,
-                             num_inference_steps=60,
-                             guidance_scale=7.5,
-                             scheduler=EulerAncestralDiscreteScheduler(beta_start=0.00085,
-                                                                       beta_end=0.012),
-                             width=config.resolution,
-                             height=config.resolution,
-                             generator=g_cuda).images[0]
-
-    except:
-        print("Exception generating sample!")
-        traceback.print_exc()
-    reload_system_models()
-    return "Sample generated.", image
-
-
-def isset(val: str):
+def isset(val: Union[str | None]):
     return val is not None and val != "" and val != "*"
 
 
@@ -325,6 +228,13 @@ def is_image(path: Path, feats=None):
     return is_img
 
 
+def get_checkpoint_match(search_string):
+    for info in sd_models.checkpoints_list.values():
+        if search_string in info.title or search_string in info.model_name or search_string in info.filename:
+            return info
+    return None
+
+
 def get_full_repo_name(model_id: str, organization: Optional[str] = None, token: Optional[str] = None):
     if token is None:
         token = HfFolder.get_token()
@@ -333,3 +243,209 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{username}/{model_id}"
     else:
         return f"{organization}/{model_id}"
+
+
+def plot_multi(
+    data: pd.DataFrame,
+    x: Union[str, None] = None,
+    y: Union[List[str], None] = None,
+    spacing: float = 0.1,
+    **kwargs
+) -> matplotlib.axes.Axes:
+    """Plot multiple Y axes on the same chart with same x axis.
+
+    Args:
+        data: dataframe which contains x and y columns
+        x: column to use as x axis. If None, use index.
+        y: list of columns to use as Y axes. If None, all columns are used
+            except x column.
+        spacing: spacing between the plots
+        **kwargs: keyword arguments to pass to data.plot()
+
+    Returns:
+        a matplotlib.axes.Axes object returned from data.plot()
+
+    Example:
+
+    See Also:
+        This code is mentioned in https://stackoverflow.com/q/11640243/2593810
+    """
+    from pandas.plotting._matplotlib.style import get_standard_colors
+
+    # Get default color style from pandas - can be changed to any other color list
+    if y is None:
+        y = data.columns
+
+    # remove x_col from y_cols
+    if x:
+        y = [col for col in y if col != x]
+
+    if len(y) == 0:
+        return
+    colors = get_standard_colors(num_colors=len(y))
+
+    if "legend" not in kwargs:
+        kwargs["legend"] = False  # prevent multiple legends
+
+    # First axis
+    ax = data.plot(x=x, y=y[0], color=colors[0], **kwargs)
+    ax.set_ylabel(ylabel=y[0])
+    lines, labels = ax.get_legend_handles_labels()
+
+    for i in range(1, len(y)):
+        # Multiple y-axes
+        ax_new = ax.twinx()
+        ax_new.spines["right"].set_position(("axes", 1 + spacing * (i - 1)))
+        data.plot(
+            ax=ax_new, x=x, y=y[i], color=colors[i % len(colors)], **kwargs
+        )
+        ax_new.set_ylabel(ylabel=y[i])
+
+        # Proper legend position
+        line, label = ax_new.get_legend_handles_labels()
+        lines += line
+        labels += label
+
+    ax.legend(lines, labels, loc=0)
+
+    return ax
+
+
+def parse_logs(model_name: str, for_ui: bool = False):
+    """Convert local TensorBoard data into Pandas DataFrame.
+
+    Function takes the root directory path and recursively parses
+    all events data.
+    If the `sort_by` value is provided then it will use that column
+    to sort values; typically `wall_time` or `step`.
+
+    *Note* that the whole data is converted into a DataFrame.
+    Depending on the data size this might take a while. If it takes
+    too long then narrow it to some sub-directories.
+
+    Paramters:
+        model_name: (str) path to db model config/dir.
+        for_ui: (bool) Generate UI-formatted text outputs.
+
+    Returns:
+        pandas.DataFrame with [wall_time, name, step, value] columns.
+
+    """
+
+    def convert_tfevent(filepath) -> Tuple[DataFrame, DataFrame, DataFrame, bool]:
+        loss_events = []
+        lr_events = []
+        ram_events = []
+        serialized_examples = tensorflow.data.TFRecordDataset(filepath)
+        for serialized_example in serialized_examples:
+            e = event_pb2.Event.FromString(serialized_example.numpy())
+            if len(e.summary.value):
+                parsed = parse_tfevent(e)
+                if parsed["Name"] == "lr":
+                    lr_events.append(parsed)
+                elif parsed["Name"] == "loss":
+                    loss_events.append(parsed)
+                elif parsed["Name"] == "vram_usage":
+                    ram_events.append(parsed)
+
+        merged_events = []
+
+        has_all = True
+        for le in loss_events:
+            lr = next((item for item in lr_events if item["Step"] == le["Step"]), None)
+            if lr is not None:
+                le["LR"] = lr["Value"]
+                le["Loss"] = le["Value"]
+                merged_events.append(le)
+            else:
+                has_all = False
+        if has_all:
+            loss_events = merged_events
+
+        return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events), has_all
+
+    def parse_tfevent(tfevent):
+        return {
+            "Wall_time": tfevent.wall_time,
+            "Name": tfevent.summary.value[0].tag,
+            "Step": tfevent.step,
+            "Value": float(tfevent.summary.value[0].simple_value),
+        }
+
+    from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
+    model_config = from_file(model_name)
+    if model_config is None:
+        print("Unable to load model config!")
+        return None
+    smoothing_window = int(model_config.graph_smoothing)
+    root_dir = os.path.join(model_config.model_dir, "logging", "dreambooth")
+    columns_order = ['Wall_time', 'Name', 'Step', 'Value']
+
+    out_loss = []
+    out_lr = []
+    out_ram = []
+    has_all_lr = True
+    for (root, _, filenames) in os.walk(root_dir):
+        for filename in filenames:
+            if "events.out.tfevents" not in filename:
+                continue
+            file_full_path = os.path.join(root, filename)
+            converted_loss, converted_lr, converted_ram, merged = convert_tfevent(file_full_path)
+            out_loss.append(converted_loss)
+            out_lr.append(converted_lr)
+            out_ram.append(converted_ram)
+            if not merged:
+                has_all_lr = False
+
+    loss_columns = columns_order
+    if has_all_lr:
+        loss_columns = ['Wall_time', 'Name', 'Step', 'Loss', "LR"]
+    # Concatenate (and sort) all partial individual dataframes
+    all_df_loss = pd.concat(out_loss)[loss_columns]
+    all_df_loss = all_df_loss.sort_values("Wall_time")
+    all_df_loss = all_df_loss.reset_index(drop=True)
+    all_df_loss = all_df_loss.rolling(smoothing_window).mean()
+    out_images = []
+    out_names = []
+    loss_name = ""
+    if has_all_lr:
+        plotted_loss = plot_multi(all_df_loss, "Step", ["Loss", "LR"], title=f"Loss Average/Learning Rate ({model_config.lr_scheduler})")
+        loss_name = "Loss Average/Learning Rate"
+    else:
+        plotted_loss = all_df_loss.plot(x="Step", y="Value", title="Loss Averages")
+        loss_name = "Loss Averages"
+        all_df_lr = pd.concat(out_lr)[columns_order]
+        all_df_lr = all_df_lr.sort_values("Wall_time")
+        all_df_lr = all_df_lr.reset_index(drop=True)
+        all_df_lr = all_df_lr.rolling(smoothing_window).mean()
+        plotted_lr = all_df_lr.plot(x="Step", y="Value", title="Learning Rate")
+        lr_img = os.path.join(model_config.model_dir, "logging", f"lr_plot_{model_config.revision}.png")
+        plotted_lr.figure.savefig(lr_img)
+        log_lr = Image.open(lr_img)
+        out_images.append(log_lr)
+        out_names.append("Learning Rate")
+
+    loss_img = os.path.join(model_config.model_dir, "logging", f"loss_plot_{model_config.revision}.png")
+    plotted_loss.figure.savefig(loss_img)
+
+    log_pil = Image.open(loss_img)
+    out_images.append(log_pil)
+    out_names.append(loss_name)
+    try:
+        all_df_ram = pd.concat(out_ram)[columns_order]
+        all_df_ram = all_df_ram.sort_values("Wall_time")
+        all_df_ram = all_df_ram.reset_index(drop=True)
+        all_df_ram = all_df_ram.rolling(smoothing_window).mean()
+        plotted_ram = all_df_ram.plot(x="Step", y="Value", title="VRAM Usage")
+
+        ram_img = os.path.join(model_config.model_dir, "logging", f"ram_plot_{model_config.revision}.png")
+        plotted_ram.figure.savefig(ram_img)
+        log_ram = Image.open(ram_img)
+        out_images.append(log_ram)
+        out_names.append("VRAM Usage")
+        if for_ui:
+            out_names = "<br>".join(out_names)
+    except:
+        pass
+
+    return out_images, out_names
