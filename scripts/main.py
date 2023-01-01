@@ -279,8 +279,7 @@ def on_ui_tabs():
                             db_concepts_path = gr.Textbox(label="Concepts List",
                                                           placeholder="Path to JSON file with concepts to train.")
                             with gr.Row():
-                                db_secret = gr.Textbox(label="API Key", value=get_secret, interactive=False,
-                                                       type="password")
+                                db_secret = gr.Textbox(label="API Key", value=get_secret, interactive=False)
                                 db_refresh_button = gr.Button(value=refresh_symbol, elem_id="refresh_secret")
                                 db_clear_secret = gr.Button(value=delete_symbol, elem_id="clear_secret")
 
