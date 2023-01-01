@@ -7,6 +7,7 @@ import traceback
 import gradio
 import torch
 import torch.utils.checkpoint
+from accelerate import find_executable_batch_size
 from diffusers.utils import logging as dl
 
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
@@ -271,10 +272,11 @@ def performance_wizard(model_name):
         sample_batch_size, train_batch_size, stop_text_encoder, use_8bit_adam, use_lora, use_ema, msg
 
 
+
 def ui_samples(model_dir: str,
                save_sample_prompt: str,
                num_samples: int = 1,
-               batch_size: int = 1,
+               sample_batch_size: int = 1,
                lora_model_path: str = "",
                lora_weight: float = 1,
                lora_txt_weight: float = 1,
@@ -283,54 +285,65 @@ def ui_samples(model_dir: str,
                steps: int = 60,
                scale: float = 7.5
                ):
-    status.job_count = num_samples + 1
-    if model_dir is None or model_dir == "":
-        return "Please select a model."
-    config = from_file(model_dir)
-    msg = f"Generated {num_samples} sample(s)."
-    images = []
-    prompts_out = []
-    try:
-        print(f"Loading model from {config.model_dir}.")
-        status.job_no = 1
-        status.textinfo = "Loading diffusion model..."
-        img_builder = ImageBuilder(
-            config,
-            False,
-            lora_model_path,
-            lora_weight,
-            lora_txt_weight,
-            batch_size)
+
+    if sample_batch_size > num_samples:
+        sample_batch_size = num_samples
+    @find_executable_batch_size(starting_batch_size=sample_batch_size)
+    def sample_loop(batch_size):
+        status.job_count = num_samples + 1
+        if model_dir is None or model_dir == "":
+            return "Please select a model."
+        config = from_file(model_dir)
+        msg = f"Generated {num_samples} sample(s)."
+        images = []
+        prompts_out = []
         if save_sample_prompt is None:
             msg = "Please provide a sample prompt."
             print(msg)
             return None, msg
-        status.textinfo = f"Generating sample image for model {config.model_name}..."
-        status.sampling_steps = 0
-        status.current_image_sampling_step = 0
-        pd = PromptData()
-        pd.steps = steps
-        pd.prompt = save_sample_prompt
-        pd.negative_prompt = negative_prompt
-        pd.scale = scale
-        pd.seed = seed
-        prompts = [pd] * batch_size
-        while len(images) < num_samples:
-            prompts_out.append(save_sample_prompt)
-            out_images = img_builder.generate_images(prompts)
-            for img in out_images:
-                if len(images) < num_samples:
-                    images.append(img)
-        img_builder.unload()
-    except Exception as e:
-        msg = f"Exception generating sample(s): {e}"
-        print(msg)
-        traceback.print_exc()
-    reload_system_models()
-    print(f"Returning {len(images)} samples.")
-    prompt_str = "<br>".join(prompts_out)
-    return images, prompt_str, msg
-
+        try:
+            unload_system_models()
+            print(f"Loading model from {config.model_dir}.")
+            status.job_no = 1
+            status.textinfo = "Loading diffusion model..."
+            img_builder = ImageBuilder(
+                config,
+                False,
+                lora_model_path,
+                lora_weight,
+                lora_txt_weight,
+                batch_size)
+            status.textinfo = f"Generating sample image for model {config.model_name}..."
+            status.sampling_steps = 0
+            status.current_image_sampling_step = 0
+            pd = PromptData()
+            pd.steps = steps
+            pd.prompt = save_sample_prompt
+            pd.negative_prompt = negative_prompt
+            pd.scale = scale
+            pd.seed = seed
+            prompts = [pd] * batch_size
+            while len(images) < num_samples:
+                prompts_out.append(save_sample_prompt)
+                out_images = img_builder.generate_images(prompts)
+                for img in out_images:
+                    if len(images) < num_samples:
+                        images.append(img)
+            img_builder.unload()
+            reload_system_models()
+        except Exception as e:
+            msg = f"Exception generating sample(s): {e}"
+            if "out of memory" in msg:
+                print("OOM detected, decreasing batch size.")
+                raise
+            else:
+                print(msg)
+                traceback.print_exc()
+        reload_system_models()
+        print(f"Returning {len(images)} samples.")
+        prompt_str = "<br>".join(prompts_out)
+        return images, prompt_str, msg
+    return sample_loop()
 
 def load_params(model_dir):
     data = from_file(model_dir)

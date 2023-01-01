@@ -103,7 +103,9 @@ mem_record = {}
 
 
 def printm(msg="", reset=False):
-    print(msg)
+    allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
+    cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
+    print(f"{msg}({allocated}/{cached})")
 
 
 def cleanup(do_print: bool = False):
