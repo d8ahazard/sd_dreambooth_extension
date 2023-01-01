@@ -40,6 +40,11 @@ def calc_time_left(progress, threshold, label, force_display):
         eta = (time_since_start / progress)
         eta_relative = eta - time_since_start
         if (eta_relative > threshold and progress > 0.02) or force_display:
+            if eta_relative > 86400:
+                days = eta_relative // 86400
+                remainder = days * 86400
+                eta_relative -= remainder
+                return f"{label}{days}:{time.strftime('%H:%M:%S', time.gmtime(eta_relative))}"
             if eta_relative > 3600:
                 return label + time.strftime('%H:%M:%S', time.gmtime(eta_relative))
             elif eta_relative > 60:
