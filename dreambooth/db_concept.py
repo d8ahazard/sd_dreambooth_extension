@@ -2,7 +2,7 @@ import os
 
 
 class Concept(dict):
-    def __init__(self, max_steps: int = -1, instance_data_dir: str = "", class_data_dir: str = "",
+    def __init__(self, instance_data_dir: str = "", class_data_dir: str = "",
                  instance_prompt: str = "", class_prompt: str = "",
                  save_sample_prompt: str = "", save_sample_template: str = "", instance_token: str = "",
                  class_token: str = "", num_class_images: int = 0, class_negative_prompt: str = "",
@@ -10,7 +10,6 @@ class Concept(dict):
                  n_save_sample: int = 1, sample_seed: int = -1, save_guidance_scale: float = 7.5,
                  save_infer_steps: int = 60, input_dict=None):
         if input_dict is None:
-            self.max_steps = max_steps
             self.instance_data_dir = instance_data_dir
             self.class_data_dir = class_data_dir
             self.instance_prompt = instance_prompt
@@ -29,7 +28,6 @@ class Concept(dict):
             self.save_guidance_scale = save_guidance_scale
             self.save_infer_steps = save_infer_steps
         else:
-            self.max_steps = input_dict["max_steps"] if "max_steps" in input_dict else -1
             self.instance_data_dir = input_dict["instance_data_dir"] if "instance_data_dir" in input_dict else ""
             self.class_data_dir = input_dict["class_data_dir"] if "class_data_dir" in input_dict else ""
             self.instance_prompt = input_dict["instance_prompt"] if "instance_prompt" in input_dict else ""
@@ -53,7 +51,6 @@ class Concept(dict):
             self.save_infer_steps = input_dict["save_infer_steps"] if "save_infer_steps" in input_dict else 60
 
         self_dict = {
-            "max_steps": self.max_steps,
             "instance_data_dir": self.instance_data_dir,
             "class_data_dir": self.class_data_dir,
             "instance_prompt": self.instance_prompt,

@@ -40,11 +40,8 @@ def training_wizard(model_dir, is_person=False):
     """
     Calculate the number of steps based on our learning rate, return the following:
     db_num_train_epochs,
-    c1_max_steps,
     c1_num_class_images,
-    c2_max_steps,
     c2_num_class_images,
-    c3_max_steps,
     c3_num_class_images,
     db_status
     """
@@ -105,7 +102,7 @@ def training_wizard(model_dir, is_person=False):
 
         print(w_status)
 
-    return int(step_mult), -1, c_list[0], -1, c_list[1], -1, c_list[2], w_status
+    return int(step_mult), c_list[0], c_list[1], c_list[2], w_status
 
 def largest_prime_factor(n):
     # Special case for n = 2
@@ -426,18 +423,18 @@ def load_params(model_dir):
                "db_use_lora",
                "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps",
                "c1_class_negative_prompt", "c1_class_prompt", "c1_class_token",
-               "c1_instance_data_dir", "c1_instance_prompt", "c1_instance_token", "c1_max_steps", "c1_n_save_sample",
+               "c1_instance_data_dir", "c1_instance_prompt", "c1_instance_token", "c1_n_save_sample",
                "c1_num_class_images", "c1_sample_seed", "c1_save_guidance_scale", "c1_save_infer_steps",
                "c1_save_sample_negative_prompt", "c1_save_sample_prompt", "c1_save_sample_template",
                "c2_class_data_dir",
                "c2_class_guidance_scale", "c2_class_infer_steps", "c2_class_negative_prompt", "c2_class_prompt",
                "c2_class_token", "c2_instance_data_dir", "c2_instance_prompt",
-               "c2_instance_token", "c2_max_steps", "c2_n_save_sample", "c2_num_class_images", "c2_sample_seed",
+               "c2_instance_token", "c2_n_save_sample", "c2_num_class_images", "c2_sample_seed",
                "c2_save_guidance_scale", "c2_save_infer_steps", "c2_save_sample_negative_prompt",
                "c2_save_sample_prompt", "c2_save_sample_template", "c3_class_data_dir", "c3_class_guidance_scale",
                "c3_class_infer_steps", "c3_class_negative_prompt", "c3_class_prompt", "c3_class_token",
                "c3_instance_data_dir", "c3_instance_prompt", "c3_instance_token",
-               "c3_max_steps", "c3_n_save_sample", "c3_num_class_images", "c3_sample_seed", "c3_save_guidance_scale",
+               "c3_n_save_sample", "c3_num_class_images", "c3_sample_seed", "c3_save_guidance_scale",
                "c3_save_infer_steps", "c3_save_sample_negative_prompt", "c3_save_sample_prompt",
                "c3_save_sample_template", "db_status"]
     output = []

@@ -56,7 +56,6 @@ class DbImagesRequest(BaseModel):
 
 # API Representation of concept data
 class DreamboothConcept(BaseModel):
-    max_steps: int = -1
     instance_data_dir: str = ""
     class_data_dir: str = ""
     file_prompt_contents: str = ""

@@ -1,6 +1,5 @@
 [
   {
-    "max_steps": -1,
     "instance_data_dir": "E:\\dev\\sd_db\\clothes_samples\\bossdyn",
     "class_data_dir": "E:\\dev\\sd_db\\pants",
     "instance_prompt": "a man wearing bossdyn pants",
@@ -20,7 +19,6 @@
     "save_infer_steps": 40
   },
   {
-    "max_steps": -1,
     "instance_data_dir": "E:\\dev\\sd_db\\clothes_samples\\capocor",
     "class_data_dir": "E:\\dev\\sd_db\\jacket",
     "instance_prompt": "a person wearing copocor jacket",

@@ -30,12 +30,11 @@ class TrainingData:
 
 
 class ConceptData:
-    def __init__(self, name: str, max_steps: int, instance_images: [TrainingData], class_images: [TrainingData],
+    def __init__(self, name: str, instance_images: [TrainingData], class_images: [TrainingData],
                  sample_prompts: List[str], concept: Concept):
         """
         A class for holding all the info on a concept without needing a bunch of different dictionaries and stuff
         @param name: Token for our subject.
-        @param max_steps: Maximum lifetime training steps remaining
         @param instance_images: A list of instance images or whatever
         @param class_images: A list of class images and prompts
         @param sample_prompts: A list of sample prompts
@@ -43,7 +42,6 @@ class ConceptData:
         self.name = name
         self.instance_images = instance_images
         self.class_images = class_images
-        self.max_steps = max_steps
         self.sample_prompts = sample_prompts
         self.concept = concept
         self.instance_indices = []
@@ -135,34 +133,21 @@ class SuperDataset(Dataset):
             else:
                 concept_key = images.sanitize_filename_part(instance_prompt)
 
-            # Determine the max steps for the concept
-            max_steps = concept.max_steps
-
-            if concept.max_steps > 0:
-                max_steps = concept.max_steps
-                # Ensure we don't over-train our concept
-                if lifetime_steps >= max_steps:
-                    max_steps = 0
-                else:
-                    max_steps -= lifetime_steps
-
-            # Only append things to the dict if we still want to train them
-            if max_steps > 0 or max_steps == -1:
-                instance_data = []
-                concept_images = get_images(concept.instance_data_dir)
-                for file in concept_images:
-                    try:
-                        img = Image.open(file)
-                        if img.width != size or img.height != size:
-                            needs_crop = True
-                    except Exception as e:
-                        print(f"Exception parsing instance image: {e}")
-                        continue
-                    file_text = self.text_getter.read_text(file)
-                    file_prompt = self.text_getter.create_text(instance_prompt, file_text, instance_token,
-                                                               class_token, False)
-                    prompt_tokens = self.tokenize(file_prompt)
-                    instance_data.append(TrainingData(file, file_prompt, prompt_tokens))
+            instance_data = []
+            concept_images = get_images(concept.instance_data_dir)
+            for file in concept_images:
+                try:
+                    img = Image.open(file)
+                    if img.width != size or img.height != size:
+                        needs_crop = True
+                except Exception as e:
+                    print(f"Exception parsing instance image: {e}")
+                    continue
+                file_text = self.text_getter.read_text(file)
+                file_prompt = self.text_getter.create_text(instance_prompt, file_text, instance_token,
+                                                           class_token, False)
+                prompt_tokens = self.tokenize(file_prompt)
+                instance_data.append(TrainingData(file, file_prompt, prompt_tokens))
                 # Create a dictionary for each concept, one with the images, and another with the max training steps
                 random.shuffle(instance_data)
 
@@ -192,7 +177,7 @@ class SuperDataset(Dataset):
                 samples = self.generate_sample_prompts(instance_data, concept)
                 print(f"Concept {concept_key} has {len(samples)} sample prompts.")
                 # One pretty wrapper for the whole concept
-                concept_data = ConceptData(concept_key, max_steps, instance_data, class_data, samples, concept)
+                concept_data = ConceptData(concept_key, instance_data, class_data, samples, concept)
                 self.concepts.append(concept_data)
                 total_images += concept_data.length
 
@@ -319,15 +304,6 @@ class SuperDataset(Dataset):
             example["class_images"] = self.image_transforms(class_image)
             example["class_prompt"] = class_data.prompt
             example["class_prompt_ids"] = class_data.tokens
-
-        # Here's where the "Super" comes in.
-        if concept_data.max_steps != -1:
-            concept_data.max_steps -= 1
-            if concept_data.max_steps <= 0:
-                print(f" Popping concept: {concept_data.name}")
-                concept_len = concept_data.length
-                self.concepts.remove(concept_data)
-                self._length -= concept_len
 
         # Rotate to the next concept
         self.current_concept += 1

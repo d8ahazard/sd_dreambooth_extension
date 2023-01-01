@@ -91,7 +91,6 @@ class DreamboothConfig:
                  c1_instance_data_dir: str = "",
                  c1_instance_prompt: str = "",
                  c1_instance_token: str = "",
-                 c1_max_steps: int = -1,
                  c1_n_save_sample: int = 1,
                  c1_num_class_images: int = 0,
                  c1_sample_seed: int = -1,
@@ -109,7 +108,6 @@ class DreamboothConfig:
                  c2_instance_data_dir: str = "",
                  c2_instance_prompt: str = "",
                  c2_instance_token: str = "",
-                 c2_max_steps: int = -1,
                  c2_n_save_sample: int = 1,
                  c2_num_class_images: int = 0,
                  c2_sample_seed: int = -1,
@@ -127,7 +125,6 @@ class DreamboothConfig:
                  c3_instance_data_dir: str = "",
                  c3_instance_prompt: str = "",
                  c3_instance_token: str = "",
-                 c3_max_steps: int = -1,
                  c3_n_save_sample: int = 1,
                  c3_num_class_images: int = 0,
                  c3_sample_seed: int = -1,
@@ -238,7 +235,7 @@ class DreamboothConfig:
                 else:
                     print("Please provide a valid concepts path.")
             else:
-                concept1 = Concept(c1_max_steps, c1_instance_data_dir, c1_class_data_dir,
+                concept1 = Concept(c1_instance_data_dir, c1_class_data_dir,
                                    c1_instance_prompt,
                                    c1_class_prompt, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token,
                                    c1_class_token,
@@ -248,7 +245,7 @@ class DreamboothConfig:
                                    c1_save_guidance_scale,
                                    c1_save_infer_steps)
 
-                concept2 = Concept(c2_max_steps, c2_instance_data_dir, c2_class_data_dir,
+                concept2 = Concept(c2_instance_data_dir, c2_class_data_dir,
                                    c2_instance_prompt,
                                    c2_class_prompt, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token,
                                    c2_class_token,
@@ -258,7 +255,7 @@ class DreamboothConfig:
                                    c2_save_guidance_scale,
                                    c2_save_infer_steps)
 
-                concept3 = Concept(c3_max_steps, c3_instance_data_dir, c3_class_data_dir,
+                concept3 = Concept(c3_instance_data_dir, c3_class_data_dir,
                                    c3_instance_prompt,
                                    c3_class_prompt, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token,
                                    c3_class_token,

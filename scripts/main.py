@@ -224,18 +224,15 @@ def on_ui_tabs():
                                 precision=0)
 
                         with gr.Column():
-                            gr.HTML(value="Batch")
+                            gr.HTML(value="Batching")
                             db_train_batch_size = gr.Number(label="Batch Size", precision=0, value=1)
                             db_sample_batch_size = gr.Number(label="Class Batch Size", precision=0, value=1)
-
-                        with gr.Column():
-                            gr.HTML("Gradients")
-                            db_gradient_checkpointing = gr.Checkbox(label="Gradient Checkpointing", value=True)
                             db_gradient_accumulation_steps = gr.Number(label="Gradient Accumulation Steps",
                                                                        precision=0,
                                                                        value=1)
                             db_gradient_set_to_none = gr.Checkbox(label="Set Gradients to None When Zeroing",
                                                                   value=True)
+                            db_gradient_checkpointing = gr.Checkbox(label="Gradient Checkpointing", value=True)
 
                         schedulers = ["linear", "linear_with_warmup", "cosine", "cosine_annealing",
                                       "cosine_annealing_with_restarts", "cosine_with_restarts", "polynomial",
@@ -250,7 +247,7 @@ def on_ui_tabs():
                             db_lr_cycles = gr.Number(label="Number of Hard Resets", value=1, precision=0, visible=False)
                             db_lr_factor = gr.Number(label="Constant/Linear Starting Factor", value=0.5, precision=2, visible=False)
                             db_lr_power = gr.Number(label="Polynomial Power", value=1.0, precision=1, visible=False)
-                            db_lr_scale_pos = gr.Slider(label="Scale Position", value=0.5, minimum=0, maximum=1, step=0.1, visible=False)
+                            db_lr_scale_pos = gr.Slider(label="Scale Position", value=0.5, minimum=0, maximum=1, step=0.05, visible=False)
                             with gr.Row(visible=False) as lora_lr_row:
                                 db_lora_learning_rate = gr.Number(label='Lora UNET Learning Rate', value=2e-4)
                                 db_lora_txt_learning_rate = gr.Number(label='Lora Text Encoder Learning Rate',
@@ -313,7 +310,6 @@ def on_ui_tabs():
                             db_train_wizard_person = gr.Button(value="Training Wizard (Person)")
                             db_train_wizard_object = gr.Button(value="Training Wizard (Object/Style)")
                         with gr.Tab("Concept 1"):
-                            c1_max_steps, \
                             c1_instance_data_dir, c1_class_data_dir, c1_instance_prompt, \
                             c1_class_prompt, c1_num_class_images, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token, \
                             c1_class_token, c1_num_class_images, c1_class_negative_prompt, c1_class_guidance_scale, \
@@ -321,7 +317,6 @@ def on_ui_tabs():
                             c1_save_guidance_scale, c1_save_infer_steps = build_concept_panel()
 
                         with gr.Tab("Concept 2"):
-                            c2_max_steps, \
                             c2_instance_data_dir, c2_class_data_dir, c2_instance_prompt, \
                             c2_class_prompt, c2_num_class_images, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token, \
                             c2_class_token, c2_num_class_images, c2_class_negative_prompt, c2_class_guidance_scale, \
@@ -329,7 +324,6 @@ def on_ui_tabs():
                             c2_save_guidance_scale, c2_save_infer_steps = build_concept_panel()
 
                         with gr.Tab("Concept 3"):
-                            c3_max_steps, \
                             c3_instance_data_dir, c3_class_data_dir, c3_instance_prompt, \
                             c3_class_prompt, c3_num_class_images, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token, \
                             c3_class_token, c3_num_class_images, c3_class_negative_prompt, c3_class_guidance_scale, \
@@ -541,7 +535,6 @@ def on_ui_tabs():
             c1_instance_data_dir,
             c1_instance_prompt,
             c1_instance_token,
-            c1_max_steps,
             c1_n_save_sample,
             c1_num_class_images,
             c1_sample_seed,
@@ -559,7 +552,6 @@ def on_ui_tabs():
             c2_instance_data_dir,
             c2_instance_prompt,
             c2_instance_token,
-            c2_max_steps,
             c2_n_save_sample,
             c2_num_class_images,
             c2_sample_seed,
@@ -577,7 +569,6 @@ def on_ui_tabs():
             c3_instance_data_dir,
             c3_instance_prompt,
             c3_instance_token,
-            c3_max_steps,
             c3_n_save_sample,
             c3_num_class_images,
             c3_sample_seed,
@@ -667,7 +658,6 @@ def on_ui_tabs():
                 c1_instance_data_dir,
                 c1_instance_prompt,
                 c1_instance_token,
-                c1_max_steps,
                 c1_n_save_sample,
                 c1_num_class_images,
                 c1_sample_seed,
@@ -685,7 +675,6 @@ def on_ui_tabs():
                 c2_instance_data_dir,
                 c2_instance_prompt,
                 c2_instance_token,
-                c2_max_steps,
                 c2_n_save_sample,
                 c2_num_class_images,
                 c2_sample_seed,
@@ -703,7 +692,6 @@ def on_ui_tabs():
                 c3_instance_data_dir,
                 c3_instance_prompt,
                 c3_instance_token,
-                c3_max_steps,
                 c3_n_save_sample,
                 c3_num_class_images,
                 c3_sample_seed,
@@ -822,11 +810,8 @@ def on_ui_tabs():
             ],
             outputs=[
                 db_num_train_epochs,
-                c1_max_steps,
                 c1_num_class_images,
-                c2_max_steps,
                 c2_num_class_images,
-                c3_max_steps,
                 c3_num_class_images,
                 db_status
             ]
@@ -840,11 +825,8 @@ def on_ui_tabs():
             ],
             outputs=[
                 db_num_train_epochs,
-                c1_max_steps,
                 c1_num_class_images,
-                c2_max_steps,
                 c2_num_class_images,
-                c3_max_steps,
                 c3_num_class_images,
                 db_status
             ]
@@ -960,7 +942,6 @@ def on_ui_tabs():
 
 def build_concept_panel():
     with gr.Column():
-        max_steps = gr.Number(label="Maximum Training Steps", value=-1, precision=0)
         gr.HTML(value="Directories")
         instance_data_dir = gr.Textbox(label='Dataset Directory',
                                        placeholder="Path to directory with input images")
@@ -1000,7 +981,7 @@ def build_concept_panel():
         sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
         save_guidance_scale = gr.Number(label="Sample CFG Scale", value=7.5, max=12, min=1, precision=2)
         save_infer_steps = gr.Number(label="Sample Steps", value=40, min=10, max=200, precision=0)
-    return [max_steps, instance_data_dir, class_data_dir, instance_prompt, class_prompt,
+    return [instance_data_dir, class_data_dir, instance_prompt, class_prompt,
             num_class_images,
             save_sample_prompt, sample_template, instance_token, class_token, num_class_images, class_negative_prompt,
             class_guidance_scale, class_infer_steps, save_sample_negative_prompt, n_save_sample, sample_seed,
