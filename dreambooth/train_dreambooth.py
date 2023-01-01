@@ -471,6 +471,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             vae = None
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
             gc.collect()
         else:
             train_dataset.make_buckets_with_caching(enable_bucket, None, min_bucket_reso, max_bucket_reso)
@@ -751,7 +752,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                                                    custom_model_name=custom_model_name)
                             if args.use_ema:
                                 ema_unet.restore(unet.parameters())
-                            args.save()
                         except Exception as ex:
                             print(f"Exception saving checkpoint/model: {ex}")
                             traceback.print_exc()
@@ -924,7 +924,16 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                 global_step += train_batch_size
                 args.revision += train_batch_size
                 status.job_no += train_batch_size
-
+                del noise_pred
+                del latents
+                del encoder_hidden_states
+                del noise
+                del timesteps
+                del noisy_latents
+                del target
+                if torch.has_cuda:
+                    torch.cuda.empty_cache()
+                    torch.cuda.ipc_collect()
                 logs = {"loss": float(current_loss), "loss_avg": avg_loss, "lr": last_lr, "vram_usage": float(cached)}
                 status.textinfo2 = f"Loss: {'%.2f' % current_loss}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
                                    f"VRAM: {allocated}/{cached} GB"
@@ -983,7 +992,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
             args.epoch += 1
             global_epoch += 1
-            args.save()
             if args.num_train_epochs > 1:
                 training_complete = global_epoch >= max_train_epochs
                 if training_complete:
@@ -1004,7 +1012,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
             if training_complete:
                 break
-
         if profile_memory and prof is not None:
             prof.stop()
         cleanup_memory()

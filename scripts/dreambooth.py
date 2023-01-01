@@ -1,4 +1,5 @@
 import gc
+import glob
 import logging
 import math
 import os
@@ -15,7 +16,7 @@ from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, PromptData
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, get_images, \
-    get_lora_models
+    get_lora_models, cleanup
 from modules import shared, devices
 
 try:
@@ -574,6 +575,12 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
         print(f"We have {len(images)} sample image(s).")
         if config.revision != total_steps:
             config.save()
+        else:
+            log_dir = os.path.join(config.model_dir, "logging", "dreambooth", "*")
+            list_of_files = glob.glob(log_dir)
+            latest_file = max(list_of_files, key=os.path.getmtime)
+            print(f"No training was completed, deleting log: {latest_file}")
+            os.remove(latest_file)
         total_steps = config.revision
         res = f"Training {'interrupted' if status.interrupted else 'finished'}. " \
               f"Total lifetime steps: {total_steps} \n"
@@ -582,8 +589,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
         traceback.print_exc()
         pass
 
-    devices.torch_gc()
-    gc.collect()
+    cleanup()
     print("Training completed, reloading SD Model.")
     reload_system_models()
     if lora_model_name != "" and lora_model_name is not None:
