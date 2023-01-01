@@ -135,7 +135,8 @@ class DreamboothParameters(BaseModel):
     train_batch_size: int = 1
     stop_text_encoder: int = 0
     use_8bit_adam: bool = False
-
+    use_lora: bool = False
+    use_subdir: bool = True
 
 def zip_files(db_model_name, files, name_part=""):
     zip_buffer = io.BytesIO()

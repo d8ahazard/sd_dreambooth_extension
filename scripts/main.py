@@ -3,7 +3,7 @@ from typing import List
 
 import gradio as gr
 
-from extensions.sd_dreambooth_extension.dreambooth.db_config import save_config
+from extensions.sd_dreambooth_extension.dreambooth.db_config import save_config, from_file
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generate_prompts
@@ -125,8 +125,18 @@ def check_progress_call_initial():
     return pspan, gr_show(False), gr.update(value=[]), textinfo_result, gr.update(value=[]), gr_show(False)
 
 
-def ui_gen_ckpt(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1.0,
-                lora_txt_alpha=1.0, custom_model_name=""):
+def ui_gen_ckpt(model_name: str):
+    if isinstance(model_name, List):
+        model_name = model_name[0]
+    if model_name == "" or model_name is None:
+        return "Please select a model."
+    config = from_file(model_name)
+    half = config.half_model
+    use_subdir = config.use_subdir
+    lora_path = config.lora_model_name
+    lora_alpha = config.lora_weight
+    lora_txt_alpha = config.lora_txt_weight
+    custom_model_name = config.custom_model_name
     res = compile_checkpoint(model_name, half, use_subdir, lora_path, lora_alpha, lora_txt_alpha, custom_model_name,
                              True, True)
     return res
@@ -484,6 +494,7 @@ def on_ui_tabs():
             db_learning_rate,
             db_learning_rate_min,
             db_lora_learning_rate,
+            db_lora_model_name,
             db_lora_txt_learning_rate,
             db_lora_txt_weight,
             db_lora_weight,
@@ -525,6 +536,7 @@ def on_ui_tabs():
             db_use_concepts,
             db_use_ema,
             db_use_lora,
+            db_use_subdir,
             db_v2,
             c1_class_data_dir,
             c1_class_guidance_scale,
@@ -612,6 +624,7 @@ def on_ui_tabs():
                 db_learning_rate,
                 db_learning_rate_min,
                 db_lora_learning_rate,
+                db_lora_model_name,
                 db_lora_txt_learning_rate,
                 db_lora_txt_weight,
                 db_lora_weight,
@@ -649,6 +662,7 @@ def on_ui_tabs():
                 db_use_concepts,
                 db_use_ema,
                 db_use_lora,
+                db_use_subdir,
                 c1_class_data_dir,
                 c1_class_guidance_scale,
                 c1_class_infer_steps,
@@ -850,16 +864,10 @@ def on_ui_tabs():
         )
 
         db_generate_checkpoint.click(
-            fn=wrap_gpu_call(ui_gen_ckpt),
             _js="db_start_checkpoint",
+            fn=wrap_gpu_call(ui_gen_ckpt),
             inputs=[
-                db_model_name,
-                db_half_model,
-                db_use_subdir,
-                db_lora_model_name,
-                db_lora_weight,
-                db_lora_txt_weight,
-                db_custom_model_name,
+                db_model_name
             ],
             outputs=[
                 db_status

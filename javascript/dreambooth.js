@@ -2,6 +2,7 @@
 
 const id_part = "db_";
 let params_loaded = false;
+let training_started = false;
 
 // Click a button. Whee.
 function save_config() {
@@ -101,7 +102,7 @@ function db_start_twizard() {
 
 // Generate checkpoint
 function db_start_checkpoint() {
-    return db_start(7, false, true, arguments);
+    return db_start(1, false, true, arguments);
 }
 
 // Generate sample prompts
@@ -121,6 +122,7 @@ function db_start_create() {
 
 // Train!
 function db_start_train() {
+    training_started = true;
     return db_start(8, true, true, arguments);
 }
 
@@ -175,6 +177,7 @@ let db_titles = {
     "Generate lora weights when training completes.": "When enabled, lora .pt files will be generated when training completes.",
     "Generate lora weights when training is cancelled.": "When enabled, lora .pt files will be generated when training is cancelled by the user.",
     "Generate Sample Images": "Generate sample images using the currently saved diffusers model.",
+    "Generate Samples": "Trigger sample generation after the next training epoch.",
     "Gradient Accumulation Steps": "Number of updates steps to accumulate before performing a backward/update pass. You should try to make this the same as your batch size.",
     "Gradient Checkpointing": "This is a technique to reduce memory usage by clearing activations of certain layers and recomputing them during a backward pass. Effectively, this trades extra computation time for reduced memory usage.",
     "Graph Smoothing Steps": "How many timesteps to smooth graph data over. A lower value means a more jagged graph with more information, higher value will make things prettier but slightly less accurate.",
@@ -383,7 +386,8 @@ function db_progressbar(){
                     progressTimeout = window.setTimeout(function() {
                         requestMoreDbProgress();
                     }, 500);
-                } else{
+                } else {
+                    training_started = false;
                     interrupt.style.display = "none";
                     gen_sample.style.display = "none";
                     gen_ckpt_during.style.display = "none";
@@ -477,11 +481,17 @@ function requestMoreDbProgress(){
     let gen_ckpt = gradioApp().getElementById("db_gen_ckpt");
     let gen_ckpt_during = gradioApp().getElementById("db_gen_ckpt_during");
     if(progressDiv && interrupt && train && gen_sample){
-        gen_sample.style.display = "block";
-        train.style.display = "none";
-        interrupt.style.display = "block";
-        gen_ckpt.style.display = "none";
-        gen_ckpt_during.style.display = "block";
+        if (training_started) {
+            gen_sample.style.display = "block";
+            train.style.display = "none";
+            interrupt.style.display = "block";
+            gen_ckpt.style.display = "none";
+            gen_ckpt_during.style.display = "block";
+        } else {
+            train.style.display = "none";
+            interrupt.style.display = "block";
+            gen_ckpt.style.display = "none";
+        }
     }
 }
 

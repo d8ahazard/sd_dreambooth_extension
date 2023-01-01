@@ -40,6 +40,7 @@ class DreamboothConfig:
                  learning_rate: float = 5e-6,
                  learning_rate_min: float = 1e-6,
                  lora_learning_rate: float = 1e-4,
+                 lora_model_name: str = "",
                  lora_txt_learning_rate: float = 5e-5,
                  lora_txt_weight: float = 1.0,
                  lora_weight: float = 1.0,
@@ -81,6 +82,7 @@ class DreamboothConfig:
                  use_concepts: bool = False,
                  use_ema: bool = True,
                  use_lora: bool = False,
+                 use_subdir: bool = False,
                  v2: bool = False,
                  c1_class_data_dir: str = "",
                  c1_class_guidance_scale: float = 7.5,
@@ -166,6 +168,7 @@ class DreamboothConfig:
         self.learning_rate = learning_rate
         self.learning_rate_min = learning_rate_min
         self.lora_learning_rate = lora_learning_rate
+        self.lora_model_name = lora_model_name
         self.lora_txt_learning_rate = lora_txt_learning_rate
         self.lora_txt_weight = lora_txt_weight
         self.lora_weight = lora_weight
@@ -208,6 +211,7 @@ class DreamboothConfig:
         self.use_concepts = use_concepts
         self.use_ema = False if use_ema is None else use_ema
         self.use_lora = False if use_lora is None else use_lora
+        self.use_subdir = use_subdir
         if scheduler is not None:
             self.scheduler = scheduler
 

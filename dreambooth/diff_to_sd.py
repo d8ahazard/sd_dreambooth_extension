@@ -297,8 +297,6 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
         models_path = ckpt_dir
 
     config = from_file(model_name)
-    if "use_subdir" in config.__dict__:
-        use_subdir = config["use_subdir"]
     lora_diffusers = ""
     v2 = config.v2
     total_steps = config.revision
