@@ -13,7 +13,6 @@ font-roboto
 fonts
 ftfy==6.1.1
 gfpgan==1.3.8
-gradio==3.9
 inflection==0.5.1
 jsonmerge==1.8.0
 kornia==0.6.7
