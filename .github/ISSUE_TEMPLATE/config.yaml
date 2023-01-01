@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussions
+    url: https://github.com/d8ahazard/sd_dreambooth_extension/discussions
+    about: Check here for common issues and discussions.
+  - name: Discord
+    url: https://discord.gg/q8dtpfRD5w
+    about: Come chat in realtime.
