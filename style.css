@@ -8,6 +8,10 @@
     max-height: 20px;
 }
 
+.min-h-\[6rem\] {
+    min-height: 0!important;
+}
+
 #db_progress_row {
     margin-bottom: 10px;
     margin-top: -18px;
