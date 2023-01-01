@@ -863,7 +863,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                         if args.cache_latents:
                             latents = batch["latents"].to(accelerator.device)
                         else:
-                            latents = vae.encode(batch["images"].to(dtype=weight_dtype)).latent_dist.sample()
+                            latents = vae.encode(batch["pixel_values"].to(dtype=weight_dtype)).latent_dist.sample()
                         latents = latents * 0.18215
 
                     # Sample noise that we'll add to the latents

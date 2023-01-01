@@ -226,10 +226,10 @@ def on_ui_tabs():
                         with gr.Column():
                             gr.HTML(value="Batching")
                             db_train_batch_size = gr.Number(label="Batch Size", precision=0, value=1)
-                            db_sample_batch_size = gr.Number(label="Class Batch Size", precision=0, value=1)
                             db_gradient_accumulation_steps = gr.Number(label="Gradient Accumulation Steps",
                                                                        precision=0,
                                                                        value=1)
+                            db_sample_batch_size = gr.Number(label="Class Batch Size", precision=0, value=1)
                             db_gradient_set_to_none = gr.Checkbox(label="Set Gradients to None When Zeroing",
                                                                   value=True)
                             db_gradient_checkpointing = gr.Checkbox(label="Gradient Checkpointing", value=True)
