@@ -285,7 +285,7 @@ class DreamboothConfig:
             if len(concepts_list):
                 self.concepts_list = concepts_list
 
-    def save(self):
+    def save(self, backup=False):
         """
         Save the config file
         """
@@ -295,6 +295,11 @@ class DreamboothConfig:
             models_path = os.path.join(shared.models_path, "dreambooth")
 
         config_file = os.path.join(models_path, self.model_name, "db_config.json")
+        if backup:
+            backup_dir = os.path.join(models_path, self.model_name, "backups")
+            if not os.path.exists(backup_dir):
+                os.makedirs(backup_dir)
+            config_file = os.path.join(models_path, self.model_name, "backups", f"db_config_{self.revision}.json")
         with open(config_file, "w") as outfile:
             json.dump(self.__dict__, outfile, indent=4)
 

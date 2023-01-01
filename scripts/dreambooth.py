@@ -553,6 +553,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     print("Starting Dreambooth training...")
     unload_system_models()
     total_steps = config.revision
+    config.save(True)
     images = []
     try:
         if imagic_only:
