@@ -1044,7 +1044,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                             break
                         time.sleep(1)
 
-            if training_complete:
+
         print(f"Profile memory is {profile_memory}")
         if profile_memory:
             print("Stopping profiler.")
