@@ -193,8 +193,7 @@ class PromptDataset(Dataset):
                                         break
                                 if len(ex_tokens) == 0 and len(pt) == 0:
                                     class_count += 1
-                        else:
-                            print(f"Can't find matching res: {res}")
+
                         req_classes = concept.num_class_images_per - class_count
                         if req_classes > 0:
                             self.total_len += req_classes
@@ -718,9 +717,6 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
             batch_size = args.sample_batch_size
         for b in range(batch_size):
             pd = prompt_dataset.__getitem__(actual_idx)
-            if pd is None:
-                print("NO PD!")
-                continue
             # Ensure that our image batches have the right resolutions
             if first_res is None:
                 first_res = pd.resolution

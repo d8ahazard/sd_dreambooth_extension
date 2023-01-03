@@ -845,14 +845,6 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         db_config.epoch = epoch
 
         sched_keys = os.path.join(db_config.model_dir, "keys.txt")
-        print(f"Keyfile: {sched_keys}")
-        with open(sched_keys, "w") as sched_file:
-
-            for key in checkpoint:
-                if "scheduler.v_params" in key:
-                    print("GOT V-PRED KEY!")
-                else:
-                    sched_file.write(f"{key}\r\n")
         print(f"{'v2' if v2 else 'v1'} model loaded.")
 
         # Use existing YAML if present

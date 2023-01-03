@@ -288,7 +288,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         )
 
         if args.attention == "xformers":
-            # print("Setting diffusers unet flags for xformers.")
             set_diffusers_xformers_flag(unet, True)
 
         vae_path = args.pretrained_vae_name_or_path if args.pretrained_vae_name_or_path else \
@@ -370,7 +369,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
             return list(zip(img_paths, captions))
 
-        print("prepare train images.")
         train_img_path_captions = []
         reg_img_path_captions = []
         tokens = []
@@ -381,15 +379,14 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             if idd is not None and idd != "" and os.path.exists(idd):
                 img_caps = load_dreambooth_dir(idd, conc, False)
                 train_img_path_captions.extend(img_caps)
-                print(f"{len(train_img_path_captions)} train images with repeating.")
+                print(f"Found {len(train_img_path_captions)} training images.")
 
             class_data_dir = conc.class_data_dir
             number_class_images = conc.num_class_images_per
             if number_class_images > 0 and class_data_dir is not None and class_data_dir != "" and os.path.exists(class_data_dir):
-                print(f"Preparing class images from dir {class_data_dir}...")
                 reg_caps = load_dreambooth_dir(class_data_dir, conc)
                 reg_img_path_captions.extend(reg_caps)
-            print(f"{len(reg_img_path_captions)} reg images.")
+            print(f"Found {len(reg_img_path_captions)} reg images.")
 
         # TODO: Add UI stuff for these
         resolution = (args.resolution, args.resolution)
@@ -691,7 +688,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             global last_prompts
             # Create the pipeline using the trained modules and save it.
             if accelerator.is_main_process:
-                printm("Precleanup")
+                printm("Pre-cleanup")
                 optim_to(optimizer)
                 gc.collect()
                 cleanup()
@@ -699,12 +696,10 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                 pred_type = "epsilon"
                 if args.v2:
                     pred_type = "v_prediction"
-                printm("Loading scheduler")
                 scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
                                           steps_offset=1, clip_sample=False, set_alpha_to_one=False,
                                           prediction_type=pred_type)
                 if args.use_ema:
-                    printm("Storing ema_unet params?")
                     ema_unet.store(unet.parameters())
                     ema_unet.copy_to(unet.parameters())
 
@@ -724,15 +719,13 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     safety_checker=None,
                     requires_safety_checker=None
                 )
-                printm("Pipeline created.")
                 s_pipeline = s_pipeline.to(accelerator.device)
-                printm("Pipeline moved to device.")
                 s_pipeline.enable_attention_slicing()
                 with accelerator.autocast(), torch.inference_mode():
                     if save_model:
                         # We are saving weights, we need to ensure revision is saved
                         args.save()
-                        pbar.set_description("Saving weights")
+                        pbar.set_description("Saving Weights")
                         pbar.reset(4)
                         pbar.update()
                         try:
@@ -760,6 +753,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                             elif not args.use_lora:
                                 out_file = None
                                 if save_snapshot:
+                                    pbar.set_description("Saving Snapshot")
                                     status.textinfo = f"Saving snapshot at step {args.revision}..."
                                     # print(f"Saving snapshot at step: {args.revision}")
                                     accelerator.save_state(os.path.join(args.model_dir, "checkpoints",
@@ -773,6 +767,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                                 pbar.update()
 
                             if save_checkpoint:
+                                pbar.set_description("Compiling Checkpoint")
                                 compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
                                                    reload_models=False, lora_path=out_file, log=False,
                                                    custom_model_name=custom_model_name)
@@ -808,7 +803,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                                     extra = SampleData(args.sanity_prompt, concept=args.concepts_list[0])
                                     extra.seed = args.sanity_seed
                                     prompts.append(extra)
-                                pbar.set_description("Previews")
+                                pbar.set_description("Generating Samples:")
                                 pbar.reset(len(prompts) + 2)
                                 ci = 0
                                 for c in prompts:
@@ -1048,14 +1043,10 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                         time.sleep(1)
 
 
-        print(f"Profile memory is {profile_memory}")
         if profile_memory:
-            print("Stopping profiler.")
             prof.stop()
-            print("No, really, stopped the damned profiler.")
         cleanup_memory()
         accelerator.end_training()
-        print("Ended training.")
         result.msg = msg
         result.config = args
         result.samples = last_samples
