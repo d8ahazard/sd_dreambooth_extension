@@ -78,7 +78,7 @@ class DreamboothConfig:
                  src: str = "",
                  shuffle_tags: bool = False,
                  train_batch_size: int = 1,
-                 stop_text_encoder: int = 0,
+                 stop_text_encoder: float = 1.0,
                  use_8bit_adam: bool = True,
                  use_concepts: bool = False,
                  use_ema: bool = True,

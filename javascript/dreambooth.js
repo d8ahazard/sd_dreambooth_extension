@@ -239,7 +239,7 @@ let db_titles = {
     "Shuffle Tags": "When enabled, tags after the first ',' in a prompt will be randomly ordered, which can potentially improve training.",
     "Shuffle After Epoch": "When enabled, will shuffle the dataset after the first epoch. Will enable text encoder training and latent caching (More VRAM).",
     "Source Checkpoint": "The source checkpoint to extract for training.",
-    "Text Encoder Epochs": "The number of steps per image (Epoch) to train the text encoder for. Set to -1 to train the same amount as the Unet, set to 0 to not train at all.",
+    "Step Ratio of Text Encoder Training": "The number of steps per image (Epoch) to train the text encoder for. Set 0.5 for 50% of the epochs",
     "Total Number of Class/Reg Images": "Total number of classification/regularization images to use. If no images exist, they will be generated. Set to 0 to disable prior preservation.",
     "Train Text Encoder": "Enabling this will provide better results and editability, but cost more VRAM.",
     "Train": "Start training.",

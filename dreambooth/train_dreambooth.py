@@ -537,8 +537,10 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             accelerator.init_trackers("dreambooth")
 
         # Train!
-        total_batch_size = len(train_dataloader) * accelerator.num_processes * gradient_accumulation_steps
+        total_batch_size = train_batch_size * accelerator.num_processes * gradient_accumulation_steps
         max_train_epochs = args.num_train_epochs
+        # we calculate our number of tenc training epochs
+        text_encoder_epochs=round(args.num_train_epochs*args.stop_text_encoder)
         global_step = 0
         global_epoch = 0
         last_save_step = 0
@@ -574,13 +576,14 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         print(f"  Batch Size Per Device = {train_batch_size}")
         print(f"  Gradient Accumulation steps = {gradient_accumulation_steps}")
         print(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
+        print(f"  Text Encoder Epochs: {text_encoder_epochs}")
         print(f"  Total optimization steps = {sched_train_steps}")
         print(f"  Total training steps = {max_train_steps}")
         print(f"  Resuming from checkpoint: {resume_from_checkpoint}")
         print(f"  First resume epoch: {first_epoch}")
         print(f"  First resume step: {resume_step}")
         print(f"  Lora: {args.use_lora}, Adam: {use_adam}, Prec: {args.mixed_precision}")
-        print(f"  Gradient Checkpointing: {args.gradient_checkpointing}, Text Enc Steps: {args.stop_text_encoder}")
+        print(f"  Gradient Checkpointing: {args.gradient_checkpointing}")
         print(f"  EMA: {args.use_ema}")
         print(f"  LR: {args.learning_rate})")
 
@@ -888,7 +891,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                 break
 
             unet.train()
-            train_tenc = args.stop_text_encoder == -1 or epoch < args.stop_text_encoder
+            train_tenc = epoch<text_encoder_epochs
             text_encoder.train(train_tenc)
             text_encoder.requires_grad_(train_tenc)
 
