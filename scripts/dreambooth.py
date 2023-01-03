@@ -42,9 +42,9 @@ def training_wizard(model_dir, is_person=False):
     """
     Calculate the number of steps based on our learning rate, return the following:
     db_num_train_epochs,
-    c1_num_class_images,
-    c2_num_class_images,
-    c3_num_class_images,
+    c1_num_class_images_per,
+    c2_num_class_images_per,
+    c3_num_class_images_per,
     db_status
     """
     if model_dir == "" or model_dir is None:
@@ -384,6 +384,7 @@ def load_params(model_dir):
     ui_keys = ["db_attention",
                "db_cache_latents",
                "db_center_crop",
+               "db_class_buckets",
                "db_clip_skip",
                "db_concepts_path",
                "db_custom_model_name",
@@ -440,17 +441,17 @@ def load_params(model_dir):
                "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps",
                "c1_class_negative_prompt", "c1_class_prompt", "c1_class_token",
                "c1_instance_data_dir", "c1_instance_prompt", "c1_instance_token", "c1_n_save_sample",
-               "c1_num_class_images", "c1_sample_seed", "c1_save_guidance_scale", "c1_save_infer_steps",
+               "c1_num_class_images", "c1_num_class_images_per", "c1_sample_seed", "c1_save_guidance_scale", "c1_save_infer_steps",
                "c1_save_sample_negative_prompt", "c1_save_sample_prompt", "c1_save_sample_template",
                "c2_class_data_dir",
                "c2_class_guidance_scale", "c2_class_infer_steps", "c2_class_negative_prompt", "c2_class_prompt",
                "c2_class_token", "c2_instance_data_dir", "c2_instance_prompt",
-               "c2_instance_token", "c2_n_save_sample", "c2_num_class_images", "c2_sample_seed",
+               "c2_instance_token", "c2_n_save_sample", "c2_num_class_images", "c2_num_class_images_per", "c2_sample_seed",
                "c2_save_guidance_scale", "c2_save_infer_steps", "c2_save_sample_negative_prompt",
                "c2_save_sample_prompt", "c2_save_sample_template", "c3_class_data_dir", "c3_class_guidance_scale",
                "c3_class_infer_steps", "c3_class_negative_prompt", "c3_class_prompt", "c3_class_token",
                "c3_instance_data_dir", "c3_instance_prompt", "c3_instance_token",
-               "c3_n_save_sample", "c3_num_class_images", "c3_sample_seed", "c3_save_guidance_scale",
+               "c3_n_save_sample", "c3_num_class_images", "c3_num_class_images_per", "c3_sample_seed", "c3_save_guidance_scale",
                "c3_save_infer_steps", "c3_save_sample_negative_prompt", "c3_save_sample_prompt",
                "c3_save_sample_template", "db_status"]
     output = []
@@ -585,7 +586,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
         res = f"Training {'interrupted' if status.interrupted else 'finished'}. " \
               f"Total lifetime steps: {total_steps} \n"
     except Exception as e:
-        res = f"Exception training model: {e}"
+        res = f"Exception training model: '{e}'."
         traceback.print_exc()
         pass
 
@@ -600,7 +601,12 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     return lora_model_name, total_steps, config.epoch, images, res
 
 
-def ui_classifiers(model_name: str, lora_model: str, lora_weight: float, lora_txt_weight: float, use_txt2img: bool):
+def ui_classifiers(model_name: str,
+                   lora_model: str,
+                   lora_weight: float,
+                   lora_txt_weight: float,
+                   use_txt2img: bool,
+                   match_buckets: bool):
     """
     UI method for generating class images.
     @param model_name: The model to generate classes for.
@@ -608,6 +614,7 @@ def ui_classifiers(model_name: str, lora_model: str, lora_weight: float, lora_tx
     @param lora_weight: The weight of the lora unet.
     @param lora_txt_weight: The weight of the lora text encoder.
     @param use_txt2img: Use txt2image when generating concepts.
+    @param match_buckets: Match instance image resolution when generating class images.
     @return:
     """
     if model_name == "" or model_name is None:
@@ -642,10 +649,10 @@ def ui_classifiers(model_name: str, lora_model: str, lora_weight: float, lora_tx
     images = []
     try:
         from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import generate_classifiers
-        print("Generating concepts...")
+        print("Generating class images...")
         unload_system_models()
         count, _, images = generate_classifiers(config, lora_model=lora_model, lora_weight=lora_weight,
-                                                lora_text_weight=lora_txt_weight, use_txt2img=use_txt2img)
+                                                lora_text_weight=lora_txt_weight, use_txt2img=use_txt2img, match_buckets=match_buckets)
         reload_system_models()
         msg = f"Generated {count} class images."
     except Exception as e:

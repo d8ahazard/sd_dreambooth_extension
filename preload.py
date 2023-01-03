@@ -15,9 +15,9 @@ def preload(parser: argparse.ArgumentParser):
                                                                    "s).", default=None)
     parser.add_argument("--lora-models-path", type=str, help="Path to directory to store Lora model file(s).",
                         default=None)
-    parser.add_argument("--test-lora", action='store_true',
-                        help="This command is no longer used, and will be removed in future releases.")
     parser.add_argument("--ckptfix", action='store_true',
                         help="(Dreambooth) Enable fix for OOM errors when extracting checkpoints.")
     parser.add_argument("--profile-db", action='store_true',
                         help="Set this to enable memory profiling while training. For science only.")
+    parser.add_argument("--debug-db", action='store_true',
+                        help="Set this to enable memory logging. For science only.")

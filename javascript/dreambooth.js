@@ -10,7 +10,7 @@ function save_config() {
     if (btn == null) return;
     let do_save = true;
     if (params_loaded === false) {
-        do_save = confirm("Warning: You are about to save model parameters that may be empty or from another model. This may erase or overwrite existing settings. If you still wish to continue, click 'OK'.");
+        do_save = confirm("Warning: Current UI Params have not been saved. Press 'OK' to save them now, or 'Cancel' to continue without saving.");
     }
     if (do_save === true) {
         console.log("Saving config...");
@@ -128,7 +128,7 @@ function db_start_train() {
 
 // Generate class images
 function db_start_classes() {
-    return db_start(5, true, true, arguments);
+    return db_start(6, true, true, arguments);
 }
 
 // Return only the number of arguments given as an input
@@ -172,6 +172,7 @@ let db_titles = {
     "Generate Ckpt": "Generate a checkpoint at the current training level.",
     "Generate Class Images": "Create classification images using training settings without training.",
     "Generate Classification Images Using txt2img": "Use the source checkpoint and TXT2IMG to generate class images.",
+    "Generate Classification Images to match Instance Resolutions": "Instead of generating square class images, they will be generated at the same resolution(s) as class images.",
     "Generate Graph": "Generate graphs from training logs showing learning rate and loss averages over the course of training.",
     "Generate lora weights when saving during training.": "When enabled, lora .pt files will be generated at each specified epoch interval during training. This also affects whether .pt files will be generated when manually clicking the 'Save Weights' button.",
     "Generate lora weights when training completes.": "When enabled, lora .pt files will be generated when training completes.",

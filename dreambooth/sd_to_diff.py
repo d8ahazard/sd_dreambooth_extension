@@ -802,7 +802,6 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                     break
 
             key_name = "model.diffusion_model.input_blocks.2.1.transformer_blocks.0.attn2.to_k.weight"
-
             if key_name in checkpoint and checkpoint[key_name].shape[-1] == 1024:
                 if revision == 110000:
                     # v2.1 needs to upcast attention
@@ -844,6 +843,16 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                                      resolution=image_size)
         db_config.lifetime_revision = revision
         db_config.epoch = epoch
+
+        sched_keys = os.path.join(db_config.model_dir, "keys.txt")
+        print(f"Keyfile: {sched_keys}")
+        with open(sched_keys, "w") as sched_file:
+
+            for key in checkpoint:
+                if "scheduler.v_params" in key:
+                    print("GOT V-PRED KEY!")
+                else:
+                    sched_file.write(f"{key}\r\n")
         print(f"{'v2' if v2 else 'v1'} model loaded.")
 
         # Use existing YAML if present
@@ -998,6 +1007,13 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                 result_status = f"Missing model directory, removing model: {full_path}"
                 shutil.rmtree(db_config.model_dir, ignore_errors=False, onerror=None)
                 break
+        remove_dirs = ["logging", "samples"]
+        for rd in remove_dirs:
+            rem_dir = os.path.join(db_config.model_dir, rd)
+            if os.path.exists(rem_dir):
+                shutil.rmtree(rem_dir, True)
+            os.makedirs(rem_dir)
+
 
     if reset_safe:
         db_shared.start_safe_unpickle()

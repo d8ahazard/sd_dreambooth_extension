@@ -224,6 +224,8 @@ def on_ui_tabs():
                                                               visible=False)
                             db_use_txt2img = gr.Checkbox(label="Generate Classification Images Using txt2img",
                                                          value=True)
+                            db_class_buckets = gr.Checkbox(label="Generate Classification Images to match Instance Resolutions",
+                                                         value=True)
                         with gr.Column():
                             gr.HTML(value="Intervals")
                             db_num_train_epochs = gr.Number(label="Training Steps Per Image (Epochs)", precision=0,
@@ -327,21 +329,21 @@ def on_ui_tabs():
                         with gr.Tab("Concept 1"):
                             c1_instance_data_dir, c1_class_data_dir, c1_instance_prompt, \
                             c1_class_prompt, c1_num_class_images, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token, \
-                            c1_class_token, c1_num_class_images, c1_class_negative_prompt, c1_class_guidance_scale, \
+                            c1_class_token, c1_num_class_images_per, c1_class_negative_prompt, c1_class_guidance_scale, \
                             c1_class_infer_steps, c1_save_sample_negative_prompt, c1_n_save_sample, c1_sample_seed, \
                             c1_save_guidance_scale, c1_save_infer_steps = build_concept_panel()
 
                         with gr.Tab("Concept 2"):
                             c2_instance_data_dir, c2_class_data_dir, c2_instance_prompt, \
                             c2_class_prompt, c2_num_class_images, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token, \
-                            c2_class_token, c2_num_class_images, c2_class_negative_prompt, c2_class_guidance_scale, \
+                            c2_class_token, c2_num_class_images_per, c2_class_negative_prompt, c2_class_guidance_scale, \
                             c2_class_infer_steps, c2_save_sample_negative_prompt, c2_n_save_sample, c2_sample_seed, \
                             c2_save_guidance_scale, c2_save_infer_steps = build_concept_panel()
 
                         with gr.Tab("Concept 3"):
                             c3_instance_data_dir, c3_class_data_dir, c3_instance_prompt, \
                             c3_class_prompt, c3_num_class_images, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token, \
-                            c3_class_token, c3_num_class_images, c3_class_negative_prompt, c3_class_guidance_scale, \
+                            c3_class_token, c3_num_class_images_per, c3_class_negative_prompt, c3_class_guidance_scale, \
                             c3_class_infer_steps, c3_save_sample_negative_prompt, c3_n_save_sample, c3_sample_seed, \
                             c3_save_guidance_scale, c3_save_infer_steps = build_concept_panel()
                 with gr.Tab("Saving") as save_tab:
@@ -483,6 +485,7 @@ def on_ui_tabs():
             db_attention,
             db_cache_latents,
             db_center_crop,
+            db_class_buckets,
             db_clip_skip,
             db_concepts_path,
             db_custom_model_name,
@@ -554,6 +557,7 @@ def on_ui_tabs():
             c1_instance_token,
             c1_n_save_sample,
             c1_num_class_images,
+            c1_num_class_images_per,
             c1_sample_seed,
             c1_save_guidance_scale,
             c1_save_infer_steps,
@@ -571,6 +575,7 @@ def on_ui_tabs():
             c2_instance_token,
             c2_n_save_sample,
             c2_num_class_images,
+            c2_num_class_images_per,
             c2_sample_seed,
             c2_save_guidance_scale,
             c2_save_infer_steps,
@@ -588,6 +593,7 @@ def on_ui_tabs():
             c3_instance_token,
             c3_n_save_sample,
             c3_num_class_images,
+            c3_num_class_images_per,
             c3_sample_seed,
             c3_save_guidance_scale,
             c3_save_infer_steps,
@@ -615,6 +621,7 @@ def on_ui_tabs():
                 db_attention,
                 db_cache_latents,
                 db_center_crop,
+                db_class_buckets,
                 db_clip_skip,
                 db_concepts_path,
                 db_custom_model_name,
@@ -679,6 +686,7 @@ def on_ui_tabs():
                 c1_instance_token,
                 c1_n_save_sample,
                 c1_num_class_images,
+                c1_num_class_images_per,
                 c1_sample_seed,
                 c1_save_guidance_scale,
                 c1_save_infer_steps,
@@ -696,6 +704,7 @@ def on_ui_tabs():
                 c2_instance_token,
                 c2_n_save_sample,
                 c2_num_class_images,
+                c2_num_class_images_per,
                 c2_sample_seed,
                 c2_save_guidance_scale,
                 c2_save_infer_steps,
@@ -713,6 +722,7 @@ def on_ui_tabs():
                 c3_instance_token,
                 c3_n_save_sample,
                 c3_num_class_images,
+                c3_num_class_images_per,
                 c3_sample_seed,
                 c3_save_guidance_scale,
                 c3_save_infer_steps,
@@ -829,9 +839,9 @@ def on_ui_tabs():
             ],
             outputs=[
                 db_num_train_epochs,
-                c1_num_class_images,
-                c2_num_class_images,
-                c3_num_class_images,
+                c1_num_class_images_per,
+                c2_num_class_images_per,
+                c3_num_class_images_per,
                 db_status
             ]
         )
@@ -844,9 +854,9 @@ def on_ui_tabs():
             ],
             outputs=[
                 db_num_train_epochs,
-                c1_num_class_images,
-                c2_num_class_images,
-                c3_num_class_images,
+                c1_num_class_images_per,
+                c2_num_class_images_per,
+                c3_num_class_images_per,
                 db_status
             ]
         )
@@ -940,7 +950,7 @@ def on_ui_tabs():
         db_generate_classes.click(
             _js="db_start_classes",
             fn=wrap_gpu_call(ui_classifiers),
-            inputs=[db_model_name, db_lora_model_name, db_lora_weight, db_lora_txt_weight, db_use_txt2img],
+            inputs=[db_model_name, db_lora_model_name, db_lora_weight, db_lora_txt_weight, db_use_txt2img, db_class_buckets],
             outputs=[db_gallery, db_status]
         )
 
@@ -987,7 +997,8 @@ def build_concept_panel():
 
     with gr.Column():
         gr.HTML("Image Generation")
-        num_class_images = gr.Number(label='Total Number of Class/Reg Images', value=0, precision=0)
+        num_class_images = gr.Number(label='Total Number of Class/Reg Images', value=0, precision=0, visible=False)
+        num_class_images_per = gr.Number(label='Class Images Per Instance Image', value=0, precision=0)
         class_guidance_scale = gr.Number(label="Classification CFG Scale", value=7.5, max=12, min=1, precision=2)
         class_infer_steps = gr.Number(label="Classification Steps", value=40, min=10, max=200, precision=0)
         n_save_sample = gr.Number(label="Number of Samples to Generate", value=1, precision=0)
@@ -996,7 +1007,7 @@ def build_concept_panel():
         save_infer_steps = gr.Number(label="Sample Steps", value=40, min=10, max=200, precision=0)
     return [instance_data_dir, class_data_dir, instance_prompt, class_prompt,
             num_class_images,
-            save_sample_prompt, sample_template, instance_token, class_token, num_class_images, class_negative_prompt,
+            save_sample_prompt, sample_template, instance_token, class_token, num_class_images_per, class_negative_prompt,
             class_guidance_scale, class_infer_steps, save_sample_negative_prompt, n_save_sample, sample_seed,
             save_guidance_scale, save_infer_steps]
 
