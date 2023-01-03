@@ -133,7 +133,7 @@ class DreamboothParameters(BaseModel):
     src: Union[str, None] = ""
     shuffle_tags: bool = False
     train_batch_size: int = 1
-    stop_text_encoder: int = 0
+    stop_text_encoder: float = 0
     use_8bit_adam: bool = False
     use_lora: bool = False
     use_subdir: bool = True

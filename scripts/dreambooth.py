@@ -234,15 +234,15 @@ def performance_wizard(model_name):
     if has_xformers:
         attention = "xformers"
     try:
-        stop_text_encoder = 75
+        stop_text_encoder = 0.75
         if config is not None:
-            stop_text_encoder = int(config.num_train_epochs * .75)
+            stop_text_encoder = 0.75
         t = torch.cuda.get_device_properties(0).total_memory
         gb = math.ceil(t / 1073741824)
         print(f"Total VRAM: {gb}")
         if gb >= 24:
             sample_batch_size = 4
-            stop_text_encoder = 75
+            stop_text_encoder = 0.75
             use_ema = True
             if attention != "xformers":
                 attention = "no"
@@ -266,7 +266,7 @@ def performance_wizard(model_name):
                 "Accumulation Steps": gradient_accumulation_steps, "Precision": mixed_precision,
                 "Cache Latents": cache_latents, "Training Batch Size": train_batch_size,
                 "Class Generation Batch Size": sample_batch_size,
-                "Text Encoder Epochs": stop_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "LORA": use_lora}
+                "Text Encoder Ratio": stop_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "LORA": use_lora}
     for key in log_dict:
         msg += f"<br>{key}: {log_dict[key]}"
     return attention, gradient_checkpointing, gradient_accumulation_steps, mixed_precision, cache_latents, \

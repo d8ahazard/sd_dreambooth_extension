@@ -310,7 +310,7 @@ def on_ui_tabs():
                                         label="Memory Attention", value="default",
                                         choices=list_attention())
                                     db_cache_latents = gr.Checkbox(label="Cache Latents", value=True)
-                                    db_stop_text_encoder = gr.Number(label="Text Encoder Epochs", value=-1)
+                                    db_stop_text_encoder = gr.Slider(label="Step Ratio of Text Encoder Training", minimum=0, maximum=1, step=0.01, value=1, visible=True)
                                     db_clip_skip = gr.Slider(label="Clip Skip", value=1, minimum=1, maximum=12, step=1)
                                     db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
@@ -402,8 +402,8 @@ def on_ui_tabs():
                 db_check_progress = gr.Button("Check Progress", elem_id=f"db_check_progress", visible=False)
                 db_update_params = gr.Button("Update Parameters", elem_id="db_update_params", visible=False)
 
-                def check_toggles(use_ema, use_lora, lr_scheduler, stop_text_enc):
-                    pad_tokens = update_pad_tokens(stop_text_enc)
+                def check_toggles(use_ema, use_lora, lr_scheduler, stop_text_encoder):
+                    pad_tokens = update_pad_tokens(stop_text_encoder)
                     show_ema, lora_save, lora_lr, lora_model = disable_ema(use_lora)
                     if not use_lora and use_ema:
                         disable_lora(use_ema)
