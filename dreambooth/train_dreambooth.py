@@ -36,7 +36,7 @@ from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import EMAModel, generate_classifiers, \
     FilenameTextGetter, PromptData
-from extensions.sd_dreambooth_extension.dreambooth.finetuneing_dataset_2 import DreamBoothOrFineTuningDataset
+from extensions.sd_dreambooth_extension.dreambooth.finetuneing_dataset import DreamBoothOrFineTuningDataset
 from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
 from extensions.sd_dreambooth_extension.dreambooth.sample_dataset import SampleDataset
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models, parse_logs, get_images, \
