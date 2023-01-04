@@ -211,6 +211,18 @@ class PromptDataset(Dataset):
                     print(f"Instance Bucket {idx}: Resolution {h, w}, Count: {len(prompts)}")
                     idx += 1
 
+            idx = 0
+            for w in class_prompts:
+                heights = class_prompts[w]
+                for h in heights:
+                    prompts = heights[h]
+                    print(f"Class Bucket {idx}: Resolution {h, w}, Count: {len(prompts)}")
+                    idx += 1
+
+            # Loop by resolutions
+            for w in instance_prompts:
+                instance_heights = instance_prompts[w]
+                class_heights = class_prompts[w] if w in class_prompts else {}
                 new_heights = prompts_to_create[w] if w in prompts_to_create else {}
                 for h in instance_heights:
                     inst_prompts = instance_heights[h]
