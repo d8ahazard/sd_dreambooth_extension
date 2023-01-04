@@ -374,8 +374,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         resolution = (args.resolution, args.resolution)
         enable_bucket = True
         debug_bucket = False
-        min_bucket_reso = int(args.resolution * 0.28125)  # 16x9 / 2
-        max_bucket_reso = args.resolution
+        min_bucket_reso = (int(args.resolution * 0.28125) // 64) * 64
         # Enable to crop faces? (2.0,4.0)
         face_crop_aug_range = None
 
@@ -411,7 +410,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         )
 
         if debug_bucket:
-            train_dataset.make_buckets_with_caching(enable_bucket, None, min_bucket_reso, max_bucket_reso)
+            train_dataset.make_buckets_with_caching(enable_bucket, None, min_bucket_reso)
             print(f"Total dataset length (steps): {len(train_dataset)}")
             print("Escape for exit.")
             for example in train_dataset:
@@ -448,10 +447,10 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             vae.requires_grad_(False)
             vae.eval()
             with torch.no_grad():
-                train_dataset.make_buckets_with_caching(enable_bucket, vae, min_bucket_reso, max_bucket_reso)
+                train_dataset.make_buckets_with_caching(enable_bucket, vae, min_bucket_reso)
             vae.to('cpu')
         else:
-            train_dataset.make_buckets_with_caching(enable_bucket, None, min_bucket_reso, max_bucket_reso)
+            train_dataset.make_buckets_with_caching(enable_bucket, None, min_bucket_reso)
             vae.requires_grad_(False)
             vae.eval()
 

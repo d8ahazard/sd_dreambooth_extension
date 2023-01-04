@@ -14,40 +14,19 @@ from tqdm import tqdm
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 
 
-def make_bucket_resolutions(
-        max_reso, min_size=256, max_size=1024, divisible=64
-):
-    max_width, max_height = max_reso
-    max_area = (max_width // divisible) * (max_height // divisible)
-
+def make_bucket_resolutions(max_size, min_size=256, divisible=64):
     resos = set()
 
-    size = int(math.sqrt(max_area)) * divisible
-    resos.add((size, size))
-
-    size = min_size
-    while size <= max_size:
-        width = size
-        height = min(max_size, (max_area // (width // divisible)) * divisible)
-        resos.add((width, height))
-        resos.add((height, width))
-
-        # # make additional resos
-        # if width >= height and width - divisible >= min_size:
-        #   resos.add((width - divisible, height))
-        #   resos.add((height, width - divisible))
-        # if height >= width and height - divisible >= min_size:
-        #   resos.add((width, height - divisible))
-        #   resos.add((height - divisible, width))
-
-        size += divisible
+    for w in range(min_size, max_size + divisible, divisible):
+        for h in range(min_size, max_size + divisible, divisible):
+            resos.add((w, h))
+            resos.add((h, w))
 
     resos = list(resos)
     resos.sort()
 
     aspect_ratios = [w / h for w, h in resos]
     return resos, aspect_ratios
-
 
 class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
     def __init__(self, batch_size, fine_tuning, train_img_path_captions, reg_img_path_captions, tokens, tokenizer, resolution,
@@ -106,7 +85,7 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
         )
 
 
-    def make_buckets_with_caching(self, enable_bucket, vae, min_size, max_size):
+    def make_buckets_with_caching(self, enable_bucket, vae, min_size):
         self.enable_bucket = enable_bucket
 
         cache_latents = vae is not None
@@ -124,7 +103,7 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
         status.textinfo = state
 
         if enable_bucket:
-            bucket_resos, bucket_aspect_ratios = make_bucket_resolutions((self.width, self.height), min_size, max_size)
+            bucket_resos, bucket_aspect_ratios = make_bucket_resolutions(self.width, min_size)
         else:
             bucket_resos = [(self.width, self.height)]
             bucket_aspect_ratios = [self.width / self.height]
@@ -180,10 +159,17 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
             split_to_buckets(self.reg_buckets, caps)
 
         if enable_bucket:
+            bi = 0
             for i, (reso, images) in enumerate(zip(bucket_resos, self.train_buckets)):
-                print(f"Train Bucket {i}: Resolution {reso}, Count: {len(images)}")
+                if len(images) > 0:
+                    bi += 1
+                    print(f"Train Bucket {bi}: Resolution {reso}, Count: {len(images)}")
+
+            bi = 0
             for i, (reso, images) in enumerate(zip(bucket_resos, self.reg_buckets)):
-                print(f"Reg Bucket {i}: Resolution {reso}, Count: {len(images)}")
+                if len(images) > 0:
+                    bi += 1
+                    print(f"Reg Bucket {bi}: Resolution {reso}, Count: {len(images)}")
 
         for bucket_index, bucket in enumerate(self.train_buckets):
             batch_count = int(math.ceil(len(bucket) / self.batch_size))
