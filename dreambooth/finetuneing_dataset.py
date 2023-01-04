@@ -28,6 +28,13 @@ def make_bucket_resolutions(max_size, min_size=256, divisible=64):
     aspect_ratios = [w / h for w, h in resos]
     return resos, aspect_ratios
 
+def closest_resolution(width, height, resos):
+    def distance(reso):
+        w, h = reso
+        return abs(width - w) + abs(height - h)
+
+    return min(resos, key=distance)
+
 class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
     def __init__(self, batch_size, fine_tuning, train_img_path_captions, reg_img_path_captions, tokens, tokenizer, resolution,
                  prior_loss_weight, flip_aug, color_aug, face_crop_aug_range, random_crop, shuffle_caption,
@@ -120,12 +127,7 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
             if not enable_bucket:
                 reso = (self.width, self.height)
             else:
-                aspect_ratio = image_width / image_height
-                ar_errors = bucket_aspect_ratios - aspect_ratio
-                bucket_id = np.abs(ar_errors).argmin()
-                reso = bucket_resos[bucket_id]
-                ar_error = ar_errors[bucket_id]
-                img_ar_errors.append(ar_error)
+                reso = closest_resolution(image_width, image_height, bucket_resos)
 
                 if cache_latents:
                     image = self.resize_and_trim(image, reso)
