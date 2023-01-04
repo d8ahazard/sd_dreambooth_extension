@@ -301,7 +301,9 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
             if instance_token in inst_caption:
                 inst_caption = inst_caption.replace(instance_token, class_token)
             inst_parts = inst_caption.split(",")
+            inst_parts = [x.strip(' ') for x in inst_parts]
             clas_parts = reg_caption.split(",")
+            clas_parts = [x.strip(' ') for x in clas_parts]
             for token in inst_parts:
                 if token in clas_parts:
                     inst_parts.remove(token)

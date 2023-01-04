@@ -7,7 +7,7 @@ import re
 import traceback
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Dict, List
 
 import numpy as np
 import torch
@@ -33,13 +33,13 @@ from modules.sd_hijack import model_hijack
 
 @dataclass
 class PromptData:
-    prompt = ""
-    negative_prompt = ""
-    steps = 60
-    scale = 7.5
-    out_dir = ""
-    seed = -1
-    resolution = (512, 512)
+    prompt:str = ""
+    negative_prompt:str = ""
+    steps:int = 60
+    scale:float = 7.5
+    out_dir:str = ""
+    seed:int = -1
+    resolution:tuple[int, int] = (512, 512)
 
     @property
     def __dict__(self):
@@ -132,99 +132,139 @@ class FilenameTextGetter:
         return output
 
 
+def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str) -> Dict[tuple[int, int], List[str]]:
+    prompts = {}
+    images = get_images(img_dir)
+    for img in images:
+        # Get prompt
+        text = text_getter.read_text(img)
+        prompt = text_getter.create_text(concept.class_prompt, text, concept.instance_token, concept.class_token)
+        res = Image.open(img).size
+        width = (res[0] // 8) * 8
+        height = (res[1] // 8) * 8
+        height_dict = prompts[width] if width in prompts else {}
+        prompt_list = height_dict[height] if height in height_dict else []
+        prompt_list.append(prompt)
+        height_dict[height] = prompt_list
+        prompts[width] = height_dict
+            
+    sorted_prompts = {key: prompts[key] for key in sorted(prompts)}
+    return sorted_prompts
+
+def match_caption(inst_caption: str, class_caption: str):
+    if class_caption == "":
+        print("NO REG!")
+
+        return False
+    if inst_caption == class_caption:
+        return True
+
+    inst_parts = inst_caption.split(",")
+    class_parts = class_caption.split(",")
+    popped = 0
+    for token in inst_parts:
+        if token in class_parts:
+            inst_parts.remove(token)
+            class_parts.remove(token)
+            popped += 1
+    if len(inst_parts) == 0 and len(class_parts) == 0:
+        print("MATCH!")
+        return True
+    return False
+
+
 class PromptDataset(Dataset):
     """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
 
-    def __init__(self, concepts: [Concept], model_dir: str, shuffle_tags: bool, match_buckets: bool=False):
+    def __init__(self, concepts: [Concept], model_dir: str):
         c_idx = 0
-        prompts_to_create = {}
-        self.with_prior = False
         text_getter = FilenameTextGetter(False)
         self.total_len = 0
+        # Loop concepts
+        prompts_to_create = {}
+        num_prompts_to_create = 0
+
         for concept in concepts:
-            cur_class_images = 0
-            if concept.num_class_images_per > 0:
-                self.with_prior = True
-                class_images_dir = concept["class_data_dir"]
-                if class_images_dir == "" or class_images_dir is None or class_images_dir == db_shared.script_path:
-                    class_images_dir = os.path.join(model_dir, f"classifiers_{c_idx}")
-                class_images_dir = Path(class_images_dir)
-                class_images_dir.mkdir(parents=True, exist_ok=True)
-                from extensions.sd_dreambooth_extension.dreambooth.utils import get_images
-                class_images = get_images(class_images_dir)
-                class_prompts = {}
+            concept_prompts = {}
+            print(f"Checking classes for concept: {concept}")
+            # Don't need to do anything here
+            if concept.num_class_images_per <= 0:
+                continue
+            
+            instance_dir = concept.instance_data_dir
+            class_dir = concept.class_data_dir
+            
+            # Filter empty class dir and set if necessary
+            if class_dir == "" or class_dir is None or class_dir == db_shared.script_path:
+                class_dir = os.path.join(model_dir, f"classifiers_{c_idx}")
+            class_dir = Path(class_dir)
+            class_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Sort existing prompts
+            instance_prompts = sort_prompts(concept, text_getter, instance_dir)
+            class_prompts = sort_prompts(concept, text_getter, class_dir)
+            idx = 0
+            for w in instance_prompts:
+                heights = instance_prompts[w]
+                for h in heights:
+                    prompts = heights[h]
+                    print(f"Instance Bucket {idx}: Resolution {h, w}, Count: {len(prompts)}")
+                    idx += 1
 
-                # Get all existing class prompts and sort by resolution
-                for class_image in class_images:
-                    class_text = text_getter.read_text(class_image)
-                    class_prompt = text_getter.create_text(concept.class_prompt, class_text, concept.instance_token,
-                                                         concept.class_token)
-                    res = Image.open(class_image).size
-                    if res in class_prompts:
-                        class_prompts[res].append(class_prompt)
+                new_heights = prompts_to_create[w] if w in prompts_to_create else {}
+                for h in instance_heights:
+                    inst_prompts = instance_heights[h]
+                    cls_prompts = class_heights[h] if h in class_heights else []
+                    new_prompts = new_heights[h] if h in new_heights else []
+                    if "[filewords]" not in concept.class_prompt:
+                        num_res_img = len(inst_prompts) * concept.num_class_images_per
+                        if len(cls_prompts) < num_res_img:
+                            num_prompts = num_res_img - len(cls_prompts)
+                            prompt_data = PromptData(
+                                concept.class_prompt,
+                                concept.class_negative_prompt,
+                                concept.class_infer_steps,
+                                concept.class_guidance_scale,
+                                class_dir,
+                                -1,
+                                (w, h)
+                            )
+                            new_prompts = [prompt_data] * num_prompts
+                            num_prompts_to_create += num_prompts
                     else:
-                        class_prompts[res] = [class_prompt]
+                        for ex_cap in inst_prompts:
+                            num_matches = 0
+                            for cl_cap in cls_prompts:
+                                if match_caption(ex_cap, cl_cap):
+                                    num_matches += 1
+                            if num_matches < concept.num_class_images_per:
+                                num_prompts = concept.num_class_images_per - num_matches
+                                new_prompts = [
+                                    PromptData(
+                                        ex_cap,
+                                        concept.class_negative_prompt,
+                                        concept.class_infer_steps,
+                                        concept.class_guidance_scale,
+                                        class_dir,
+                                        -1,
+                                        (w, h)
+                                    )
+                                ] * num_prompts
+                                num_prompts_to_create += num_prompts
+                    new_heights[h] = new_prompts
+                prompts_to_create[w] = new_heights
 
-                # If we're using filewords, then we need to check to ensure each instance image has N class images.
-                instance_images = get_images(concept.instance_data_dir)
-                prompts_to_create = {}
-                if "[filewords]" in concept.class_prompt:
-                    for instance_image in instance_images:
-                        class_count = 0
-                        res = Image.open(instance_image).size
-                        if res not in prompts_to_create:
-                            prompts_to_create[res] = []
-                        text = text_getter.read_text(instance_image)
-                        # Generate a class prompt from our instance image
-                        prompt = text_getter.create_text(concept.class_prompt, text, concept.instance_token,
-                                                         concept.class_token)
-                        prompt_tokens = prompt.split(",")
-                        fixed_res = ((res[0] // 8) * 8, (res[1] // 8) * 8)
-                        if res in class_prompts or fixed_res in class_prompts:
-                            res_list = class_prompts[res] if res in class_prompts else class_prompts[fixed_res]
-                            for ex_prompt in res_list:
-                                pt = prompt_tokens.copy()
-                                ex_tokens = ex_prompt.split(",")
-                                for token in prompt_tokens:
-                                    if token in ex_tokens:
-                                        pt.remove(token)
-                                        ex_tokens.remove(token)
-                                    else:
-                                        break
-                                if len(ex_tokens) == 0 and len(pt) == 0:
-                                    class_count += 1
-
-                        req_classes = concept.num_class_images_per - class_count
-                        if req_classes > 0:
-                            self.total_len += req_classes
-                            for i in range(req_classes):
-                                pd = PromptData()
-                                pd.prompt = prompt
-                                pd.negative_prompt = concept.class_negative_prompt
-                                pd.steps = concept.class_infer_steps
-                                pd.scale = concept.class_guidance_scale
-                                pd.out_dir = class_images_dir
-                                pd.resolution = res
-                                prompts_to_create[res].append(pd)
-                else:
-                    for _ in class_images:
-                        cur_class_images += 1
-                    if cur_class_images < concept.num_class_images_per * len(instance_images):
-                        num_new_images = concept.num_class_images - cur_class_images
-                        filename_texts = [text_getter.read_text(x) for x in instance_images]
-                        if not (512, 512) in prompts_to_create:
-                            prompts_to_create[(512, 512)] = []
-                        for i in range(num_new_images):
-                            text = filename_texts[i % len(filename_texts)]
-                            prompt = text_getter.create_text(concept.class_prompt, text, concept.instance_token,
-                                                             concept.class_token)
-                            pd = PromptData()
-                            pd.prompt = prompt
-                            pd.negative_prompt = concept.class_negative_prompt
-                            pd.steps = concept.class_infer_steps
-                            pd.scale = concept.class_guidance_scale
-                            pd.out_dir = class_images_dir
-                            prompts_to_create[(512,512)].append(pd)
+        new_len = 0
+        idx = 0
+        for w in prompts_to_create:
+            heights = prompts_to_create[w]
+            for h in heights:
+                prompts = heights[h]
+                new_len += len(prompts)
+                print(f"Target Bucket {idx}: Resolution {h, w}, Count: {len(prompts)}")
+                idx += 1
+        self.total_len = new_len
+        print(f"We need a total of {new_len} images.")
         self.prompts = prompts_to_create
 
     def __len__(self) -> int:
@@ -232,12 +272,13 @@ class PromptDataset(Dataset):
 
     def __getitem__(self, index) -> PromptData:
         res_index = 0
-        for i in range(len(self.prompts)):
-            for pi, res in self.prompts:
-                prompt_datas = self.prompts[(pi, res)]
-                for i in range(len(prompt_datas)):
+        for w in self.prompts:
+            heights = self.prompts[w]
+            for h in heights:
+                prompt_datas = heights[h]
+                for p in range(len(prompt_datas)):
                     if res_index == index:
-                        return prompt_datas[i]
+                        return prompt_datas[p]
                     res_index += 1
         print(f"Invalid index: {index}/{self.total_len}")
         return None
@@ -331,6 +372,18 @@ class EMAModel:
             for p in self.shadow_params
         ]
 
+
+def load_dreambooth_dir(db_dir, concept: Concept, is_class: bool = True):
+    img_paths = get_images(db_dir)
+    captions = []
+    text_getter = FilenameTextGetter()
+    for img_path in img_paths:
+        cap_for_img = text_getter.read_text(img_path)
+        final_caption = text_getter.create_text(concept.instance_prompt, cap_for_img, concept.instance_token,
+                                                concept.class_token, is_class)
+        captions.append(final_caption)
+
+    return list(zip(img_paths, captions))
 
 class ImageBuilder:
     def __init__(self, config: DreamboothConfig, use_txt2img: bool, lora_model: str = None, lora_weight: float = 1,
@@ -656,7 +709,7 @@ def generate_prompts(model_dir):
         class_images_dir.mkdir(parents=True, exist_ok=True)
         cur_class_images = len(get_images(class_images_dir))
         if cur_class_images < concept.num_class_images:
-            sample_dataset = PromptDataset(config.concepts_list, config.model_dir, config.shuffle_tags, match_buckets)
+            sample_dataset = PromptDataset(config.concepts_list, config.model_dir)
             for i in range(sample_dataset.__len__()):
                 prompt = sample_dataset.__getitem__(i)
                 output["new_class_prompts"].append(prompt.prompt)
@@ -680,21 +733,19 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
     @param match_buckets: Require class images to match the resolution of instance images
     @return:
     generated: Number of images generated
-    with_prior: Whether prior preservation should be used
     images: A list of strings with paths to images.
     """
     out_images = []
     try:
-        prompt_dataset = PromptDataset(args.concepts_list, args.model_dir, match_buckets)
+        prompt_dataset = PromptDataset(args.concepts_list, args.model_dir)
     except Exception as p:
         print(f"Exception generating dataset: {str(p)}")
+        traceback.print_exc()
         return 0, False
-
-    with_prior = prompt_dataset.with_prior
 
     set_len = prompt_dataset.__len__()
     if set_len == 0:
-        return 0, prompt_dataset.with_prior, []
+        return 0, []
 
     print(f"Generating {set_len} class images for training...")
     status.textinfo = f"Generating {set_len} class images for training..."
@@ -754,7 +805,7 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
     del prompt_dataset
     cleanup()
     print(f"Generated {generated} new class images.")
-    return generated, with_prior, out_images
+    return generated, out_images
 
 
 # Implementation from https://github.com/bmaltais/kohya_ss

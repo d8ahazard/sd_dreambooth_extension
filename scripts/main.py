@@ -20,7 +20,7 @@ from modules.ui import gr_show, create_refresh_button
 params_to_save = []
 refresh_symbol = '\U0001f504'  # 🔄
 delete_symbol = '\U0001F5D1'  # 🗑️
-update_symbol = '\U0001F81D'  # 🠝
+update_symbol = '\U0001F879'  # 🠝
 
 
 def get_sd_models():
@@ -193,6 +193,7 @@ def on_ui_tabs():
                     gr.HTML(value="Scheduler:")
                     db_scheduler = gr.HTML()
 
+
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Input</span>")
                 with gr.Tab("Create"):
@@ -203,12 +204,13 @@ def on_ui_tabs():
                     with gr.Column(visible=False) as hub_row:
                         db_new_model_url = gr.Textbox(label="Model Path", placeholder="runwayml/stable-diffusion-v1-5")
                         db_new_model_token = gr.Textbox(label="HuggingFace Token", value="")
-                    with gr.Row():
-                        db_new_model_src = gr.Dropdown(label='Source Checkpoint',
-                                                       choices=sorted(get_sd_models()))
-                        create_refresh_button(db_new_model_src, get_sd_models, lambda: {
-                            "choices": sorted(get_sd_models())},
-                                              "refresh_sd_models")
+                    with gr.Column(visible=True) as local_row:
+                        with gr.Row():
+                            db_new_model_src = gr.Dropdown(label='Source Checkpoint',
+                                                           choices=sorted(get_sd_models()))
+                            create_refresh_button(db_new_model_src, get_sd_models, lambda: {
+                                "choices": sorted(get_sd_models())},
+                                                  "refresh_sd_models")
                     db_new_model_extract_ema = gr.Checkbox(label='Extract EMA Weights', value=False)
                     db_new_model_scheduler = gr.Dropdown(label='Scheduler', choices=["pndm", "lms", "euler",
                                                                                      "euler-ancestral", "dpm", "ddim"],
@@ -390,8 +392,8 @@ def on_ui_tabs():
 
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")
-                db_check_progress_initial = gr.Button(value=update_symbol, elem_id="db_check_progress_initial")
-
+                ui_check_progress_initial = gr.Button(value=update_symbol, elem_id="ui_check_progress_initial")
+                db_check_progress_initial = gr.Button(value=update_symbol, elem_id="db_check_progress_initial", visible=False)
                 # These two should be updated while doing things
                 db_status = gr.HTML(elem_id="db_status", value="")
                 db_progressbar = gr.HTML(elem_id="db_progressbar")
@@ -468,14 +470,22 @@ def on_ui_tabs():
                     fn=lambda: check_progress_call(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, db_check_progress_initial],
+                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, ui_check_progress_initial],
                 )
 
                 db_check_progress_initial.click(
                     fn=lambda: check_progress_call_initial(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, db_check_progress_initial],
+                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, ui_check_progress_initial],
+                )
+
+                ui_check_progress_initial.click(
+                    fn=lambda: check_progress_call(),
+                    show_progress=False,
+                    inputs=[],
+                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list,
+                             ui_check_progress_initial],
                 )
 
         global params_to_save
@@ -733,8 +743,11 @@ def on_ui_tabs():
             ]
         )
 
+        def toggle_new_rows(create_from):
+            return gr.update(visible=create_from), gr.update(visible=not create_from)
+
         db_create_from_hub.change(
-            fn=lambda x: gr_show(x),
+            fn=toggle_new_rows,
             inputs=[db_create_from_hub],
             outputs=[hub_row],
         )

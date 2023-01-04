@@ -35,7 +35,7 @@ from extensions.sd_dreambooth_extension.dreambooth.db_optimization import get_sc
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import EMAModel, generate_classifiers, \
-    FilenameTextGetter, PromptData
+    FilenameTextGetter, PromptData, load_dreambooth_dir
 from extensions.sd_dreambooth_extension.dreambooth.finetuneing_dataset import DreamBoothOrFineTuningDataset
 from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
 from extensions.sd_dreambooth_extension.dreambooth.sample_dataset import SampleDataset
@@ -63,12 +63,6 @@ console.setLevel(logging.DEBUG)
 logger.addHandler(console)
 logger.setLevel(logging.DEBUG)
 dl.set_verbosity_error()
-
-last_img_step = -1
-last_save_step = -1
-last_check_step = 0
-last_check_epoch = 0
-
 
 def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision):
     text_encoder_config = PretrainedConfig.from_pretrained(
@@ -250,7 +244,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             status.textinfo = msg
             args.stop_text_encoder = 0
 
-        count, _, _ = generate_classifiers(args, lora_model, lora_weight=lora_alpha,
+        count, _ = generate_classifiers(args, lora_model, lora_weight=lora_alpha,
                                            lora_text_weight=lora_txt_alpha,
                                            use_txt2img=use_txt2img, accelerator=accelerator)
         if use_txt2img and count > 0:
@@ -356,18 +350,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                 cleanup(True)
             except:
                 pass
-
-        def load_dreambooth_dir(db_dir, concept: Concept, is_class: bool = True):
-            img_paths = get_images(db_dir)
-            captions = []
-            text_getter = FilenameTextGetter()
-            for img_path in img_paths:
-                cap_for_img = text_getter.read_text(img_path)
-                final_caption = text_getter.create_text(concept.instance_prompt, cap_for_img, concept.instance_token,
-                                                        concept.class_token, is_class)
-                captions.append(final_caption)
-
-            return list(zip(img_paths, captions))
 
         train_img_path_captions = []
         reg_img_path_captions = []
@@ -540,10 +522,11 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         text_encoder_epochs=round(args.num_train_epochs*args.stop_text_encoder)
         global_step = 0
         global_epoch = 0
-        last_save_step = 0
-        last_img_step = 0
+        session_epoch = 0
         first_epoch = 0
         resume_step = 0
+        last_save_step = -1
+        last_img_step = -1
         resume_from_checkpoint = False
         new_hotness = os.path.join(args.model_dir, "checkpoints", f"checkpoint-{args.revision}")
         if os.path.exists(new_hotness):
@@ -556,11 +539,10 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                 shared.cmd_opts.disable_safe_unpickle = True
                 accelerator.load_state(new_hotness)
                 shared.cmd_opts.disable_safe_unpickle = no_safe
-                global_step = args.revision
+                global_step = resume_step = args.revision
                 resume_from_checkpoint = True
-                resume_global_step = global_step
                 first_epoch = args.epoch
-                resume_step = resume_global_step
+                global_epoch = first_epoch
             except Exception as lex:
                 print(f"Exception loading checkpoint: {lex}")
 
@@ -584,11 +566,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         print(f"  EMA: {args.use_ema}")
         print(f"  LR: {args.learning_rate})")
 
-        last_img_step = -1
-        last_save_step = -1
-        last_check_step = 0
-        last_check_epoch = 0
-
         def optim_to(optim: torch.optim.Optimizer, device="cpu"):
             def inplace_move(obj: torch.Tensor, target):
                 if hasattr(obj, 'data'):
@@ -605,29 +582,31 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                             inplace_move(subparams, device)
             torch.cuda.empty_cache()
         def check_save(pbar: tqdm, is_epoch_check = False):
-            global last_save_step
-            global last_img_step
-            global last_check_step
-            global last_check_epoch
+            nonlocal last_save_step
+            nonlocal last_img_step
             training_save_interval = args.save_embedding_every
             training_image_interval = args.save_preview_every
             training_completed_count = max_train_epochs
-            training_save_check = global_epoch
+            training_save_check = session_epoch
             save_completed = training_save_check >= training_completed_count
             save_canceled = status.interrupted
             save_image = False
             save_model = False
             if not save_canceled and not save_completed:
+                # If this is our first check, we definitely don't need to save anything.
                 if last_save_step == -1:
                     save_model = False
                     last_save_step = 0
                 else:
+                    # Otherwise, if we don't have an interval, we don't need to save
                     if training_save_interval == 0:
                         save_model = False
+                    # Check to see if the number of epochs since last save is gt the interval
                     elif training_save_check - last_save_step >= training_save_interval:
                         save_model = True
                         last_save_step = training_save_check
 
+                # Repeat for sample images
                 if last_img_step == -1:
                     save_image = False
                     last_img_step = 0
@@ -880,7 +859,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         training_complete = False
         msg = ""
         for epoch in range(first_epoch, max_train_epochs):
-            weights_saved = False
             if training_complete:
                 print("Training complete, breaking epoch.")
                 break
@@ -895,8 +873,9 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             for step, batch in enumerate(train_dataloader):
                 # Skip steps until we reach the resumed step
                 if resume_from_checkpoint and epoch == first_epoch and step < resume_step:
-                    if step % gradient_accumulation_steps == 0:
-                        progress_bar.update(1)
+                    progress_bar.update(train_batch_size)
+                    status.job_count = max_train_steps
+                    status.job_no += train_batch_size
                     continue
                 with accelerator.accumulate(unet), accelerator.accumulate(text_encoder):
                     # Convert images to latent space
@@ -1010,6 +989,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
             args.epoch += 1
             global_epoch += 1
+            session_epoch += 1
 
             status.job_count = max_train_steps
             status.job_no = global_step
@@ -1017,7 +997,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             check_save(progress_bar, True)
 
             if args.num_train_epochs > 1:
-                training_complete = global_epoch >= max_train_epochs
+                training_complete = session_epoch >= max_train_epochs
 
             if training_complete or status.interrupted:
                 print("  Training complete (step check).")
@@ -1033,7 +1013,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
             # Do this at the very END of the epoch, only after we're sure we're not done
             if args.epoch_pause_frequency > 0 and args.epoch_pause_time > 0:
-                if not global_epoch % args.epoch_pause_frequency:
+                if not session_epoch % args.epoch_pause_frequency:
                     print(f"Giving the GPU a break for {args.epoch_pause_time} seconds.")
                     for i in range(args.epoch_pause_time):
                         if status.interrupted:

@@ -651,7 +651,7 @@ def ui_classifiers(model_name: str,
         from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import generate_classifiers
         print("Generating class images...")
         unload_system_models()
-        count, _, images = generate_classifiers(config, lora_model=lora_model, lora_weight=lora_weight,
+        count, images = generate_classifiers(config, lora_model=lora_model, lora_weight=lora_weight,
                                                 lora_text_weight=lora_txt_weight, use_txt2img=use_txt2img, match_buckets=match_buckets)
         reload_system_models()
         msg = f"Generated {count} class images."
