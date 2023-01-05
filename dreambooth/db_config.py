@@ -2,8 +2,8 @@ import json
 import os
 import traceback
 
-from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared
+from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 
 
 def sanitize_name(name):
@@ -24,7 +24,6 @@ class DreamboothConfig:
                  attention: str = "default",
                  cache_latents=True,
                  center_crop: bool = True,
-                 class_buckets: bool = False,
                  clip_skip: int = 1,
                  concepts_path: str = "",
                  custom_model_name: str = "",
@@ -157,7 +156,6 @@ class DreamboothConfig:
         self.attention = attention
         self.cache_latents = cache_latents
         self.center_crop = center_crop
-        self.class_buckets = class_buckets
         self.clip_skip = clip_skip
         self.concepts_path = concepts_path
         self.custom_model_name = custom_model_name

@@ -13,8 +13,6 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Optional
 
-import cv2
-import numpy as np
 import torch
 import torch.backends.cudnn
 import torch.utils.checkpoint
@@ -29,18 +27,15 @@ from transformers import AutoTokenizer, PretrainedConfig
 
 from extensions.sd_dreambooth_extension.dreambooth import xattention, db_shared
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SampleData
-from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.db_optimization import get_scheduler
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import EMAModel, generate_classifiers, \
-    FilenameTextGetter, PromptData, load_dreambooth_dir
-from extensions.sd_dreambooth_extension.dreambooth.finetuneing_dataset import DreamBoothOrFineTuningDataset
+    PromptData, generate_dataset
 from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
 from extensions.sd_dreambooth_extension.dreambooth.sample_dataset import SampleDataset
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models, parse_logs, get_images, \
-    printm
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models, parse_logs, printm
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, apply_lora_weights
 from modules import shared, paths
 
@@ -205,6 +200,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
         if args.attention == "xformers":
             xattention.replace_unet_cross_attn_to_xformers()
+        elif args.attention == "sub_quad":
+            xattention.replace_unet_cross_attn_to_quad()
         elif args.attention == "flash_attention":
             xattention.replace_unet_cross_attn_to_flash_attention()
         else:
@@ -318,8 +315,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                 logger.warning(f"Exception importing 8bit adam: {a}")
                 traceback.print_exc()
 
-        # noise_scheduler = DDPMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
-        #                                 num_train_timesteps=1000, clip_sample=False)
         noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
 
         def cleanup_memory():
@@ -351,83 +346,19 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             except:
                 pass
 
-        train_img_path_captions = []
-        reg_img_path_captions = []
-        tokens = []
-        for conc in args.concepts_list:
-            if conc.class_token != "" and conc.instance_token != "":
-                tokens.append((conc.instance_token, conc.class_token))
-            idd = conc.instance_data_dir
-            if idd is not None and idd != "" and os.path.exists(idd):
-                img_caps = load_dreambooth_dir(idd, conc, False)
-                train_img_path_captions.extend(img_caps)
-                print(f"Found {len(train_img_path_captions)} training images.")
-
-            class_data_dir = conc.class_data_dir
-            number_class_images = conc.num_class_images_per
-            if number_class_images > 0 and class_data_dir is not None and class_data_dir != "" and os.path.exists(class_data_dir):
-                reg_caps = load_dreambooth_dir(class_data_dir, conc)
-                reg_img_path_captions.extend(reg_caps)
-            print(f"Found {len(reg_img_path_captions)} reg images.")
-
-        # TODO: Add UI stuff for these
-        resolution = (args.resolution, args.resolution)
-        enable_bucket = True
-        debug_bucket = False
-        min_bucket_reso = (int(args.resolution * 0.28125) // 64) * 64
-        # Enable to crop faces? (2.0,4.0)
-        face_crop_aug_range = None
-
-        if len(resolution) == 1:
-            resolution = (resolution[0], resolution[0])
-        assert len(resolution) == 2, \
-            f"resolution must be 'size' or 'width,height' / resolutionは'サイズ'または'幅','高さ'で指定してください: {args.resolution}"
-
-        if face_crop_aug_range is not None and isinstance(face_crop_aug_range, str):
-            face_crop_aug_range = tuple([float(r) for r in face_crop_aug_range.split(',')])
-            assert len(
-                face_crop_aug_range) == 2, f"face_crop_aug_range must be two floats / face_crop_aug_range: {face_crop_aug_range}"
-        else:
-            face_crop_aug_range = None
-
         print("Preparing dataset")
-        train_dataset = DreamBoothOrFineTuningDataset(
-            batch_size=train_batch_size,
-            fine_tuning=False,
-            train_img_path_captions=train_img_path_captions,
-            reg_img_path_captions=reg_img_path_captions,
-            tokens=tokens,
-            tokenizer=tokenizer,
-            resolution=resolution,
-            prior_loss_weight=args.prior_loss_weight,
-            flip_aug=args.hflip,
-            color_aug=False,
-            face_crop_aug_range=face_crop_aug_range,
-            random_crop=False,
-            shuffle_caption=args.shuffle_tags,
-            disable_padding=not args.pad_tokens,
-            debug_dataset=True
-        )
+        if args.cache_latents:
+            vae.to(accelerator.device, dtype=weight_dtype)
+            vae.requires_grad_(False)
+            vae.eval()
 
-        if debug_bucket:
-            train_dataset.make_buckets_with_caching(enable_bucket, None, min_bucket_reso)
-            print(f"Total dataset length (steps): {len(train_dataset)}")
-            print("Escape for exit.")
-            for example in train_dataset:
-                k = None
-                for im, cap, lw in zip(example['images'], example['captions'], example['loss_weights']):
-                    im = ((im.numpy() + 1.0) * 127.5).astype(np.uint8)
-                    im = np.transpose(im, (1, 2, 0))  # c,H,W -> H,W,c
-                    im = im[:, :, ::-1]  # RGB -> BGR (OpenCV)
-                    print(f'size: {im.shape[1]}*{im.shape[0]}, caption: "{cap}", loss weight: {lw}')
-                    cv2.imshow("img", im)
-                    k = cv2.waitKey()
-                    cv2.destroyAllWindows()
-                    if k == 27:
-                        break
-                if k == 27:
-                    break
-            return
+        train_dataset = generate_dataset(
+            model_name=args.model_name,
+            batch_size=train_batch_size,
+            tokenizer=tokenizer,
+            vae=vae if args.cache_latents else None,
+            debug=False
+        )
 
         if train_dataset.__len__ == 0:
             msg = "Please provide a directory with actual images in it."
@@ -437,22 +368,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             result.msg = msg
             result.config = args
             return result
-
-        # if args.stop_text_encoder != 0:
-        #     text_encoder.to(accelerator.device, dtype=weight_dtype)
-        #
-
-        if args.cache_latents:
-            vae.to(accelerator.device, dtype=weight_dtype)
-            vae.requires_grad_(False)
-            vae.eval()
-            with torch.no_grad():
-                train_dataset.make_buckets_with_caching(enable_bucket, vae, min_bucket_reso)
-            vae.to('cpu')
-        else:
-            train_dataset.make_buckets_with_caching(enable_bucket, None, min_bucket_reso)
-            vae.requires_grad_(False)
-            vae.eval()
 
         unet.requires_grad_(True)  # 念のため追加
         text_encoder.requires_grad_(True)
@@ -524,8 +439,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         session_epoch = 0
         first_epoch = 0
         resume_step = 0
-        last_save_step = -1
-        last_img_step = -1
+        last_model_save = 0
+        last_image_save = 0
         resume_from_checkpoint = False
         new_hotness = os.path.join(args.model_dir, "checkpoints", f"checkpoint-{args.revision}")
         if os.path.exists(new_hotness):
@@ -581,40 +496,24 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                             inplace_move(subparams, device)
             torch.cuda.empty_cache()
         def check_save(pbar: tqdm, is_epoch_check = False):
-            nonlocal last_save_step
-            nonlocal last_img_step
-            training_save_interval = args.save_embedding_every
-            training_image_interval = args.save_preview_every
-            training_completed_count = max_train_epochs
-            training_save_check = session_epoch
-            save_completed = training_save_check >= training_completed_count
+            nonlocal last_model_save
+            nonlocal last_image_save
+            save_model_interval = args.save_embedding_every
+            save_image_interval = args.save_preview_every
+            save_completed = session_epoch >= max_train_epochs
             save_canceled = status.interrupted
             save_image = False
             save_model = False
             if not save_canceled and not save_completed:
-                # If this is our first check, we definitely don't need to save anything.
-                if last_save_step == -1:
-                    save_model = False
-                    last_save_step = 0
-                else:
-                    # Otherwise, if we don't have an interval, we don't need to save
-                    if training_save_interval == 0:
-                        save_model = False
-                    # Check to see if the number of epochs since last save is gt the interval
-                    elif training_save_check - last_save_step >= training_save_interval:
-                        save_model = True
-                        last_save_step = training_save_check
+                # Check to see if the number of epochs since last save is gt the interval
+                if 0 < save_model_interval <= session_epoch - last_model_save:
+                    save_model = True
+                    last_model_save = session_epoch
 
                 # Repeat for sample images
-                if last_img_step == -1:
-                    save_image = False
-                    last_img_step = 0
-                else:
-                    if training_image_interval == 0:
-                        save_image = False
-                    elif training_save_check - last_img_step >= training_image_interval:
-                        save_image = True
-                        last_img_step = training_save_check
+                if 0 < save_image_interval <= session_epoch - last_image_save:
+                    save_image = True
+                    last_image_save = session_epoch
 
             else:
                 print("\nSave completed/canceled.")
@@ -645,9 +544,12 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     save_snapshot = args.save_state_after
                     save_checkpoint = args.save_ckpt_after
                 else:
+                    print("Save model is definitely enabled.")
                     save_lora = args.save_lora_during
                     save_snapshot = args.save_state_during
                     save_checkpoint = args.save_ckpt_during
+                    if save_checkpoint:
+                        print("So is saving of checkpoint.")
 
             if save_checkpoint or save_snapshot or save_lora or save_image or save_model:
                 printm(" Saving weights.")
@@ -701,13 +603,32 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                 s_pipeline.enable_attention_slicing()
                 with accelerator.autocast(), torch.inference_mode():
                     if save_model:
+                        print("SAVE MODEL")
                         # We are saving weights, we need to ensure revision is saved
                         args.save()
                         pbar.set_description("Saving Weights")
                         pbar.reset(4)
                         pbar.update()
                         try:
-                            if args.use_lora and save_lora:
+                            if not args.use_lora:
+                                out_file = None
+                                if save_snapshot:
+                                    pbar.set_description("Saving Snapshot")
+                                    status.textinfo = f"Saving snapshot at step {args.revision}..."
+                                    # print(f"Saving snapshot at step: {args.revision}")
+                                    accelerator.save_state(os.path.join(args.model_dir, "checkpoints",
+                                                                        f"checkpoint-{args.revision}"))
+                                    pbar.update()
+
+                                # We should save this regardless, because it's our fallback if no snapshot exists.
+                                status.textinfo = f"Saving diffusion model at step {args.revision}..."
+
+                                print(f"Saving diffusion weights at step: {args.revision}.")
+                                s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"))
+                                pbar.update()
+
+                            elif save_lora:
+                                print("Saving lora...")
                                 lora_model_name = args.model_name if custom_model_name == "" else custom_model_name
                                 try:
                                     cmd_lora_models_path = shared.cmd_opts.lora_models_path
@@ -728,30 +649,16 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                                                      target_replace_module=["CLIPAttention"],
                                                      )
                                     pbar.update()
-                            elif not args.use_lora:
-                                out_file = None
-                                if save_snapshot:
-                                    pbar.set_description("Saving Snapshot")
-                                    status.textinfo = f"Saving snapshot at step {args.revision}..."
-                                    # print(f"Saving snapshot at step: {args.revision}")
-                                    accelerator.save_state(os.path.join(args.model_dir, "checkpoints",
-                                                                        f"checkpoint-{args.revision}"))
-                                    pbar.update()
-
-                                # We should save this regardless, because it's our fallback if no snapshot exists.
-                                status.textinfo = f"Saving diffusion model at step {args.revision}..."
-                                # print(f"Saving diffusion weights at step: {args.revision}.")
-                                s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"))
-                                pbar.update()
 
                             if save_checkpoint:
+                                print("SAVE CHECKPOINT.")
                                 pbar.set_description("Compiling Checkpoint")
                                 compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
                                                    reload_models=False, lora_path=out_file, log=False,
                                                    custom_model_name=custom_model_name)
                                 pbar.update()
                             if args.use_ema:
-                                printm("Restoring ema unet.")
+                                print("Restoring ema unet.")
                                 ema_unet.restore(unet.parameters())
                                 ema_unet.to(accelerator.device, dtype=weight_dtype)
                                 printm("Restored, moved to acc.device.")
@@ -773,6 +680,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                             with accelerator.autocast(), torch.inference_mode():
                                 sd = SampleDataset(args.concepts_list, args.shuffle_tags)
                                 prompts = sd.get_prompts()
+                                print(f"We have {len(prompts)} sample prompts...")
                                 if args.sanity_prompt != "" and args.sanity_prompt is not None:
                                     epd = PromptData()
                                     epd.prompt = args.sanity_prompt
@@ -781,7 +689,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                                     extra = SampleData(args.sanity_prompt, concept=args.concepts_list[0])
                                     extra.seed = args.sanity_seed
                                     prompts.append(extra)
-                                pbar.set_description("Generating Samples:")
+                                pbar.set_description("Generating Samples")
                                 pbar.reset(len(prompts) + 2)
                                 ci = 0
                                 for c in prompts:
@@ -809,6 +717,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                                 for prompt in sample_prompts:
                                     last_prompts.append(prompt)
                                 del samples
+                                del prompts
 
                         except Exception as em:
                             print(f"Exception saving sample: {em}")
@@ -907,10 +816,11 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
                     # Get the target for loss depending on the prediction type
-                    if noise_scheduler.config.prediction_type == "v_prediction":
-                        target = noise_scheduler.get_velocity(latents, noise, timesteps)
-                    else:
-                        target = noise
+                    target = noise
+                    # if noise_scheduler.config.prediction_type == "v_prediction":
+                    #     target = noise_scheduler.get_velocity(latents, noise, timesteps)
+                    # else:
+                    #     target = noise
 
                     loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="none")
                     loss = loss.mean([1, 2, 3])

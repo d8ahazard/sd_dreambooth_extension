@@ -13,14 +13,14 @@ from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, l
     list_floats, get_lora_models, wrap_gpu_call, parse_logs
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
-    training_wizard, training_wizard_person, load_model_params, ui_classifiers, ui_samples
+    training_wizard, training_wizard_person, load_model_params, ui_classifiers, ui_samples, debug_buckets
 from modules import script_callbacks, sd_models
 from modules.ui import gr_show, create_refresh_button
 
 params_to_save = []
 refresh_symbol = '\U0001f504'  # 🔄
 delete_symbol = '\U0001F5D1'  # 🗑️
-update_symbol = '\U0001F879'  # 🠝
+update_symbol = '\U0001F51D'  # 🠝
 
 
 def get_sd_models():
@@ -94,11 +94,12 @@ def check_progress_call():
                 preview = gr.update(visible=False, value=None)
                 gallery = gr.update(visible=True, value=image)
             else:
-                preview = gr.update(visible=True, value=image)
+                preview = gr.update(visible=True, value=image[0])
                 gallery = gr.update(visible=True, value=None)
         else:
             preview = gr.update(visible=True, value=image)
             gallery = gr.update(visible=True, value=None)
+
     if status.textinfo is not None:
         textinfo_result = status.textinfo
     else:
@@ -226,8 +227,6 @@ def on_ui_tabs():
                                                               visible=False)
                             db_use_txt2img = gr.Checkbox(label="Generate Classification Images Using txt2img",
                                                          value=True)
-                            db_class_buckets = gr.Checkbox(label="Generate Classification Images to match Instance Resolutions",
-                                                         value=True)
                         with gr.Column():
                             gr.HTML(value="Intervals")
                             db_num_train_epochs = gr.Number(label="Training Steps Per Image (Epochs)", precision=0,
@@ -348,7 +347,7 @@ def on_ui_tabs():
                             c3_class_token, c3_num_class_images_per, c3_class_negative_prompt, c3_class_guidance_scale, \
                             c3_class_infer_steps, c3_save_sample_negative_prompt, c3_n_save_sample, c3_sample_seed, \
                             c3_save_guidance_scale, c3_save_infer_steps = build_concept_panel()
-                with gr.Tab("Saving") as save_tab:
+                with gr.Tab("Saving"):
                     with gr.Column():
                         gr.HTML("General")
                         db_custom_model_name = gr.Textbox(label="Custom Model Name", value="",
@@ -382,6 +381,7 @@ def on_ui_tabs():
                         db_generate_prompts = gr.Button(value="Preview Prompts")
                         db_generate_graph = gr.Button(value="Generate Graph")
                         db_graph_smoothing = gr.Number(value=50, label="Graph Smoothing Steps")
+                        db_debug_buckets = gr.Button(value="Debug Buckets")
                         db_generate_sample = gr.Button(value="Generate Sample Images")
                         db_sample_prompt = gr.Textbox(label="Sample Prompt")
                         db_sample_negative = gr.Textbox(label="Sample Negative Prompt")
@@ -495,7 +495,6 @@ def on_ui_tabs():
             db_attention,
             db_cache_latents,
             db_center_crop,
-            db_class_buckets,
             db_clip_skip,
             db_concepts_path,
             db_custom_model_name,
@@ -631,7 +630,6 @@ def on_ui_tabs():
                 db_attention,
                 db_cache_latents,
                 db_center_crop,
-                db_class_buckets,
                 db_clip_skip,
                 db_concepts_path,
                 db_custom_model_name,
@@ -749,7 +747,7 @@ def on_ui_tabs():
         db_create_from_hub.change(
             fn=toggle_new_rows,
             inputs=[db_create_from_hub],
-            outputs=[hub_row],
+            outputs=[hub_row, local_row],
         )
 
         def disable_ema(x):
@@ -822,6 +820,13 @@ def on_ui_tabs():
             fn=parse_logs,
             inputs=[db_model_name, gr.Checkbox(value=True, visible=False)],
             outputs=[db_gallery, db_prompt_list]
+        )
+
+        db_debug_buckets.click(
+            _js="db_start_buckets",
+            fn=debug_buckets,
+            inputs=[db_model_name],
+            outputs=[db_gallery, db_prompt_list, db_status]
         )
 
         db_performance_wizard.click(
@@ -963,7 +968,7 @@ def on_ui_tabs():
         db_generate_classes.click(
             _js="db_start_classes",
             fn=wrap_gpu_call(ui_classifiers),
-            inputs=[db_model_name, db_lora_model_name, db_lora_weight, db_lora_txt_weight, db_use_txt2img, db_class_buckets],
+            inputs=[db_model_name, db_lora_model_name, db_lora_weight, db_lora_txt_weight, db_use_txt2img],
             outputs=[db_gallery, db_status]
         )
 

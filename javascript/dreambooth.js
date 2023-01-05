@@ -110,6 +110,11 @@ function db_start_prompts() {
     return db_start(1, true, false, arguments);
 }
 
+// Debug bucketing
+function db_start_buckets() {
+    return db_start(1, true, true, arguments);
+}
+
 function db_start_load_params() {
     update_params();
     return db_start(1, false, false, arguments);
@@ -128,7 +133,7 @@ function db_start_train() {
 
 // Generate class images
 function db_start_classes() {
-    return db_start(6, true, true, arguments);
+    return db_start(5, true, true, arguments);
 }
 
 // Return only the number of arguments given as an input

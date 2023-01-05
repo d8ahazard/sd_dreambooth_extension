@@ -1,10 +1,7 @@
 import argparse
 
-import gradio
-
 import modules.safe
 from extensions.sd_dreambooth_extension import reallysafe
-from extensions.sd_dreambooth_extension.dreambooth import xattention
 
 
 def preload(parser: argparse.ArgumentParser):

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import inspect
 import math
-import os
-import traceback
 from typing import Any, Dict, List, Union, Optional
 
 import diffusers
@@ -13,6 +11,8 @@ from diffusers.optimization import SchedulerType, TYPE_TO_SCHEDULER_FUNCTION
 from einops import rearrange
 from torch import einsum
 from torch.optim import Optimizer
+
+from extensions.sd_dreambooth_extension.dreambooth.sub_quad_attention import sub_quad_attnblock_forward
 
 
 def replace_unet_cross_attn_to_default():
@@ -319,6 +319,9 @@ def replace_unet_cross_attn_to_xformers():
 
     diffusers.models.attention.CrossAttention.forward = forward_xformers
 
+def replace_unet_cross_attn_to_quad():
+    #ldm.modules.attention.CrossAttention.forward = sd_hijack_optimizations.sub_quad_attention_forward
+    diffusers.models.attention.CrossAttention.forward = sub_quad_attnblock_forward
 
 def _validate_model_kwargs(self, model_kwargs: Dict[str, Any]):
     pass

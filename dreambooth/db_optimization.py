@@ -21,10 +21,9 @@ import math
 from enum import Enum
 from typing import Optional, Union
 
+from diffusers.utils import logging
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR, ConstantLR, LinearLR, CosineAnnealingLR, CosineAnnealingWarmRestarts
-
-from diffusers.utils import logging
 
 logger = logging.get_logger(__name__)
 

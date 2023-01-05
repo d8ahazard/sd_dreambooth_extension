@@ -12,12 +12,12 @@ from typing import Dict
 import torch
 from diffusers import DiffusionPipeline
 
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
+from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils import printi, unload_system_models, \
     reload_system_models
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
-from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)

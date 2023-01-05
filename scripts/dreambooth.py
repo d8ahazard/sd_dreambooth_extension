@@ -1,4 +1,3 @@
-import gc
 import glob
 import logging
 import math
@@ -14,10 +13,10 @@ from diffusers.utils import logging as dl
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, PromptData
+from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, PromptData, generate_dataset
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, get_images, \
     get_lora_models, cleanup
-from modules import shared, devices
+from modules import shared
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -140,7 +139,7 @@ def closest_factors_to_sqrt(n):
 
     # Check if n is a prime number
     if math.sqrt(n) == sqrt_n:
-        return (sqrt_n, sqrt_n)
+        return sqrt_n, sqrt_n
 
     # Find the first pair of factors that are closest in value
     while n % f1 != 0:
@@ -330,7 +329,7 @@ def ui_samples(model_dir: str,
                 for img in out_images:
                     if len(images) < num_samples:
                         images.append(img)
-            img_builder.unload()
+            img_builder.unload(True)
             reload_system_models()
         except Exception as e:
             msg = f"Exception generating sample(s): {e}"
@@ -384,7 +383,6 @@ def load_params(model_dir):
     ui_keys = ["db_attention",
                "db_cache_latents",
                "db_center_crop",
-               "db_class_buckets",
                "db_clip_skip",
                "db_concepts_path",
                "db_custom_model_name",
@@ -605,8 +603,7 @@ def ui_classifiers(model_name: str,
                    lora_model: str,
                    lora_weight: float,
                    lora_txt_weight: float,
-                   use_txt2img: bool,
-                   match_buckets: bool):
+                   use_txt2img: bool):
     """
     UI method for generating class images.
     @param model_name: The model to generate classes for.
@@ -622,7 +619,7 @@ def ui_classifiers(model_name: str,
         msg = "Create or select a model first."
         return msg
     config = from_file(model_name)
-
+    status.textinfo = "Generating class images..."
     # Clear pretrained VAE Name if applicable
     if config.pretrained_vae_name_or_path == "":
         config.pretrained_vae_name_or_path = None
@@ -652,10 +649,15 @@ def ui_classifiers(model_name: str,
         print("Generating class images...")
         unload_system_models()
         count, images = generate_classifiers(config, lora_model=lora_model, lora_weight=lora_weight,
-                                                lora_text_weight=lora_txt_weight, use_txt2img=use_txt2img, match_buckets=match_buckets)
+                                                lora_text_weight=lora_txt_weight, use_txt2img=use_txt2img, ui=True)
         reload_system_models()
         msg = f"Generated {count} class images."
     except Exception as e:
         msg = f"Exception generating concepts: {str(e)}"
         traceback.print_exc()
+        status.job_no = status.job_count
+        status.textinfo = msg
     return images, msg
+
+def debug_buckets(model_name):
+    return generate_dataset(model_name)
