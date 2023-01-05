@@ -437,6 +437,7 @@ def load_params(model_dir):
                "db_use_ema",
                "db_use_lora",
                "db_use_subdir",
+               "db_notification_webhook_url",
                "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps",
                "c1_class_negative_prompt", "c1_class_prompt", "c1_class_token",
                "c1_instance_data_dir", "c1_instance_prompt", "c1_instance_token", "c1_n_save_sample",

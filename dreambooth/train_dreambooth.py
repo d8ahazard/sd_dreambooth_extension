@@ -33,6 +33,7 @@ from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.db_optimization import get_scheduler
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
+from extensions.sd_dreambooth_extension.dreambooth.db_webhook import is_valid_notification_target, send_training_update
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import EMAModel, generate_classifiers, \
     FilenameTextGetter, PromptData
@@ -796,13 +797,20 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                                     txt_name = image_name.replace(".png", ".txt")
                                     with open(txt_name, "w", encoding="utf8") as txt_file:
                                         txt_file.write(c.prompt)
+                                        
                                     s_image.save(image_name)
-                                    ci += 1
-                                for sample in samples:
-                                    last_samples.append(sample)
-                                for prompt in sample_prompts:
-                                    last_prompts.append(prompt)
-                                del samples
+                                    
+                                    notification_target = args.notification_webhook_url
+                                    if is_valid_notification_target(notification_target):
+                                        send_training_update(notification_target, s_image, 
+                                                             args.model_name, c.prompt,
+                                                             global_step, args.revision)
+                                        
+                                ci += 1
+                                
+                            for sample in samples:
+                                last_samples.append(sample)
+                            del samples
 
                         except Exception as em:
                             print(f"Exception saving sample: {em}")
