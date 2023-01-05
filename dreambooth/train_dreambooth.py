@@ -11,7 +11,7 @@ import time
 import traceback
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 import cv2
 import numpy as np
@@ -144,7 +144,7 @@ last_prompts = []
 class TrainResult:
     config: DreamboothConfig = None
     msg: str = ""
-    samples: [Image] = []
+    samples: List[Image] = []
 
 
 def set_diffusers_xformers_flag(model, valid):
