@@ -810,6 +810,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                                 
                             for sample in samples:
                                 last_samples.append(sample)
+                            for prompt in sample_prompts:
+                                last_prompts.append(prompt)
                             del samples
 
                         except Exception as em:
