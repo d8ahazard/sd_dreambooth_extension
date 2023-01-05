@@ -15,7 +15,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""PyTorch optimization for diffusion models."""
+"""PyTorch optimizations for diffusion models."""
 
 import math
 from enum import Enum

@@ -30,7 +30,6 @@ def narrow_trunc(input, dim, start, length):
 
 # Based on Birch-san's modified implementation of sub-quadratic attention from https://github.com/Birch-san/diffusers/pull/1
 def sub_quad_attention_forward(self, x, context=None, mask=None):
-    from extensions.sd_dreambooth_extension.dreambooth.xattention import default
     assert mask is None, "attention-mask not currently implemented for SubQuadraticCrossAttnProcessor."
 
     h = self.heads

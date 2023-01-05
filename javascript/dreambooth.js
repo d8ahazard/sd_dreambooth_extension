@@ -1,6 +1,4 @@
 // Save our current training params before doing a thing
-
-const id_part = "db_";
 let params_loaded = false;
 let training_started = false;
 
@@ -297,7 +295,7 @@ onUiUpdate(function () {
     gradioApp().querySelectorAll('.gallery-item').forEach(function (btn) {
         if (btn.onchange != null) return;
         btn.onchange = function() {
-            // Dummy function so we don't keep setting up the observer.
+            // Dummy function, so we don't keep setting up the observer.
         }
         checkPrompts();
         const options = {
@@ -336,8 +334,6 @@ let galleryObserver = null;
 let gallerySet = false;
 
 function db_progressbar(){
-    let id_gallery = "db_gallery";
-
     // gradio 3.8's enlightened approach allows them to create two nested div elements inside each other with same id
     // every time you use gr.HTML(elem_id='xxx'), so we handle this here
     let progressbar = gradioApp().querySelector("#db_progressbar #db_progressbar");
@@ -444,8 +440,6 @@ function checkDbGallery(){
                 }, 50);
 
                 if(activeElement){
-                    // i fought this for about an hour; i don't know why the focus is lost or why this helps recover it
-                    // if someone has a better solution please by all means
                     setTimeout(function (){
                         activeElement.focus({
                             preventScroll: true // Refocus the element that was focused before the gallery was opened without scrolling to it

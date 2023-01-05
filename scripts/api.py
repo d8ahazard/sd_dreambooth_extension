@@ -411,7 +411,6 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             model_dir=model_name,
             save_sample_prompt=sample_prompt,
             num_samples=num_images,
-            batch_size=batch_size,
             lora_model_path=lora_model_path,
             lora_weight=lora_weight,
             lora_txt_weight=lora_txt_weight,

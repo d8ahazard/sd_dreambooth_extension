@@ -154,9 +154,9 @@ class SuperDataset(Dataset):
                 class_data = []
                 if concept_with_prior:
                     concept_images = get_images(concept.class_data_dir)
-                    for file in concept_images:
+                    for concept_file in concept_images:
                         try:
-                            img = Image.open(file)
+                            img = Image.open(concept_file)
                             if img.width != size or img.height != size:
                                 needs_crop = True
                         except Exception as e:

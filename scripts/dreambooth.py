@@ -506,7 +506,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     @param lora_alpha: Lora unet strength if model name specified.
     @param lora_txt_alpha: Lora text encoder strength if model name specified.
     @param imagic_only: Train using imagic instead of dreambooth.
-    @param use_subdir: Save generated checkpoints to a subdirectory in the models dir.
+    @param use_subdir: Save generated checkpoints to a subdirectory in the model dir.
     @param custom_model_name: A custom filename to use when generating regular and lora checkpoints.
     @param use_txt2img: Whether to use txt2img or diffusion pipeline for image generation.
     @return:
@@ -611,7 +611,6 @@ def ui_classifiers(model_name: str,
     @param lora_weight: The weight of the lora unet.
     @param lora_txt_weight: The weight of the lora text encoder.
     @param use_txt2img: Use txt2image when generating concepts.
-    @param match_buckets: Match instance image resolution when generating class images.
     @return:
     """
     if model_name == "" or model_name is None:
