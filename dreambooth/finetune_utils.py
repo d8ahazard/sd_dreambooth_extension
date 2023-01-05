@@ -506,7 +506,6 @@ class ImageBuilder:
             scale = prompt.scale
             steps = prompt.steps
             seed = prompt.seed
-            print(f"\r\nInput propmpt: {prompt}\r\n")
             width, height = prompt.resolution
 
         if self.use_txt2img:

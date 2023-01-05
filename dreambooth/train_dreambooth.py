@@ -817,10 +817,10 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
                     # Get the target for loss depending on the prediction type
                     target = noise
-                    # if noise_scheduler.config.prediction_type == "v_prediction":
-                    #     target = noise_scheduler.get_velocity(latents, noise, timesteps)
-                    # else:
-                    #     target = noise
+                    if noise_scheduler.config.prediction_type == "v_prediction":
+                        target = noise_scheduler.get_velocity(latents, noise, timesteps)
+                    else:
+                        target = noise
 
                     loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="none")
                     loss = loss.mean([1, 2, 3])
