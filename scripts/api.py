@@ -78,7 +78,7 @@ class DreamboothConcept(BaseModel):
 
 # API Representation of db config
 class DreamboothParameters(BaseModel):
-    concepts_list: list[DreamboothConcept]
+    concepts_list: List[DreamboothConcept]
     attention: str = "default"
     center_crop: bool = False
     clip_skip: int = 1
