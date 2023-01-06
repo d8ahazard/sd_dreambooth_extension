@@ -213,8 +213,6 @@ class PromptDataset(Dataset):
         self.instance_paths = []
         self.class_paths = []
         for concept in concepts:
-            # Don't need to do anything here
-            
             instance_dir = concept.instance_data_dir
             class_dir = concept.class_data_dir
             
@@ -227,7 +225,10 @@ class PromptDataset(Dataset):
             status.textinfo = "Sorting images..."
             # Sort existing prompts
             instance_prompts = sort_prompts(concept, text_getter, instance_dir, bucket_resos)
-            class_prompts = sort_prompts(concept, text_getter, class_dir, bucket_resos, instance_prompts)
+            if concept.num_class_images_per >= 0:
+                class_prompts = sort_prompts(concept, text_getter, class_dir, bucket_resos, instance_prompts)
+            else:
+                class_prompts = {}
             idx = 0
             matched_resos = []
             for res, prompts in instance_prompts.items():
@@ -238,13 +239,14 @@ class PromptDataset(Dataset):
                     matched_resos.append((idx, res))
                 idx += 1
 
-            for idx, res in matched_resos:
-                prompts = []
-                if res in class_prompts:
-                    prompts = class_prompts[res]
-                    for prompt in prompts:
-                        self.class_paths.append(prompt[2])
-                print(f"Class Bucket {idx}: Resolution {res}, Count: {len(prompts)}")
+            if concept.num_class_images_per > 0:
+                for idx, res in matched_resos:
+                    prompts = []
+                    if res in class_prompts:
+                        prompts = class_prompts[res]
+                        for prompt in prompts:
+                            self.class_paths.append(prompt[2])
+                    print(f"Class Bucket {idx}: Resolution {res}, Count: {len(prompts)}")
 
             # Loop by resolutions
             for res, inst_prompts in instance_prompts.items():
@@ -782,18 +784,25 @@ def generate_dataset(model_name: str, instance_paths = None, class_paths = None,
     train_img_path_captions = []
     reg_img_path_captions = []
     tokens = []
+    use_concepts = False
     for conc in args.concepts_list:
+        if not conc.is_valid():
+            continue
+        if conc.num_class_images_per > 0:
+            use_concepts = True
         if instance_paths is not None and class_paths is not None:
             train_img_path_captions.extend(get_captions(conc, instance_paths, False))
-            reg_img_path_captions.extend(get_captions(conc, class_paths, True))
+            if conc.num_class_images_per > 0:
+                reg_img_path_captions.extend(get_captions(conc, class_paths, True))
         else:
             if conc.class_token != "" and conc.instance_token != "":
                 tokens.append((conc.instance_token, conc.class_token))
             idd = conc.instance_data_dir
             if idd is not None and idd != "" and os.path.exists(idd):
                 img_caps = load_dreambooth_dir(idd, conc, False)
-                train_img_path_captions.extend(img_caps)
-                print(f"Found {len(train_img_path_captions)} training images.")
+                if conc.num_class_images_per > 0:
+                    train_img_path_captions.extend(img_caps)
+                    print(f"Found {len(train_img_path_captions)} training images.")
 
             class_data_dir = conc.class_data_dir
             number_class_images = conc.num_class_images_per
@@ -801,7 +810,8 @@ def generate_dataset(model_name: str, instance_paths = None, class_paths = None,
                     class_data_dir):
                 reg_caps = load_dreambooth_dir(class_data_dir, conc)
                 reg_img_path_captions.extend(reg_caps)
-    print(f"Found {len(reg_img_path_captions)} reg images.")
+    if use_concepts:
+        print(f"Found {len(reg_img_path_captions)} reg images.")
 
     min_bucket_reso = (int(args.resolution * 0.28125) // 64) * 64
     from extensions.sd_dreambooth_extension.dreambooth.finetuning_dataset import DreamBoothOrFineTuningDataset

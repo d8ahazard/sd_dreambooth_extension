@@ -145,6 +145,13 @@ def set_diffusers_xformers_flag(model, valid):
 def collate_fn(examples):
     return examples[0]
 
+def stop_profiler(profiler):
+    if profiler is not None:
+        try:
+            print("Stopping profiler.")
+            profiler.stop()
+        except:
+            pass
 
 def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lora_txt_alpha=1.0,
          custom_model_name="", use_txt2img=True) -> TrainResult:
@@ -163,6 +170,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
     result = TrainResult
     result.config = args
+
+
 
     @find_executable_batch_size(starting_batch_size=args.train_batch_size,
                                 starting_grad_size=args.gradient_accumulation_steps, logging_dir=logging_dir)
@@ -209,6 +218,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             print(msg)
             result.msg = msg
             result.config = args
+            stop_profiler(profiler)
             return result
         # Currently, it's not possible to do gradient accumulation when training two models with
         # accelerate.accumulate This will be enabled soon in accelerate. For now, we don't allow gradient
@@ -227,6 +237,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                                            use_txt2img=use_txt2img, accelerator=accelerator, ui = False)
         if status.interrupted:
             result.msg = "Training interrupted."
+            stop_profiler(profiler)
             return result
 
         if use_txt2img and count > 0:
@@ -339,6 +350,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
         if status.interrupted:
             result.msg = "Training interrupted."
+            stop_profiler(profiler)
             return result
 
         train_dataset = generate_dataset(
@@ -350,12 +362,13 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             vae=vae if args.cache_latents else None,
             debug=False
         )
-        
+
         if args.cache_latents:
             vae.to("cpu")
 
         if status.interrupted:
             result.msg = "Training interrupted."
+            stop_profiler(profiler)
             return result
 
         if train_dataset.__len__ == 0:
@@ -365,6 +378,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             cleanup_memory()
             result.msg = msg
             result.config = args
+            stop_profiler(profiler)
             return result
 
         unet.requires_grad_(True)  # 念のため追加
@@ -948,6 +962,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         result.msg = msg
         result.config = args
         result.samples = last_samples
+        stop_profiler(profiler)
         return result
 
     return inner_loop()

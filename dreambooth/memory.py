@@ -127,11 +127,6 @@ def find_executable_batch_size(function: callable = None, starting_batch_size: i
                 else:
                     raise
 
-    if profiler is not None:
-        try:
-            print("Stopping profiler.")
-            profiler.stop()
-        except:
-            pass
+
 
     return decorator
