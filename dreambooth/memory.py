@@ -83,7 +83,7 @@ def find_executable_batch_size(function: callable = None, starting_batch_size: i
             on_trace_ready=torch.profiler.tensorboard_trace_handler(f'{logging_dir}'),
             with_stack=True,
             profile_memory=True)
-
+        print("Starting profiler...")
         profiler.start()
     else:
         prof = None
@@ -129,6 +129,7 @@ def find_executable_batch_size(function: callable = None, starting_batch_size: i
 
     if profiler is not None:
         try:
+            print("Stopping profiler.")
             profiler.stop()
         except:
             pass

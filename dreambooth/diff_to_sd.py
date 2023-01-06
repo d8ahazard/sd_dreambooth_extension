@@ -282,9 +282,9 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
 
     save_model_name = model_name if custom_model_name == "" else custom_model_name
     if custom_model_name == "":
-        printi(f"Compiling checkpoint for {model_name}...", log)
+        printi(f"Compiling checkpoint for {model_name}...", log=log)
     else:
-        printi(f"Compiling checkpoint for {model_name} with a custom name {custom_model_name}", log)
+        printi(f"Compiling checkpoint for {model_name} with a custom name {custom_model_name}", log=log)
 
     if not model_name:
         msg = "Select a model to compile."
