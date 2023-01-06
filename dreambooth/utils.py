@@ -5,6 +5,7 @@ import html
 import os
 import sys
 import traceback
+from tqdm.auto import tqdm
 from io import StringIO
 from pathlib import Path
 from typing import Optional, Union, Tuple, List
@@ -41,9 +42,9 @@ def printi(msg, params=None, log=True):
         if status.job_count > status.job_no:
             status.job_no += 1
         if params:
-            print(msg, params)
+            tqdm.write(msg, params)
         else:
-            print(msg)
+            tqdm.write(msg)
 
 
 def get_db_models():

@@ -8,7 +8,7 @@ import re
 import shutil
 import traceback
 from typing import Dict
-
+from tqdm.auto import tqdm
 import torch
 from diffusers import DiffusionPipeline
 
@@ -282,9 +282,9 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
 
     save_model_name = model_name if custom_model_name == "" else custom_model_name
     if custom_model_name == "":
-        printi(f"Compiling checkpoint for {model_name}...")
+        printi(f"Compiling checkpoint for {model_name}...", log)
     else:
-        printi(f"Compiling checkpoint for {model_name} with a custom name {custom_model_name}")
+        printi(f"Compiling checkpoint for {model_name} with a custom name {custom_model_name}", log)
 
     if not model_name:
         msg = "Select a model to compile."
@@ -310,7 +310,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
 
     if os.path.exists(new_hotness):
-        print(f"Loading snapshot paths from {new_hotness}")
+        tqdm.write(f"Loading snapshot paths from {new_hotness}")
         unet_path = osp.join(new_hotness, "pytorch_model.bin")
         text_enc_path = osp.join(new_hotness, "pytorch_model_1.bin")
     else:
@@ -336,16 +336,16 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
             printi(f"Loading lora from {lora_path}", log=log)
             if os.path.exists(lora_path):
                 checkpoint_path = checkpoint_path.replace(".ckpt", "_lora.ckpt")
-                printi(f"Applying lora weight of alpha: {lora_alpha} to unet...")
+                printi(f"Applying lora weight of alpha: {lora_alpha} to unet...", log=log)
                 weight_apply_lora(loaded_pipeline.unet, torch.load(lora_path), alpha=lora_alpha)
-                printi("Saving lora unet...")
+                printi("Saving lora unet...", log=log)
                 loaded_pipeline.unet.save_pretrained(os.path.join(config.pretrained_model_name_or_path, "unet_lora"))
                 unet_path = osp.join(config.pretrained_model_name_or_path, "unet_lora", "diffusion_pytorch_model.bin")
             lora_txt = lora_path.replace(".pt", "_txt.pt")
             if os.path.exists(lora_txt):
-                printi(f"Applying lora weight of alpha: {lora_txt_alpha} to text encoder...")
+                printi(f"Applying lora weight of alpha: {lora_txt_alpha} to text encoder...", log=log)
                 weight_apply_lora(loaded_pipeline.text_encoder, torch.load(lora_txt), alpha=lora_txt_alpha)
-                printi("Saving lora text encoder...")
+                printi("Saving lora text encoder...", log=log)
                 loaded_pipeline.text_encoder.save_pretrained(
                     os.path.join(config.pretrained_model_name_or_path, "text_encoder_lora"))
                 text_enc_path = osp.join(config.pretrained_model_name_or_path, "text_encoder_lora", "pytorch_model.bin")
@@ -390,7 +390,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
             state_dict = {k: v.half() for k, v in state_dict.items()}
 
         state_dict = {"db_global_step": config.revision, "db_epoch": config.epoch, "state_dict": state_dict}
-        printi(f"Saving checkpoint to {checkpoint_path}...")
+        printi(f"Saving checkpoint to {checkpoint_path}...", log=log)
         torch.save(state_dict, checkpoint_path)
         cfg_file = None
         new_name = os.path.join(config.model_dir, f"{config.model_name}.yaml")
@@ -424,5 +424,5 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     if reload_models:
         reload_system_models()
     msg = f"Checkpoint compiled successfully: {checkpoint_path}"
-    printi(msg)
+    printi(msg, log=log)
     return msg

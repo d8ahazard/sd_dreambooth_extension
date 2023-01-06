@@ -545,12 +545,9 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     save_snapshot = args.save_state_after
                     save_checkpoint = args.save_ckpt_after
                 else:
-                    print("Save model is definitely enabled.")
                     save_lora = args.save_lora_during
                     save_snapshot = args.save_state_during
                     save_checkpoint = args.save_ckpt_during
-                    if save_checkpoint:
-                        print("So is saving of checkpoint.")
 
             if save_checkpoint or save_snapshot or save_lora or save_image or save_model:
                 printm(" Saving weights.")
@@ -604,7 +601,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                 s_pipeline.enable_attention_slicing()
                 with accelerator.autocast(), torch.inference_mode():
                     if save_model:
-                        print("SAVE MODEL")
                         # We are saving weights, we need to ensure revision is saved
                         args.save()
                         pbar.set_description("Saving Weights")
@@ -616,20 +612,18 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                                 if save_snapshot:
                                     pbar.set_description("Saving Snapshot")
                                     status.textinfo = f"Saving snapshot at step {args.revision}..."
-                                    # print(f"Saving snapshot at step: {args.revision}")
                                     accelerator.save_state(os.path.join(args.model_dir, "checkpoints",
                                                                         f"checkpoint-{args.revision}"))
                                     pbar.update()
 
                                 # We should save this regardless, because it's our fallback if no snapshot exists.
                                 status.textinfo = f"Saving diffusion model at step {args.revision}..."
-
-                                print(f"Saving diffusion weights at step: {args.revision}.")
+                                pbar.set_description("Saving diffusion model")
                                 s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"))
                                 pbar.update()
 
                             elif save_lora:
-                                print("Saving lora...")
+                                pbar.set_description("Saving Lora Weights...")
                                 lora_model_name = args.model_name if custom_model_name == "" else custom_model_name
                                 try:
                                     cmd_lora_models_path = shared.cmd_opts.lora_models_path
@@ -652,14 +646,12 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                                     pbar.update()
 
                             if save_checkpoint:
-                                print("SAVE CHECKPOINT.")
                                 pbar.set_description("Compiling Checkpoint")
                                 compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
                                                    reload_models=False, lora_path=out_file, log=False,
                                                    custom_model_name=custom_model_name)
                                 pbar.update()
                             if args.use_ema:
-                                print("Restoring ema unet.")
                                 ema_unet.restore(unet.parameters())
                                 ema_unet.to(accelerator.device, dtype=weight_dtype)
                                 printm("Restored, moved to acc.device.")
@@ -681,7 +673,6 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                             with accelerator.autocast(), torch.inference_mode():
                                 sd = SampleDataset(args.concepts_list, args.shuffle_tags)
                                 prompts = sd.get_prompts()
-                                print(f"We have {len(prompts)} sample prompts...")
                                 if args.sanity_prompt != "" and args.sanity_prompt is not None:
                                     epd = PromptData()
                                     epd.prompt = args.sanity_prompt
