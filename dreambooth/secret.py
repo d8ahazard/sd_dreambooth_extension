@@ -1,5 +1,6 @@
 import os
 import secrets
+
 from modules import shared
 
 db_path = os.path.join(shared.models_path, "dreambooth")

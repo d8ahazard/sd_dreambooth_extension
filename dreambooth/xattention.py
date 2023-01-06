@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import inspect
 import math
-import os
-import traceback
 from typing import Any, Dict, List, Union, Optional
 
 import diffusers
@@ -13,6 +11,8 @@ from diffusers.optimization import SchedulerType, TYPE_TO_SCHEDULER_FUNCTION
 from einops import rearrange
 from torch import einsum
 from torch.optim import Optimizer
+
+from extensions.sd_dreambooth_extension.dreambooth.sub_quad_attention import sub_quad_attnblock_forward
 
 
 def replace_unet_cross_attn_to_default():
@@ -219,8 +219,8 @@ class FlashAttentionFunction(torch.autograd.function.Function):
                 dv_chunk = einsum('... i j, ... i d -> ... j d', p, doc)
                 dp = einsum('... i d, ... j d -> ... i j', doc, vc)
 
-                D = (doc * oc).sum(dim=-1, keepdims=True)
-                ds = p * scale * (dp - D)
+                d_sum = (doc * oc).sum(dim=-1, keepdims=True)
+                ds = p * scale * (dp - d_sum)
 
                 dq_chunk = einsum('... i j, ... j d -> ... i d', ds, kc)
                 dk_chunk = einsum('... i j, ... i d -> ... j d', ds, qc)
@@ -319,6 +319,9 @@ def replace_unet_cross_attn_to_xformers():
 
     diffusers.models.attention.CrossAttention.forward = forward_xformers
 
+def replace_unet_cross_attn_to_quad():
+    #ldm.modules.attention.CrossAttention.forward = sd_hijack_optimizations.sub_quad_attention_forward
+    diffusers.models.attention.CrossAttention.forward = sub_quad_attnblock_forward
 
 def _validate_model_kwargs(self, model_kwargs: Dict[str, Any]):
     pass
@@ -424,14 +427,12 @@ def get_scheduler(
             The number of warmup steps to do. This is not required by all schedulers (hence the argument being
             optional), the function will raise an error if it's unset and the scheduler type requires it.
         num_training_steps (`int``, *optional*):
-            The number of training steps to do. This is not required by all schedulers (hence the argument being
+            The number of training steps. This is not required by all schedulers (hence the argument being
             optional), the function will raise an error if it's unset and the scheduler type requires it.
         num_cycles (`int`, *optional*):
             The number of hard restarts used in `COSINE_WITH_RESTARTS` scheduler.
         power (`float`, *optional*, defaults to 1.0):
             Power factor. See `POLYNOMIAL` scheduler
-        last_epoch (`int`, *optional*, defaults to -1):
-            The index of the last epoch when resuming training.
     """
     name = SchedulerType(name)
     schedule_func = TYPE_TO_SCHEDULER_FUNCTION[name]

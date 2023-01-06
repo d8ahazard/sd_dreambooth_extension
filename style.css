@@ -25,16 +25,16 @@
     text-align: center;
 }
 
-#refresh_db_models, #refresh_lora_models, #refresh_sd_models, #refresh_secret, #clear_secret, #db_check_progress_initial {
+#refresh_db_models, #refresh_lora_models, #refresh_sd_models, #refresh_secret, #clear_secret, #ui_check_progress_initial {
     margin-top: 0.75em;
     max-width: 2.5em;
     min-width: 2.5em;
     height: 2.4em;
 }
 
-#db_check_progress_initial {
+#ui_check_progress_initial {
     position: absolute;
-    top: 0px;
+    top: 0;
     right: 10px;
 }
 

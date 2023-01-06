@@ -1,4 +1,4 @@
-# Script for converting a HF Diffusers saved pipeline to a Stable Diffusion checkpoint.
+# Script for converting Diffusers saved pipeline to a Stable Diffusion checkpoint.
 # *Only* converts the UNet, VAE, and Text Encoder.
 # Does not convert optimizer state or any other thing.
 
@@ -12,12 +12,12 @@ from typing import Dict
 import torch
 from diffusers import DiffusionPipeline
 
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
+from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils import printi, unload_system_models, \
     reload_system_models
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
-from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -148,7 +148,7 @@ for i in range(4):
         sd_up_prefix = f"decoder.up.{3 - i}.block.{j}."
         vae_conversion_map.append((sd_up_prefix, hf_up_prefix))
 
-# this part accounts for mid blocks in both the encoder and the decoder
+# this part accounts for mid-blocks in both the encoder and the decoder
 for i in range(2):
     hf_mid_res_prefix = f"mid_block.resnets.{i}."
     sd_mid_res_prefix = f"mid.block_{i + 1}."
@@ -267,8 +267,8 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     @param lora_txt_alpha:
     @param custom_model_name:
     @param model_name: The model name to compile
-    @param half: Use FP16 when compiling the model
-    @param use_subdir: The model will be saved to a subdirectory of the checkpoints folder
+    @param half: Use FP16 when compiling
+    @param use_subdir: Save to a subdirectory of the checkpoints folder
     @param reload_models: Whether to reload the system list of checkpoints.
     @param lora_path: The path to a lora pt file to merge with the unet. Auto set during training.
     @param lora_alpha: The overall weight of the lora model when adding to unet. Default is 1.0

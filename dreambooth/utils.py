@@ -11,6 +11,8 @@ from typing import Optional, Union, Tuple, List
 
 import matplotlib
 import pandas as pd
+from pandas.plotting._matplotlib.style import get_standard_colors
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow
 import torch
@@ -102,10 +104,12 @@ def sanitize_name(name):
 mem_record = {}
 
 
-def printm(msg="", reset=False):
-    allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
-    cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
-    print(f"{msg}({allocated}/{cached})")
+def printm(msg=""):
+    from extensions.sd_dreambooth_extension.dreambooth import db_shared
+    if db_shared.debug:
+        allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
+        cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
+        print(f"{msg}({allocated}/{cached})")
 
 
 def cleanup(do_print: bool = False):
@@ -142,8 +146,10 @@ def list_attention():
     pass
 
     if has_xformers:
+        # return ["default", "xformers", "sub_quad", "flash_attention"]
         return ["default", "xformers", "flash_attention"]
     else:
+        # return ["default", "sub_quad", "flash_attention"]
         return ["default", "flash_attention"]
 
 
@@ -248,11 +254,11 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 
 
 def plot_multi(
-    data: pd.DataFrame,
-    x: Union[str, None] = None,
-    y: Union[List[str], None] = None,
-    spacing: float = 0.1,
-    **kwargs
+        data: pd.DataFrame,
+        x: Union[str, None] = None,
+        y: Union[List[str], None] = None,
+        spacing: float = 0.1,
+        **kwargs
 ) -> matplotlib.axes.Axes:
     """Plot multiple Y axes on the same chart with same x axis.
 
@@ -272,7 +278,6 @@ def plot_multi(
     See Also:
         This code is mentioned in https://stackoverflow.com/q/11640243/2593810
     """
-    from pandas.plotting._matplotlib.style import get_standard_colors
 
     # Get default color style from pandas - can be changed to any other color list
     if y is None:
@@ -333,7 +338,7 @@ def parse_logs(model_name: str, for_ui: bool = False):
         pandas.DataFrame with [wall_time, name, step, value] columns.
 
     """
-
+    matplotlib.use("Agg")
     def convert_tfevent(filepath) -> Tuple[DataFrame, DataFrame, DataFrame, bool]:
         loss_events = []
         lr_events = []
@@ -409,9 +414,9 @@ def parse_logs(model_name: str, for_ui: bool = False):
     all_df_loss = all_df_loss.rolling(smoothing_window).mean()
     out_images = []
     out_names = []
-    loss_name = ""
     if has_all_lr:
-        plotted_loss = plot_multi(all_df_loss, "Step", ["Loss", "LR"], title=f"Loss Average/Learning Rate ({model_config.lr_scheduler})")
+        plotted_loss = plot_multi(all_df_loss, "Step", ["Loss", "LR"],
+                                  title=f"Loss Average/Learning Rate ({model_config.lr_scheduler})")
         loss_name = "Loss Average/Learning Rate"
     else:
         plotted_loss = all_df_loss.plot(x="Step", y="Value", title="Loss Averages")
@@ -437,7 +442,7 @@ def parse_logs(model_name: str, for_ui: bool = False):
         all_df_ram = pd.concat(out_ram)[columns_order]
         all_df_ram = all_df_ram.sort_values("Wall_time")
         all_df_ram = all_df_ram.reset_index(drop=True)
-        all_df_ram = all_df_ram.rolling(smoothing_window).mean()
+        all_df_ram = all_df_ram.rolling(smoothing_window).mean(numeric_only=True)
         plotted_ram = all_df_ram.plot(x="Step", y="Value", title="VRAM Usage")
 
         ram_img = os.path.join(model_config.model_dir, "logging", f"ram_plot_{model_config.revision}.png")

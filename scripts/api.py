@@ -17,10 +17,10 @@ from pydantic.dataclasses import Union
 from pydantic.types import List
 
 from extensions.sd_dreambooth_extension.dreambooth import db_shared
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import DreamState
+from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
+from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
@@ -133,7 +133,7 @@ class DreamboothParameters(BaseModel):
     src: Union[str, None] = ""
     shuffle_tags: bool = False
     train_batch_size: int = 1
-    stop_text_encoder: int = 0
+    stop_text_encoder: float = 0
     use_8bit_adam: bool = False
     use_lora: bool = False
     use_subdir: bool = True
@@ -411,7 +411,6 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             model_dir=model_name,
             save_sample_prompt=sample_prompt,
             num_samples=num_images,
-            batch_size=batch_size,
             lora_model_path=lora_model_path,
             lora_weight=lora_weight,
             lora_txt_weight=lora_txt_weight,

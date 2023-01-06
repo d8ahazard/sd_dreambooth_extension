@@ -1,4 +1,3 @@
-import gc
 import glob
 import logging
 import math
@@ -14,10 +13,10 @@ from diffusers.utils import logging as dl
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, PromptData
+from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, PromptData, generate_dataset
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, get_images, \
     get_lora_models, cleanup
-from modules import shared, devices
+from modules import shared
 
 try:
     cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
@@ -42,9 +41,9 @@ def training_wizard(model_dir, is_person=False):
     """
     Calculate the number of steps based on our learning rate, return the following:
     db_num_train_epochs,
-    c1_num_class_images,
-    c2_num_class_images,
-    c3_num_class_images,
+    c1_num_class_images_per,
+    c2_num_class_images_per,
+    c3_num_class_images_per,
     db_status
     """
     if model_dir == "" or model_dir is None:
@@ -140,7 +139,7 @@ def closest_factors_to_sqrt(n):
 
     # Check if n is a prime number
     if math.sqrt(n) == sqrt_n:
-        return (sqrt_n, sqrt_n)
+        return sqrt_n, sqrt_n
 
     # Find the first pair of factors that are closest in value
     while n % f1 != 0:
@@ -234,15 +233,15 @@ def performance_wizard(model_name):
     if has_xformers:
         attention = "xformers"
     try:
-        stop_text_encoder = 75
+        stop_text_encoder = 0.75
         if config is not None:
-            stop_text_encoder = int(config.num_train_epochs * .75)
+            stop_text_encoder = 0.75
         t = torch.cuda.get_device_properties(0).total_memory
         gb = math.ceil(t / 1073741824)
         print(f"Total VRAM: {gb}")
         if gb >= 24:
             sample_batch_size = 4
-            stop_text_encoder = 75
+            stop_text_encoder = 0.75
             use_ema = True
             if attention != "xformers":
                 attention = "no"
@@ -266,7 +265,7 @@ def performance_wizard(model_name):
                 "Accumulation Steps": gradient_accumulation_steps, "Precision": mixed_precision,
                 "Cache Latents": cache_latents, "Training Batch Size": train_batch_size,
                 "Class Generation Batch Size": sample_batch_size,
-                "Text Encoder Epochs": stop_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "LORA": use_lora}
+                "Text Encoder Ratio": stop_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "LORA": use_lora}
     for key in log_dict:
         msg += f"<br>{key}: {log_dict[key]}"
     return attention, gradient_checkpointing, gradient_accumulation_steps, mixed_precision, cache_latents, \
@@ -330,7 +329,7 @@ def ui_samples(model_dir: str,
                 for img in out_images:
                     if len(images) < num_samples:
                         images.append(img)
-            img_builder.unload()
+            img_builder.unload(True)
             reload_system_models()
         except Exception as e:
             msg = f"Exception generating sample(s): {e}"
@@ -440,17 +439,17 @@ def load_params(model_dir):
                "c1_class_data_dir", "c1_class_guidance_scale", "c1_class_infer_steps",
                "c1_class_negative_prompt", "c1_class_prompt", "c1_class_token",
                "c1_instance_data_dir", "c1_instance_prompt", "c1_instance_token", "c1_n_save_sample",
-               "c1_num_class_images", "c1_sample_seed", "c1_save_guidance_scale", "c1_save_infer_steps",
+               "c1_num_class_images", "c1_num_class_images_per", "c1_sample_seed", "c1_save_guidance_scale", "c1_save_infer_steps",
                "c1_save_sample_negative_prompt", "c1_save_sample_prompt", "c1_save_sample_template",
                "c2_class_data_dir",
                "c2_class_guidance_scale", "c2_class_infer_steps", "c2_class_negative_prompt", "c2_class_prompt",
                "c2_class_token", "c2_instance_data_dir", "c2_instance_prompt",
-               "c2_instance_token", "c2_n_save_sample", "c2_num_class_images", "c2_sample_seed",
+               "c2_instance_token", "c2_n_save_sample", "c2_num_class_images", "c2_num_class_images_per", "c2_sample_seed",
                "c2_save_guidance_scale", "c2_save_infer_steps", "c2_save_sample_negative_prompt",
                "c2_save_sample_prompt", "c2_save_sample_template", "c3_class_data_dir", "c3_class_guidance_scale",
                "c3_class_infer_steps", "c3_class_negative_prompt", "c3_class_prompt", "c3_class_token",
                "c3_instance_data_dir", "c3_instance_prompt", "c3_instance_token",
-               "c3_n_save_sample", "c3_num_class_images", "c3_sample_seed", "c3_save_guidance_scale",
+               "c3_n_save_sample", "c3_num_class_images", "c3_num_class_images_per", "c3_sample_seed", "c3_save_guidance_scale",
                "c3_save_infer_steps", "c3_save_sample_negative_prompt", "c3_save_sample_prompt",
                "c3_save_sample_template", "db_status"]
     output = []
@@ -507,7 +506,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     @param lora_alpha: Lora unet strength if model name specified.
     @param lora_txt_alpha: Lora text encoder strength if model name specified.
     @param imagic_only: Train using imagic instead of dreambooth.
-    @param use_subdir: Save generated checkpoints to a subdirectory in the models dir.
+    @param use_subdir: Save generated checkpoints to a subdirectory in the model dir.
     @param custom_model_name: A custom filename to use when generating regular and lora checkpoints.
     @param use_txt2img: Whether to use txt2img or diffusion pipeline for image generation.
     @return:
@@ -585,7 +584,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
         res = f"Training {'interrupted' if status.interrupted else 'finished'}. " \
               f"Total lifetime steps: {total_steps} \n"
     except Exception as e:
-        res = f"Exception training model: {e}"
+        res = f"Exception training model: '{e}'."
         traceback.print_exc()
         pass
 
@@ -600,7 +599,11 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     return lora_model_name, total_steps, config.epoch, images, res
 
 
-def ui_classifiers(model_name: str, lora_model: str, lora_weight: float, lora_txt_weight: float, use_txt2img: bool):
+def ui_classifiers(model_name: str,
+                   lora_model: str,
+                   lora_weight: float,
+                   lora_txt_weight: float,
+                   use_txt2img: bool):
     """
     UI method for generating class images.
     @param model_name: The model to generate classes for.
@@ -615,7 +618,7 @@ def ui_classifiers(model_name: str, lora_model: str, lora_weight: float, lora_tx
         msg = "Create or select a model first."
         return msg
     config = from_file(model_name)
-
+    status.textinfo = "Generating class images..."
     # Clear pretrained VAE Name if applicable
     if config.pretrained_vae_name_or_path == "":
         config.pretrained_vae_name_or_path = None
@@ -642,13 +645,18 @@ def ui_classifiers(model_name: str, lora_model: str, lora_weight: float, lora_tx
     images = []
     try:
         from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import generate_classifiers
-        print("Generating concepts...")
+        print("Generating class images...")
         unload_system_models()
-        count, _, images = generate_classifiers(config, lora_model=lora_model, lora_weight=lora_weight,
-                                                lora_text_weight=lora_txt_weight, use_txt2img=use_txt2img)
+        count, images = generate_classifiers(config, lora_model=lora_model, lora_weight=lora_weight,
+                                                lora_text_weight=lora_txt_weight, use_txt2img=use_txt2img, ui=True)
         reload_system_models()
         msg = f"Generated {count} class images."
     except Exception as e:
         msg = f"Exception generating concepts: {str(e)}"
         traceback.print_exc()
+        status.job_no = status.job_count
+        status.textinfo = msg
     return images, msg
+
+def debug_buckets(model_name):
+    return generate_dataset(model_name)

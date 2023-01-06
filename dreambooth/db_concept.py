@@ -1,14 +1,16 @@
 import os
 
+from extensions.sd_dreambooth_extension.dreambooth.utils import get_images
+
 
 class Concept(dict):
     def __init__(self, instance_data_dir: str = "", class_data_dir: str = "",
                  instance_prompt: str = "", class_prompt: str = "",
                  save_sample_prompt: str = "", save_sample_template: str = "", instance_token: str = "",
-                 class_token: str = "", num_class_images: int = 0, class_negative_prompt: str = "",
-                 class_guidance_scale: float = 7.5, class_infer_steps: int = 60, save_sample_negative_prompt: str = "",
-                 n_save_sample: int = 1, sample_seed: int = -1, save_guidance_scale: float = 7.5,
-                 save_infer_steps: int = 60, input_dict=None):
+                 class_token: str = "", num_class_images: int = 0, num_class_images_per: int = 0,
+                 class_negative_prompt: str = "", class_guidance_scale: float = 7.5, class_infer_steps: int = 60,
+                 save_sample_negative_prompt: str = "", n_save_sample: int = 1, sample_seed: int = -1,
+                 save_guidance_scale: float = 7.5, save_infer_steps: int = 60, input_dict=None):
         if input_dict is None:
             self.instance_data_dir = instance_data_dir
             self.class_data_dir = class_data_dir
@@ -19,6 +21,7 @@ class Concept(dict):
             self.instance_token = instance_token
             self.class_token = class_token
             self.num_class_images = num_class_images
+            self.num_class_images_per = num_class_images_per
             self.class_negative_prompt = class_negative_prompt
             self.class_guidance_scale = class_guidance_scale
             self.class_infer_steps = class_infer_steps
@@ -38,6 +41,7 @@ class Concept(dict):
             self.instance_token = input_dict["instance_token"] if "instance_token" in input_dict else ""
             self.class_token = input_dict["class_token"] if "class_token" in input_dict else ""
             self.num_class_images = input_dict["num_class_images"] if "num_class_images" in input_dict else 0
+            self.num_class_images_per = input_dict["num_class_images_per"] if "num_class_images_per" in input_dict else 0
             self.class_negative_prompt = input_dict[
                 "class_negative_prompt"] if "class_negative_prompt" in input_dict else ""
             self.class_guidance_scale = input_dict[
@@ -50,6 +54,15 @@ class Concept(dict):
             self.save_guidance_scale = input_dict["save_guidance_scale"] if "save_guidance_scale" in input_dict else 7.5
             self.save_infer_steps = input_dict["save_infer_steps"] if "save_infer_steps" in input_dict else 60
 
+        if self.is_valid() and self.num_class_images != 0:
+            if self.num_class_images_per == 0:
+                images = get_images(self.instance_data_dir)
+                if len(images) < self.num_class_images * 2:
+                    self.num_class_images_per = 1
+                else:
+                    self.num_class_images_per = self.num_class_images // len(images)
+                self.num_class_images = 0
+
         self_dict = {
             "instance_data_dir": self.instance_data_dir,
             "class_data_dir": self.class_data_dir,
@@ -60,6 +73,7 @@ class Concept(dict):
             "instance_token": self.instance_token,
             "class_token": self.class_token,
             "num_class_images": self.num_class_images,
+            "num_class_images_per": self.num_class_images_per,
             "class_negative_prompt": self.class_negative_prompt,
             "class_guidance_scale": self.class_guidance_scale,
             "class_infer_steps": self.class_infer_steps,

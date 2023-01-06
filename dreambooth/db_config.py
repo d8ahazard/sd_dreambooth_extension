@@ -2,8 +2,8 @@ import json
 import os
 import traceback
 
-from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared
+from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 
 
 def sanitize_name(name):
@@ -77,7 +77,7 @@ class DreamboothConfig:
                  src: str = "",
                  shuffle_tags: bool = False,
                  train_batch_size: int = 1,
-                 stop_text_encoder: int = 0,
+                 stop_text_encoder: float = 1.0,
                  use_8bit_adam: bool = True,
                  use_concepts: bool = False,
                  use_ema: bool = True,
@@ -95,6 +95,7 @@ class DreamboothConfig:
                  c1_instance_token: str = "",
                  c1_n_save_sample: int = 1,
                  c1_num_class_images: int = 0,
+                 c1_num_class_images_per: int = 0,
                  c1_sample_seed: int = -1,
                  c1_save_guidance_scale: float = 7.5,
                  c1_save_infer_steps: int = 60,
@@ -112,6 +113,7 @@ class DreamboothConfig:
                  c2_instance_token: str = "",
                  c2_n_save_sample: int = 1,
                  c2_num_class_images: int = 0,
+                 c2_num_class_images_per: int = 0,
                  c2_sample_seed: int = -1,
                  c2_save_guidance_scale: float = 7.5,
                  c2_save_infer_steps: int = 60,
@@ -129,6 +131,7 @@ class DreamboothConfig:
                  c3_instance_token: str = "",
                  c3_n_save_sample: int = 1,
                  c3_num_class_images: int = 0,
+                 c3_num_class_images_per: int = 0,
                  c3_sample_seed: int = -1,
                  c3_save_guidance_scale: float = 7.5,
                  c3_save_infer_steps: int = 60,
@@ -243,7 +246,7 @@ class DreamboothConfig:
                                    c1_instance_prompt,
                                    c1_class_prompt, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token,
                                    c1_class_token,
-                                   c1_num_class_images, c1_class_negative_prompt, c1_class_guidance_scale,
+                                   c1_num_class_images, c1_num_class_images_per, c1_class_negative_prompt, c1_class_guidance_scale,
                                    c1_class_infer_steps,
                                    c1_save_sample_negative_prompt, c1_n_save_sample, c1_sample_seed,
                                    c1_save_guidance_scale,
@@ -253,7 +256,7 @@ class DreamboothConfig:
                                    c2_instance_prompt,
                                    c2_class_prompt, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token,
                                    c2_class_token,
-                                   c2_num_class_images, c2_class_negative_prompt, c2_class_guidance_scale,
+                                   c2_num_class_images, c2_num_class_images_per, c2_class_negative_prompt, c2_class_guidance_scale,
                                    c2_class_infer_steps,
                                    c2_save_sample_negative_prompt, c2_n_save_sample, c2_sample_seed,
                                    c2_save_guidance_scale,
@@ -263,7 +266,7 @@ class DreamboothConfig:
                                    c3_instance_prompt,
                                    c3_class_prompt, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token,
                                    c3_class_token,
-                                   c3_num_class_images, c3_class_negative_prompt, c3_class_guidance_scale,
+                                   c3_num_class_images, c3_num_class_images_per, c3_class_negative_prompt, c3_class_guidance_scale,
                                    c3_class_infer_steps,
                                    c3_save_sample_negative_prompt, c3_n_save_sample, c3_sample_seed,
                                    c3_save_guidance_scale,

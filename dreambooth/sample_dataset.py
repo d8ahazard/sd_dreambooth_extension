@@ -69,6 +69,7 @@ class SampleDataset:
             for idx in range(num_images):
                 concept_prompt = random.choice(self.prompts[concept_index])
                 output.append(concept_prompt)
+            concept_index += 1
         return output
 
 

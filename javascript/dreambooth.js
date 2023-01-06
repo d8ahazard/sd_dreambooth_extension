@@ -1,6 +1,4 @@
 // Save our current training params before doing a thing
-
-const id_part = "db_";
 let params_loaded = false;
 let training_started = false;
 
@@ -10,7 +8,7 @@ function save_config() {
     if (btn == null) return;
     let do_save = true;
     if (params_loaded === false) {
-        do_save = confirm("Warning: You are about to save model parameters that may be empty or from another model. This may erase or overwrite existing settings. If you still wish to continue, click 'OK'.");
+        do_save = confirm("Warning: Current UI Params have not been saved. Press 'OK' to save them now, or 'Cancel' to continue without saving.");
     }
     if (do_save === true) {
         console.log("Saving config...");
@@ -110,6 +108,11 @@ function db_start_prompts() {
     return db_start(1, true, false, arguments);
 }
 
+// Debug bucketing
+function db_start_buckets() {
+    return db_start(1, true, true, arguments);
+}
+
 function db_start_load_params() {
     update_params();
     return db_start(1, false, false, arguments);
@@ -151,6 +154,7 @@ let db_titles = {
     "Cancel": "Cancel training.",
     "Center Crop": "If an image is too large, crop it from the center.",
     "Class Batch Size": "How many classifier/regularization images to generate at once.",
+    "Class Images Per Instance Image": "How many classification images to use per instance image.",
     "Class Prompt": "A prompt for generating classification/regularization images. See the readme for more info.",
     "Class Token": "When using [filewords], this is the class identifier to use/find in existing prompts. Should be a single word.",
     "Classification CFG Scale": "The Classifier-Free Guidance Scale to use for classifier/regularization images.",
@@ -164,18 +168,20 @@ let db_titles = {
     "Create": "Create the danged model already.",
     "Custom Model Name": "A custom name to use when saving .ckpt and .pt files. Subdirectories will also be named this.",
     "Dataset Directory": "The directory containing training images.",
+    "Debug Buckets": "Examine the instance and class images and report any instance images without corresponding class images.",
     "Existing Prompt Contents": "If using [filewords], this tells the string builder how the existing prompts are formatted.",
     "Extract EMA Weights": "If EMA weights are saved in a model, these will be extracted instead of the full Unet. Probably not necessary for training or fine-tuning.",
-    "Generate A .ckpt file when saving during training.": "When enabled, a checkpoint will be generated at the specified epoch intervals while training is active. This also controls manual generation using the 'save weights' button while training is active.",
-    "Generate A .ckpt file when training completes.":"When enabled, a checkpoint will be generated when training completes successfully.",
-    "Generate A .ckpt file when training is cancelled.":"When enabled, a checkpoint will be generated when training is cancelled by the user.",
+    "Generate a .ckpt file when saving during training.": "When enabled, a checkpoint will be generated at the specified epoch intervals while training is active. This also controls manual generation using the 'save weights' button while training is active.",
+    "Generate a .ckpt file when training completes.":"When enabled, a checkpoint will be generated when training completes successfully.",
+    "Generate a .ckpt file when training is cancelled.":"When enabled, a checkpoint will be generated when training is cancelled by the user.",
     "Generate Ckpt": "Generate a checkpoint at the current training level.",
     "Generate Class Images": "Create classification images using training settings without training.",
     "Generate Classification Images Using txt2img": "Use the source checkpoint and TXT2IMG to generate class images.",
+    "Generate Classification Images to match Instance Resolutions": "Instead of generating square class images, they will be generated at the same resolution(s) as class images.",
     "Generate Graph": "Generate graphs from training logs showing learning rate and loss averages over the course of training.",
     "Generate lora weights when saving during training.": "When enabled, lora .pt files will be generated at each specified epoch interval during training. This also affects whether .pt files will be generated when manually clicking the 'Save Weights' button.",
     "Generate lora weights when training completes.": "When enabled, lora .pt files will be generated when training completes.",
-    "Generate lora weights when training is cancelled.": "When enabled, lora .pt files will be generated when training is cancelled by the user.",
+    "Generate lora weights when training is canceled.": "When enabled, lora .pt files will be generated when training is cancelled by the user.",
     "Generate Sample Images": "Generate sample images using the currently saved diffusers model.",
     "Generate Samples": "Trigger sample generation after the next training epoch.",
     "Gradient Accumulation Steps": "Number of updates steps to accumulate before performing a backward/update pass. You should try to make this the same as your batch size.",
@@ -212,7 +218,7 @@ let db_titles = {
     "Pretrained VAE Name or Path": "To use an alternate VAE, you can specify the path to a directory containing a pytorch_model.bin representing your VAE.",
     "Preview Prompts": "Generate a JSON representation of prompt data used for training.",
     "Prior Loss Weight": "Prior loss weight.",
-    "Resolution": "The resolution of input images. You probably want to pre-process them to match this.",
+    "Resolution": "The resolution of input images. When using bucketing, this is the maximum size of image buckets.",
     "Sample CFG Scale": "The Classifier-Free Guidance Scale to use for preview images.",
     "Sample Image Prompt": "The prompt to use when generating preview images.",
     "Sample Prompt": "The prompt to use to generate a sample image",
@@ -238,7 +244,7 @@ let db_titles = {
     "Shuffle Tags": "When enabled, tags after the first ',' in a prompt will be randomly ordered, which can potentially improve training.",
     "Shuffle After Epoch": "When enabled, will shuffle the dataset after the first epoch. Will enable text encoder training and latent caching (More VRAM).",
     "Source Checkpoint": "The source checkpoint to extract for training.",
-    "Text Encoder Epochs": "The number of steps per image (Epoch) to train the text encoder for. Set to -1 to train the same amount as the Unet, set to 0 to not train at all.",
+    "Step Ratio of Text Encoder Training": "The number of steps per image (Epoch) to train the text encoder for. Set 0.5 for 50% of the epochs",
     "Total Number of Class/Reg Images": "Total number of classification/regularization images to use. If no images exist, they will be generated. Set to 0 to disable prior preservation.",
     "Train Text Encoder": "Enabling this will provide better results and editability, but cost more VRAM.",
     "Train": "Start training.",
@@ -291,7 +297,7 @@ onUiUpdate(function () {
     gradioApp().querySelectorAll('.gallery-item').forEach(function (btn) {
         if (btn.onchange != null) return;
         btn.onchange = function() {
-            // Dummy function so we don't keep setting up the observer.
+            // Dummy function, so we don't keep setting up the observer.
         }
         checkPrompts();
         const options = {
@@ -330,8 +336,6 @@ let galleryObserver = null;
 let gallerySet = false;
 
 function db_progressbar(){
-    let id_gallery = "db_gallery";
-
     // gradio 3.8's enlightened approach allows them to create two nested div elements inside each other with same id
     // every time you use gr.HTML(elem_id='xxx'), so we handle this here
     let progressbar = gradioApp().querySelector("#db_progressbar #db_progressbar");
@@ -438,8 +442,6 @@ function checkDbGallery(){
                 }, 50);
 
                 if(activeElement){
-                    // i fought this for about an hour; i don't know why the focus is lost or why this helps recover it
-                    // if someone has a better solution please by all means
                     setTimeout(function (){
                         activeElement.focus({
                             preventScroll: true // Refocus the element that was focused before the gallery was opened without scrolling to it

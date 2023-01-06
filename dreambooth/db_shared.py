@@ -2,10 +2,14 @@
 import datetime
 import math
 import os
+import pathlib
 import time
 
+import PIL
+import numpy
 import torch
 from PIL import Image
+from packaging import version
 
 dreambooth_models_path = ""
 models_path = ""
@@ -22,9 +26,24 @@ disable_safe_unpickle = True
 ckptfix = False
 medvram = False
 lowvram = False
+debug = False
+profile_db = False
+sub_quad_q_chunk_size = 1024
+sub_quad_kv_chunk_size = None
+sub_quad_chunk_threshold = None
 CLIP_stop_at_last_layers = 2
 config = os.path.join(script_path, "configs", "v1-inference.yaml")
 
+device = torch.device("cpu")
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+
+if getattr(torch, 'has_mps', False):
+    try:
+        torch.zeros(1).to(torch.device("mps"))
+        device = torch.device("mps")
+    except Exception:
+        pass
 
 def image_grid(imgs, batch_size=1, rows=None):
     if rows is None:
@@ -49,7 +68,7 @@ def image_grid(imgs, batch_size=1, rows=None):
 def load_auto_settings():
     global models_path, script_path, ckpt_dir, device_id, disable_safe_unpickle, dataset_filename_word_regex, \
         dataset_filename_join_string, show_progress_every_n_steps, parallel_processing_allowed, state, ckptfix, medvram, \
-        lowvram, dreambooth_models_path, lora_models_path, CLIP_stop_at_last_layers
+        lowvram, dreambooth_models_path, lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config
     try:
         from modules import shared as ws, devices, images
         from modules import paths
@@ -66,9 +85,12 @@ def load_auto_settings():
         parallel_processing_allowed = ws.parallel_processing_allowed
         state = ws.state
         ckptfix = ws.cmd_opts.ckptfix
+        profile_db = ws.cmd_opts.profile_db
+        debug = ws.cmd_opts.debug_db
         medvram = ws.cmd_opts.medvram
         lowvram = ws.cmd_opts.lowvram
         config = ws.cmd_opts.config
+        device = ws.device
         try:
             dreambooth_models_path = ws.cmd_opts.dreambooth_models_path
             lora_models_path = ws.cmd_opts.lora_models_path
@@ -178,6 +200,7 @@ class DreamState:
 
     def set_current_image(self):
         from_shared = False
+        # If using txt2img to generate, try and grab the current latent
         if state.current_latent is not None and self.current_latent is None:
             self.sampling_step = state.sampling_step
             self.current_image_sampling_step = state.current_image_sampling_step
@@ -187,21 +210,27 @@ class DreamState:
             self.do_set_current_image(from_shared)
 
     def do_set_current_image(self, from_shared):
-        if not parallel_processing_allowed:
-            return
-        if self.current_latent is None:
-            return
-
-        if isinstance(self.current_latent, list):
-            if len(self.current_latent) > 1:
-                self.current_image = image_grid(self.current_latent)
+        if self.current_latent is not None:
+            if from_shared:
+                self.current_image_sampling_step = state.sampling_step
             else:
-                self.current_image = self.current_latent[0]
-        if from_shared:
-            self.current_image_sampling_step = state.sampling_step
-        else:
-            self.current_image_sampling_step = self.sampling_step
-        self.current_latent = None
+                self.current_image_sampling_step = self.sampling_step
+            self.current_image = self.current_latent
+            self.current_latent = None
+
+        if self.current_image is not None:
+            if isinstance(self.current_image, list):
+                to_check = self.current_image
+            else:
+                to_check = [self.current_image]
+
+            real_images = []
+            for check in to_check:
+                #List[numpy.array | PIL.Image | str]
+                # numpy.array, PIL.Image or str or pathlib.Path
+                if isinstance(check, numpy.array) or isinstance(check, type(PIL.Image)) or isinstance(check, type(pathlib.Path)):
+                    real_images.append(check)
+            self.current_image = real_images if len(real_images) > 1 else real_images[0]
 
 
 def stop_safe_unpickle():
@@ -223,8 +252,55 @@ def start_safe_unpickle():
     except:
         pass
 
+orig_tensor_to = torch.Tensor.to
+def tensor_to_fix(self, *args, **kwargs):
+    if self.device.type != 'mps' and \
+       ((len(args) > 0 and isinstance(args[0], torch.device) and args[0].type == 'mps') or \
+       (isinstance(kwargs.get('device'), torch.device) and kwargs['device'].type == 'mps')):
+        self = self.contiguous()
+    return orig_tensor_to(self, *args, **kwargs)
+
+# MPS workaround for https://github.com/pytorch/pytorch/issues/80800
+orig_layer_norm = torch.nn.functional.layer_norm
+def layer_norm_fix(*args, **kwargs):
+    if len(args) > 0 and isinstance(args[0], torch.Tensor) and args[0].device.type == 'mps':
+        args = list(args)
+        args[0] = args[0].contiguous()
+    return orig_layer_norm(*args, **kwargs)
+
+
+# MPS workaround for https://github.com/pytorch/pytorch/issues/90532
+orig_tensor_numpy = torch.Tensor.numpy
+def numpy_fix(self, *args, **kwargs):
+    if self.requires_grad:
+        self = self.detach()
+    return orig_tensor_numpy(self, *args, **kwargs)
+
 
 load_auto_settings()
+
+orig_cumsum = torch.cumsum
+orig_Tensor_cumsum = torch.Tensor.cumsum
+def cumsum_fix(input, cumsum_func, *args, **kwargs):
+    if input.device.type == 'mps':
+        output_dtype = kwargs.get('dtype', input.dtype)
+        if any(output_dtype == broken_dtype for broken_dtype in [torch.bool, torch.int8, torch.int16, torch.int64]):
+            return cumsum_func(input.cpu(), *args, **kwargs).to(input.device)
+    return cumsum_func(input, *args, **kwargs)
+
+
+if device.type == "mps":
+    if version.parse(torch.__version__) < version.parse("1.13"):
+        # PyTorch 1.13 doesn't need these fixes but unfortunately is slower and has regressions that prevent training from working
+        torch.Tensor.to = tensor_to_fix
+        torch.nn.functional.layer_norm = layer_norm_fix
+        torch.Tensor.numpy = numpy_fix
+    elif version.parse(torch.__version__) > version.parse("1.13.1"):
+        if not torch.Tensor([1,2]).to(torch.device("mps")).equal(torch.Tensor([1,1]).to(torch.device("mps")).cumsum(0, dtype=torch.int16)):
+            torch.cumsum = lambda input, *args, **kwargs: ( cumsum_fix(input, orig_cumsum, *args, **kwargs) )
+            torch.Tensor.cumsum = lambda self, *args, **kwargs: ( cumsum_fix(self, orig_Tensor_cumsum, *args, **kwargs) )
+        orig_narrow = torch.narrow
+        torch.narrow = lambda *args, **kwargs: ( orig_narrow(*args, **kwargs).clone() )
 
 status = DreamState()
 if state is None:

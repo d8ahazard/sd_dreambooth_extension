@@ -13,14 +13,14 @@ from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, l
     list_floats, get_lora_models, wrap_gpu_call, parse_logs
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
-    training_wizard, training_wizard_person, load_model_params, ui_classifiers, ui_samples
+    training_wizard, training_wizard_person, load_model_params, ui_classifiers, ui_samples, debug_buckets
 from modules import script_callbacks, sd_models
 from modules.ui import gr_show, create_refresh_button
 
 params_to_save = []
 refresh_symbol = '\U0001f504'  # 🔄
 delete_symbol = '\U0001F5D1'  # 🗑️
-update_symbol = '\U0001F81D'  # 🠝
+update_symbol = '\U0001F51D'  # 🠝
 
 
 def get_sd_models():
@@ -94,11 +94,12 @@ def check_progress_call():
                 preview = gr.update(visible=False, value=None)
                 gallery = gr.update(visible=True, value=image)
             else:
-                preview = gr.update(visible=True, value=image)
+                preview = gr.update(visible=True, value=image[0])
                 gallery = gr.update(visible=True, value=None)
         else:
             preview = gr.update(visible=True, value=image)
             gallery = gr.update(visible=True, value=None)
+
     if status.textinfo is not None:
         textinfo_result = status.textinfo
     else:
@@ -193,6 +194,7 @@ def on_ui_tabs():
                     gr.HTML(value="Scheduler:")
                     db_scheduler = gr.HTML()
 
+
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Input</span>")
                 with gr.Tab("Create"):
@@ -203,12 +205,13 @@ def on_ui_tabs():
                     with gr.Column(visible=False) as hub_row:
                         db_new_model_url = gr.Textbox(label="Model Path", placeholder="runwayml/stable-diffusion-v1-5")
                         db_new_model_token = gr.Textbox(label="HuggingFace Token", value="")
-                    with gr.Row():
-                        db_new_model_src = gr.Dropdown(label='Source Checkpoint',
-                                                       choices=sorted(get_sd_models()))
-                        create_refresh_button(db_new_model_src, get_sd_models, lambda: {
-                            "choices": sorted(get_sd_models())},
-                                              "refresh_sd_models")
+                    with gr.Column(visible=True) as local_row:
+                        with gr.Row():
+                            db_new_model_src = gr.Dropdown(label='Source Checkpoint',
+                                                           choices=sorted(get_sd_models()))
+                            create_refresh_button(db_new_model_src, get_sd_models, lambda: {
+                                "choices": sorted(get_sd_models())},
+                                                  "refresh_sd_models")
                     db_new_model_extract_ema = gr.Checkbox(label='Extract EMA Weights', value=False)
                     db_new_model_scheduler = gr.Dropdown(label='Scheduler', choices=["pndm", "lms", "euler",
                                                                                      "euler-ancestral", "dpm", "ddim"],
@@ -308,7 +311,7 @@ def on_ui_tabs():
                                         label="Memory Attention", value="default",
                                         choices=list_attention())
                                     db_cache_latents = gr.Checkbox(label="Cache Latents", value=True)
-                                    db_stop_text_encoder = gr.Number(label="Text Encoder Epochs", value=-1)
+                                    db_stop_text_encoder = gr.Slider(label="Step Ratio of Text Encoder Training", minimum=0, maximum=1, step=0.01, value=1, visible=True)
                                     db_clip_skip = gr.Slider(label="Clip Skip", value=1, minimum=1, maximum=12, step=1)
                                     db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
@@ -327,24 +330,24 @@ def on_ui_tabs():
                         with gr.Tab("Concept 1"):
                             c1_instance_data_dir, c1_class_data_dir, c1_instance_prompt, \
                             c1_class_prompt, c1_num_class_images, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token, \
-                            c1_class_token, c1_num_class_images, c1_class_negative_prompt, c1_class_guidance_scale, \
+                            c1_class_token, c1_num_class_images_per, c1_class_negative_prompt, c1_class_guidance_scale, \
                             c1_class_infer_steps, c1_save_sample_negative_prompt, c1_n_save_sample, c1_sample_seed, \
                             c1_save_guidance_scale, c1_save_infer_steps = build_concept_panel()
 
                         with gr.Tab("Concept 2"):
                             c2_instance_data_dir, c2_class_data_dir, c2_instance_prompt, \
                             c2_class_prompt, c2_num_class_images, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token, \
-                            c2_class_token, c2_num_class_images, c2_class_negative_prompt, c2_class_guidance_scale, \
+                            c2_class_token, c2_num_class_images_per, c2_class_negative_prompt, c2_class_guidance_scale, \
                             c2_class_infer_steps, c2_save_sample_negative_prompt, c2_n_save_sample, c2_sample_seed, \
                             c2_save_guidance_scale, c2_save_infer_steps = build_concept_panel()
 
                         with gr.Tab("Concept 3"):
                             c3_instance_data_dir, c3_class_data_dir, c3_instance_prompt, \
                             c3_class_prompt, c3_num_class_images, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token, \
-                            c3_class_token, c3_num_class_images, c3_class_negative_prompt, c3_class_guidance_scale, \
+                            c3_class_token, c3_num_class_images_per, c3_class_negative_prompt, c3_class_guidance_scale, \
                             c3_class_infer_steps, c3_save_sample_negative_prompt, c3_n_save_sample, c3_sample_seed, \
                             c3_save_guidance_scale, c3_save_infer_steps = build_concept_panel()
-                with gr.Tab("Saving") as save_tab:
+                with gr.Tab("Saving"):
                     with gr.Column():
                         gr.HTML("General")
                         db_custom_model_name = gr.Textbox(label="Custom Model Name", value="",
@@ -378,6 +381,7 @@ def on_ui_tabs():
                         db_generate_prompts = gr.Button(value="Preview Prompts")
                         db_generate_graph = gr.Button(value="Generate Graph")
                         db_graph_smoothing = gr.Number(value=50, label="Graph Smoothing Steps")
+                        db_debug_buckets = gr.Button(value="Debug Buckets")
                         db_generate_sample = gr.Button(value="Generate Sample Images")
                         db_sample_prompt = gr.Textbox(label="Sample Prompt")
                         db_sample_negative = gr.Textbox(label="Sample Negative Prompt")
@@ -388,8 +392,8 @@ def on_ui_tabs():
 
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")
-                db_check_progress_initial = gr.Button(value=update_symbol, elem_id="db_check_progress_initial")
-
+                ui_check_progress_initial = gr.Button(value=update_symbol, elem_id="ui_check_progress_initial")
+                db_check_progress_initial = gr.Button(value=update_symbol, elem_id="db_check_progress_initial", visible=False)
                 # These two should be updated while doing things
                 db_status = gr.HTML(elem_id="db_status", value="")
                 db_progressbar = gr.HTML(elem_id="db_progressbar")
@@ -400,8 +404,8 @@ def on_ui_tabs():
                 db_check_progress = gr.Button("Check Progress", elem_id=f"db_check_progress", visible=False)
                 db_update_params = gr.Button("Update Parameters", elem_id="db_update_params", visible=False)
 
-                def check_toggles(use_ema, use_lora, lr_scheduler, stop_text_enc):
-                    pad_tokens = update_pad_tokens(stop_text_enc)
+                def check_toggles(use_ema, use_lora, lr_scheduler, stop_text_encoder):
+                    pad_tokens = update_pad_tokens(stop_text_encoder)
                     show_ema, lora_save, lora_lr, lora_model = disable_ema(use_lora)
                     if not use_lora and use_ema:
                         disable_lora(use_ema)
@@ -466,14 +470,22 @@ def on_ui_tabs():
                     fn=lambda: check_progress_call(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, db_check_progress_initial],
+                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, ui_check_progress_initial],
                 )
 
                 db_check_progress_initial.click(
                     fn=lambda: check_progress_call_initial(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, db_check_progress_initial],
+                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, ui_check_progress_initial],
+                )
+
+                ui_check_progress_initial.click(
+                    fn=lambda: check_progress_call(),
+                    show_progress=False,
+                    inputs=[],
+                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list,
+                             ui_check_progress_initial],
                 )
 
         global params_to_save
@@ -554,6 +566,7 @@ def on_ui_tabs():
             c1_instance_token,
             c1_n_save_sample,
             c1_num_class_images,
+            c1_num_class_images_per,
             c1_sample_seed,
             c1_save_guidance_scale,
             c1_save_infer_steps,
@@ -571,6 +584,7 @@ def on_ui_tabs():
             c2_instance_token,
             c2_n_save_sample,
             c2_num_class_images,
+            c2_num_class_images_per,
             c2_sample_seed,
             c2_save_guidance_scale,
             c2_save_infer_steps,
@@ -588,6 +602,7 @@ def on_ui_tabs():
             c3_instance_token,
             c3_n_save_sample,
             c3_num_class_images,
+            c3_num_class_images_per,
             c3_sample_seed,
             c3_save_guidance_scale,
             c3_save_infer_steps,
@@ -679,6 +694,7 @@ def on_ui_tabs():
                 c1_instance_token,
                 c1_n_save_sample,
                 c1_num_class_images,
+                c1_num_class_images_per,
                 c1_sample_seed,
                 c1_save_guidance_scale,
                 c1_save_infer_steps,
@@ -696,6 +712,7 @@ def on_ui_tabs():
                 c2_instance_token,
                 c2_n_save_sample,
                 c2_num_class_images,
+                c2_num_class_images_per,
                 c2_sample_seed,
                 c2_save_guidance_scale,
                 c2_save_infer_steps,
@@ -713,6 +730,7 @@ def on_ui_tabs():
                 c3_instance_token,
                 c3_n_save_sample,
                 c3_num_class_images,
+                c3_num_class_images_per,
                 c3_sample_seed,
                 c3_save_guidance_scale,
                 c3_save_infer_steps,
@@ -723,10 +741,13 @@ def on_ui_tabs():
             ]
         )
 
+        def toggle_new_rows(create_from):
+            return gr.update(visible=create_from), gr.update(visible=not create_from)
+
         db_create_from_hub.change(
-            fn=lambda x: gr_show(x),
+            fn=toggle_new_rows,
             inputs=[db_create_from_hub],
-            outputs=[hub_row],
+            outputs=[hub_row, local_row],
         )
 
         def disable_ema(x):
@@ -801,6 +822,13 @@ def on_ui_tabs():
             outputs=[db_gallery, db_prompt_list]
         )
 
+        db_debug_buckets.click(
+            _js="db_start_buckets",
+            fn=debug_buckets,
+            inputs=[db_model_name],
+            outputs=[db_gallery, db_prompt_list, db_status]
+        )
+
         db_performance_wizard.click(
             fn=performance_wizard,
             _js="db_start_pwizard",
@@ -829,9 +857,9 @@ def on_ui_tabs():
             ],
             outputs=[
                 db_num_train_epochs,
-                c1_num_class_images,
-                c2_num_class_images,
-                c3_num_class_images,
+                c1_num_class_images_per,
+                c2_num_class_images_per,
+                c3_num_class_images_per,
                 db_status
             ]
         )
@@ -844,9 +872,9 @@ def on_ui_tabs():
             ],
             outputs=[
                 db_num_train_epochs,
-                c1_num_class_images,
-                c2_num_class_images,
-                c3_num_class_images,
+                c1_num_class_images_per,
+                c2_num_class_images_per,
+                c3_num_class_images_per,
                 db_status
             ]
         )
@@ -987,7 +1015,8 @@ def build_concept_panel():
 
     with gr.Column():
         gr.HTML("Image Generation")
-        num_class_images = gr.Number(label='Total Number of Class/Reg Images', value=0, precision=0)
+        num_class_images = gr.Number(label='Total Number of Class/Reg Images', value=0, precision=0, visible=False)
+        num_class_images_per = gr.Number(label='Class Images Per Instance Image', value=0, precision=0)
         class_guidance_scale = gr.Number(label="Classification CFG Scale", value=7.5, max=12, min=1, precision=2)
         class_infer_steps = gr.Number(label="Classification Steps", value=40, min=10, max=200, precision=0)
         n_save_sample = gr.Number(label="Number of Samples to Generate", value=1, precision=0)
@@ -996,7 +1025,7 @@ def build_concept_panel():
         save_infer_steps = gr.Number(label="Sample Steps", value=40, min=10, max=200, precision=0)
     return [instance_data_dir, class_data_dir, instance_prompt, class_prompt,
             num_class_images,
-            save_sample_prompt, sample_template, instance_token, class_token, num_class_images, class_negative_prompt,
+            save_sample_prompt, sample_template, instance_token, class_token, num_class_images_per, class_negative_prompt,
             class_guidance_scale, class_infer_steps, save_sample_negative_prompt, n_save_sample, sample_seed,
             save_guidance_scale, save_infer_steps]
 
