@@ -5,6 +5,7 @@ import gradio as gr
 
 from extensions.sd_dreambooth_extension.dreambooth.db_config import save_config, from_file
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
+from extensions.sd_dreambooth_extension.dreambooth.db_webhook import save_and_test_webhook
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generate_prompts
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
@@ -297,6 +298,15 @@ def on_ui_tabs():
                                 db_secret = gr.Textbox(label="API Key", value=get_secret, interactive=False)
                                 db_refresh_button = gr.Button(value=refresh_symbol, elem_id="refresh_secret")
                                 db_clear_secret = gr.Button(value=delete_symbol, elem_id="clear_secret")
+                            with gr.Column():
+                                # In the future change this to something more generic and list the supported types
+                                # from DreamboothWebhookTarget enum; for now, Discord is what I use ;)
+                                # Add options to include notifications on training complete and exceptions that halt training
+                                db_notification_webhook_url = gr.Textbox(label="Discord Webhook",
+                                                                      placeholder="https://discord.com/api/webhooks/XXX/XXXX",
+                                                                      value="")
+                                notification_webhook_test_btn = gr.Button(value="Save and Test Webhook")
+
 
                     with gr.Accordion(open=False, label="Advanced"):
                         with gr.Row():
@@ -438,6 +448,12 @@ def on_ui_tabs():
                              db_learning_rate_min,
                              db_lr_warmup_steps]
 
+                )
+
+                notification_webhook_test_btn.click(
+                    fn=save_and_test_webhook,
+                    inputs=[db_notification_webhook_url],
+                    outputs=[db_status]
                 )
 
                 db_refresh_button.click(

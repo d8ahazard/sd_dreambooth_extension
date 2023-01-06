@@ -30,6 +30,7 @@ from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SampleDat
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.db_optimization import get_scheduler
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
+from extensions.sd_dreambooth_extension.dreambooth.db_webhook import send_training_update
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import EMAModel, generate_classifiers, \
     PromptData, generate_dataset
@@ -739,7 +740,9 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                             last_samples.append(log_image)
                         for log_name in log_names:
                             last_prompts.append(log_name)
-                        db_shared.status.sample_prompts = last_prompts
+                        status.sample_prompts = last_prompts
+                        status.current_image = last_samples
+                        send_training_update(last_samples, args.model_name, last_prompts, global_step, args.revision)
                         pbar.update()
                         del log_images
                     except:
