@@ -756,12 +756,21 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
     upcast_attention = False
 
     # Needed for V2 models so we can create the right text encoder.
+    msg = None
+    new_model_name = sanitize_name(new_model_name)
+    if new_model_name == "":
+        msg = "Please enter a model name."
+    if not from_hub and (ckpt_path == "" or ckpt_path is None):
+        msg = "Please select a source checkpoint."
+    if from_hub and (new_model_url == "" or new_model_url is None) and (new_model_token is None or new_model_token == ""):
+        msg = "Please provide a URL and token for huggingface models."
+    if msg is not None:
+        return "", "", 0, 0, "", "", "", "", 512, "", msg
 
     reset_safe = stop_safe_unpickle()
     db_shared.status.job_count = 11
     original_config_file = None
     try:
-        new_model_name = sanitize_name(new_model_name)
         db_shared.status.job_no = 0
         checkpoint = None
         map_location = shared.device
@@ -771,7 +780,8 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                 map_location = torch.device('cpu')
         except:
             print("UPDATE YOUR WEBUI!!!!")
-            return "", "", 0, 0, "", "", "", "", 512, "", "UPDATE YOUR WEBUI!"
+            return "", "", 0, 0, "", "", "", "", 512, "", "Update your web UI."
+
 
 
         # Try to determine if v1 or v2 model
