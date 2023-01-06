@@ -27,7 +27,7 @@ def get_webhook_url():
     url = ""
     if not os.path.exists(url_file):
         return url
-    with open(url, 'r') as file:
+    with open(url_file, 'r') as file:
         url = file.read().replace('\n', '')
     return url
 
@@ -36,7 +36,7 @@ def save_and_test_webhook(url: str) -> str:
     global hook_url
     if len(url) <= 0:
         return "Invalid webhook url."
-    with open(url, 'w') as file:
+    with open(url_file, 'w') as file:
         file.write(url)
     hook_url = url
     target = __detect_webhook_target(url)
