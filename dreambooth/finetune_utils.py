@@ -155,6 +155,7 @@ class PromptDataset(Dataset):
                         pd.scale = concept.class_guidance_scale
                         pd.out_dir = class_images_dir
                         prompts.append(pd)
+            c_idx += 1
         random.shuffle(prompts)
         self.prompts = prompts
 
@@ -564,8 +565,8 @@ def generate_prompts(model_dir):
 
     status.job_no = 3
     status.textinfo = "Building dataset for 'new' class images..."
+    c_idx = 0
     for concept in config.concepts_list:
-        c_idx = 0
         class_images_dir = Path(concept["class_data_dir"])
         if class_images_dir == "" or class_images_dir is None or class_images_dir == db_shared.script_path:
             class_images_dir = os.path.join(config.model_dir, f"classifiers_{c_idx}")
