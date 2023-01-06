@@ -338,7 +338,7 @@ def parse_logs(model_name: str, for_ui: bool = False):
         pandas.DataFrame with [wall_time, name, step, value] columns.
 
     """
-
+    matplotlib.use("Agg")
     def convert_tfevent(filepath) -> Tuple[DataFrame, DataFrame, DataFrame, bool]:
         loss_events = []
         lr_events = []
@@ -442,7 +442,7 @@ def parse_logs(model_name: str, for_ui: bool = False):
         all_df_ram = pd.concat(out_ram)[columns_order]
         all_df_ram = all_df_ram.sort_values("Wall_time")
         all_df_ram = all_df_ram.reset_index(drop=True)
-        all_df_ram = all_df_ram.rolling(smoothing_window).mean()
+        all_df_ram = all_df_ram.rolling(smoothing_window).mean(numeric_only=True)
         plotted_ram = all_df_ram.plot(x="Step", y="Value", title="VRAM Usage")
 
         ram_img = os.path.join(model_config.model_dir, "logging", f"ram_plot_{model_config.revision}.png")
