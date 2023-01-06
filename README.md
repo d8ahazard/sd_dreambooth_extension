@@ -5,6 +5,8 @@ of [Shivam Shriao's Diffusers Repo](https://github.com/ShivamShrirao/diffusers/t
 a modified version of the default [Huggingface Diffusers Repo](https://github.com/huggingface/diffusers) optimized for
 better performance on lower-VRAM GPUs.
 
+In addition, there are parts borrowed from [Koyha SS by BMaltais](https://github.com/bmaltais/kohya_ss).
+
 It also adds several other features, including training multiple concepts simultaneously, and (Coming soon) Inpainting
 training.
 
@@ -22,7 +24,9 @@ We also need a newer version of diffusers, as SD-WebUI uses version 0.3.0, while
 having the right diffusers version is the cause of the 'UNet2DConditionModel' object has no attribute '
 enable_gradient_checkpointing' error message, as well as safety checker warnings.
 
-To force sd-web-ui to *only* install one set of requirements, we can specify the command line argument:
+## IF YOU ARE HAVING ISSUES WITH REQUIREMENTS AFTER INSTALLING, LOOK BELOW 
+
+To force sd-web-ui to *only* install one set of requirements and resolve many issues on install, we can specify the command line argument:
 
 set/export REQS_FILE=.\extensions\sd_dreambooth_extension\requirements.txt
 
@@ -64,6 +68,8 @@ another.
 
 *Generate Ckpt* - Generate a checkpoint from the currently saved weights at the current revision.
 
+Generate Samples* - Click this while training to generate samples before the next interval.
+
 *Cancel* - Cancels training after the current step.
 
 *Train* - Starts training.
@@ -72,21 +78,20 @@ another.
 
 *Model* - The model to use. Training parameters will not be automatically loaded to the UI when changing models.
 
+*Lora Model* - An existing lora checkpoint to load if resuming training, or to merge with the base model if generating a checkpoint.
+
 *Half Model* - Enable this to save the model using half precision. Results in a smaller checkpoint with little
 noticeable difference in image output.
 
 *Save Checkpoint to Subdirectory* - Save the checkpoint to a subdirectory using the model name.
 
-*Training Wizard (Person)* - Uses the selected learning rate and number of instance images to calculate the required
-number of epochs and classification images.
-
-*Training Wizard (Object/Style)* - Uses the selected learning rate and number of instance images to calculate the
-required number of epochs. No class images will be generated.
-
-*Performance Wizard (WIP)* - Tries to set the optimal training parameters based on the amount of VRAM for your GPU.
-Probably not perfect, but at least a good starting point.
 
 ## Training Parameters
+
+*Performance Wizard (WIP)* - Tries to set the optimal training parameters based on the amount of VRAM for your GPU and number of instance images.
+
+Probably not perfect, but at least a good starting point.
+
 
 ### Intervals
 
@@ -96,10 +101,6 @@ This section contains parameters related to when things happen during training.
 instance images.
 So, if we want to train 100 steps per image, we can set this value to 100 and we're ready to go. No math required.
 
-*Max Training Steps* - I honestly don't even know why we ever used this value, as it's confusing and requires more math.
-Set this value to 0 to use epochs. Setting it to any value > 0 will ignore epoch value and stop training after this many
-steps.
-
 *Pause After N Epochs* - When set to a value higher than 0, training will pause for the time specified.
 
 *Amount of time to pause between Epochs, in Seconds* - How long to pause between "N" epochs when N is greater than zero,
@@ -107,22 +108,25 @@ in seconds.
 
 *Use Concepts* - Whether to use a JSON file or string with multiple concepts, or the individual settings below.
 
-*Use Lifetime Steps/Epochs When Saving* - When enabled, checkpoint and sample save frequencies will be based on the
-total number of steps the model has been trained on. When disabled, it will be based on the number of steps in the
-current training run.
+*Save Model/Preview Frequency (Epochs)* - The save checkpoint and preview frequencies will be per epoch, not steps.
 
-*Save Preview/Ckpt Every epoch* - The save checkpoint and preview frequencies will be per epoch, not steps.
-
-*Save Checkpoint Frequency* - How frequently to save a checkpoint from the trained data.
-
-*Save Preview(s) Frequency* - How frequently will an image be generated as an example of training progress.
-
-### Batch
+### Batching
 
 *Batch size* - How many training steps to process simultaneously. You probably want to leave this at 1.
 
+*Gradient Accumulation Steps* - This should probably be set to the same value as the training batch size.
+
 *Class batch size* - How many classification images to generate simultaneously. Set this to whatever you can safely
 process at once using Txt2Image, or just leave it alone.
+
+*Set Gradients to None When Zeroing* -  instead of setting to zero, set the grads to None. This will in general have lower memory footprint, and can modestly improve performance.
+https://pytorch.org/docs/stable/generated/torch.optim.Optimizer.zero_grad.html
+
+*Gradient Checkpointing* - Enable this to save VRAM at the cost of a bit of speed.
+https://arxiv.org/abs/1604.06174v2
+
+*Max Grad Norms* - The maximum number of gradient normalizati
+
 
 ### Learning Rate
 
@@ -204,13 +208,6 @@ to better editability.
 
 *Max Token Length* - raise the tokenizer's default limit above 75. Requires Pad Tokens for > 75.
 
-### Gradients
-
-*Gradient Checkpointing* - Enable this to save VRAM at the cost of a bit of speed.
-
-*Gradient Accumulation Steps* - This should probably be set to the same value as the training batch size.
-
-*Max Grad Norms* - The maximum number of gradient normalizati
 
 ### Adam Advanced
 
