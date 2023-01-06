@@ -214,8 +214,6 @@ class PromptDataset(Dataset):
         self.class_paths = []
         for concept in concepts:
             # Don't need to do anything here
-            if concept.num_class_images_per <= 0:
-                continue
             
             instance_dir = concept.instance_data_dir
             class_dir = concept.class_data_dir
