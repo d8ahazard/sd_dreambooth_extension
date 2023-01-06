@@ -7,7 +7,7 @@ import re
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, List
 
 import numpy as np
 import torch
@@ -327,7 +327,7 @@ class ImageBuilder:
                 sd_models.load_model(new_model_info)
             shared.sd_model.to(shared.device)
 
-    def generate_images(self, prompt_data: list[PromptData]) -> [Image]:
+    def generate_images(self, prompt_data: List[PromptData]) -> [Image]:
         def update_latent(step: int, timestep: int, latents: torch.FloatTensor):
             status.sampling_step = step
             decoded = self.image_pipe.decode_latents(latents)
