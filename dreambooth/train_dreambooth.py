@@ -793,7 +793,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                         else:
                             latents = vae.encode(batch["pixel_values"].to(dtype=weight_dtype)).latent_dist.sample()
                         latents = latents * 0.18215
-
+                    with_prior = batch["with_prior"]
                     # Sample noise that we'll add to the latents
                     noise = torch.randn_like(latents, device=latents.device)
                     b_size = latents.shape[0]
@@ -821,18 +821,38 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     else:
                         target = noise
 
-                    loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="none")
-                    loss = loss.mean([1, 2, 3])
+                    # loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="none")
+                    # loss = loss.mean([1, 2, 3])
 
-                    loss_weights = batch["loss_weights"]
-                    loss = loss * loss_weights
+                    # loss_weights = batch["loss_weights"]
+                    # loss = loss * loss_weights
 
-                    loss = loss.mean()
+                    # loss = loss.mean()
+
+                    if with_prior:
+                        # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
+                        model_pred, model_pred_prior = torch.chunk(noise_pred, 2, dim=0)
+                        target, target_prior = torch.chunk(target, 2, dim=0)
+
+                        # Compute instance loss
+                        loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+                        # Compute prior loss
+                        prior_loss = torch.nn.functional.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
+
+                        # Add the prior loss to the instance loss.
+                        loss = loss + args.prior_loss_weight * prior_loss
+                    else:
+                        loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="mean")
 
                     accelerator.backward(loss)
                     if accelerator.sync_gradients:
-                        params_to_clip = (itertools.chain(unet.parameters(), text_encoder.parameters()))
-                        accelerator.clip_grad_norm_(params_to_clip, 1.0)
+                        params_to_clip = (
+                            itertools.chain(unet.parameters(), text_encoder.parameters())
+                            if train_tenc
+                            else unet.parameters()
+                        )
+                        accelerator.clip_grad_norm_(params_to_clip, 1)
 
                     optimizer.step()
                     lr_scheduler.step()

@@ -205,11 +205,9 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
         latents_list = []
         images = []
         captions = []
-        loss_weights = []
 
         # Process instance images
         for image_path, caption in bucket[image_index:image_index + self.batch_size]:
-            loss_weights.append(self.prior_loss_weight)
 
             reso, latents = self.size_lat_cache[image_path]
 
@@ -273,7 +271,6 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
                             captions.append(reg_caption)
                         else:
                             captions.append(reg_caption)
-                        loss_weights.append(1.0)
                         has_class = True
 
             if self.tokenizer is not None:
@@ -284,7 +281,7 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
             else:
                 input_ids = self.tokenizer
             # Create the example to be returned
-            example = {'loss_weights': torch.FloatTensor(loss_weights), 'input_ids': input_ids}
+            example = {'input_ids': input_ids, "with_prior": has_class}
             if self.debug_dataset:
                 example["captions"] = captions
                 example["images"] = images
