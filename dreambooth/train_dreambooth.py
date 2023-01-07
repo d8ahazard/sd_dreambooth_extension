@@ -153,16 +153,10 @@ def stop_profiler(profiler):
         except:
             pass
 
-def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lora_txt_alpha=1.0,
-         custom_model_name="", use_txt2img=True) -> TrainResult:
+def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
     """
 
-    @param args: The model config to use. 
-    @param use_subdir: Save checkpoints to a subdirectory.
-    @param lora_model: An optional lora model to use/resume.
-    @param lora_alpha: The weight to use when applying lora unet.
-    @param lora_txt_alpha: The weight to use when applying lora text encoder.
-    @param custom_model_name: A custom name to use when saving checkpoints.
+    @param args: The model config to use.
     @param use_txt2img: Use txt2img when generating class images.
     @return: TrainResult
     """
@@ -232,9 +226,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             status.textinfo = msg
             args.stop_text_encoder = 0
 
-        count, instance_paths, class_paths = generate_classifiers(args, lora_model, lora_weight=lora_alpha,
-                                           lora_text_weight=lora_txt_alpha,
-                                           use_txt2img=use_txt2img, accelerator=accelerator, ui = False)
+        count, instance_paths, class_paths = generate_classifiers(args, use_txt2img=use_txt2img, accelerator=accelerator, ui = False)
         if status.interrupted:
             result.msg = "Training interrupted."
             stop_profiler(profiler)
@@ -299,8 +291,9 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             text_encoder.gradient_checkpointing_enable()
 
         if args.use_lora:
-            unet_lora_params, text_encoder_lora_params = apply_lora_weights(lora_model, unet, text_encoder, lora_alpha,
-                                                                            lora_txt_alpha, accelerator.device)
+            unet_lora_params, text_encoder_lora_params = apply_lora_weights(args.lora_model_name, unet, text_encoder,
+                                                                            args.lora_weight, args.lora_txt_weight,
+                                                                            accelerator.device)
 
         # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
         use_adam = False
@@ -587,6 +580,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             global last_samples
             global last_prompts
             nonlocal vae
+
             # Create the pipeline using the trained modules and save it.
             if accelerator.is_main_process:
                 printm("Pre-cleanup.")
@@ -648,7 +642,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
                             elif save_lora:
                                 pbar.set_description("Saving Lora Weights...")
-                                lora_model_name = args.model_name if custom_model_name == "" else custom_model_name
+                                lora_model_name = args.model_name if args.custom_model_name == "" else args.custom_model_name
                                 try:
                                     cmd_lora_models_path = shared.cmd_opts.lora_models_path
                                 except:
@@ -671,9 +665,9 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
 
                             if save_checkpoint:
                                 pbar.set_description("Compiling Checkpoint")
-                                compile_checkpoint(args.model_name, half=args.half_model, use_subdir=use_subdir,
+                                compile_checkpoint(args.model_name, half=args.half_model, use_subdir=args.use_subdir,
                                                    reload_models=False, lora_path=out_file, log=False,
-                                                   custom_model_name=custom_model_name)
+                                                   custom_model_name=args.custom_model_name)
                                 pbar.update()
                             if args.use_ema:
                                 ema_unet.restore(unet.parameters())
@@ -768,6 +762,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     del vae
                     # Preserve the reference again
                     vae = None
+
                 unload_system_models()
                 status.current_image = last_samples
                 printm("Cleanup.")

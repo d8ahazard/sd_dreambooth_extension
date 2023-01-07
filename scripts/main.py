@@ -262,7 +262,7 @@ def on_ui_tabs():
                                                           choices=schedulers)
 
                             db_learning_rate = gr.Number(label='Learning Rate', value=2e-6)
-                            db_learning_rate_min = gr.Number(label='Min Learning Rate', value=1e-6)
+                            db_learning_rate_min = gr.Number(label='Min Learning Rate', value=1e-6, visible=False)
                             db_lr_cycles = gr.Number(label="Number of Hard Resets", value=1, precision=0, visible=False)
                             db_lr_factor = gr.Number(label="Constant/Linear Starting Factor", value=0.5, precision=2, visible=False)
                             db_lr_power = gr.Number(label="Polynomial Power", value=1.0, precision=1, visible=False)
@@ -564,6 +564,7 @@ def on_ui_tabs():
             db_src,
             db_shuffle_tags,
             db_train_batch_size,
+            db_train_imagic_only,
             db_stop_text_encoder,
             db_use_8bit_adam,
             db_use_concepts,
@@ -693,6 +694,7 @@ def on_ui_tabs():
                 db_save_state_during,
                 db_shuffle_tags,
                 db_train_batch_size,
+                db_train_imagic_only,
                 db_stop_text_encoder,
                 db_use_8bit_adam,
                 db_use_concepts,
@@ -964,12 +966,6 @@ def on_ui_tabs():
             _js="db_start_train",
             inputs=[
                 db_model_name,
-                db_lora_model_name,
-                db_lora_weight,
-                db_lora_txt_weight,
-                db_train_imagic_only,
-                db_use_subdir,
-                db_custom_model_name,
                 db_use_txt2img
             ],
             outputs=[
@@ -984,7 +980,7 @@ def on_ui_tabs():
         db_generate_classes.click(
             _js="db_start_classes",
             fn=wrap_gpu_call(ui_classifiers),
-            inputs=[db_model_name, db_lora_model_name, db_lora_weight, db_lora_txt_weight, db_use_txt2img],
+            inputs=[db_model_name, db_use_txt2img],
             outputs=[db_gallery, db_status]
         )
 

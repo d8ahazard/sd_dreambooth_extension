@@ -430,6 +430,7 @@ def load_params(model_dir):
                "db_save_state_during",
                "db_shuffle_tags",
                "db_train_batch_size",
+               "db_train_imagic",
                "db_stop_text_encoder",
                "db_use_8bit_adam",
                "db_use_concepts",
@@ -497,17 +498,10 @@ def load_model_params(model_name):
             msg
 
 
-def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora_txt_alpha: float, imagic_only: bool,
-                   use_subdir: bool, custom_model_name: str, use_txt2img: bool):
+def start_training(model_dir: str, use_txt2img: bool = True):
     """
 
     @param model_dir: The directory containing the dreambooth model/config
-    @param lora_model_name: (Optional) - A lora model name to apply to diffusion model.
-    @param lora_alpha: Lora unet strength if model name specified.
-    @param lora_txt_alpha: Lora text encoder strength if model name specified.
-    @param imagic_only: Train using imagic instead of dreambooth.
-    @param use_subdir: Save generated checkpoints to a subdirectory in the model dir.
-    @param custom_model_name: A custom filename to use when generating regular and lora checkpoints.
     @param use_txt2img: Whether to use txt2img or diffusion pipeline for image generation.
     @return:
     lora_model_name: If using lora, this will be the model name of the saved weights. (For resuming further training)
@@ -520,7 +514,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
         print("Invalid model name.")
         msg = "Create or select a model first."
         dirs = get_lora_models()
-        lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
+        lora_model_name = gradio.update(visible=True)
         return lora_model_name, 0, 0, [], msg
     config = from_file(model_dir)
 
@@ -544,19 +538,18 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
 
     if msg:
         print(msg)
-        dirs = get_lora_models()
-        lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
+        lora_model_name = gradio.update(visible=True)
         return lora_model_name, 0, 0, [], msg
 
     # Clear memory and do "stuff" only after we've ensured all the things are right
-    print(f"Custom model name is {custom_model_name}")
+    print(f"Custom model name is {config.custom_model_name}")
     print("Starting Dreambooth training...")
     unload_system_models()
     total_steps = config.revision
     config.save(True)
     images = []
     try:
-        if imagic_only:
+        if config.train_imagic:
             status.textinfo = "Initializing imagic training..."
             print(status.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_imagic import train_imagic
@@ -565,9 +558,7 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
             status.textinfo = "Initializing dreambooth training..."
             print(status.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
-            result = main(config, use_subdir=use_subdir, lora_model=lora_model_name,
-                          lora_alpha=lora_alpha, lora_txt_alpha=lora_txt_alpha,
-                          custom_model_name=custom_model_name, use_txt2img=use_txt2img)
+            result = main(config, use_txt2img=use_txt2img)
 
         config = result.config
         images = result.samples
@@ -591,25 +582,19 @@ def start_training(model_dir: str, lora_model_name: str, lora_alpha: float, lora
     cleanup()
     print("Training completed, reloading SD Model.")
     reload_system_models()
-    if lora_model_name != "" and lora_model_name is not None:
+    if config.lora_model_name != "" and config.lora_model_name is not None:
         lora_model_name = f"{config.model_name}_{total_steps}.pt"
     print(f"Returning result: {res}")
     dirs = get_lora_models()
-    lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
+    lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=config.lora_model_name)
     return lora_model_name, total_steps, config.epoch, images, res
 
 
 def ui_classifiers(model_name: str,
-                   lora_model: str,
-                   lora_weight: float,
-                   lora_txt_weight: float,
                    use_txt2img: bool):
     """
     UI method for generating class images.
     @param model_name: The model to generate classes for.
-    @param lora_model: An optional lora model to use when generating classes.
-    @param lora_weight: The weight of the lora unet.
-    @param lora_txt_weight: The weight of the lora text encoder.
     @param use_txt2img: Use txt2image when generating concepts.
     @return:
     """
@@ -647,8 +632,7 @@ def ui_classifiers(model_name: str,
         from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import generate_classifiers
         print("Generating class images...")
         unload_system_models()
-        count, images = generate_classifiers(config, lora_model=lora_model, lora_weight=lora_weight,
-                                                lora_text_weight=lora_txt_weight, use_txt2img=use_txt2img, ui=True)
+        count, images = generate_classifiers(config, use_txt2img=use_txt2img, ui=True)
         reload_system_models()
         msg = f"Generated {count} class images."
     except Exception as e:

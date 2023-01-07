@@ -77,6 +77,7 @@ class DreamboothConfig:
                  src: str = "",
                  shuffle_tags: bool = False,
                  train_batch_size: int = 1,
+                 train_imagic: bool = False,
                  stop_text_encoder: float = 1.0,
                  use_8bit_adam: bool = True,
                  use_concepts: bool = False,
@@ -209,6 +210,7 @@ class DreamboothConfig:
         self.src = src
         self.shuffle_tags = shuffle_tags
         self.train_batch_size = train_batch_size
+        self.train_imagic = train_imagic
         self.stop_text_encoder = stop_text_encoder
         self.use_8bit_adam = use_8bit_adam
         self.use_concepts = use_concepts

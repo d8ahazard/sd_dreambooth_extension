@@ -857,14 +857,10 @@ def generate_dataset(model_name: str, instance_paths = None, class_paths = None,
         return train_dataset
 
 
-def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weight: float = 1.0,
-                         lora_text_weight: float = 1.0, use_txt2img: bool = True, accelerator: Accelerator = None, ui=False):
+def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accelerator: Accelerator = None, ui=False):
     """
 
     @param args: A DreamboothConfig
-    @param lora_model: Optional path to a lora model to use. You probably don't want to use this.
-    @param lora_weight: Alpha to use when merging lora unet.
-    @param lora_text_weight: Alpha to use when merging lora text encoder.
     @param use_txt2img: Generate images using txt2image. Does not use lora.
     @param accelerator: An optional existing accelerator to use.
     @param ui: Whether this was called by th UI, or is being run during training.
@@ -901,8 +897,8 @@ def generate_classifiers(args: DreamboothConfig, lora_model: str = "", lora_weig
     status.textinfo = f"Generating {set_len} class images for training..."
     status.job_count = set_len
     status.job_no = 0
-    builder = ImageBuilder(args, use_txt2img=use_txt2img, lora_model=lora_model, lora_weight=lora_weight,
-                           lora_txt_weight=lora_text_weight, batch_size=args.sample_batch_size, accelerator=accelerator)
+    builder = ImageBuilder(args, use_txt2img=use_txt2img, lora_model=args.lora_model_name, lora_weight=args.lora_weight,
+                           lora_txt_weight=args.lora_txt_weight, batch_size=args.sample_batch_size, accelerator=accelerator)
     generated = 0
     pbar = tqdm(total=set_len)
     actual_idx = 0

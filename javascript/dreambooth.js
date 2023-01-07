@@ -126,12 +126,12 @@ function db_start_create() {
 // Train!
 function db_start_train() {
     training_started = true;
-    return db_start(8, true, true, arguments);
+    return db_start(2, true, true, arguments);
 }
 
 // Generate class images
 function db_start_classes() {
-    return db_start(5, true, true, arguments);
+    return db_start(2, true, true, arguments);
 }
 
 // Return only the number of arguments given as an input
