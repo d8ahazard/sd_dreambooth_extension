@@ -1014,7 +1014,8 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             rem_dir = os.path.join(db_config.model_dir, rd)
             if os.path.exists(rem_dir):
                 shutil.rmtree(rem_dir, True)
-            os.makedirs(rem_dir)
+                if not os.path.exists(rem_dir):
+                    os.makedirs(rem_dir)
 
 
     if reset_safe:
