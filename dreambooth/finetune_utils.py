@@ -7,7 +7,7 @@ import re
 import traceback
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Iterable, Dict, List
+from typing import Iterable, Dict, List, Tuple
 
 import gradio
 import numpy as np
