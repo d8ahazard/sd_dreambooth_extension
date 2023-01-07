@@ -145,7 +145,7 @@ def get_dim(filename):
         return width, height
 
 
-def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str, bucket_resos, instance_prompts = None) -> Dict[tuple[int, int], List[str]]:
+def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str, bucket_resos, instance_prompts = None) -> Dict[Tuple[int, int], List[str]]:
     prompts = {}
     images = get_images(img_dir)
 
@@ -171,7 +171,7 @@ def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str
             
     return dict(sorted(prompts.items()))
 
-def compare_prompts(src_prompt: str, check_prompt: str, tokens: [tuple[str, str]]):
+def compare_prompts(src_prompt: str, check_prompt: str, tokens: [Tuple[str, str]]):
     src_tags = src_prompt.split(',')
     check_tags = check_prompt.split(',')
     conjunctions = ['a ', 'an ', 'the ']
@@ -527,7 +527,7 @@ class ImageBuilder:
             shared.sd_model.to(shared.device)
 
 
-    def generate_images(self, prompt_data: list[PromptData]) -> [Image]:
+    def generate_images(self, prompt_data: List[PromptData]) -> [Image]:
         positive_prompts = []
         negative_prompts = []
         seed = -1
