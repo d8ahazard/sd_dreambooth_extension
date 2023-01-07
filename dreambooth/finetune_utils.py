@@ -39,7 +39,7 @@ class PromptData:
     scale:float = 7.5
     out_dir:str = ""
     seed:int = -1
-    resolution:tuple[int, int] = (512, 512)
+    resolution: Tuple[int, int] = (512, 512)
 
     @property
     def __dict__(self):
