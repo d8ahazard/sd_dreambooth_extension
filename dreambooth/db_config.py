@@ -48,7 +48,7 @@ class DreamboothConfig:
                  lr_factor: float = 0.5,
                  lr_power: float = 1.0,
                  lr_scale_pos: float = 0.5,
-                 lr_scheduler: str = 'constant',
+                 lr_scheduler: str = 'constant_with_warmup',
                  lr_warmup_steps: int = 0,
                  max_token_length: int = 75,
                  mixed_precision: str = "fp16",
