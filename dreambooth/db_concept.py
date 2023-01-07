@@ -1,5 +1,7 @@
 import os
+import json
 
+from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_images
 
 
@@ -90,3 +92,60 @@ class Concept(dict):
             if os.path.exists(self.instance_data_dir):
                 return True
         return False
+
+def generate_concept_list(model_name: str,
+                          instance_root: str,
+                          class_root: str,
+                          negative_prompt: str,
+                          cfg_scale: float,
+                          steps: int):
+    # Check if the instance root directory exists
+    if not os.path.exists(instance_root):
+        print("The instance root directory does not exist: {}".format(instance_root))
+        exit(1)
+
+    # Initialize an empty list to hold the configurations
+    configs = []
+
+    # Iterate through the instance folders in the instance root directory
+    for instance_folder in os.listdir(instance_root):
+        # Get the full path to the instance folder
+        instance_path = os.path.join(instance_root, instance_folder)
+        # Check if the path is a directory (skip if not)
+        if not os.path.isdir(instance_path):
+            continue
+        # Split the instance folder name into the instance name and the class name
+        instance_name, class_name = instance_folder.split(' ')
+        class_dir = os.path.join(class_root, class_name)
+        if not os.path.exists(class_dir):
+            class_dir = ""
+        # Create a configuration for the instance and class
+        concept = Concept(
+            instance_path,
+            class_dir,
+            "[filewords]",
+            "[filewords]",
+            "[filewords]",
+            "",
+            instance_name,
+            0,
+            5,
+            negative_prompt,
+            cfg_scale,
+            steps,
+            negative_prompt
+        )
+        # Add the configuration to the list
+        configs.append(concept.__dict__)
+    # Output the configuration
+    output = json.dumps(configs, ensure_ascii=False, indent=4)
+
+    if db_shared.dreambooth_models_path is not None:
+        out_dir = db_shared.dreambooth_models_path
+    else:
+        out_dir = os.path.join(db_shared.models_path, "dreambooth")
+    out_file = os.path.join(out_dir, f"concepts_{model_name}")
+    # Write the list of configurations to a JSON file
+    with open(out_file, 'w', encoding='utf-8') as f:
+        f.write(output)
+    return output
