@@ -277,15 +277,19 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         if args.attention == "xformers":
             set_diffusers_xformers_flag(unet, True)
 
-        vae_path = args.pretrained_vae_name_or_path if args.pretrained_vae_name_or_path else \
-            args.pretrained_model_name_or_path
-        vae = AutoencoderKL.from_pretrained(
-            vae_path,
-            subfolder=None if args.pretrained_vae_name_or_path else "vae",
-            revision=args.revision
-        )
-        vae.requires_grad_(False)
-        vae.to(accelerator.device, dtype=weight_dtype)
+        def create_vae():
+            vae_path = args.pretrained_vae_name_or_path if args.pretrained_vae_name_or_path else \
+                args.pretrained_model_name_or_path
+            new_vae = AutoencoderKL.from_pretrained(
+                vae_path,
+                subfolder=None if args.pretrained_vae_name_or_path else "vae",
+                revision=args.revision
+            )
+            new_vae.requires_grad_(False)
+            new_vae.to(accelerator.device, dtype=weight_dtype)
+            return new_vae
+
+        vae = create_vae()
 
         unet_lora_params = None
         text_encoder_lora_params = None
@@ -364,7 +368,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         )
 
         if args.cache_latents:
-            vae.to("cpu")
+            printm("Unloading vae.")
+            del vae
 
         if status.interrupted:
             result.msg = "Training interrupted."
@@ -581,7 +586,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
             global last_prompts
             # Create the pipeline using the trained modules and save it.
             if accelerator.is_main_process:
-                printm("Pre-cleanup")
+                printm("Pre-cleanup.")
                 optim_to(optimizer)
                 if profiler is not None:
                     cleanup()
@@ -597,8 +602,9 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     ema_unet.copy_to(unet.parameters())
 
                 if args.cache_latents:
-                    printm("Moving vae to accelerator device.")
-                    vae.to(accelerator.device, dtype=weight_dtype)
+                    printm("Loading vae.")
+                    nonlocal vae
+                    vae = create_vae()
 
                 printm("Creating pipeline.")
 
@@ -756,8 +762,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     except:
                         pass
                 if args.cache_latents:
-                    printm("Moving vae to cpu.")
-                    vae.to("cpu")
+                    printm("Unloading vae.")
+                    del vae
                 unload_system_models()
                 status.current_image = last_samples
                 printm("Cleanup.")
