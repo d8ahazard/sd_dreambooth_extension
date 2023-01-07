@@ -78,6 +78,13 @@ print(f"SD-WebUI revision: {app_revision}")
 print("")
 dreambooth_skip_install = os.environ.get('DREAMBOOTH_SKIP_INSTALL', False)
 
+try:
+    requirements_file = os.environ.get('REQS_FILE', "requirements_versions.txt")
+    if requirements_file == req_file:
+        dreambooth_skip_install = True
+except:
+    pass
+
 if not dreambooth_skip_install:
     name = "Dreambooth"
     run(f'"{sys.executable}" -m pip install -r "{req_file}"', f"Checking {name} requirements...",
