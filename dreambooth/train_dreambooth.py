@@ -370,6 +370,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         if args.cache_latents:
             printm("Unloading vae.")
             del vae
+            # Preserve reference to vae for later checks
+            vae = None
 
         if status.interrupted:
             result.msg = "Training interrupted."
@@ -584,6 +586,7 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
         def save_weights(save_image, save_model, save_snapshot, save_checkpoint, save_lora, pbar):
             global last_samples
             global last_prompts
+            nonlocal vae
             # Create the pipeline using the trained modules and save it.
             if accelerator.is_main_process:
                 printm("Pre-cleanup.")
@@ -601,9 +604,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                     ema_unet.store(unet.parameters())
                     ema_unet.copy_to(unet.parameters())
 
-                if args.cache_latents:
+                if vae is None:
                     printm("Loading vae.")
-                    nonlocal vae
                     vae = create_vae()
 
                 printm("Creating pipeline.")
@@ -764,6 +766,8 @@ def main(args: DreamboothConfig, use_subdir, lora_model=None, lora_alpha=1.0, lo
                 if args.cache_latents:
                     printm("Unloading vae.")
                     del vae
+                    # Preserve the reference again
+                    vae = None
                 unload_system_models()
                 status.current_image = last_samples
                 printm("Cleanup.")
