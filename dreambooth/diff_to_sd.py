@@ -344,7 +344,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
             lora_txt = lora_path.replace(".pt", "_txt.pt")
             if os.path.exists(lora_txt):
                 printi(f"Applying lora weight of alpha: {lora_txt_alpha} to text encoder...", log=log)
-                weight_apply_lora(loaded_pipeline.text_encoder, torch.load(lora_txt), alpha=lora_txt_alpha)
+                weight_apply_lora(loaded_pipeline.text_encoder, torch.load(lora_txt), target_replace_module=["CLIPAttention"], alpha=lora_txt_alpha)
                 printi("Saving lora text encoder...", log=log)
                 loaded_pipeline.text_encoder.save_pretrained(
                     os.path.join(config.pretrained_model_name_or_path, "text_encoder_lora"))
