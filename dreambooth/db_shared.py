@@ -137,6 +137,7 @@ class DreamState:
     sample_prompts = []
     time_start = None
     need_restart = False
+    time_left_force_display = False
 
     def interrupt(self):
         self.interrupted = True
