@@ -409,6 +409,7 @@ def load_params(model_dir):
                "db_lr_warmup_steps",
                "db_max_token_length",
                "db_mixed_precision",
+               "db_adamw_weight_decay",
                "db_num_train_epochs",
                "db_pad_tokens",
                "db_pretrained_vae_name_or_path",
