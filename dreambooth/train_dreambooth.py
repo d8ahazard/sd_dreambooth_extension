@@ -266,7 +266,8 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
             )
         optimizer = optimizer_class(
             params_to_optimize,
-            lr=args.learning_rate
+            lr=args.learning_rate,
+            weight_decay=args.adamw_weight_decay
         )
         noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
 

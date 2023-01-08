@@ -1301,6 +1301,11 @@
             "type": "integer",
             "default": 75
           },
+          "adamw_weight_decay": {
+            "title": "AdamW Weight Decay",
+            "type": "string",
+            "default": 1e-2
+          },
           "mixed_precision": {
             "title": "Mixed Precision",
             "type": "string",

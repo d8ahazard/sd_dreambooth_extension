@@ -315,6 +315,7 @@ def on_ui_tabs():
                                     gr.HTML(value="Tuning")
                                     db_use_ema = gr.Checkbox(label="Use EMA", value=False)
                                     db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
+                                    db_adamw_weight_decay = gr.Slider(label="AdamW Weight Decay", minimum=0, maximum=1, step=0.01, value=1e-2, visible=True)
                                     db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
                                                                      choices=list_floats())
                                     db_attention = gr.Dropdown(
@@ -477,6 +478,12 @@ def on_ui_tabs():
                     outputs=[db_pad_tokens]
                 )
 
+                db_adamw_weight_decay.change(
+                    fn=lambda x: x,
+                    inputs=[]
+                    outputs=[db_adamw_weight_decay]
+                )
+
                 db_clear_secret.click(
                     fn=clear_secret,
                     inputs=[],
@@ -540,6 +547,7 @@ def on_ui_tabs():
             db_lr_scheduler,
             db_lr_warmup_steps,
             db_max_token_length,
+            db_adamw_weight_decay,
             db_mixed_precision,
             db_model_path,
             db_num_train_epochs,
@@ -675,6 +683,7 @@ def on_ui_tabs():
                 db_lr_scheduler,
                 db_lr_warmup_steps,
                 db_max_token_length,
+                db_adamw_weight_decay,
                 db_mixed_precision,
                 db_num_train_epochs,
                 db_pad_tokens,
