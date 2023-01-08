@@ -235,6 +235,18 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         if use_txt2img and count > 0:
             unload_system_models()
 
+        def create_vae():
+            vae_path = args.pretrained_vae_name_or_path if args.pretrained_vae_name_or_path else \
+                args.pretrained_model_name_or_path
+            new_vae = AutoencoderKL.from_pretrained(
+                vae_path,
+                subfolder=None if args.pretrained_vae_name_or_path else "vae",
+                revision=args.revision
+            )
+            new_vae.requires_grad_(False)
+            new_vae.to(accelerator.device, dtype=weight_dtype)
+            return new_vae
+
         # Load the tokenizer
         if args.tokenizer_name:
             tokenizer = AutoTokenizer.from_pretrained(
@@ -258,7 +270,9 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
             subfolder="text_encoder",
             revision=args.revision,
         )
-
+        printm("Created tenc")
+        vae = create_vae()
+        printm("Created vae")
         unet = UNet2DConditionModel.from_pretrained(
             args.pretrained_model_name_or_path,
             subfolder="unet",
@@ -268,32 +282,44 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
 
         if args.attention == "xformers":
             set_diffusers_xformers_flag(unet, True)
-
-        def create_vae():
-            vae_path = args.pretrained_vae_name_or_path if args.pretrained_vae_name_or_path else \
-                args.pretrained_model_name_or_path
-            new_vae = AutoencoderKL.from_pretrained(
-                vae_path,
-                subfolder=None if args.pretrained_vae_name_or_path else "vae",
-                revision=args.revision
-            )
-            new_vae.requires_grad_(False)
-            new_vae.to(accelerator.device, dtype=weight_dtype)
-            return new_vae
-
-        vae = create_vae()
-
+        if args.gradient_checkpointing:
+            unet.enable_gradient_checkpointing()
+            if args.stop_text_encoder != 0:
+                text_encoder.gradient_checkpointing_enable()
+            else:
+                text_encoder.to(accelerator.device, dtype=weight_dtype)
         unet_lora_params = None
         text_encoder_lora_params = None
 
-        if args.gradient_checkpointing:
-            unet.enable_gradient_checkpointing()
-            text_encoder.gradient_checkpointing_enable()
-
         if args.use_lora:
-            unet_lora_params, text_encoder_lora_params = apply_lora_weights(args.lora_model_name, unet, text_encoder,
-                                                                            args.lora_weight, args.lora_txt_weight,
-                                                                            accelerator.device)
+            unet.requires_grad_(False)
+            
+            lora_path = os.path.join(db_shared.models_path, "lora", args.lora_model_name)
+            if not os.path.exists(lora_path) or not os.path.isfile(lora_path):
+                lora_path = None
+                lora_txt = None
+            else:
+                lora_txt = lora_path.replace(".pt", "_txt.pt")
+
+            unet_lora_params, _ = inject_trainable_lora(
+                unet,
+                r=args.lora_rank,
+                loras=lora_path
+            )
+
+            if args.stop_text_encoder != 0:
+                text_encoder.requires_grad_(False)
+                text_encoder_lora_params, _ = inject_trainable_lora(
+                    text_encoder,
+                    target_replace_module=["CLIPAttention"],
+                    r=args.lora_rank,
+                    loras=lora_txt
+                )
+            printm("Lora loaded")
+            cleanup()
+            printm("Cleaned")
+
+        
 
         # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
         use_adam = False
@@ -308,6 +334,26 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
                 logger.warning(f"Exception importing 8bit adam: {a}")
                 traceback.print_exc()
 
+        if args.use_lora:
+
+            args.learning_rate = args.lora_learning_rate
+        
+            params_to_optimize = ([
+                    {"params": itertools.chain(*unet_lora_params), "lr": args.lora_learning_rate},
+                    {"params": itertools.chain(*text_encoder_lora_params), "lr": args.lora_txt_learning_rate},
+                ]
+                if args.stop_text_encoder != 0
+                else itertools.chain(*unet_lora_params)
+            )
+        else:
+            params_to_optimize = (
+                itertools.chain(unet.parameters(), text_encoder.parameters()) if args.stop_text_encoder != 0
+                else unet.parameters()
+            )
+        optimizer = optimizer_class(
+            params_to_optimize,
+            lr=args.learning_rate
+        )
         noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
 
         def cleanup_memory():
@@ -365,7 +411,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
             del vae
             # Preserve reference to vae for later checks
             vae = None
-
+        cleanup()
         if status.interrupted:
             result.msg = "Training interrupted."
             stop_profiler(profiler)
@@ -381,23 +427,6 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
             stop_profiler(profiler)
             return result
 
-        unet.requires_grad_(True)  # 念のため追加
-        text_encoder.requires_grad_(True)
-
-        if args.gradient_checkpointing:
-            unet.enable_gradient_checkpointing()
-            text_encoder.gradient_checkpointing_enable()
-        if args.use_lora:
-            params_to_optimize = ([
-                {"params": itertools.chain(*unet_lora_params), "lr": args.lora_learning_rate},
-                {"params": itertools.chain(*text_encoder_lora_params),"lr": args.lora_txt_learning_rate}
-            ])
-        else:
-            params_to_optimize = (
-                itertools.chain(unet.parameters(), text_encoder.parameters())
-            )
-
-        optimizer = optimizer_class(params_to_optimize, lr=args.learning_rate if not args.use_lora else args.lora_learning_rate)
 
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset, batch_size=1, shuffle=False, collate_fn=collate_fn, num_workers=n_workers)
@@ -424,17 +453,30 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         if args.use_ema:
             ema_unet = EMAModel(unet.parameters())
             ema_unet.to(accelerator.device, dtype=weight_dtype)
-            unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-                unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler
-            )
+            if args.stop_text_encoder != 0:
+                unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                    unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler
+                )
+            else:
+                unet, ema_unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                    unet, ema_unet, optimizer, train_dataloader, lr_scheduler
+                )
         else:
             ema_unet = None
-            unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-                unet, text_encoder, optimizer, train_dataloader, lr_scheduler
-            )
+            if args.stop_text_encoder != 0:
+                unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                    unet, text_encoder, optimizer, train_dataloader, lr_scheduler
+                )
+            else:
+                unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                    unet, optimizer, train_dataloader, lr_scheduler
+                )
 
         if not args.cache_latents and vae is not None:
             vae.to(accelerator.device, dtype=weight_dtype)
+
+        if args.stop_text_encoder == 0:
+            text_encoder.to(accelerator.device, dtype=weight_dtype)
         # Afterwards we recalculate our number of training epochs
         # We need to initialize the trackers we use, and also store our configuration.
         # The trackers will initialize automatically on the main process.
@@ -445,7 +487,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         total_batch_size = train_batch_size * accelerator.num_processes * gradient_accumulation_steps
         max_train_epochs = args.num_train_epochs
         # we calculate our number of tenc training epochs
-        text_encoder_epochs=round(args.num_train_epochs*args.stop_text_encoder)
+        text_encoder_epochs = round(args.num_train_epochs * args.stop_text_encoder)
         global_step = 0
         global_epoch = 0
         session_epoch = 0
@@ -492,22 +534,6 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         print(f"  EMA: {args.use_ema}")
         print(f"  LR: {args.learning_rate})")
 
-        def optim_to(optim: torch.optim.Optimizer, device="cpu"):
-            def inplace_move(obj: torch.Tensor, target):
-                if hasattr(obj, 'data'):
-                    obj.data = obj.data.to(target)
-                if hasattr(obj, '_grad') and obj._grad is not None:
-                    obj._grad.data = obj._grad.data.to(target)
-
-            if isinstance(optim, torch.optim.Optimizer):
-                for param in optim.state.values():
-                    if isinstance(param, torch.Tensor):
-                        inplace_move(param, device)
-                    elif isinstance(param, dict):
-                        for subparams in param.values():
-                            inplace_move(subparams, device)
-            if profiler is None:
-                torch.cuda.empty_cache()
         def check_save(pbar: tqdm, is_epoch_check = False):
             nonlocal last_model_save
             nonlocal last_image_save
@@ -584,7 +610,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
             # Create the pipeline using the trained modules and save it.
             if accelerator.is_main_process:
                 printm("Pre-cleanup.")
-                optim_to(optimizer)
+                optim_to(torch, profiler, optimizer)
                 if profiler is not None:
                     cleanup()
                 g_cuda = None
@@ -766,7 +792,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
                 unload_system_models()
                 status.current_image = last_samples
                 printm("Cleanup.")
-                optim_to(optimizer, accelerator.device)
+                optim_to(torch, profiler, optimizer, accelerator.device)
                 if profiler is not None:
                     cleanup()
                 printm("Cleanup completed.")
@@ -785,9 +811,12 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
                 break
 
             unet.train()
-            train_tenc = epoch<text_encoder_epochs
+            train_tenc = epoch < text_encoder_epochs
+            if args.stop_text_encoder == 0:
+                train_tenc = False
             text_encoder.train(train_tenc)
-            text_encoder.requires_grad_(train_tenc)
+            if not args.use_lora:
+                text_encoder.requires_grad_(train_tenc)
 
             loss_total = 0
 

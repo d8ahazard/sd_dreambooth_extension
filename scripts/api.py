@@ -97,6 +97,7 @@ class DreamboothParameters(BaseModel):
     learning_rate_min: float = 0.000001
     lora_learning_rate: float = 0.0002
     lora_model_name: str = ""
+    lora_rank: int = 4
     lora_txt_learning_rate: float = 0.0002
     lora_txt_weight: int = 1
     lora_weight: int = 1
@@ -462,6 +463,8 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             num_images: int = Query(1, description="The number of sample images to generate."),
             batch_size: int = Query(1, description="How many images to generate at once."),
             lora_model_path: str = Query("", description="The path to a lora model to use when generating images."),
+            lora_rank: int = Query(1,
+                                       description="LORA rank when training, or something.."),
             lora_weight: float = Query(1.0,
                                        description="The weight of the lora unet when merging with the base model."),
             lora_txt_weight: float = Query(1.0,
@@ -487,6 +490,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             num_samples=num_images,
             sample_batch_size=batch_size,
             lora_model_path=lora_model_path,
+            lora_rank=lora_rank,
             lora_weight=lora_weight,
             lora_txt_weight=lora_txt_weight,
             negative_prompt=negative_prompt,

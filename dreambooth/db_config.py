@@ -41,6 +41,7 @@ class DreamboothConfig:
                  learning_rate_min: float = 1e-6,
                  lora_learning_rate: float = 1e-4,
                  lora_model_name: str = "",
+                 lora_rank: int = 4,
                  lora_txt_learning_rate: float = 5e-5,
                  lora_txt_weight: float = 1.0,
                  lora_weight: float = 1.0,
@@ -173,6 +174,7 @@ class DreamboothConfig:
         self.learning_rate_min = learning_rate_min
         self.lora_learning_rate = lora_learning_rate
         self.lora_model_name = lora_model_name
+        self.lora_rank = lora_rank
         self.lora_txt_learning_rate = lora_txt_learning_rate
         self.lora_txt_weight = lora_txt_weight
         self.lora_weight = lora_weight
