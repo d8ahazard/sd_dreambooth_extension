@@ -181,7 +181,7 @@ def performance_wizard(model_name):
     msg: Stuff to show in the UI
     """
     attention = "flash_attention"
-    gradient_checkpointing = True
+    gradient_checkpointing = False
     gradient_accumulation_steps = 1
     mixed_precision = 'fp16'
     cache_latents = True
@@ -234,14 +234,11 @@ def performance_wizard(model_name):
         attention = "xformers"
     try:
         stop_text_encoder = 0.75
-        if config is not None:
-            stop_text_encoder = 0.75
         t = torch.cuda.get_device_properties(0).total_memory
         gb = math.ceil(t / 1073741824)
         print(f"Total VRAM: {gb}")
         if gb >= 24:
             sample_batch_size = 4
-            stop_text_encoder = 0.75
             use_ema = True
             if attention != "xformers":
                 attention = "no"
@@ -249,12 +246,13 @@ def performance_wizard(model_name):
                 gradient_accumulation_steps = 1
         if 24 > gb >= 16:
             use_ema = True
-        if 16 > gb >= 10:
-            use_lora = True
+        if 16 > gb >= 12:
             use_ema = False
-            stop_text_encoder = 0
+            cache_latents = False
             gradient_accumulation_steps = 1
             train_batch_size = 1
+        if gb < 12:
+            use_lora = True
 
         msg = f"Calculated training params based on {gb}GB of VRAM:"
     except Exception as e:
