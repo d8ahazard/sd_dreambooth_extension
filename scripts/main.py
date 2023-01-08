@@ -315,7 +315,6 @@ def on_ui_tabs():
                                     gr.HTML(value="Tuning")
                                     db_use_ema = gr.Checkbox(label="Use EMA", value=False)
                                     db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
-                                    db_adamw_weight_decay = gr.Slider(label="AdamW Weight Decay", minimum=0, maximum=1, step=0.01, value=1e-2, visible=True)
                                     db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
                                                                      choices=list_floats())
                                     db_attention = gr.Dropdown(
@@ -324,6 +323,7 @@ def on_ui_tabs():
                                     db_cache_latents = gr.Checkbox(label="Cache Latents", value=True)
                                     db_stop_text_encoder = gr.Slider(label="Step Ratio of Text Encoder Training", minimum=0, maximum=1, step=0.01, value=1, visible=True)
                                     db_clip_skip = gr.Slider(label="Clip Skip", value=1, minimum=1, maximum=12, step=1)
+                                    db_adamw_weight_decay = gr.Slider(label="AdamW Weight Decay", minimum=0, maximum=1, step=0.01, value=1e-2, visible=True)
                                     db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
                                     db_shuffle_tags = gr.Checkbox(label="Shuffle Tags", value=True)
@@ -476,12 +476,6 @@ def on_ui_tabs():
                     fn=update_pad_tokens,
                     inputs=[db_stop_text_encoder],
                     outputs=[db_pad_tokens]
-                )
-
-                db_adamw_weight_decay.change(
-                    fn=lambda x: x,
-                    inputs=[],
-                    outputs=[db_adamw_weight_decay]
                 )
 
                 db_clear_secret.click(

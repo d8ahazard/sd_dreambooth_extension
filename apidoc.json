@@ -1303,7 +1303,7 @@
           },
           "adamw_weight_decay": {
             "title": "AdamW Weight Decay",
-            "type": "string",
+            "type": "float",
             "default": 1e-2
           },
           "mixed_precision": {
