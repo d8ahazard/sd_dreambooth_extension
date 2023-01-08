@@ -187,6 +187,7 @@ class DreamboothConfig:
         self.lr_warmup_steps = lr_warmup_steps
         self.max_token_length = max_token_length
         self.mixed_precision = mixed_precision
+        self.adamw_weight_decay = adamw_weight_decay
         self.model_dir = model_dir
         self.model_name = model_name
         self.num_train_epochs = num_train_epochs
