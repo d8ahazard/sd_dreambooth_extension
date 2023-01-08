@@ -1,6 +1,7 @@
 import math
 import random
 
+import PIL.Image
 import albumentations as albu
 import cv2
 import numpy as np
@@ -12,18 +13,8 @@ from tqdm import tqdm
 
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import closest_resolution, make_bucket_resolutions, \
-    compare_prompts
+    compare_prompts, get_dim
 
-
-def get_dim(filename):
-    with Image.open(filename) as im:
-        width, height = im.size
-        exif = im.getexif()
-        if exif:
-            orientation = exif.get(274)
-            if orientation == 3 or orientation == 6:
-                width, height = height, width
-        return width, height
 
 class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
     def __init__(self, batch_size, train_img_path_captions, reg_img_path_captions, tokens, tokenizer, resolution,
@@ -82,7 +73,7 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
             if image_path in self.size_lat_cache:
                 continue
             status.job_no += 1
-            image_width, image_height = get_dim(image_path)
+            image_width, image_height = get_dim(image_path, self.resolution)
             reso = closest_resolution(image_width, image_height, bucket_resos)
 
             if cache_latents and not self.debug_dataset:

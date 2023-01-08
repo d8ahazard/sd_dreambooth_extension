@@ -134,7 +134,7 @@ class FilenameTextGetter:
 
 from PIL import Image
 
-def get_dim(filename):
+def get_dim(filename, max_res):
     with Image.open(filename) as im:
         width, height = im.size
         exif = im.getexif()
@@ -142,18 +142,31 @@ def get_dim(filename):
             orientation = exif.get(274)
             if orientation == 3 or orientation == 6:
                 width, height = height, width
+        if width > max_res or height > max_res:
+            aspect_ratio = width / height
+            if width > height:
+                width = max_res
+                height = int(max_res / aspect_ratio)
+            else:
+                height = max_res
+                width = int(max_res * aspect_ratio)
         return width, height
 
 
 def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str, bucket_resos, instance_prompts = None) -> Dict[Tuple[int, int], List[str]]:
     prompts = {}
     images = get_images(img_dir)
-
+    max_dim = 0
+    for (w, h) in bucket_resos:
+        if w > max_dim:
+            max_dim = w
+        if h > max_dim:
+            max_dim = h
     for img in images:
         # Get prompt
         text = text_getter.read_text(img)
         prompt = text_getter.create_text(concept.class_prompt, text, concept.instance_token, concept.class_token)
-        w, h = get_dim(img)
+        w, h = get_dim(img, max_dim)
         reso = closest_resolution(w, h, bucket_resos)
         if instance_prompts is not None:
             if reso not in instance_prompts:
@@ -511,9 +524,7 @@ class ImageBuilder:
                 if no_safe:
                     db_shared.start_safe_unpickle()
             if config.use_lora and lora_model is not None and lora_model != "":
-                apply_lora_weights(lora_model, self.image_pipe.unet, self.image_pipe.text_encoder, lora_weight,
-                                   lora_txt_weight,
-                                   accelerator.device)
+                apply_lora_weights(self.image_pipe.unet, self.image_pipe.text_encoder, config)
         else:
             current_model = sd_models.select_checkpoint()
             new_model_info = get_checkpoint_match(config.src)
@@ -991,3 +1002,9 @@ def encode_hidden_state(text_encoder: CLIPTextModel, input_ids, pad_tokens, b_si
         encoder_hidden_states = torch.cat(sts_list, dim=1)
 
     return encoder_hidden_states
+
+
+class TrainResult:
+    config: DreamboothConfig = None
+    msg: str = ""
+    samples: [Image] = []
