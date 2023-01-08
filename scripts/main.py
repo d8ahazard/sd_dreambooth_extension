@@ -480,7 +480,7 @@ def on_ui_tabs():
 
                 db_adamw_weight_decay.change(
                     fn=lambda x: x,
-                    inputs=[]
+                    inputs=[],
                     outputs=[db_adamw_weight_decay]
                 )
 
