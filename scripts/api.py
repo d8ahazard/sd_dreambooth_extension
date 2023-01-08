@@ -108,8 +108,8 @@ class DreamboothParameters(BaseModel):
     lr_scheduler: str = "constant"
     lr_warmup_steps: int = 500
     max_token_length: int = 75
-    adamw_weight_decay: float = 1e-2
     mixed_precision: str = "no"
+    adamw_weight_decay: float = 1e-2
     model_name: str = ""
     num_train_epochs: int = 100
     pad_tokens: bool = True
