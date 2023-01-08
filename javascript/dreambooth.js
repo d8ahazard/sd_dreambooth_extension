@@ -206,7 +206,7 @@ let db_titles = {
     "Max Token Length": "Maximum token length to respect. You probably want to leave this at 75.",
     "Memory Attention": "The type of memory attention to use. 'Xformers' will provide better performance than flash_attention, but requires a separate installation.",
     "Min Learning Rate": "The minimum learning rate to decrease to over time.",
-    "AdamW Weight Decay": "The weight decay of the AdamW Optimizer. Values closer to 0 closely match your training dataset, and values closer to 1 generalize more and deviate from your training dataset.",
+    "AdamW Weight Decay": "The weight decay of the AdamW Optimizer. Values closer to 0 closely match your training dataset, and values closer to 1 generalize more and deviate from your training dataset. Default is 1e-2, values lower than 0.1 are recommended.",
     "Mixed Precision": "Use FP16 or BF16 (if available) will help improve memory performance. Required when using 'xformers'.",
     "Model Path": "The URL to the model on huggingface. Should be in the format of 'developer/model_name'.",
     "Model": "The model to train.",
