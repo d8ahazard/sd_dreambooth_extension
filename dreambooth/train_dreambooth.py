@@ -10,20 +10,17 @@ import time
 import traceback
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional
 
 import torch
 import torch.backends.cudnn
 import torch.utils.checkpoint
-from PIL import Image
 from accelerate import Accelerator
 from diffusers import AutoencoderKL, DDIMScheduler, DiffusionPipeline, UNet2DConditionModel, DDPMScheduler
 from diffusers.utils import logging as dl
-from huggingface_hub import HfFolder, whoami
 from torch.cuda.profiler import profile
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
-from transformers import AutoTokenizer, PretrainedConfig
+from transformers import AutoTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth import xattention, db_shared
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SampleData
@@ -33,11 +30,13 @@ from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_webhook import send_training_update
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import EMAModel, generate_classifiers, \
-    PromptData, generate_dataset
+    PromptData, generate_dataset, TrainResult
 from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
 from extensions.sd_dreambooth_extension.dreambooth.sample_dataset import SampleDataset
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models, parse_logs, printm
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, apply_lora_weights
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models, parse_logs, printm, \
+    import_model_class_from_model_name_or_path
+from extensions.sd_dreambooth_extension.dreambooth.xattention import set_diffusers_xformers_flag, optim_to
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, inject_trainable_lora
 from modules import shared, paths
 
 try:
@@ -54,92 +53,8 @@ logger.addHandler(console)
 logger.setLevel(logging.DEBUG)
 dl.set_verbosity_error()
 
-def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision):
-    text_encoder_config = PretrainedConfig.from_pretrained(
-        pretrained_model_name_or_path,
-        subfolder="text_encoder",
-        revision=revision,
-    )
-    model_class = text_encoder_config.architectures[0]
-
-    if model_class == "CLIPTextModel":
-        from transformers import CLIPTextModel
-
-        return CLIPTextModel
-    elif model_class == "RobertaSeriesModelWithTransformation":
-        from diffusers.pipelines.alt_diffusion.modeling_roberta_series import RobertaSeriesModelWithTransformation
-
-        return RobertaSeriesModelWithTransformation
-    else:
-        raise ValueError(f"{model_class} is not supported.")
-
-
-class LatentsDataset(Dataset):
-    def __init__(self, latents_cache, text_encoder_cache, concepts_cache):
-        self.latents_cache = latents_cache
-        self.text_encoder_cache = text_encoder_cache
-        self.concepts_cache = concepts_cache
-        self.current_index = 0
-        self.current_concept = 0
-
-    def __len__(self):
-        return len(self.latents_cache)
-
-    def __getitem__(self, index):
-        self.current_concept = self.concepts_cache[index]
-        return self.latents_cache[index], self.text_encoder_cache[index]
-
-
-class AverageMeter:
-    def __init__(self, name=None):
-        self.name = name
-        self.avg: float = 0
-        self.count = 0
-        self.counts = []
-
-    def reset(self):
-        self.count = self.avg = 0
-        self.counts = []
-
-    def update(self, val, n=1):
-        self.counts.append(val * n)
-        if len(self.counts) > 10:
-            self.counts.pop(0)
-        self.avg = float(sum(self.counts) / len(self.counts))
-
-
-def get_full_repo_name(model_id: str, organization: Optional[str] = None, token: Optional[str] = None):
-    if token is None:
-        token = HfFolder.get_token()
-    if organization is None:
-        username = whoami(token)["name"]
-        return f"{username}/{model_id}"
-    else:
-        return f"{organization}/{model_id}"
-
-
 last_samples = []
 last_prompts = []
-
-
-class TrainResult:
-    config: DreamboothConfig = None
-    msg: str = ""
-    samples: [Image] = []
-
-
-def set_diffusers_xformers_flag(model, valid):
-    # Recursively walk through all the children.
-    # Any children which exposes the set_use_memory_efficient_attention_xformers method
-    # gets the message
-    def fn_recursive_set_mem_eff(module: torch.nn.Module):
-        if hasattr(module, 'set_use_memory_efficient_attention_xformers'):
-            module.set_use_memory_efficient_attention_xformers(valid)
-
-        for child in module.children():
-            fn_recursive_set_mem_eff(child)
-
-    fn_recursive_set_mem_eff(model)
 
 
 def collate_fn(examples):
@@ -225,7 +140,6 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
             print(msg)
             status.textinfo = msg
             args.stop_text_encoder = 0
-
         count, instance_paths, class_paths = generate_classifiers(args, use_txt2img=use_txt2img, accelerator=accelerator, ui = False)
         if status.interrupted:
             result.msg = "Training interrupted."

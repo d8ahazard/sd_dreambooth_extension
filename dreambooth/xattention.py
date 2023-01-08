@@ -461,6 +461,22 @@ def get_scheduler(
         )
 
     return schedule_func(optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
+
+
+def set_diffusers_xformers_flag(model, valid):
+    # Recursively walk through all the children.
+    # Any children which exposes the set_use_memory_efficient_attention_xformers method
+    # gets the message
+    def fn_recursive_set_mem_eff(module: torch.nn.Module):
+        if hasattr(module, 'set_use_memory_efficient_attention_xformers'):
+            module.set_use_memory_efficient_attention_xformers(valid)
+
+        for child in module.children():
+            fn_recursive_set_mem_eff(child)
+
+    fn_recursive_set_mem_eff(model)
+
+
 def optim_to(torch, profiler, optim: torch.optim.Optimizer, device="cpu"):
     def inplace_move(obj: torch.Tensor, target):
         if hasattr(obj, 'data'):
