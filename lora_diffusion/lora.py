@@ -141,7 +141,7 @@ def inject_trainable_lora(
     names = []
 
     if loras is not None and os.path.exists(loras) and os.path.isfile(loras):
-        loras = torch.load(loras, device=device)
+        loras = torch.load(loras)
     else:
         loras = None
 
