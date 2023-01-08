@@ -283,7 +283,8 @@ def ui_samples(model_dir: str,
                negative_prompt: str = "",
                seed: int = -1,
                steps: int = 60,
-               scale: float = 7.5
+               scale: float = 7.5,
+               resolution: int = 512
                ):
 
     if sample_batch_size > num_samples:
@@ -313,7 +314,7 @@ def ui_samples(model_dir: str,
                 lora_weight,
                 lora_txt_weight,
                 batch_size)
-            status.textinfo = f"Generating sample image for model {config.model_name}..."
+            status.textinfo = f"Generating sample {resolution} image for model {config.model_name}..."
             status.sampling_steps = 0
             status.current_image_sampling_step = 0
             pd = PromptData()
@@ -322,6 +323,7 @@ def ui_samples(model_dir: str,
             pd.negative_prompt = negative_prompt
             pd.scale = scale
             pd.seed = seed
+            pd.resolution = (resolution, resolution)
             prompts = [pd] * batch_size
             while len(images) < num_samples:
                 prompts_out.append(save_sample_prompt)
