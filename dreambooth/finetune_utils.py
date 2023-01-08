@@ -524,7 +524,7 @@ class ImageBuilder:
                 if no_safe:
                     db_shared.start_safe_unpickle()
             if config.use_lora and lora_model is not None and lora_model != "":
-                apply_lora_weights(self.image_pipe.unet, self.image_pipe.text_encoder, config)
+                apply_lora_weights(self.image_pipe.unet, self.image_pipe.text_encoder, config, is_ui=True)
         else:
             current_model = sd_models.select_checkpoint()
             new_model_info = get_checkpoint_match(config.src)

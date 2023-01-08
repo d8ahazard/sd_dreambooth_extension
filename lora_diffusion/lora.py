@@ -177,13 +177,42 @@ def inject_trainable_lora(
     start_safe_unpickle()
     return require_grad_params, names
 
+def apply_lora_weights_sample(target_unet, target_text_encoder, lora_path, lora_txt, lora_alpha=1, lora_txt_alpha=1):
+    
+    print("Applying lora weights for sampling...")
+    
+    lora_dicts = [
+        {"path": lora_path, "model": target_unet, "alpha": lora_alpha, "is_text": False},
+        {"path": lora_txt, "model": target_text_encoder, "alpha": lora_txt_alpha, "is_text": True}
+    ]
+    
+    for loras in lora_dicts:
+        if os.path.exists(loras["path"]) and os.path.isfile(loras["path"]):
+            monkeypatch_lora(
+                loras["model"],
+                torch.load(loras["path"]), 
+                target_replace_module=None if loras["is_text"] == False else ["CLIPAttention"]
+            )
+            tune_lora_scale(loras["model"], loras["alpha"]) 
 
-def apply_lora_weights(target_unet, target_text_encoder, config: DreamboothConfig, device=None):
+def apply_lora_weights(target_unet, target_text_encoder, config: DreamboothConfig, device=None, is_ui=False):
     if device is None:
         device = db_shared.device
     target_unet.requires_grad_(False)
     lora_path = os.path.join(db_shared.models_path, "lora", config.lora_model_name)
     lora_txt = lora_path.replace(".pt", "_txt.pt")
+
+    if is_ui:
+        apply_lora_weights_sample(
+            target_unet,
+            target_text_encoder,
+            lora_path, 
+            lora_txt, 
+            lora_alpha, 
+            lora_txt_alpha
+        )
+        return
+
     print("Injecting trainable lora...")
     unet_lora_params, _ = inject_trainable_lora(target_unet, None, config.lora_rank, lora_path, device)
     text_encoder_lora_params = None
