@@ -53,6 +53,7 @@ class DreamboothConfig:
                  lr_warmup_steps: int = 0,
                  max_token_length: int = 75,
                  mixed_precision: str = "fp16",
+                 adamw_weight_decay: float = 1e-2,
                  model_path: str = "",
                  num_train_epochs: int = 100,
                  pad_tokens: bool = True,
@@ -186,6 +187,7 @@ class DreamboothConfig:
         self.lr_warmup_steps = lr_warmup_steps
         self.max_token_length = max_token_length
         self.mixed_precision = mixed_precision
+        self.adamw_weight_decay = adamw_weight_decay
         self.model_dir = model_dir
         self.model_name = model_name
         self.num_train_epochs = num_train_epochs
