@@ -412,7 +412,7 @@ def parse_logs(model_name: str, for_ui: bool = False):
     all_df_loss = pd.concat(out_loss)[loss_columns]
     all_df_loss = all_df_loss.sort_values("Wall_time")
     all_df_loss = all_df_loss.reset_index(drop=True)
-    all_df_loss = all_df_loss.rolling(smoothing_window).mean()
+    all_df_loss = all_df_loss.rolling(smoothing_window).mean(numeric_only=True)
     out_images = []
     out_names = []
     if has_all_lr:
