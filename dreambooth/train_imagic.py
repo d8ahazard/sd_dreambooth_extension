@@ -323,8 +323,8 @@ def train_imagic(args: DreamboothConfig):
         accelerator.unwrap_model(unet).parameters(),
         lr=args.learning_rate
     )
-    # Accelerator.prepare takes a list?
-    optimizer = accelerator.prepare([optimizer])
+
+    optimizer = accelerator.prepare(optimizer)
     progress_bar = tqdm(range(args.num_train_epochs), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Fine Tuning")
     status.textinfo = "Fine Tuning"
