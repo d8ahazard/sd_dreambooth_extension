@@ -1,35 +1,88 @@
-import math
+import os.path
 import random
+from typing import Tuple
 
-import PIL.Image
 import albumentations as albu
 import cv2
 import numpy as np
-import torch
 import torch.utils.data
 from PIL import Image
 from torchvision.transforms import transforms
-from tqdm import tqdm
 
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import closest_resolution, make_bucket_resolutions, \
     compare_prompts, get_dim
 
 
-class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
-    def __init__(self, batch_size, train_img_path_captions, reg_img_path_captions, tokens, tokenizer, resolution,
-                 prior_loss_weight, hflip, random_crop, shuffle_tokens, not_pad_tokens, debug_dataset) -> None:
-        super().__init__()
+class BucketCounter:
+    def __init__(self, starting_keys=None):
+        self.counts = {}
+        print("Initializing bucket counter!")
+        if starting_keys is not None:
+            for key in starting_keys:
+                self.counts[key] = 0
 
-        self.train_buckets = []
-        self.reg_buckets = []
-        self.train_buckets_indices = []
-        self.reg_buckets_indices = []
+    def count(self, key: Tuple[int, int]):
+        if key in self.counts:
+            self.counts[key] += 1
+        else:
+            self.counts[key] = 1
+
+    def min(self):
+        return min(self.counts.values()) if len(self.counts) else 0
+
+    def max(self):
+        return max(self.counts.values()) if len(self.counts) else 0
+
+    def get(self, key: Tuple[int, int]):
+        return self.counts[key] if key in self.counts else 0
+
+    def check_reset(self):
+        if self.max() == self.min():
+            for key in list(self.counts.keys()):
+                self.counts[key] = 0
+
+    def missing(self):
+        out = {}
+        max = self.max()
+        for key in list(self.counts.keys()):
+            if self.counts[key] < max:
+                out[key] = max - self.counts[key]
+        return out
+
+    def print(self):
+        print(f"Bucket counts: {self.counts}")
+
+class DbDataset(torch.utils.data.Dataset):
+    def __init__(self, batch_size, counter, train_img_path_captions, class_img_path_captions, tokens, tokenizer,
+                 resolution, prior_loss_weight, hflip, random_crop, shuffle_tokens, not_pad_tokens, debug_dataset) -> None:
+        super().__init__()
+        print("Init dataset!")
+        # A dictionary of string/latent pairs matching image paths
+        self.latents_cache = {}
+        # A dictionary of string/input_id(s) pairs matching image paths
+        self.caption_cache = {}
+        # A dictionary of (int, int) / List[(string, string)] of resolutions and the corresponding image paths/captions
+        self.train_dict = {}
+        # A dictionary of string/list[(string, string)], where the string is the instance image path, the path/captions
+        # are matching reg images
+        self.class_dict = {}
+        # A dictionary containing the number of times each bucket has been enumerated over
+        self.counter = counter
+        # A list of the currently "active" resolutions to enumerate
+        self.active_resos = []
+        # All of the available bucket resolutions
+        self.resolutions = []
+        # The currently active index in our dict of buckets
+        self.bucket_index = 0
+        # The currently active image index while iterating
+        self.image_index = 0
+        # Total len of the dataloader
         self._length = 0
-        self.size_lat_cache = {}
+
         self.batch_size = batch_size
         self.train_img_path_captions = train_img_path_captions
-        self.reg_img_path_captions = reg_img_path_captions
+        self.class_img_path_captions = class_img_path_captions
         self.tokenizer = tokenizer
         self.resolution = resolution
         self.prior_loss_weight = prior_loss_weight
@@ -37,8 +90,10 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
         self.debug_dataset = debug_dataset
         self.shuffle_tokens = shuffle_tokens
         self.not_pad_tokens = not_pad_tokens
-        self.latents_cache = None
         self.tokens = tokens
+        self.vae = None
+        self.cache_latents = False
+
         # augmentation
         flip_p = 0.5 if hflip else 0.0
         if hflip:
@@ -49,8 +104,7 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
             self.aug = None
 
         self.num_train_images = len(self.train_img_path_captions)
-        self.num_reg_images = len(self.reg_img_path_captions)
-        self.enable_reg_images = self.num_reg_images > 0
+        self.num_class_images = len(self.class_img_path_captions)
 
         self.image_transforms = transforms.Compose(
             [
@@ -58,93 +112,6 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
                 transforms.Normalize([0.5], [0.5]),
             ]
         )
-
-    def make_buckets_with_caching(self, vae, min_size):
-
-        cache_latents = vae is not None
-        state = f"Preparing Dataset ({'With Caching' if cache_latents else 'Without Caching'})"
-        print(state)
-        status.textinfo = state
-
-        bucket_resos, bucket_aspect_ratios = make_bucket_resolutions(self.resolution, min_size)
-        status.job_count = len(self.train_img_path_captions) + len(self.reg_img_path_captions)
-        status.job_no = 0
-        for image_path, _ in tqdm(self.train_img_path_captions + self.reg_img_path_captions):
-            if image_path in self.size_lat_cache:
-                continue
-            status.job_no += 1
-            image_width, image_height = get_dim(image_path, self.resolution)
-            reso = closest_resolution(image_width, image_height, bucket_resos)
-
-            if cache_latents and not self.debug_dataset:
-                image = self.open_and_trim(image_path, reso)
-                img_tensor = self.image_transforms(image)
-                img_tensor = img_tensor.unsqueeze(0).to(device=vae.device, dtype=vae.dtype)
-                latents = vae.encode(img_tensor).latent_dist.sample().squeeze(0).to("cpu")
-            else:
-                latents = None
-
-            self.size_lat_cache[image_path] = (reso, latents)
-
-        self.train_buckets = [[] for _ in range(len(bucket_resos))]
-        self.reg_buckets = [[] for _ in range(len(bucket_resos))]
-        reso_to_index = {}
-        for i, reso in enumerate(bucket_resos):
-            reso_to_index[reso] = i
-
-        def split_to_buckets(buckets, img_path_captions):
-            for path, caption in img_path_captions:
-                img_reso, _ = self.size_lat_cache[path]
-                bidx = reso_to_index[img_reso]
-                buckets[bidx].append((path, caption))
-
-        split_to_buckets(self.train_buckets, self.train_img_path_captions)
-
-        if self.enable_reg_images:
-            caps = []
-            caps += self.reg_img_path_captions
-            split_to_buckets(self.reg_buckets, caps)
-
-        bi = 0
-        for i, (reso, images) in enumerate(zip(bucket_resos, self.train_buckets)):
-            if len(images) > 0:
-                bi += 1
-                print(f"Train Bucket {bi}: Resolution {reso}, Count: {len(images)}")
-
-        bi = 0
-        for i, (reso, images) in enumerate(zip(bucket_resos, self.reg_buckets)):
-            if len(images) > 0:
-                bi += 1
-                print(f"Reg Bucket {bi}: Resolution {reso}, Count: {len(images)}")
-
-        for bucket_index, bucket in enumerate(self.train_buckets):
-            batch_count = int(math.ceil(len(bucket) / self.batch_size))
-            for batch_index in range(batch_count):
-                self.train_buckets_indices.append((bucket_index, batch_index))
-
-        for bucket_index, bucket in enumerate(self.reg_buckets):
-            batch_count = int(math.ceil(len(bucket) / self.batch_size))
-            for batch_index in range(batch_count):
-                self.reg_buckets_indices.append((bucket_index, batch_index))
-
-        if self.debug_dataset:
-            for i, (reso, images) in enumerate(zip(bucket_resos, self.train_buckets)):
-                reg_images = self.reg_buckets[i]
-                missing_prompts = []
-                for path, caption in images:
-                    class_found = False
-                    for reg_path, reg_caption in reg_images:
-                        if compare_prompts(caption, reg_caption, self.tokens):
-                            class_found = True
-                            break
-                    if not class_found:
-                        missing_prompts.append(caption)
-
-        self.shuffle_buckets()
-        self._length = len(self.train_buckets_indices)
-
-        print(f"Total images: {self._length}")
-
 
     @staticmethod
     def open_and_trim(image_path, reso):
@@ -172,116 +139,217 @@ class DreamBoothOrFineTuningDataset(torch.utils.data.Dataset):
             f"internal error, illegal trimmed size: {image.shape}, {reso}"
         return image
 
-    def shuffle_buckets(self):
-        random.shuffle(self.train_buckets_indices)
-        random.shuffle(self.reg_buckets_indices)
-        for bucket in self.train_buckets:
-            random.shuffle(bucket)
-        for bucket in self.reg_buckets:
-            random.shuffle(bucket)
+    def cache_latent(self, image_path, res):
+        latents = None
+        if self.vae is not None:
+            image = self.open_and_trim(image_path, res)
+            if self.aug is not None:
+                image = self.aug(image=image)['image']
 
+            img_tensor = self.image_transforms(image)
+            img_tensor = img_tensor.unsqueeze(0).to(device=self.vae.device, dtype=self.vae.dtype)
+            latents = self.vae.encode(img_tensor).latent_dist.sample().squeeze(0).to("cpu")
+        self.latents_cache[image_path] = latents
+
+    def cache_caption(self, image_path, caption):
+        input_ids = None
+        if self.tokenizer is not None:
+            if self.not_pad_tokens:
+                input_ids = self.tokenizer(caption, padding=True, truncation=True,
+                                           return_tensors="pt").input_ids
+            else:
+                input_ids = self.tokenizer(caption, padding='max_length', truncation=True,
+                                           return_tensors='pt').input_ids
+        self.caption_cache[image_path] = input_ids
+
+    def make_buckets_with_caching(self, vae, min_size):
+        self.vae = vae
+        self.cache_latents = vae is not None
+        state = f"Preparing Dataset ({'With Caching' if self.cache_latents else 'Without Caching'})"
+        print(state)
+        status.textinfo = state
+
+        # Create a list of resolutions
+        bucket_resos = make_bucket_resolutions(self.resolution, min_size)
+        self.train_dict = {}
+        class_dict = {}
+
+        def sort_images(img_path_captions, resos, target_dict):
+            for path, cap in img_path_captions:
+                image_width, image_height = get_dim(path, self.resolution)
+                reso = closest_resolution(image_width, image_height, resos)
+                target_dict.setdefault(reso, []).append((path, cap))
+
+        sort_images(self.train_img_path_captions, bucket_resos, self.train_dict)
+        sort_images(self.class_img_path_captions, bucket_resos, class_dict)
+        print(f"We have {len(list(class_dict.keys()))} dict buckets, still.")
+        # Enumerate by resolution, cache as needed
+        def cache_images(images, reso):
+            for img_path, cap in images:
+                if self.cache_latents and not self.debug_dataset:
+                    self.cache_latent(img_path, reso)
+                self.cache_caption(img_path, cap)
+
+        bucket_idx = 0
+        class_count = 0
+        total_len = 0
+        bucket_len = {}
+        max_idx_chars = len(str(len(self.train_dict.keys())))
+        for res, train_images in self.train_dict.items():
+            self.resolutions.append(res)
+            class_len = 0
+            if not train_images:
+                continue
+            class_list = class_dict.get(res, [])
+            cache_images(train_images, res)
+            for image_path, caption in train_images:
+                instance_classes = []
+                for class_path, class_caption in class_list:
+                    if compare_prompts(caption, class_caption, self.tokens):
+                        instance_classes.append((class_path, class_caption))
+                class_count += len(instance_classes)
+                cache_images(instance_classes, res)
+                self.class_dict[image_path] = instance_classes
+                class_len += 1 + 1 if class_count > 0 else 0
+            bucket_len[res] = class_len
+            total_len += class_len
+            bucket_str = str(bucket_idx).rjust(max_idx_chars, " ")
+            inst_str = str(len(train_images)).rjust(5, " ")
+            class_str = str(class_count).rjust(5, " ")
+            ex_str = str(class_len).rjust(5, " ")
+            print(f"Bucket {bucket_str} {res} - Instance Images: {inst_str} | Class Images: {class_str} | Examples: {ex_str}")
+            bucket_idx += 1
+
+        self._length = total_len // self.batch_size
+        print(f"Total images / batch: {self._length}, total examples: {total_len}")
+
+    def check_shuffle_tokens(self, caption):
+        if self.shuffle_tokens:
+            tags = caption.split(',')
+            if len(tags) > 2:
+                first_tag = tags.pop(0)
+                random.shuffle(tags)
+                tags.insert(0, first_tag)
+            caption = ','.join(tags)
+        return caption
+
+
+    def set_buckets(self):
+        # Initialize list of bucket counts if not set
+        all_resos = self.resolutions
+
+        # Enumerate each bucket, adding those which need to be leveled
+        pop_index = 0
+        resos_to_use = []
+        am = self.counter.missing()
+        missing = am.copy()
+        pop_index = 0
+        #self.counter.check_reset()
+        if len(missing):
+            while len(resos_to_use) < len(all_resos):
+                if len(missing):
+                    for res, count in am.items():
+                        resos_to_use.append(res)
+                        missing[res] -= 1
+                        if missing[res] == 0:
+                            del missing[res]
+                        am = missing.copy()
+                else:
+                    resos_to_use.append(all_resos[pop_index])
+                    pop_index += 1
+                    if pop_index >= len(all_resos):
+                        pop_index = 0
+        else:
+            resos_to_use = all_resos.copy()
+        random.shuffle(resos_to_use)
+        self.active_resos = resos_to_use
+        self.bucket_index = 0
+        self.image_index = 0
+
+    def load_image(self, image_path, caption, res):
+        if self.debug_dataset:
+            image = os.path.splitext(image_path)
+            input_ids = caption
+        else:
+            if self.cache_latents:
+                image = self.latents_cache[image_path]
+            else:
+                img = self.open_and_trim(image_path, res)
+                if self.aug is not None:
+                    img = self.aug(image=img)['image']
+
+                image = self.image_transforms(img)
+            input_ids = self.caption_cache[image_path]
+        return image, input_ids
     def __len__(self):
         return self._length
 
     def __getitem__(self, index):
-        # Shuffle the buckets at the start of each epoch
+        # Reset bucket counts if we're starting from the start of the dataloader
         if index == 0:
-            self.shuffle_buckets()
-
-        # Select the current bucket and image index
-        bucket = self.train_buckets[self.train_buckets_indices[index][0]]
-        image_index = self.train_buckets_indices[index][1] * self.batch_size
-
-        # Initialize lists to store the latents, images, captions, and loss weights for the batch
-        latents_list = []
+            self.set_buckets()
+        bucket_counts = {}
+        # Select the current bucket of image paths
+        if self.bucket_index >= len(self.active_resos):
+            self.bucket_index = 0
+        bucket_res = self.active_resos[self.bucket_index]
+        bucket = self.train_dict[bucket_res]
+        # Initialize outputs
         images = []
-        captions = []
+        ids = []
+        loss_weights = []
 
-        # Process instance images
-        for image_path, caption in bucket[image_index:image_index + self.batch_size]:
+        # Set start position from last iteration
+        img_index = self.image_index
+        
+        # Loop the current bucket until we fill our batch
+        bucket_emptied = False
+        repeats = 0
+        while len(images) < self.batch_size:
+            # Grab instance image data
+            image_path, caption = bucket[img_index]
+            image_data, input_ids = self.load_image(image_path, caption, bucket_res)
+            images.append(image_data)
+            ids.append(input_ids)
+            loss_weights.append(1.0)
+            if len(images) < self.batch_size:
+                class_image_paths = self.class_dict[image_path]
+                # Select a random class image from our instance image's available class image.
+                if len(class_image_paths):
+                    class_image_path, class_caption = random.choice(class_image_paths)
+                    if class_image_path is not None:
+                        # Grab class image data
+                        image_data, input_ids = self.load_image(class_image_path, class_caption, bucket_res)
+                        images.append(image_data)
+                        ids.append(input_ids)
+                        loss_weights.append(self.prior_loss_weight)
 
-            reso, latents = self.size_lat_cache[image_path]
+            img_index += 1
 
-            if self.debug_dataset:
-                image = Image.open(image_path)
-            else:
-                if latents is None:
-                    img = self.open_and_trim(image_path, reso)
+            if img_index >= len(bucket):
+                bucket_emptied = True
+                img_index = 0
+                repeats += 1
+                self.counter.count(bucket_res)
+        self.image_index = img_index
 
-                    if self.aug is not None:
-                        img = self.aug(image=img)['image']
+        # If we have reached the end of our bucket, increment to the next, update the count, reset image index.
+        if bucket_emptied:
+            #print(f"Incrementing bucket {self.bucket_index}-{bucket_res}, {self.counter.get(bucket_res)}")
+            self.bucket_index += 1
+            self.image_index = 0
 
-                    image = self.image_transforms(img)
-                else:
-                    image = None
-
-            images.append(image)
-            latents_list.append(latents)
-            if self.shuffle_tokens:
-                tags = caption.split(',')
-                if len(tags) > 2:
-                    first_tag = tags.pop(0)
-                    random.shuffle(tags)
-                    tags.insert(0, first_tag)
-                    caption = ','.join(tags)
-                captions.append(caption)
-            else:
-                captions.append(caption)
-
-            # Select the bucket with reg images
-            reg_bucket = self.reg_buckets[self.train_buckets_indices[index][0]]
-            # Randomize the order in which we pick a reg image
-            b_indices = list(range(len(reg_bucket)))
-            random.shuffle(b_indices)
-            has_class = False
-
-            for reg_idx in b_indices:
-                if has_class:
-                    break
-                image_path, reg_caption = reg_bucket[reg_idx]
-                if compare_prompts(caption, reg_caption, self.tokens):
-                    res, latents = self.size_lat_cache[image_path]
-                    if reso == res:
-                        if self.debug_dataset:
-                            image = Image.open(image_path)
-                        else:
-                            img = self.open_and_trim(image_path, res)
-                            if self.aug is not None:
-                                img = self.aug(image=img)['image']
-
-                            image = self.image_transforms(img)
-                        images.append(image)
-                        latents_list.append(latents)
-                        if self.shuffle_tokens:
-                            tags = reg_caption.split(',')
-                            if len(tags) > 2:
-                                first_tag = tags.pop(0)
-                                random.shuffle(tags)
-                                tags.insert(0, first_tag)
-                                reg_caption = ','.join(tags)
-                            captions.append(reg_caption)
-                        else:
-                            captions.append(reg_caption)
-                        has_class = True
-
-            if self.tokenizer is not None:
-                if self.not_pad_tokens:
-                    input_ids = self.tokenizer(captions, padding=True, truncation=True, return_tensors="pt").input_ids
-                else:
-                    input_ids = self.tokenizer(captions, padding='max_length', truncation=True, return_tensors='pt').input_ids
-            else:
-                input_ids = self.tokenizer
-            # Create the example to be returned
-            example = {'input_ids': input_ids, "with_prior": has_class}
-            if self.debug_dataset:
-                example["captions"] = captions
-                example["images"] = images
-                example["res"] = reso
-            if images[0] is not None and not self.debug_dataset:
-                images = torch.stack(images)
+        # Stack and return outputs
+        if not self.debug_dataset:
+            images = torch.stack(images)
+            loss_weights = torch.FloatTensor(loss_weights)
+            if not self.cache_latents:
                 images = images.to(memory_format=torch.contiguous_format)
-            else:
-                images = None
-            example['pixel_values'] = images
-            example['latents'] = torch.stack(latents_list) if latents_list[0] is not None else None
-            return example
+            input_ids = torch.cat(ids, dim=0)
+        else:
+            input_ids = ids
+
+        example = {"images": images, "input_ids": input_ids, "loss_weight": loss_weights, "res": bucket_res}
+        return example
+
+

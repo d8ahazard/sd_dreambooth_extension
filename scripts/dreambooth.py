@@ -1,4 +1,5 @@
 import glob
+import json
 import logging
 import math
 import os
@@ -7,13 +8,15 @@ import traceback
 import gradio
 import torch
 import torch.utils.checkpoint
+import torch.utils.data.dataloader
 from accelerate import find_executable_batch_size
 from diffusers.utils import logging as dl
 
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, PromptData, generate_dataset
+from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, PromptData, generate_dataset, \
+    PromptDataset
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, get_images, \
     get_lora_models, cleanup
 from modules import shared
@@ -543,8 +546,8 @@ def start_training(model_dir: str, use_txt2img: bool = True):
         return lora_model_name, 0, 0, [], msg
 
     # Clear memory and do "stuff" only after we've ensured all the things are right
-    print(f"Custom model name is {config.custom_model_name}")
-    print("Starting Dreambooth training...")
+    if config.custom_model_name:
+        print(f"Custom model name is {config.custom_model_name}")
     unload_system_models()
     total_steps = config.revision
     config.save(True)
@@ -563,7 +566,6 @@ def start_training(model_dir: str, use_txt2img: bool = True):
 
         config = result.config
         images = result.samples
-        print(f"We have {len(images)} sample image(s).")
         if config.revision != total_steps:
             config.save()
         else:
@@ -581,11 +583,9 @@ def start_training(model_dir: str, use_txt2img: bool = True):
         pass
 
     cleanup()
-    print("Training completed, reloading SD Model.")
     reload_system_models()
     if config.lora_model_name != "" and config.lora_model_name is not None:
         lora_model_name = f"{config.model_name}_{total_steps}.pt"
-    print(f"Returning result: {res}")
     dirs = get_lora_models()
     lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=config.lora_model_name)
     return lora_model_name, total_steps, config.epoch, images, res
@@ -643,5 +643,48 @@ def ui_classifiers(model_name: str,
         status.textinfo = msg
     return images, msg
 
+def collate_fn(examples):
+    return examples[0]
+
 def debug_buckets(model_name):
-    return generate_dataset(model_name)
+    print("Debug click?")
+    status.textinfo = "Preparing dataset..."
+    if model_name == "" or model_name is None:
+        return "No model selected."
+    args = from_file(model_name)
+    if args is None:
+        return "Invalid config."
+    print("Preparing prompt dataset...")
+    prompt_dataset = PromptDataset(args.concepts_list, args.model_dir, args.resolution)
+    inst_paths = prompt_dataset.instance_paths
+    class_paths = prompt_dataset.class_paths
+    print("Generating training dataset...")
+    dataset = generate_dataset(model_name, inst_paths, class_paths, 10, debug=True)
+    dataloader = torch.utils.data.DataLoader(
+        dataset, batch_size=1, shuffle=False, collate_fn=collate_fn, num_workers=0)
+
+    lines = []
+    test_epochs = 10
+    print(f"Simulating training for {test_epochs} epochs.")
+    for epoch in range(test_epochs):
+        for step, batch in enumerate(dataloader):
+            image_names = batch["images"]
+            captions = batch["input_ids"]
+            losses = batch["loss_weight"]
+            res = batch["res"]
+            line = f"Epoch: {epoch}, Batch: {step}, Images: {len(image_names)}, Res: {res}, Loss: {losses}"
+            print(line)
+            lines.append(line)
+            for image, caption in zip(image_names, captions):
+                line = f"{image}, {caption}, {losses}"
+                lines.append(line)
+    samples_dir = os.path.join(args.model_dir, "samples")
+    if not os.path.exists(samples_dir):
+        os.makedirs(samples_dir)
+    bucket_file = os.path.join(samples_dir, "prompts.json")
+    with open(bucket_file, "w") as outfile:
+        json.dump(lines, outfile, indent=4)
+
+    return f"Debug output saved to {bucket_file}"
+
+

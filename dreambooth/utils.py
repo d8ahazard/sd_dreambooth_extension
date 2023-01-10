@@ -5,6 +5,8 @@ import html
 import os
 import sys
 import traceback
+
+import gradio
 from tqdm.auto import tqdm
 from io import StringIO
 from pathlib import Path
@@ -71,6 +73,22 @@ def get_lora_models():
                 if "_txt.pt" not in found and ".pt" in found:
                     output.append(found)
     return output
+
+
+def get_model_snapshots(model_name: str):
+    from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
+    result = gradio.update(visible=True)
+    if model_name == "" or model_name is None:
+        return result
+    config = from_file(model_name)
+    snaps_path = os.path.join(config.model_dir, "snapshots")
+    snaps = []
+    if os.path.exists(snaps_path):
+        for dir in os.listdir(snaps_path):
+            if "checkpoint_" in dir:
+                fullpath = os.path.join(snaps_path, dir)
+                snaps.append(fullpath)
+    return snaps
 
 
 def get_images(image_path):
@@ -227,7 +245,6 @@ def list_features():
                 if extension not in pil_features:
                     pil_features.append(extension)
     return pil_features
-
 
 def is_image(path: Path, feats=None):
     if feats is None:

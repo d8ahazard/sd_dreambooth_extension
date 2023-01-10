@@ -90,9 +90,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         global last_samples
         global last_prompts
 
-        n_workers = min(8, os.cpu_count() - 1)
-        if os.name == "nt":
-            n_workers = 0
+        n_workers = 0
         args.max_token_length = int(args.max_token_length)
         if not args.pad_tokens and args.max_token_length > 75:
             print("Cannot raise token length limit above 75 when pad_tokens=False")
@@ -187,6 +185,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         printm("Created tenc")
         vae = create_vae()
         printm("Created vae")
+
         unet = UNet2DConditionModel.from_pretrained(
             args.pretrained_model_name_or_path,
             subfolder="unet",
@@ -300,7 +299,6 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
             except:
                 pass
 
-        print("Preparing dataset")
         if args.cache_latents:
             vae.to(accelerator.device, dtype=weight_dtype)
             vae.requires_grad_(False)
@@ -310,7 +308,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
             result.msg = "Training interrupted."
             stop_profiler(profiler)
             return result
-
+        printm("Loading dataset...")
         train_dataset = generate_dataset(
             model_name=args.model_name,
             instance_paths = instance_paths,
@@ -320,6 +318,8 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
             vae=vae if args.cache_latents else None,
             debug=False
         )
+
+        printm("Dataset loaded.")
 
         if args.cache_latents:
             printm("Unloading vae.")
@@ -430,9 +430,6 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
                 print(f"Exception loading checkpoint: {lex}")
 
         print("  ***** Running training *****")
-        print(f"  Instance Images: {train_dataset.num_train_images}")
-        print(f"  Class Images: {train_dataset.num_reg_images}")
-        print(f"  Total Examples: {train_dataset.num_train_images * (2 if train_dataset.enable_reg_images else 1)}")
         print(f"  Num batches each epoch = {len(train_dataloader)}")
         print(f"  Num Epochs = {max_train_epochs}")
         print(f"  Batch Size Per Device = {train_batch_size}")
@@ -746,11 +743,11 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
                     # Convert images to latent space
                     with torch.no_grad():
                         if args.cache_latents:
-                            latents = batch["latents"].to(accelerator.device)
+                            latents = batch["images"].to(accelerator.device)
                         else:
-                            latents = vae.encode(batch["pixel_values"].to(dtype=weight_dtype)).latent_dist.sample()
+                            latents = vae.encode(batch["images"].to(dtype=weight_dtype)).latent_dist.sample()
                         latents = latents * 0.18215
-                    with_prior = batch["with_prior"]
+
                     # Sample noise that we'll add to the latents
                     noise = torch.randn_like(latents, device=latents.device)
                     b_size = latents.shape[0]
@@ -778,32 +775,13 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
                     else:
                         target = noise
 
-                    # loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="none")
-                    # loss = loss.mean([1, 2, 3])
-
-                    # loss_weights = batch["loss_weights"]
-                    # loss = loss * loss_weights
-
-                    # loss = loss.mean()
-
-                    if with_prior:
-                        # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
-                        model_pred, model_pred_prior = torch.chunk(noise_pred, 2, dim=0)
-                        target, target_prior = torch.chunk(target, 2, dim=0)
-
-                        # Compute instance loss
-                        loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
-
-                        # Compute prior loss
-                        prior_loss = torch.nn.functional.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
-
-                        # Add the prior loss to the instance loss.
-                        loss = loss + args.prior_loss_weight * prior_loss
-                    else:
-                        loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="mean")
+                    loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="none")
+                    loss = loss.mean([1, 2, 3])
+                    loss = loss * batch["loss_weight"]
+                    loss = loss.mean()
 
                     accelerator.backward(loss)
-                    if accelerator.sync_gradients:
+                    if accelerator.sync_gradients and not args.use_lora:
                         params_to_clip = (
                             itertools.chain(unet.parameters(), text_encoder.parameters())
                             if train_tenc

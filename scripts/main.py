@@ -324,7 +324,7 @@ def on_ui_tabs():
                                     db_stop_text_encoder = gr.Slider(label="Step Ratio of Text Encoder Training", minimum=0, maximum=1, step=0.01, value=1, visible=True)
                                     db_clip_skip = gr.Slider(label="Clip Skip", value=1, minimum=1, maximum=12, step=1)
                                     db_adamw_weight_decay = gr.Slider(label="AdamW Weight Decay", minimum=0, maximum=1, step=1e-7, value=1e-2, visible=True)
-                                    db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
+                                    db_prior_loss_weight = gr.Slider(label="Prior Loss Weight", minimum=0.01, maximum=1, step=.01, value=0.75)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
                                     db_shuffle_tags = gr.Checkbox(label="Shuffle Tags", value=True)
                                     db_max_token_length = gr.Slider(label="Max Token Length", minimum=75, maximum=300,
@@ -850,7 +850,7 @@ def on_ui_tabs():
             _js="db_start_buckets",
             fn=debug_buckets,
             inputs=[db_model_name],
-            outputs=[db_gallery, db_prompt_list, db_status]
+            outputs=[db_status]
         )
 
         db_performance_wizard.click(

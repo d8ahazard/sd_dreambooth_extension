@@ -222,7 +222,7 @@ class PromptDataset(Dataset):
         # Loop concepts
         prompts_to_create = {}
         num_prompts_to_create = 0
-        bucket_resos, bucket_aspect_ratios = make_bucket_resolutions(max_width, min_width)
+        bucket_resos = make_bucket_resolutions(max_width, min_width)
         self.instance_paths = []
         self.class_paths = []
         for concept in concepts:
@@ -247,7 +247,6 @@ class PromptDataset(Dataset):
             for res, prompts in instance_prompts.items():
                 for prompt in prompts:
                     self.instance_paths.append(prompt[2])
-                print(f"Instance Bucket {idx}: Resolution {res}, Count: {len(prompts)}")
                 if len(prompts) > 0:
                     matched_resos.append((idx, res))
                 idx += 1
@@ -259,7 +258,6 @@ class PromptDataset(Dataset):
                         prompts = class_prompts[res]
                         for prompt in prompts:
                             self.class_paths.append(prompt[2])
-                    print(f"Class Bucket {idx}: Resolution {res}, Count: {len(prompts)}")
 
             # Loop by resolutions
             for res, inst_prompts in instance_prompts.items():
@@ -309,10 +307,10 @@ class PromptDataset(Dataset):
         for w, h in prompts_to_create:
             prompts = prompts_to_create[(w, h)]
             new_len += len(prompts)
-            print(f"Target Bucket {idx}: Resolution {w, h}, Count: {len(prompts)}")
             idx += 1
         self.total_len = new_len
-        print(f"We need a total of {new_len} images.")
+        if new_len > 0:
+            print(f"We need a total of {new_len} images.")
         self.prompts = prompts_to_create
 
     def __len__(self) -> int:
@@ -421,24 +419,28 @@ class EMAModel:
 def make_bucket_resolutions(max_size, min_size=256, divisible=64):
     resos = set()
 
-    for w in range(min_size, max_size + divisible, divisible):
-        for h in range(min_size, max_size + divisible, divisible):
+    w = max_size
+    while w > min_size:
+        h = max_size
+        while h > min_size:
             resos.add((w, h))
             resos.add((h, w))
+            h -= divisible
+        w -= divisible
 
     resos = list(resos)
     resos.sort()
+    return resos
 
-    aspect_ratios = [w / h for w, h in resos]
-    return resos, aspect_ratios
 
 def closest_resolution(width, height, resos):
     def distance(reso):
         w, h = reso
+        if w > width or h > height:
+            return float("inf")
         return (w - width) ** 2 + (h - height) ** 2
 
     return min(resos, key=distance)
-
 
 def load_dreambooth_dir(db_dir, concept: Concept, is_class: bool = True):
     img_paths = get_images(db_dir)
@@ -778,15 +780,16 @@ def generate_prompts(model_dir):
 
 
 def generate_dataset(model_name: str, instance_paths = None, class_paths = None, batch_size = None, tokenizer=None, vae=None, debug=True):
+    if debug:
+        print("Generating dataset.")
     db_gallery = gradio.update(value=None)
     db_prompt_list = gradio.update(value=None)
     db_status = gradio.update(value=None)
 
     args = from_file(model_name)
 
-    # If debugging, we pass no batch size and set to 1, so we can enumerate all items
     if batch_size is None:
-        batch_size = 1
+        batch_size = args.train_batch_size
 
     if args is None:
         print("No CONFIG!")
@@ -798,6 +801,8 @@ def generate_dataset(model_name: str, instance_paths = None, class_paths = None,
     use_concepts = False
     for conc in args.concepts_list:
         if not conc.is_valid():
+            if debug:
+                print("Concept is invalid.")
             continue
         if conc.num_class_images_per > 0:
             use_concepts = True
@@ -805,33 +810,19 @@ def generate_dataset(model_name: str, instance_paths = None, class_paths = None,
             train_img_path_captions.extend(get_captions(conc, instance_paths, False))
             if conc.num_class_images_per > 0:
                 reg_img_path_captions.extend(get_captions(conc, class_paths, True))
-        else:
-            if conc.class_token != "" and conc.instance_token != "":
-                tokens.append((conc.instance_token, conc.class_token))
-            idd = conc.instance_data_dir
-            if idd is not None and idd != "" and os.path.exists(idd):
-                img_caps = load_dreambooth_dir(idd, conc, False)
-                if conc.num_class_images_per > 0:
-                    train_img_path_captions.extend(img_caps)
-                    print(f"Found {len(train_img_path_captions)} training images.")
-
-            class_data_dir = conc.class_data_dir
-            number_class_images = conc.num_class_images_per
-            if number_class_images > 0 and class_data_dir is not None and class_data_dir != "" and os.path.exists(
-                    class_data_dir):
-                reg_caps = load_dreambooth_dir(class_data_dir, conc)
-                reg_img_path_captions.extend(reg_caps)
+        tokens.append((conc.instance_token, conc.class_token))
     if use_concepts:
         print(f"Found {len(reg_img_path_captions)} reg images.")
 
     min_bucket_reso = (int(args.resolution * 0.28125) // 64) * 64
-    from extensions.sd_dreambooth_extension.dreambooth.finetuning_dataset import DreamBoothOrFineTuningDataset
+    from extensions.sd_dreambooth_extension.dreambooth.finetuning_dataset import DbDataset, BucketCounter
 
-    print("Preparing dataset")
-    train_dataset = DreamBoothOrFineTuningDataset(
+    print("Preparing dataset...")
+    train_dataset = DbDataset(
         batch_size=batch_size,
+        counter=BucketCounter(),
         train_img_path_captions=train_img_path_captions,
-        reg_img_path_captions=reg_img_path_captions,
+        class_img_path_captions=reg_img_path_captions,
         tokens=tokens,
         tokenizer=tokenizer,
         resolution=args.resolution,
@@ -844,28 +835,7 @@ def generate_dataset(model_name: str, instance_paths = None, class_paths = None,
     )
     train_dataset.make_buckets_with_caching(vae, min_bucket_reso)
     print(f"Total dataset length (steps): {len(train_dataset)}")
-    if debug:
-        images = []
-        prompts = []
-        for example in train_dataset:
-            ex_images = example["images"]
-            ex_prompts = example["captions"]
-            if len(ex_images) == 1:
-                res = ex_images[0].size
-                b_res = example["res"]
-                cap = ex_prompts[0]
-                images.append(ex_images[0])
-                prompts.append(f"{res} B{b_res}: {cap}")
-        if len(prompts) > 0:
-            message = "Images Missing Classes:<br>"
-            for p in prompts:
-                message += f"{p}<br>"
-        else:
-            message = "No missing class images."
-            status.textinfo = message
-        return images, prompts, message
-    else:
-        return train_dataset
+    return train_dataset
 
 
 def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accelerator: Accelerator = None, ui=False):
