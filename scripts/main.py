@@ -910,7 +910,8 @@ def on_ui_tabs():
                     db_sample_negative,
                     db_sample_seed,
                     db_sample_steps,
-                    db_sample_scale],
+                    db_sample_scale,
+                    db_resolution],
             outputs=[db_gallery, db_prompt_list, db_status]
         )
 
