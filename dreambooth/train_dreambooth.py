@@ -14,12 +14,10 @@ from pathlib import Path
 import torch
 import torch.backends.cudnn
 import torch.utils.checkpoint
-from accelerate import Accelerator
 from diffusers import AutoencoderKL, DDIMScheduler, DiffusionPipeline, UNet2DConditionModel, DDPMScheduler
 from diffusers.utils import logging as dl
 from torch.cuda.profiler import profile
 from torch.utils.data import Dataset
-from tqdm.auto import tqdm
 from transformers import AutoTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth import xattention, db_shared
@@ -30,7 +28,7 @@ from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_webhook import send_training_update
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import EMAModel, generate_classifiers, \
-    PromptData, generate_dataset, TrainResult
+    PromptData, generate_dataset, TrainResult, CustomAccelerator, mytqdm
 from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
 from extensions.sd_dreambooth_extension.dreambooth.sample_dataset import SampleDataset
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models, parse_logs, printm, \
@@ -83,8 +81,9 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
 
 
     @find_executable_batch_size(starting_batch_size=args.train_batch_size,
-                                starting_grad_size=args.gradient_accumulation_steps, logging_dir=logging_dir)
-    def inner_loop(train_batch_size: int, gradient_accumulation_steps: int, profiler: profile):
+                                starting_grad_size=args.gradient_accumulation_steps,
+                                logging_dir=logging_dir)
+    def inner_loop(train_batch_size: int, gradient_accumulation_steps: int, profiler: profile, logfile: str):
         text_encoder = None
         args.tokenizer_name = None
         global last_samples
@@ -95,23 +94,14 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         if not args.pad_tokens and args.max_token_length > 75:
             print("Cannot raise token length limit above 75 when pad_tokens=False")
 
-        if args.attention == "xformers":
-            xattention.replace_unet_cross_attn_to_xformers()
-        elif args.attention == "sub_quad":
-            xattention.replace_unet_cross_attn_to_quad()
-        elif args.attention == "flash_attention":
-            xattention.replace_unet_cross_attn_to_flash_attention()
-        else:
-            xattention.replace_unet_cross_attn_to_default()
-
         weight_dtype = torch.float32
         if args.mixed_precision == "fp16":
             weight_dtype = torch.float16
         elif args.mixed_precision == "bf16":
             weight_dtype = torch.bfloat16
-
         try:
-            accelerator = Accelerator(
+            accelerator = CustomAccelerator(
+                logfile=logfile,
                 gradient_accumulation_steps=gradient_accumulation_steps,
                 mixed_precision=args.mixed_precision,
                 log_with="tensorboard",
@@ -194,7 +184,18 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         )
 
         if args.attention == "xformers":
-            set_diffusers_xformers_flag(unet, True)
+            #xattention.replace_unet_cross_attn_to_xformers()
+            xattention.set_diffusers_xformers_flag(unet, True)
+            xattention.set_diffusers_xformers_flag(vae, True)
+            xattention.set_diffusers_xformers_flag(text_encoder, True)
+        elif args.attention == "sub_quad":
+            xattention.replace_unet_cross_attn_to_quad()
+        elif args.attention == "flash_attention":
+            xattention.replace_unet_cross_attn_to_flash_attention()
+        else:
+            xattention.replace_unet_cross_attn_to_default()
+
+
         if args.gradient_checkpointing:
             unet.enable_gradient_checkpointing()
             if args.stop_text_encoder != 0:
@@ -308,6 +309,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
             result.msg = "Training interrupted."
             stop_profiler(profiler)
             return result
+
         printm("Loading dataset...")
         train_dataset = generate_dataset(
             model_name=args.model_name,
@@ -446,7 +448,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         print(f"  EMA: {args.use_ema}")
         print(f"  LR: {args.learning_rate})")
 
-        def check_save(pbar: tqdm, is_epoch_check = False):
+        def check_save(pbar: mytqdm, is_epoch_check = False):
             nonlocal last_model_save
             nonlocal last_image_save
             save_model_interval = args.save_embedding_every
@@ -710,7 +712,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
                 printm("Cleanup completed.")
 
         # Only show the progress bar once on each machine.
-        progress_bar = tqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
+        progress_bar = mytqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
         progress_bar.set_description("Steps")
         lifetime_step = args.revision
         status.job_count = max_train_steps
@@ -736,6 +738,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
                 # Skip steps until we reach the resumed step
                 if resume_from_checkpoint and epoch == first_epoch and step < resume_step:
                     progress_bar.update(train_batch_size)
+                    progress_bar.reset()
                     status.job_count = max_train_steps
                     status.job_no += train_batch_size
                     continue

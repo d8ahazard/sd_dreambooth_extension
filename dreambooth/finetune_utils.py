@@ -11,6 +11,7 @@ from typing import Iterable, Dict, List, Tuple
 
 import gradio
 import numpy as np
+import tensorflow
 import torch
 import torch.utils.checkpoint
 from accelerate import Accelerator
@@ -54,6 +55,58 @@ class PromptData:
         get the json formated string
         """
         return json.dumps(self.__dict__)
+
+
+class mytqdm(tqdm):
+    def __init__(self, iterable: Iterable = None, **kwargs):
+        self.update_ui = True
+        if "total" in kwargs:
+            total = kwargs["total"]
+            if total is not None:
+                db_shared.status.job_count = kwargs["total"]
+        if "desc" in kwargs:
+            desc = kwargs["desc"]
+            if desc is not None:
+                db_shared.status.textinfo = desc
+        super().__init__(iterable=iterable, **kwargs)
+
+    def update(self, n=1):
+        if self.update_ui:
+            db_shared.status.job_no += n
+            if db_shared.status.job_no > db_shared.status.job_count:
+                db_shared.status.job_no = db_shared.status.job_count
+        super().update(n)
+
+    def reset(self, total=None):
+        if total is not None and self.update_ui:
+            db_shared.status.job_no = 0
+            db_shared.status.job_count = total
+        super().reset(total)
+
+    def set_description(self, desc=None, refresh=True):
+        if self.update_ui:
+            db_shared.status.textinfo = desc
+        super().set_description(desc, refresh)
+    def pause_ui(self):
+        self.update_ui = False
+
+    def unpause_ui(self):
+        self.update_ui = True
+
+
+
+
+
+class CustomAccelerator(Accelerator):
+    def __init__(self, logfile, *args, **kwargs):
+        self.logfile = logfile
+        self.summary_writer = tensorflow.summary.create_file_writer(self.logfile)
+        super().__init__(*args, **kwargs)
+    def _log(self, step, metrics, prefix=''):
+        with self.summary_writer.as_default():
+            for name, value in metrics.items():
+                tensorflow.summary.scalar(name, value, step=step)
+            self.summary_writer.flush()
 
 
 class FilenameTextGetter:
@@ -162,7 +215,7 @@ def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str
             max_dim = w
         if h > max_dim:
             max_dim = h
-    for img in images:
+    for img in mytqdm(images, desc="Enumeratimg"):
         # Get prompt
         text = text_getter.read_text(img)
         prompt = text_getter.create_text(concept.class_prompt, text, concept.instance_token, concept.class_token)
@@ -211,6 +264,7 @@ def compare_prompts(src_prompt: str, check_prompt: str, tokens: [Tuple[str, str]
     check_tags = [tag for tag in check_tags if tag]
     return set(src_tags) == set(check_tags)
 
+
 class PromptDataset(Dataset):
     """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
 
@@ -228,7 +282,7 @@ class PromptDataset(Dataset):
         for concept in concepts:
             instance_dir = concept.instance_data_dir
             class_dir = concept.class_data_dir
-            
+
             # Filter empty class dir and set if necessary
             if class_dir == "" or class_dir is None or class_dir == db_shared.script_path:
                 class_dir = os.path.join(model_dir, f"classifiers_{c_idx}")
@@ -244,7 +298,7 @@ class PromptDataset(Dataset):
                 class_prompts = {}
             idx = 0
             matched_resos = []
-            for res, prompts in instance_prompts.items():
+            for res, prompts in mytqdm(instance_prompts.items(), desc="Sorting instance prompts"):
                 for prompt in prompts:
                     self.instance_paths.append(prompt[2])
                 if len(prompts) > 0:
@@ -260,7 +314,7 @@ class PromptDataset(Dataset):
                             self.class_paths.append(prompt[2])
 
             # Loop by resolutions
-            for res, inst_prompts in instance_prompts.items():
+            for res, inst_prompts in mytqdm(instance_prompts.items(), desc="Splitting by resolution"):
                 cls_prompts = class_prompts[res] if res in class_prompts else []
                 new_prompts = prompts_to_create[res] if res in prompts_to_create else []
                 if "[filewords]" not in concept.class_prompt:
@@ -770,7 +824,7 @@ def generate_prompts(model_dir):
         cur_class_images = len(get_images(class_images_dir))
         if cur_class_images < concept.num_class_images:
             sample_dataset = PromptDataset(config.concepts_list, config.model_dir, config.resolution)
-            for i in range(sample_dataset.__len__()):
+            for i in mytqdm(range(sample_dataset.__len__()), desc="Generating prompts"):
                 prompt = sample_dataset.__getitem__(i)
                 output["new_class_prompts"].append(prompt.prompt)
         c_idx += 1
@@ -881,8 +935,8 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     builder = ImageBuilder(args, use_txt2img=use_txt2img, lora_model=args.lora_model_name, lora_weight=args.lora_weight,
                            lora_txt_weight=args.lora_txt_weight, batch_size=args.sample_batch_size, accelerator=accelerator)
     generated = 0
-    pbar = tqdm(total=set_len)
     actual_idx = 0
+    pbar = mytqdm(total=set_len, desc="Generating class images")
     for i in range(set_len):
         first_res = None
         if status.interrupted or generated >= set_len:
@@ -922,13 +976,11 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
                 txt_filename = image_filename.replace(".png", ".txt")
                 with open(txt_filename, "w", encoding="utf8") as file:
                     file.write(pd.prompt)
-                status.job_no += 1
+                pbar.update()
                 i_idx += 1
                 generated += 1
                 preview_images.append(image)
                 status.textinfo = f"Class image {generated}/{set_len}, Prompt: '{pd.prompt}'"
-                if pbar is not None:
-                    pbar.update()
             except Exception as e:
                 print(f"Exception generating images: {e}")
                 traceback.print_exc()

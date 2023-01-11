@@ -8,10 +8,12 @@ import numpy as np
 import torch.utils.data
 from PIL import Image
 from torchvision.transforms import transforms
+from tqdm import tqdm
 
+from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import closest_resolution, make_bucket_resolutions, \
-    compare_prompts, get_dim
+    compare_prompts, get_dim, mytqdm
 
 
 class BucketCounter:
@@ -62,6 +64,8 @@ class DbDataset(torch.utils.data.Dataset):
         self.latents_cache = {}
         # A dictionary of string/input_id(s) pairs matching image paths
         self.caption_cache = {}
+        # The max len of all caption input_ids
+        self.max_seq_len = 0
         # A dictionary of (int, int) / List[(string, string)] of resolutions and the corresponding image paths/captions
         self.train_dict = {}
         # A dictionary of string/list[(string, string)], where the string is the instance image path, the path/captions
@@ -106,12 +110,6 @@ class DbDataset(torch.utils.data.Dataset):
         self.num_train_images = len(self.train_img_path_captions)
         self.num_class_images = len(self.class_img_path_captions)
 
-        self.image_transforms = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Normalize([0.5], [0.5]),
-            ]
-        )
 
     @staticmethod
     def open_and_trim(image_path, reso):
@@ -139,6 +137,28 @@ class DbDataset(torch.utils.data.Dataset):
             f"internal error, illegal trimmed size: {image.shape}, {reso}"
         return image
 
+    def load_image(self, image_path, caption, res):
+        if self.debug_dataset:
+            image = os.path.splitext(image_path)
+            input_ids = caption
+        else:
+            if self.cache_latents:
+                image = self.latents_cache[image_path]
+            else:
+                img = self.open_and_trim(image_path, res)
+                if self.aug is not None:
+                    img = self.aug(image=img)['image']
+                image_transform = transforms.Compose(
+                    [
+                        transforms.ToTensor(),
+                        transforms.Resize(size=(res[1], res[0])),
+                        transforms.Normalize([0.5], [0.5]),
+                    ]
+                )
+                image = image_transform(img)
+            input_ids = self.caption_cache[image_path]
+        return image, input_ids
+
     def cache_latent(self, image_path, res):
         latents = None
         if self.vae is not None:
@@ -146,7 +166,14 @@ class DbDataset(torch.utils.data.Dataset):
             if self.aug is not None:
                 image = self.aug(image=image)['image']
 
-            img_tensor = self.image_transforms(image)
+            image_transform = transforms.Compose(
+                [
+                    transforms.ToTensor(),
+                    transforms.Resize(size=(res[1], res[0])),
+                    transforms.Normalize([0.5], [0.5]),
+                ]
+            )
+            img_tensor = image_transform(image)
             img_tensor = img_tensor.unsqueeze(0).to(device=self.vae.device, dtype=self.vae.dtype)
             latents = self.vae.encode(img_tensor).latent_dist.sample().squeeze(0).to("cpu")
         self.latents_cache[image_path] = latents
@@ -160,6 +187,7 @@ class DbDataset(torch.utils.data.Dataset):
             else:
                 input_ids = self.tokenizer(caption, padding='max_length', truncation=True,
                                            return_tensors='pt').input_ids
+        self.max_seq_len = max(self.max_seq_len, input_ids.size()[1])
         self.caption_cache[image_path] = input_ids
 
     def make_buckets_with_caching(self, vae, min_size):
@@ -182,7 +210,6 @@ class DbDataset(torch.utils.data.Dataset):
 
         sort_images(self.train_img_path_captions, bucket_resos, self.train_dict)
         sort_images(self.class_img_path_captions, bucket_resos, class_dict)
-        print(f"We have {len(list(class_dict.keys()))} dict buckets, still.")
         # Enumerate by resolution, cache as needed
         def cache_images(images, reso):
             for img_path, cap in images:
@@ -195,6 +222,10 @@ class DbDataset(torch.utils.data.Dataset):
         total_len = 0
         bucket_len = {}
         max_idx_chars = len(str(len(self.train_dict.keys())))
+        p_len = self.num_class_images + self.num_train_images
+        pbar = mytqdm(total=p_len, desc="Processing images")
+        db_shared.status.job_count = p_len
+        db_shared.status.job_no = 0
         for res, train_images in self.train_dict.items():
             self.resolutions.append(res)
             class_len = 0
@@ -207,17 +238,19 @@ class DbDataset(torch.utils.data.Dataset):
                 for class_path, class_caption in class_list:
                     if compare_prompts(caption, class_caption, self.tokens):
                         instance_classes.append((class_path, class_caption))
+                        pbar.update()
                 class_count += len(instance_classes)
                 cache_images(instance_classes, res)
                 self.class_dict[image_path] = instance_classes
-                class_len += 1 + 1 if class_count > 0 else 0
+                pbar.update()
+                class_len += 1 + (1 if class_count > 0 else 0)
             bucket_len[res] = class_len
             total_len += class_len
             bucket_str = str(bucket_idx).rjust(max_idx_chars, " ")
             inst_str = str(len(train_images)).rjust(5, " ")
             class_str = str(class_count).rjust(5, " ")
             ex_str = str(class_len).rjust(5, " ")
-            print(f"Bucket {bucket_str} {res} - Instance Images: {inst_str} | Class Images: {class_str} | Examples: {ex_str}")
+            tqdm.write(f"Bucket {bucket_str} {res} - Instance Images: {inst_str} | Class Images: {class_str} | Examples: {ex_str}")
             bucket_idx += 1
 
         self._length = total_len // self.batch_size
@@ -266,21 +299,6 @@ class DbDataset(torch.utils.data.Dataset):
         self.bucket_index = 0
         self.image_index = 0
 
-    def load_image(self, image_path, caption, res):
-        if self.debug_dataset:
-            image = os.path.splitext(image_path)
-            input_ids = caption
-        else:
-            if self.cache_latents:
-                image = self.latents_cache[image_path]
-            else:
-                img = self.open_and_trim(image_path, res)
-                if self.aug is not None:
-                    img = self.aug(image=img)['image']
-
-                image = self.image_transforms(img)
-            input_ids = self.caption_cache[image_path]
-        return image, input_ids
     def __len__(self):
         return self._length
 
@@ -288,31 +306,35 @@ class DbDataset(torch.utils.data.Dataset):
         # Reset bucket counts if we're starting from the start of the dataloader
         if index == 0:
             self.set_buckets()
-        bucket_counts = {}
         # Select the current bucket of image paths
         if self.bucket_index >= len(self.active_resos):
             self.bucket_index = 0
         bucket_res = self.active_resos[self.bucket_index]
         bucket = self.train_dict[bucket_res]
         # Initialize outputs
-        images = []
-        ids = []
-        loss_weights = []
+        image_paths = []
+        images = [None] * self.batch_size
+        ids = [None] * self.batch_size
+        loss_weights = torch.empty(self.batch_size, dtype=torch.float32)
 
         # Set start position from last iteration
         img_index = self.image_index
-        
+
+        count = 0
         # Loop the current bucket until we fill our batch
         bucket_emptied = False
         repeats = 0
-        while len(images) < self.batch_size:
+        while count < self.batch_size:
             # Grab instance image data
             image_path, caption = bucket[img_index]
             image_data, input_ids = self.load_image(image_path, caption, bucket_res)
-            images.append(image_data)
-            ids.append(input_ids)
-            loss_weights.append(1.0)
-            if len(images) < self.batch_size:
+            if self.debug_dataset:
+                image_paths.append(image_path)
+            images[count] = image_data
+            ids[count] = input_ids
+            loss_weights[count] = 1.0
+            count += 1
+            if count < self.batch_size:
                 class_image_paths = self.class_dict[image_path]
                 # Select a random class image from our instance image's available class image.
                 if len(class_image_paths):
@@ -320,36 +342,34 @@ class DbDataset(torch.utils.data.Dataset):
                     if class_image_path is not None:
                         # Grab class image data
                         image_data, input_ids = self.load_image(class_image_path, class_caption, bucket_res)
-                        images.append(image_data)
-                        ids.append(input_ids)
-                        loss_weights.append(self.prior_loss_weight)
+                        images[count] = image_data
+                        ids[count] = input_ids
+                        loss_weights[count] = self.prior_loss_weight
+                        count += 1
 
             img_index += 1
-
             if img_index >= len(bucket):
                 bucket_emptied = True
                 img_index = 0
                 repeats += 1
                 self.counter.count(bucket_res)
-        self.image_index = img_index
 
+
+        self.image_index = img_index
         # If we have reached the end of our bucket, increment to the next, update the count, reset image index.
         if bucket_emptied:
-            #print(f"Incrementing bucket {self.bucket_index}-{bucket_res}, {self.counter.get(bucket_res)}")
+            # print(f"Incrementing bucket {self.bucket_index}-{bucket_res}, {self.counter.get(bucket_res)}")
             self.bucket_index += 1
             self.image_index = 0
 
         # Stack and return outputs
         if not self.debug_dataset:
             images = torch.stack(images)
-            loss_weights = torch.FloatTensor(loss_weights)
+            ids = torch.cat(ids, dim=0)
             if not self.cache_latents:
                 images = images.to(memory_format=torch.contiguous_format)
-            input_ids = torch.cat(ids, dim=0)
-        else:
-            input_ids = ids
 
-        example = {"images": images, "input_ids": input_ids, "loss_weight": loss_weights, "res": bucket_res}
+        example = {"images": images, "input_ids": ids, "loss_weight": loss_weights, "res": bucket_res}
         return example
 
 
