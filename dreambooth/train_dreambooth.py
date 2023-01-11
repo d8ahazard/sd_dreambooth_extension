@@ -66,10 +66,11 @@ def stop_profiler(profiler):
         except:
             pass
 
-def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
+def main(args: DreamboothConfig, snapshot_revision: str = "", use_txt2img=True) -> TrainResult:
     """
 
     @param args: The model config to use.
+    @param snapshot_revision: The revision of snapshot to resume.
     @param use_txt2img: Use txt2img when generating class images.
     @return: TrainResult
     """
@@ -184,7 +185,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         )
 
         if args.attention == "xformers":
-            #xattention.replace_unet_cross_attn_to_xformers()
+            xattention.replace_unet_cross_attn_to_xformers()
             xattention.set_diffusers_xformers_flag(unet, True)
             xattention.set_diffusers_xformers_flag(vae, True)
             xattention.set_diffusers_xformers_flag(text_encoder, True)
@@ -413,7 +414,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         last_model_save = 0
         last_image_save = 0
         resume_from_checkpoint = False
-        new_hotness = os.path.join(args.model_dir, "checkpoints", f"checkpoint-{args.revision}")
+        new_hotness = os.path.join(args.model_dir, "checkpoints", f"checkpoint-{snapshot_revision}")
         if os.path.exists(new_hotness):
             accelerator.print(f"Resuming from checkpoint {new_hotness}")
             try:

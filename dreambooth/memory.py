@@ -121,13 +121,16 @@ def find_executable_batch_size(function: callable = None, starting_batch_size: i
                 return function(batch_size, grad_size, prof, log_file, *args, **kwargs)
             except Exception as e:
                 if should_reduce_batch_size(e):
-                    if os.path.exists(log_file):
-                        print(f"Removing log: {log_file}")
-                        os.remove(log_file)
+                    try:
+                        if os.path.exists(log_file):
+                            print(f"Removing log: {log_file}")
+                            os.remove(log_file)
+                    except:
+                        pass
                     gc.collect()
                     torch.cuda.empty_cache()
-                    batch_size -= 1
-                    grad_size -= 1
+                    batch_size //= 2
+                    grad_size //= 2
                     if grad_size == 0:
                         grad_size = 1
                     print(f"OOM Detected, reducing batch/grad size to {batch_size}/{grad_size}.")

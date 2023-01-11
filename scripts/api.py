@@ -385,6 +385,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
     @app.get("/dreambooth/get_checkpoint")
     async def get_checkpoint(
             model_name: str = Query(description="The model name of the checkpoint to get."),
+            snapshot_revision: str = Query("", description="The model name of the checkpoint to get."),
             skip_build: bool = Query(True, description="Set to false to re-compile the checkpoint before retrieval."),
             lora_model_name: str = Query("",
                                          description="The (optional) name of the lora model to merge with the checkpoint."),
@@ -432,7 +433,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
                 skip_build = False
         if not skip_build:
             ckpt_result = compile_checkpoint(model_name, config.half_model, False, lora_model_name, lora_weight,
-                                             lora_text_weight, save_model_name, False, True)
+                                             lora_text_weight, save_model_name, False, True, snapshot_revision)
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()
                 print(f"Checkpoint aved to path: {path}")

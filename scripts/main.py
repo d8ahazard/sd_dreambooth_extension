@@ -37,7 +37,10 @@ def calc_time_left(progress, threshold, label, force_display):
     if progress == 0:
         return ""
     else:
-        time_since_start = time.time() - status.time_start
+        if status.time_start is None:
+            time_since_start = 0
+        else:
+            time_since_start = time.time() - status.time_start
         eta = (time_since_start / progress)
         eta_relative = eta - time_since_start
         if (eta_relative > threshold and progress > 0.02) or force_display:
@@ -132,7 +135,7 @@ def check_progress_call_initial():
     return pspan, gr_show(False), gr.update(value=[]), textinfo_result, gr.update(value=[]), gr_show(False)
 
 
-def ui_gen_ckpt(model_name: str):
+def ui_gen_ckpt(model_name: str, snap_revision: str):
     if isinstance(model_name, List):
         model_name = model_name[0]
     if model_name == "" or model_name is None:
@@ -145,7 +148,7 @@ def ui_gen_ckpt(model_name: str):
     lora_txt_alpha = config.lora_txt_weight
     custom_model_name = config.custom_model_name
     res = compile_checkpoint(model_name, half, use_subdir, lora_path, lora_alpha, lora_txt_alpha, custom_model_name,
-                             True, True)
+                             True, True, snap_revision)
     return res
 
 
@@ -167,6 +170,8 @@ def on_ui_tabs():
                     create_refresh_button(db_model_name, get_db_models, lambda: {
                         "choices": sorted(get_db_models())},
                                           "refresh_db_models")
+                with gr.Row():
+                    db_snaps = gr.Dropdown(label="Snapshot to Resume")
                 with gr.Row(visible=False) as lora_model_row:
                     db_lora_model_name = gr.Dropdown(label='Lora Model', choices=sorted(get_lora_models()))
                     create_refresh_button(db_lora_model_name, get_lora_models, lambda: {
@@ -820,7 +825,7 @@ def on_ui_tabs():
             _js="clear_loaded",
             fn=load_model_params,
             inputs=[db_model_name],
-            outputs=[db_model_path, db_revision, db_epochs, db_v2, db_has_ema, db_src, db_scheduler, db_status]
+            outputs=[db_model_path, db_revision, db_epochs, db_v2, db_has_ema, db_src, db_scheduler, db_snaps, db_status]
         )
 
         db_use_concepts.change(
@@ -925,7 +930,8 @@ def on_ui_tabs():
             _js="db_start_checkpoint",
             fn=wrap_gpu_call(ui_gen_ckpt),
             inputs=[
-                db_model_name
+                db_model_name,
+                db_snaps
             ],
             outputs=[
                 db_status
@@ -973,6 +979,7 @@ def on_ui_tabs():
             _js="db_start_train",
             inputs=[
                 db_model_name,
+                db_snaps,
                 db_use_txt2img
             ],
             outputs=[

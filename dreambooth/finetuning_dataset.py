@@ -64,8 +64,6 @@ class DbDataset(torch.utils.data.Dataset):
         self.latents_cache = {}
         # A dictionary of string/input_id(s) pairs matching image paths
         self.caption_cache = {}
-        # The max len of all caption input_ids
-        self.max_seq_len = 0
         # A dictionary of (int, int) / List[(string, string)] of resolutions and the corresponding image paths/captions
         self.train_dict = {}
         # A dictionary of string/list[(string, string)], where the string is the instance image path, the path/captions
@@ -87,6 +85,9 @@ class DbDataset(torch.utils.data.Dataset):
         self.batch_size = batch_size
         self.train_img_path_captions = train_img_path_captions
         self.class_img_path_captions = class_img_path_captions
+        self.num_train_images = len(self.train_img_path_captions)
+        self.num_class_images = len(self.class_img_path_captions)
+
         self.tokenizer = tokenizer
         self.resolution = resolution
         self.prior_loss_weight = prior_loss_weight
@@ -97,18 +98,15 @@ class DbDataset(torch.utils.data.Dataset):
         self.tokens = tokens
         self.vae = None
         self.cache_latents = False
-
-        # augmentation
         flip_p = 0.5 if hflip else 0.0
-        if hflip:
-            self.aug = albu.Compose([
-                albu.HorizontalFlip(p=flip_p)
-            ], p=1.)
-        else:
-            self.aug = None
+        self.image_transforms = transforms.Compose(
+            [
+                transforms.RandomHorizontalFlip(flip_p),
+                transforms.ToTensor(),
+                transforms.Normalize([0.5], [0.5]),
+            ]
+        )
 
-        self.num_train_images = len(self.train_img_path_captions)
-        self.num_class_images = len(self.class_img_path_captions)
 
 
     @staticmethod
@@ -118,6 +116,9 @@ class DbDataset(torch.utils.data.Dataset):
             image = image.convert("RGB")
         image = np.array(image, np.uint8)
         image_height, image_width = image.shape[0:2]
+        # Don't resize and junk if the image is already properly sized
+        if image_width == reso[0] and image_height == reso[1]:
+            return image
         ar_img = image_width / image_height
         ar_reso = reso[0] / reso[1]
         if ar_img > ar_reso:
@@ -146,16 +147,7 @@ class DbDataset(torch.utils.data.Dataset):
                 image = self.latents_cache[image_path]
             else:
                 img = self.open_and_trim(image_path, res)
-                if self.aug is not None:
-                    img = self.aug(image=img)['image']
-                image_transform = transforms.Compose(
-                    [
-                        transforms.ToTensor(),
-                        transforms.Resize(size=(res[1], res[0])),
-                        transforms.Normalize([0.5], [0.5]),
-                    ]
-                )
-                image = image_transform(img)
+                image = self.image_transforms(img)
             input_ids = self.caption_cache[image_path]
         return image, input_ids
 
@@ -163,17 +155,7 @@ class DbDataset(torch.utils.data.Dataset):
         latents = None
         if self.vae is not None:
             image = self.open_and_trim(image_path, res)
-            if self.aug is not None:
-                image = self.aug(image=image)['image']
-
-            image_transform = transforms.Compose(
-                [
-                    transforms.ToTensor(),
-                    transforms.Resize(size=(res[1], res[0])),
-                    transforms.Normalize([0.5], [0.5]),
-                ]
-            )
-            img_tensor = image_transform(image)
+            img_tensor = self.image_transforms(image)
             img_tensor = img_tensor.unsqueeze(0).to(device=self.vae.device, dtype=self.vae.dtype)
             latents = self.vae.encode(img_tensor).latent_dist.sample().squeeze(0).to("cpu")
         self.latents_cache[image_path] = latents
@@ -187,7 +169,6 @@ class DbDataset(torch.utils.data.Dataset):
             else:
                 input_ids = self.tokenizer(caption, padding='max_length', truncation=True,
                                            return_tensors='pt').input_ids
-        self.max_seq_len = max(self.max_seq_len, input_ids.size()[1])
         self.caption_cache[image_path] = input_ids
 
     def make_buckets_with_caching(self, vae, min_size):
@@ -265,7 +246,6 @@ class DbDataset(torch.utils.data.Dataset):
                 tags.insert(0, first_tag)
             caption = ','.join(tags)
         return caption
-
 
     def set_buckets(self):
         # Initialize list of bucket counts if not set

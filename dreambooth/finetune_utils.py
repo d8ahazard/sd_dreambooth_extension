@@ -67,6 +67,8 @@ class mytqdm(tqdm):
         if "desc" in kwargs:
             desc = kwargs["desc"]
             if desc is not None:
+                if "." not in desc and ":" not in desc:
+                    desc = f"{desc}:"
                 db_shared.status.textinfo = desc
         super().__init__(iterable=iterable, **kwargs)
 
@@ -244,7 +246,8 @@ def get_dim(filename, max_res):
         return width, height
 
 
-def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str, bucket_resos, instance_prompts = None) -> Dict[Tuple[int, int], List[str]]:
+def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str, bucket_resos, instance_prompts = None
+                 ) -> Dict[Tuple[int, int], List[str]]:
     prompts = {}
     images = get_images(img_dir)
     max_dim = 0
@@ -253,7 +256,8 @@ def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str
             max_dim = w
         if h > max_dim:
             max_dim = h
-    for img in mytqdm(images, desc="Enumeratimg"):
+    _, dirr = os.path.split(img_dir)
+    for img in mytqdm(images, desc=f"Pre-processing {dirr}"):
         # Get prompt
         text = text_getter.read_text(img)
         prompt = text_getter.create_text(concept.class_prompt, text, concept.instance_token, concept.class_token)
@@ -320,7 +324,8 @@ class PromptDataset(Dataset):
         for concept in concepts:
             instance_dir = concept.instance_data_dir
             class_dir = concept.class_data_dir
-
+            instance_prompts = {}
+            class_prompts = {}
             # Filter empty class dir and set if necessary
             if class_dir == "" or class_dir is None or class_dir == db_shared.script_path:
                 class_dir = os.path.join(model_dir, f"classifiers_{c_idx}")
@@ -329,8 +334,9 @@ class PromptDataset(Dataset):
 
             status.textinfo = "Sorting images..."
             # Sort existing prompts
-            instance_prompts = sort_prompts(concept, text_getter, instance_dir, bucket_resos)
-            if concept.num_class_images_per >= 0:
+            if instance_dir:
+                instance_prompts = sort_prompts(concept, text_getter, instance_dir, bucket_resos)
+            if concept.num_class_images_per >= 0 and class_dir:
                 class_prompts = sort_prompts(concept, text_getter, class_dir, bucket_resos, instance_prompts)
             else:
                 class_prompts = {}

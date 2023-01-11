@@ -259,9 +259,9 @@ def convert_text_enc_state_dict(text_enc_dict: Dict[str, torch.Tensor]):
     return text_enc_dict
 
 
-def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lora_path=None, lora_alpha=1.0,
-                       lora_txt_alpha=1.0, custom_model_name="",
-                       reload_models=True, log=True):
+def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lora_path: str=None, lora_alpha: float =1.0,
+                       lora_txt_alpha: float = 1.0, custom_model_name: str = "", reload_models: bool = True,
+                       log:bool =True, snap_rev: str=""):
     """
 
     @param lora_txt_alpha:
@@ -273,6 +273,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     @param lora_path: The path to a lora pt file to merge with the unet. Auto set during training.
     @param lora_alpha: The overall weight of the lora model when adding to unet. Default is 1.0
     @param log: Whether to print messages to console/UI.
+    @param snap_rev: The revision of snapshot to load from
     @return: status: What happened, path: Checkpoint path
     """
     unload_system_models()
@@ -307,14 +308,23 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
         checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}.ckpt")
 
     model_path = config.pretrained_model_name_or_path
-    new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
+    unet_path = None
+    text_enc_path = None
+    if snap_rev != "":
+        new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{snap_rev}")
+        if os.path.exists(new_hotness):
+            tqdm.write(f"Loading snapshot paths from {new_hotness}")
+            u_path = osp.join(new_hotness, "pytorch_model.bin")
+            text_path = osp.join(new_hotness, "pytorch_model_1.bin")
+            if os.path.exists(u_path):
+                unet_path = u_path
+            if os.path.exists(text_path):
+                text_enc_path = text_path
 
-    if os.path.exists(new_hotness):
-        tqdm.write(f"Loading snapshot paths from {new_hotness}")
-        unet_path = osp.join(new_hotness, "pytorch_model.bin")
-        text_enc_path = osp.join(new_hotness, "pytorch_model_1.bin")
-    else:
+    if unet_path is None:
         unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")
+
+    if text_enc_path is None:
         text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
 
     vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.bin")
