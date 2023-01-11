@@ -19,6 +19,7 @@ import shutil
 import traceback
 
 import gradio as gr
+import safetensors.torch
 import torch
 
 from extensions.sd_dreambooth_extension.dreambooth import db_shared
@@ -437,6 +438,7 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
                 paths, new_checkpoint, unet_state_dict, additional_replacements=[meta_path], config=config
             )
 
+            output_block_list = {k: sorted(v) for k, v in output_block_list.items()}
             if ["conv.weight", "conv.bias"] in output_block_list.values():
                 index = list(output_block_list.values()).index(["conv.weight", "conv.bias"])
                 new_checkpoint[f"up_blocks.{block_id}.upsamplers.0.conv.weight"] = unet_state_dict[
@@ -677,6 +679,7 @@ def convert_open_clip_checkpoint(checkpoint):
     if 'cond_stage_model.model.text_projection' in checkpoint:
         d_model = int(checkpoint['cond_stage_model.model.text_projection'].shape[0])
     else:
+        print("No projection shape found, setting to 1024")
         d_model = 1024
     text_model_dict["text_model.embeddings.position_ids"] = \
         text_model.text_model.embeddings.get_buffer('position_ids')
@@ -706,15 +709,6 @@ def convert_open_clip_checkpoint(checkpoint):
                 text_model_dict[new_key] = checkpoint[key]
 
     text_model.load_state_dict(text_model_dict)
-    # SKIP for now - need openclip -> HF conversion script here
-    #    keys = list(checkpoint.keys())
-    #
-    #    text_model_dict = {}
-    #    for key in keys:
-    #        if key.startswith("cond_stage_model.model.transformer"):
-    #            text_model_dict[key[len("cond_stage_model.model.transformer.") :]] = checkpoint[key]
-    #
-    #    text_model.load_state_dict(text_model_dict)
 
     return text_model
 
@@ -744,12 +738,9 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         status
     """
     db_config = None
-    result_status = ""
     has_ema = False
     v2 = False
     is_512 = True
-    model_dir = ""
-    scheduler = ""
     src = ""
     revision = 0
     epoch = 0
@@ -795,10 +786,14 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                 db_shared.status.job_no = 8
                 return "", "", 0, 0, "", "", "", "", 512, "", err_msg
 
-            ckpt_path = checkpoint_info.filename
+            checkpoint_file = checkpoint_info.filename
             printi("Loading checkpoint...")
-            checkpoint = torch.load(ckpt_path)
-            checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
+            _, extension = os.path.splitext(checkpoint_file)
+            if extension.lower() == ".safetensors":
+                device = db_shared.device
+                checkpoint = safetensors.torch.load_file(checkpoint_file, device=device)
+            else:
+                checkpoint = torch.load(checkpoint_file, map_location=map_location or shared.weight_load_location)
             rev_keys = ["db_global_step", "global_step"]
             epoch_keys = ["db_epoch", "epoch"]
             for key in rev_keys:
@@ -815,6 +810,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             if key_name in checkpoint and checkpoint[key_name].shape[-1] == 1024:
                 if revision == 110000:
                     # v2.1 needs to upcast attention
+                    print("Setting upcast_attention")
                     upcast_attention = True
                 if revision == 875000 or revision == 220000:
                     print(f"Model revision is {revision}, assuming v2, 512 model.")
@@ -847,14 +843,13 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             else:
                 original_config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs",
                                                     "v1-inference.yaml")
-
+        print(f"Pred and size are {prediction_type} and {image_size}")
         db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type, v2=v2,
                                      src=ckpt_path if not from_hub else new_model_url,
                                      resolution=image_size)
         db_config.lifetime_revision = revision
         db_config.epoch = epoch
 
-        sched_keys = os.path.join(db_config.model_dir, "keys.txt")
         print(f"{'v2' if v2 else 'v1'} model loaded.")
 
         # Use existing YAML if present

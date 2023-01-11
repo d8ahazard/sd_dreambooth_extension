@@ -100,7 +100,7 @@ function db_start_twizard() {
 
 // Generate checkpoint
 function db_start_checkpoint() {
-    return db_start(2, false, true, arguments);
+    return db_start(3, false, true, arguments);
 }
 
 // Generate sample prompts
@@ -126,7 +126,7 @@ function db_start_create() {
 // Train!
 function db_start_train() {
     training_started = true;
-    return db_start(3, true, true, arguments);
+    return db_start(4, true, true, arguments);
 }
 
 // Generate class images

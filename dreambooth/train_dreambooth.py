@@ -33,7 +33,7 @@ from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable
 from extensions.sd_dreambooth_extension.dreambooth.sample_dataset import SampleDataset
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models, parse_logs, printm, \
     import_model_class_from_model_name_or_path
-from extensions.sd_dreambooth_extension.dreambooth.xattention import set_diffusers_xformers_flag, optim_to
+from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, inject_trainable_lora
 from modules import shared, paths
 
@@ -66,12 +66,13 @@ def stop_profiler(profiler):
         except:
             pass
 
-def main(args: DreamboothConfig, snapshot_revision: str = "", use_txt2img=True) -> TrainResult:
+def main(args: DreamboothConfig, snapshot_revision: str = "", use_txt2img: bool = True, save_safetensors:bool = False) -> TrainResult:
     """
 
     @param args: The model config to use.
     @param snapshot_revision: The revision of snapshot to resume.
     @param use_txt2img: Use txt2img when generating class images.
+    @param save_safetensors: Save in safetensors format instead of .ckpt
     @return: TrainResult
     """
     logging_dir = Path(args.model_dir, "logging")
@@ -608,7 +609,8 @@ def main(args: DreamboothConfig, snapshot_revision: str = "", use_txt2img=True) 
                                 pbar.set_description("Compiling Checkpoint")
                                 compile_checkpoint(args.model_name, half=args.half_model, use_subdir=args.use_subdir,
                                                    reload_models=False, lora_path=out_file, log=False,
-                                                   custom_model_name=args.custom_model_name)
+                                                   custom_model_name=args.custom_model_name, snap_rev=snapshot_revision,
+                                                   save_safetensors=save_safetensors)
                                 pbar.update()
                             if args.use_ema:
                                 ema_unet.restore(unet.parameters())

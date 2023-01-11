@@ -520,11 +520,12 @@ def load_model_params(model_name):
             msg
 
 
-def start_training(model_dir: str, snapshot_revision: str = "", use_txt2img: bool = True):
+def start_training(model_dir: str, snapshot_revision: str = "", save_safetensors: bool = False, use_txt2img: bool = True):
     """
 
     @param model_dir: The directory containing the dreambooth model/config
     @param snapshot_revision: (Optional) - The snapshot revision to resume from.
+    @param save_safetensors: (Optional) - Save using safetensors instead of ckpt. Defaults to false.
     @param use_txt2img: Whether to use txt2img or diffusion pipeline for image generation.
     @return:
     lora_model_name: If using lora, this will be the model name of the saved weights. (For resuming further training)
@@ -581,7 +582,7 @@ def start_training(model_dir: str, snapshot_revision: str = "", use_txt2img: boo
             status.textinfo = "Initializing dreambooth training..."
             print(status.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
-            result = main(config, snapshot_revision=snapshot_revision, use_txt2img=use_txt2img)
+            result = main(config, snapshot_revision=snapshot_revision, use_txt2img=use_txt2img, save_safetensors=save_safetensors)
 
         config = result.config
         images = result.samples

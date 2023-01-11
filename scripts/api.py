@@ -385,11 +385,12 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
     @app.get("/dreambooth/get_checkpoint")
     async def get_checkpoint(
             model_name: str = Query(description="The model name of the checkpoint to get."),
-            snapshot_revision: str = Query("", description="The model name of the checkpoint to get."),
+            snapshot_revision: str = Query("", description="A checkpoint revision to use."),
             skip_build: bool = Query(True, description="Set to false to re-compile the checkpoint before retrieval."),
             lora_model_name: str = Query("",
                                          description="The (optional) name of the lora model to merge with the checkpoint."),
             save_model_name: str = Query("", description="A custom name to use when generating the checkpoint."),
+            save_safetensors: bool = Query(False, description="Save the model in .safetensors format instead of .ckpt"),
             lora_weight: int = Query(1, description="The weight of the lora UNET when merged with the checkpoint."),
             lora_text_weight: int = Query(1,
                                           description="The weight of the lora Text Encoder when merged with the checkpoint."),
@@ -425,6 +426,8 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
                 checkpoint_path = os.path.join(models_path, save_model_name, f"{save_model_name}_{total_steps}.ckpt")
             else:
                 checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}.ckpt")
+            if save_safetensors:
+                checkpoint_path = checkpoint_path.replace(".ckpt", ".safetensors")
             print(f"Looking for checkpoint at {checkpoint_path}")
             if os.path.exists(checkpoint_path):
                 print("Existing checkpoint found, returning.")
@@ -433,7 +436,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
                 skip_build = False
         if not skip_build:
             ckpt_result = compile_checkpoint(model_name, config.half_model, False, lora_model_name, lora_weight,
-                                             lora_text_weight, save_model_name, False, True, snapshot_revision)
+                                             lora_text_weight, save_model_name, False, True, snapshot_revision, save_safetensors)
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()
                 print(f"Checkpoint aved to path: {path}")

@@ -135,7 +135,7 @@ def check_progress_call_initial():
     return pspan, gr_show(False), gr.update(value=[]), textinfo_result, gr.update(value=[]), gr_show(False)
 
 
-def ui_gen_ckpt(model_name: str, snap_revision: str):
+def ui_gen_ckpt(model_name: str, save_safetensors, snap_revision: str):
     if isinstance(model_name, List):
         model_name = model_name[0]
     if model_name == "" or model_name is None:
@@ -148,7 +148,7 @@ def ui_gen_ckpt(model_name: str, snap_revision: str):
     lora_txt_alpha = config.lora_txt_weight
     custom_model_name = config.custom_model_name
     res = compile_checkpoint(model_name, half, use_subdir, lora_path, lora_alpha, lora_txt_alpha, custom_model_name,
-                             True, True, snap_revision)
+                             True, True, snap_revision, save_safetensors)
     return res
 
 
@@ -368,6 +368,7 @@ def on_ui_tabs():
                         gr.HTML("General")
                         db_custom_model_name = gr.Textbox(label="Custom Model Name", value="",
                                                           placeholder="Enter a model name for saving checkpoints and lora models.")
+                        db_save_safetensors = gr.Checkbox(label="Save in .safetensors format", value=False)
                     with gr.Column():
                         gr.HTML("Checkpoints")
                         db_half_model = gr.Checkbox(label="Half Model", value=False)
@@ -931,6 +932,7 @@ def on_ui_tabs():
             fn=wrap_gpu_call(ui_gen_ckpt),
             inputs=[
                 db_model_name,
+                db_save_safetensors,
                 db_snaps
             ],
             outputs=[
@@ -980,6 +982,7 @@ def on_ui_tabs():
             inputs=[
                 db_model_name,
                 db_snaps,
+                db_save_safetensors,
                 db_use_txt2img
             ],
             outputs=[

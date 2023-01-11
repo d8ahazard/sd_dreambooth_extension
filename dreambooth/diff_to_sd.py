@@ -8,6 +8,8 @@ import re
 import shutil
 import traceback
 from typing import Dict
+
+import safetensors.torch
 from tqdm.auto import tqdm
 import torch
 from diffusers import DiffusionPipeline
@@ -240,17 +242,17 @@ def convert_text_enc_state_dict_v20(text_enc_dict: Dict[str, torch.Tensor]):
 
         new_state_dict[relabelled_key] = v
 
-    re_keys = {
-        '.in_proj_weight': capture_qkv_weight,
-        '.in_proj_bias': capture_qkv_bias
-    }
-    for new_key in re_keys:
-        for k_pre, tensors in re_keys[new_key].items():
-            for t in tensors:
-                if t is None:
-                    raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
-            relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
-            new_state_dict[relabelled_key + new_key] = torch.cat(tensors)
+    for k_pre, tensors in capture_qkv_weight.items():
+        if None in tensors:
+            raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
+        relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
+        new_state_dict[relabelled_key + ".in_proj_weight"] = torch.cat(tensors)
+
+    for k_pre, tensors in capture_qkv_bias.items():
+        if None in tensors:
+            raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
+        relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
+        new_state_dict[relabelled_key + ".in_proj_bias"] = torch.cat(tensors)
 
     return new_state_dict
 
@@ -261,7 +263,7 @@ def convert_text_enc_state_dict(text_enc_dict: Dict[str, torch.Tensor]):
 
 def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lora_path: str=None, lora_alpha: float =1.0,
                        lora_txt_alpha: float = 1.0, custom_model_name: str = "", reload_models: bool = True,
-                       log:bool =True, snap_rev: str=""):
+                       log:bool =True, snap_rev: str="", save_safetensors: bool = False):
     """
 
     @param lora_txt_alpha:
@@ -274,6 +276,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     @param lora_alpha: The overall weight of the lora model when adding to unet. Default is 1.0
     @param log: Whether to print messages to console/UI.
     @param snap_rev: The revision of snapshot to load from
+    @param save_safetensors: Save checkpoint in .safetensors format
     @return: status: What happened, path: Checkpoint path
     """
     unload_system_models()
@@ -381,18 +384,12 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
             text_enc_dict = {"transformer." + k: v for k, v in text_enc_dict.items()}
             text_enc_dict = convert_text_enc_state_dict_v20(text_enc_dict)
             text_enc_dict = {"cond_stage_model.model." + k: v for k, v in text_enc_dict.items()}
-            if not config.v2:
-                config.v2 = True
-                config.save()
-                v2 = True
+            
         else:
             printi("Converting text enc dict for V1 model.", log=log)
             text_enc_dict = convert_text_enc_state_dict(text_enc_dict)
             text_enc_dict = {"cond_stage_model.transformer." + k: v for k, v in text_enc_dict.items()}
-            if config.v2:
-                config.v2 = False
-                config.save()
-                v2 = False
+            
 
         # Put together new checkpoint
         state_dict = {**unet_state_dict, **vae_state_dict, **text_enc_dict}
@@ -401,7 +398,12 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
 
         state_dict = {"db_global_step": config.revision, "db_epoch": config.epoch, "state_dict": state_dict}
         printi(f"Saving checkpoint to {checkpoint_path}...", log=log)
-        torch.save(state_dict, checkpoint_path)
+        if save_safetensors:
+            print("Saving safetensors!")
+            checkpoint_path = checkpoint_path.replace(".ckpt", ".safetensors")
+            safetensors.torch.save_file(state_dict, checkpoint_path)
+        else:
+            torch.save(state_dict, checkpoint_path)
         cfg_file = None
         new_name = os.path.join(config.model_dir, f"{config.model_name}.yaml")
         if os.path.exists(new_name):
