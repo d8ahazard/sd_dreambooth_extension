@@ -110,7 +110,7 @@ function db_start_prompts() {
 
 // Debug bucketing
 function db_start_buckets() {
-    return db_start(1, true, false, arguments);
+    return db_start(1, true, true, arguments);
 }
 
 function db_start_load_params() {
@@ -200,6 +200,7 @@ let db_titles = {
     "Load Settings": "Load last saved training parameters for the model.",
     "Log Memory": "Log the current GPU memory usage.",
     "Lora Model": "The Lora model to load for continued fine-tuning or checkpoint generation.",
+    "Lora Rank": "The rank of LoRA models. A low rank stores less information (~2MB file), and a higher rank stores more information (~60MB file). Default is 4 (~4MB file) with good results. Set based on your dataset and complexity before training [Advanced Usage].",
     "Lora UNET Learning Rate": "The learning rate at which to train lora unet. Regular learning rate is ignored.",
     "Lora Text Learning Rate": "The learning rate at which to train lora text encoder. Regular learning rate is ignored.",
     "Lora Text Weight": "What percentage of the lora weights should be applied to the text encoder when creating a checkpoint.",
@@ -231,6 +232,7 @@ let db_titles = {
     "Sample Steps": "The number of steps to use when generating classifier/regularization images.",
     "Sanity Sample Prompt": "A prompt used to generate a 'baseline' image that will be created with other samples to verify model fidelity.",
     "Sanity Sample Seed": "The seed to use when generating the validation sample image. -1 is not supported.",
+    "Save using .safetensors": "Save using safetensors format instead of .ckpt.",
     "Save and Test Webhook": "Save the currently entered webhook URL and send a test message to it.",
     "Scale Position": "The percent in training where the 'final' learning rate should be achieved. If training at 100 epochs and this is set to 0.25, the final LR will be reached at epoch 25.",
     "Save Checkpoint to Subdirectory": "When enabled, checkpoints will be saved to a subdirectory in the selected checkpoints folder.",

@@ -33,7 +33,7 @@ from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable
 from extensions.sd_dreambooth_extension.dreambooth.sample_dataset import SampleDataset
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models, parse_logs, printm, \
     import_model_class_from_model_name_or_path
-from extensions.sd_dreambooth_extension.dreambooth.xattention import set_diffusers_xformers_flag, optim_to
+from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, inject_trainable_lora
 from modules import shared, paths
 
@@ -66,7 +66,7 @@ def stop_profiler(profiler):
         except:
             pass
 
-def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
+def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
     """
 
     @param args: The model config to use.
@@ -88,6 +88,30 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         args.tokenizer_name = None
         global last_samples
         global last_prompts
+
+        if db_shared.debug:
+            method_names = [
+                "from_pretrained",
+                "to",
+                "requires_grad_",
+                "set_diffusers_xformers_flag",
+                "inject_trainable_lora",
+                "eval",
+                "get_scheduler",
+                "init_trackers",
+                "check_save",
+                "save_weights",
+                "encode",
+                "mse_loss",
+                "step",
+                "load",
+                "backward",
+                "compile_checkpoint",
+                "generate_dataset"
+
+            ]
+            #print("Debugging enabled, setting up VRAMMonitor.")
+            #vram_logger = VRAMMonitor(method_names)
 
         n_workers = 0
         args.max_token_length = int(args.max_token_length)
@@ -184,7 +208,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         )
 
         if args.attention == "xformers":
-            #xattention.replace_unet_cross_attn_to_xformers()
+            xattention.replace_unet_cross_attn_to_xformers()
             xattention.set_diffusers_xformers_flag(unet, True)
             xattention.set_diffusers_xformers_flag(vae, True)
             xattention.set_diffusers_xformers_flag(text_encoder, True)
@@ -413,7 +437,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         last_model_save = 0
         last_image_save = 0
         resume_from_checkpoint = False
-        new_hotness = os.path.join(args.model_dir, "checkpoints", f"checkpoint-{args.revision}")
+        new_hotness = os.path.join(args.model_dir, "checkpoints", f"checkpoint-{args.snapshot}")
         save_model_interval = args.save_embedding_every if args.save_embedding_every > 0 else max_train_epochs
         tenc_epochs = []
         if os.path.exists(new_hotness):
@@ -460,6 +484,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         def check_save(pbar: mytqdm, is_epoch_check = False):
             nonlocal last_model_save
             nonlocal last_image_save
+            save_model_interval = args.save_embedding_every
             save_image_interval = args.save_preview_every
             save_completed = session_epoch >= max_train_epochs
             save_canceled = status.interrupted
@@ -467,7 +492,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
             save_model = False
             if not save_canceled and not save_completed:
                 # Check to see if the number of epochs since last save is gt the interval
-                if 0 < args.save_embedding_every <= session_epoch - last_model_save:
+                if 0 < save_model_interval <= session_epoch - last_model_save:
                     save_model = True
                     last_model_save = session_epoch
 
@@ -613,9 +638,9 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
 
                             if save_checkpoint:
                                 pbar.set_description("Compiling Checkpoint")
-                                compile_checkpoint(args.model_name, half=args.half_model, use_subdir=args.use_subdir,
-                                                   reload_models=False, lora_path=out_file, log=False,
-                                                   custom_model_name=args.custom_model_name)
+                                snap_rev = str(args.revision) if save_snapshot else ""
+                                compile_checkpoint(args.model_name, reload_models=False, lora_path=out_file, log=False,
+                                                   snap_rev=snap_rev)
                                 pbar.update()
                             if args.use_ema:
                                 ema_unet.restore(unet.parameters())
@@ -901,6 +926,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         result.config = args
         result.samples = last_samples
         stop_profiler(profiler)
+        status.end()
         return result
 
     return inner_loop()

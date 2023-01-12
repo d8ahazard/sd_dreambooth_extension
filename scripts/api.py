@@ -1,5 +1,4 @@
 import base64
-import base64
 import functools
 import hashlib
 import io
@@ -128,6 +127,7 @@ class DreamboothParameters(BaseModel):
     save_lora_cancel: bool = False
     save_lora_during: bool = True
     save_preview_every: int = 5
+    save_safetensors: bool = False
     save_state_after: bool = False
     save_state_cancel: bool = False
     save_state_during: bool = False
@@ -315,6 +315,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         Returns:
             A single image or zip of images, depending on how many exist.
         """
+        key_check = check_api_key(api_key)
+        if key_check is not None:
+            return key_check
         db_shared.status.set_current_image()
         images = db_shared.status.current_image
         if not isinstance(images, List):
@@ -386,12 +389,6 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
     async def get_checkpoint(
             model_name: str = Query(description="The model name of the checkpoint to get."),
             skip_build: bool = Query(True, description="Set to false to re-compile the checkpoint before retrieval."),
-            lora_model_name: str = Query("",
-                                         description="The (optional) name of the lora model to merge with the checkpoint."),
-            save_model_name: str = Query("", description="A custom name to use when generating the checkpoint."),
-            lora_weight: int = Query(1, description="The weight of the lora UNET when merged with the checkpoint."),
-            lora_text_weight: int = Query(1,
-                                          description="The weight of the lora Text Encoder when merged with the checkpoint."),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ):
         """
@@ -409,8 +406,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             print("Something is already running.")
             return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
         path = None
-        if save_model_name == "" or save_model_name is None:
-            save_model_name = model_name
+        save_model_name = config.model_name
+        if config.custom_model_name:
+            save_model_name = config.custom_model_name
         if skip_build:
             ckpt_dir = db_shared.ckpt_dir
             models_path = os.path.join(db_shared.models_path, "Stable-diffusion")
@@ -424,6 +422,8 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
                 checkpoint_path = os.path.join(models_path, save_model_name, f"{save_model_name}_{total_steps}.ckpt")
             else:
                 checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}.ckpt")
+            if config.save_safetensors:
+                checkpoint_path = checkpoint_path.replace(".ckpt", ".safetensors")
             print(f"Looking for checkpoint at {checkpoint_path}")
             if os.path.exists(checkpoint_path):
                 print("Existing checkpoint found, returning.")
@@ -431,8 +431,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             else:
                 skip_build = False
         if not skip_build:
-            ckpt_result = compile_checkpoint(model_name, config.half_model, False, lora_model_name, lora_weight,
-                                             lora_text_weight, save_model_name, False, True)
+            db_shared.status.begin()
+            ckpt_result = compile_checkpoint(model_name, reload_models=False, log=False)
+            db_shared.status.end()
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()
                 print(f"Checkpoint aved to path: {path}")
@@ -465,7 +466,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             batch_size: int = Query(1, description="How many images to generate at once."),
             lora_model_path: str = Query("", description="The path to a lora model to use when generating images."),
             lora_rank: int = Query(1,
-                                       description="LORA rank when training, or something.."),
+                                       description="The rank of LoRA models (the amount of data to retain in the LoRA file after training)"),
             lora_weight: float = Query(1.0,
                                        description="The weight of the lora unet when merging with the base model."),
             lora_txt_weight: float = Query(1.0,
@@ -485,6 +486,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if db_shared.status.job_count != 0:
             print("Something is already running.")
             return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
+        db_shared.status.begin()
         images, msg, status = ui_samples(
             model_dir=model_name,
             save_sample_prompt=sample_prompt,
@@ -499,6 +501,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             steps=steps,
             scale=scale
         )
+        db_shared.status.end()
         if len(images) > 1:
             return zip_files(model_name, images, "_sample")
         else:

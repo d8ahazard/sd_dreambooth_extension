@@ -13,10 +13,10 @@ from accelerate import find_executable_batch_size
 from diffusers.utils import logging as dl
 
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
-from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
+from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, PromptData, generate_dataset, \
-    PromptDataset
+    PromptDataset, mytqdm
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, get_images, \
     get_lora_models, cleanup
 from modules import shared
@@ -33,6 +33,18 @@ logger.addHandler(console)
 logger.setLevel(logging.DEBUG)
 dl.set_verbosity_error()
 
+
+def get_model_snapshot(config: DreamboothConfig):
+    snaps_dir = os.path.join(config.model_dir, "checkpoints")
+    snaps = []
+    if os.path.exists(snaps_dir):
+        for file in os.listdir(snaps_dir):
+            if os.path.isdir(os.path.join(snaps_dir, file)):
+                rev_parts = file.split("-")
+                if rev_parts[0] == "checkpoint" and len(rev_parts) == 2:
+                    snaps.append(rev_parts[1])
+    print(f"Snaps: {snaps}")
+    return snaps
 
 def training_wizard_person(model_dir):
     return training_wizard(
@@ -292,7 +304,6 @@ def ui_samples(model_dir: str,
         sample_batch_size = num_samples
     @find_executable_batch_size(starting_batch_size=sample_batch_size)
     def sample_loop(batch_size):
-        status.job_count = num_samples + 1
         if model_dir is None or model_dir == "":
             return "Please select a model."
         config = from_file(model_dir)
@@ -306,7 +317,6 @@ def ui_samples(model_dir: str,
         try:
             unload_system_models()
             print(f"Loading model from {config.model_dir}.")
-            status.job_no = 1
             status.textinfo = "Loading diffusion model..."
             img_builder = ImageBuilder(
                 config,
@@ -316,8 +326,6 @@ def ui_samples(model_dir: str,
                 lora_txt_weight,
                 batch_size)
             status.textinfo = f"Generating sample image for model {config.model_name}..."
-            status.sampling_steps = 0
-            status.current_image_sampling_step = 0
             pd = PromptData()
             pd.steps = steps
             pd.prompt = save_sample_prompt
@@ -325,11 +333,13 @@ def ui_samples(model_dir: str,
             pd.scale = scale
             pd.seed = seed
             prompts = [pd] * batch_size
+            pbar = mytqdm("Generating samples")
             while len(images) < num_samples:
                 prompts_out.append(save_sample_prompt)
                 out_images = img_builder.generate_images(prompts)
                 for img in out_images:
                     if len(images) < num_samples:
+                        pbar.update()
                         images.append(img)
             img_builder.unload(True)
             reload_system_models()
@@ -429,10 +439,12 @@ def load_params(model_dir):
                "db_save_lora_cancel",
                "db_save_lora_during",
                "db_save_preview_every",
+               "db_save_safetensors",
                "db_save_state_after",
                "db_save_state_cancel",
                "db_save_state_during",
                "db_shuffle_tags",
+               "db_snapshot",
                "db_train_batch_size",
                "db_train_imagic",
                "db_stop_text_encoder",
@@ -483,14 +495,21 @@ def load_model_params(model_name):
     db_has_ema: Was the model extracted with EMA weights
     db_src: The source checkpoint that weights were extracted from or hub URL
     db_scheduler: Scheduler used for this model
+    db_model_snapshots: A gradio dropdown containing the available snapshots for the model
     db_outcome: The result of loading model params
     """
     data = from_file(model_name)
+    db_model_snapshots = gradio.update(choices=[], value="")
     if data is None:
         print("Can't load config!")
         msg = f"Error loading model params: '{model_name}'."
-        return "", "", "", "", "", "", msg
+        return "", "", "", "", "", "", db_model_snapshots, msg
     else:
+        snaps = get_model_snapshot(data)
+        snap_selection = data.revision if str(data.revision) in snaps else ""
+        snaps.insert(0, "")
+        db_model_snapshots = gradio.update(choices=snaps, value=snap_selection)
+
         msg = f"Selected model: '{model_name}'."
         return data.model_dir, \
             data.revision, \
@@ -499,6 +518,7 @@ def load_model_params(model_name):
             "True" if data.has_ema else "False", \
             data.src, \
             data.scheduler, \
+            db_model_snapshots, \
             msg
 
 
@@ -517,7 +537,6 @@ def start_training(model_dir: str, use_txt2img: bool = True):
     if model_dir == "" or model_dir is None:
         print("Invalid model name.")
         msg = "Create or select a model first."
-        dirs = get_lora_models()
         lora_model_name = gradio.update(visible=True)
         return lora_model_name, 0, 0, [], msg
     config = from_file(model_dir)
@@ -666,13 +685,13 @@ def debug_buckets(model_name):
     lines = []
     test_epochs = 10
     print(f"Simulating training for {test_epochs} epochs.")
-    for epoch in range(test_epochs):
+    for epoch in mytqdm(range(test_epochs), desc="Simulating training."):
         for step, batch in enumerate(dataloader):
             image_names = batch["images"]
             captions = batch["input_ids"]
             losses = batch["loss_weight"]
             res = batch["res"]
-            line = f"Epoch: {epoch}, Batch: {step}, Images: {len(image_names)}, Res: {res}, Loss: {losses}"
+            line = f"Epoch: {epoch}, Batch: {step}, Images: {len(image_names)}, Res: {res}, Loss: {losses.mean()}"
             print(line)
             lines.append(line)
             for image, caption in zip(image_names, captions):
@@ -684,7 +703,7 @@ def debug_buckets(model_name):
     bucket_file = os.path.join(samples_dir, "prompts.json")
     with open(bucket_file, "w") as outfile:
         json.dump(lines, outfile, indent=4)
-
+    status.end()
     return f"Debug output saved to {bucket_file}"
 
 

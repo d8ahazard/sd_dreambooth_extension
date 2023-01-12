@@ -11,7 +11,7 @@ from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generat
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret, create_secret, clear_secret
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, list_attention, \
-    list_floats, get_lora_models, wrap_gpu_call, parse_logs
+    list_floats, get_lora_models, wrap_gpu_call, parse_logs, printm
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
     training_wizard, training_wizard_person, load_model_params, ui_classifiers, ui_samples, debug_buckets
@@ -37,7 +37,10 @@ def calc_time_left(progress, threshold, label, force_display):
     if progress == 0:
         return ""
     else:
-        time_since_start = time.time() - status.time_start
+        if status.time_start is None:
+            time_since_start = 0
+        else:
+            time_since_start = time.time() - status.time_start
         eta = (time_since_start / progress)
         eta_relative = eta - time_since_start
         if (eta_relative > threshold and progress > 0.02) or force_display:
@@ -138,14 +141,9 @@ def ui_gen_ckpt(model_name: str):
     if model_name == "" or model_name is None:
         return "Please select a model."
     config = from_file(model_name)
-    half = config.half_model
-    use_subdir = config.use_subdir
+    printm("Config loaded")
     lora_path = config.lora_model_name
-    lora_alpha = config.lora_weight
-    lora_txt_alpha = config.lora_txt_weight
-    custom_model_name = config.custom_model_name
-    res = compile_checkpoint(model_name, half, use_subdir, lora_path, lora_alpha, lora_txt_alpha, custom_model_name,
-                             True, True)
+    res = compile_checkpoint(model_name, lora_path, True, True, config.snapshot)
     return res
 
 
@@ -167,6 +165,8 @@ def on_ui_tabs():
                     create_refresh_button(db_model_name, get_db_models, lambda: {
                         "choices": sorted(get_db_models())},
                                           "refresh_db_models")
+                with gr.Row():
+                    db_snapshot = gr.Dropdown(label="Snapshot to Resume")
                 with gr.Row(visible=False) as lora_model_row:
                     db_lora_model_name = gr.Dropdown(label='Lora Model', choices=sorted(get_lora_models()))
                     create_refresh_button(db_lora_model_name, get_lora_models, lambda: {
@@ -363,6 +363,7 @@ def on_ui_tabs():
                         gr.HTML("General")
                         db_custom_model_name = gr.Textbox(label="Custom Model Name", value="",
                                                           placeholder="Enter a model name for saving checkpoints and lora models.")
+                        db_save_safetensors = gr.Checkbox(label="Save in .safetensors format", value=False)
                     with gr.Column():
                         gr.HTML("Checkpoints")
                         db_half_model = gr.Checkbox(label="Half Model", value=False)
@@ -372,7 +373,7 @@ def on_ui_tabs():
                         db_save_ckpt_cancel = gr.Checkbox(label="Generate a .ckpt file when training is canceled.")
                     with gr.Column(visible=False) as lora_save_col:
                         gr.HTML("Lora")
-                        db_lora_rank = gr.Slider(label="Lora Rank", value=4, minimum=1, maximum=10, step=1)
+                        db_lora_rank = gr.Slider(label="Lora Rank", value=4, minimum=1, maximum=100, step=1)
                         db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1)
                         db_lora_txt_weight = gr.Slider(label="Lora Text Weight", value=1, minimum=0.1, maximum=1,
                                                        step=0.1)
@@ -561,12 +562,14 @@ def on_ui_tabs():
             db_save_lora_cancel,
             db_save_lora_during,
             db_save_preview_every,
+            db_save_safetensors,
             db_save_state_after,
             db_save_state_cancel,
             db_save_state_during,
             db_scheduler,
             db_src,
             db_shuffle_tags,
+            db_snapshot,
             db_train_batch_size,
             db_train_imagic_only,
             db_stop_text_encoder,
@@ -695,10 +698,12 @@ def on_ui_tabs():
                 db_save_lora_cancel,
                 db_save_lora_during,
                 db_save_preview_every,
+                db_save_safetensors,
                 db_save_state_after,
                 db_save_state_cancel,
                 db_save_state_during,
                 db_shuffle_tags,
+                db_snapshot,
                 db_train_batch_size,
                 db_train_imagic_only,
                 db_stop_text_encoder,
@@ -820,7 +825,7 @@ def on_ui_tabs():
             _js="clear_loaded",
             fn=load_model_params,
             inputs=[db_model_name],
-            outputs=[db_model_path, db_revision, db_epochs, db_v2, db_has_ema, db_src, db_scheduler, db_status]
+            outputs=[db_model_path, db_revision, db_epochs, db_v2, db_has_ema, db_src, db_scheduler, db_snapshot, db_status]
         )
 
         db_use_concepts.change(
