@@ -200,7 +200,7 @@ let db_titles = {
     "Load Settings": "Load last saved training parameters for the model.",
     "Log Memory": "Log the current GPU memory usage.",
     "Lora Model": "The Lora model to load for continued fine-tuning or checkpoint generation.",
-    "Lora Rank": "The rank of LoRA models. A low rank stores less information (~2MB file), and a higher rank stores more information (~100MB file). Default is 4 (~4MB file). Choose based on your dataset and complexity before training."
+    "Lora Rank": "The rank of LoRA models. A low rank stores less information (~2MB file), and a higher rank stores more information (~100MB file). Default is 4 (~4MB file) with good results. Set based on your dataset and complexity before training [Advanced Usage]."
     "Lora UNET Learning Rate": "The learning rate at which to train lora unet. Regular learning rate is ignored.",
     "Lora Text Learning Rate": "The learning rate at which to train lora text encoder. Regular learning rate is ignored.",
     "Lora Text Weight": "What percentage of the lora weights should be applied to the text encoder when creating a checkpoint.",
