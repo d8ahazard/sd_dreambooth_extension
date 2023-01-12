@@ -413,6 +413,7 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
         attentions_paths, new_checkpoint, unet_state_dict, additional_replacements=[meta_path], config=config
     )
 
+    print(f"We have {num_output_blocks} output blocks.")
     for i in range(num_output_blocks):
         block_id = i // (config["layers_per_block"] + 1)
         layer_in_block_id = i % (config["layers_per_block"] + 1)
@@ -425,7 +426,6 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
                 output_block_list[layer_id].append(layer_name)
             else:
                 output_block_list[layer_id] = [layer_name]
-
         if len(output_block_list) > 1:
             resnets = [key for key in output_blocks[i] if f"output_blocks.{i}.0" in key]
             attentions = [key for key in output_blocks[i] if f"output_blocks.{i}.1" in key]
@@ -439,13 +439,13 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
             )
 
             output_block_list = {k: sorted(v) for k, v in output_block_list.items()}
-            if ["conv.weight", "conv.bias"] in output_block_list.values():
-                index = list(output_block_list.values()).index(["conv.weight", "conv.bias"])
-                new_checkpoint[f"up_blocks.{block_id}.upsamplers.0.conv.weight"] = unet_state_dict[
-                    f"output_blocks.{i}.{index}.conv.weight"
-                ]
+            if ["conv.bias", "conv.weight"] in output_block_list.values():
+                index = list(output_block_list.values()).index(["conv.bias", "conv.weight"])
                 new_checkpoint[f"up_blocks.{block_id}.upsamplers.0.conv.bias"] = unet_state_dict[
                     f"output_blocks.{i}.{index}.conv.bias"
+                ]
+                new_checkpoint[f"up_blocks.{block_id}.upsamplers.0.conv.weight"] = unet_state_dict[
+                    f"output_blocks.{i}.{index}.conv.weight"
                 ]
 
                 # Clear attentions as they have been attributed above.
@@ -792,7 +792,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             if extension.lower() == ".safetensors":
                 os.environ["SAFETENSORS_FAST_GPU"] = "1"
                 device = db_shared.device
-                checkpoint = safetensors.torch.load_file(checkpoint_file, device=device)
+                checkpoint = safetensors.torch.load_file(checkpoint_file, device="cpu")
             else:
                 checkpoint = torch.load(checkpoint_file, map_location=map_location or shared.weight_load_location)
             rev_keys = ["db_global_step", "global_step"]
