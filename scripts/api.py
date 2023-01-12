@@ -471,7 +471,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             batch_size: int = Query(1, description="How many images to generate at once."),
             lora_model_path: str = Query("", description="The path to a lora model to use when generating images."),
             lora_rank: int = Query(1,
-                                       description="LORA rank when training, or something.."),
+                                       description="The rank of LoRA models (the amount of data to retain in the LoRA file after training)"),
             lora_weight: float = Query(1.0,
                                        description="The weight of the lora unet when merging with the base model."),
             lora_txt_weight: float = Query(1.0,
