@@ -404,7 +404,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         total_batch_size = train_batch_size * accelerator.num_processes * gradient_accumulation_steps
         max_train_epochs = args.num_train_epochs
         # we calculate our number of tenc training epochs
-        text_encoder_epochs = round(args.num_train_epochs * args.stop_text_encoder)
+
         global_step = 0
         global_epoch = 0
         session_epoch = 0
@@ -414,6 +414,8 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         last_image_save = 0
         resume_from_checkpoint = False
         new_hotness = os.path.join(args.model_dir, "checkpoints", f"checkpoint-{args.revision}")
+        save_model_interval = args.save_embedding_every if args.save_embedding_every > 0 else max_train_epochs
+        tenc_epochs = []
         if os.path.exists(new_hotness):
             accelerator.print(f"Resuming from checkpoint {new_hotness}")
             try:
@@ -428,6 +430,13 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
                 resume_from_checkpoint = True
                 first_epoch = args.epoch
                 global_epoch = first_epoch
+                # Calculate tenc epochs
+                num_saves = int(max_train_epochs / save_model_interval)
+                tenc_epochs_per_save = int(save_model_interval * args.stop_text_encoder)
+                for j in range(0, num_saves):
+                    start = j * save_model_interval + first_epoch
+                    tenc_epochs.append(str(start) + "-" + str(start + tenc_epochs_per_save))
+
             except Exception as lex:
                 print(f"Exception loading checkpoint: {lex}")
 
@@ -437,7 +446,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         print(f"  Batch Size Per Device = {train_batch_size}")
         print(f"  Gradient Accumulation steps = {gradient_accumulation_steps}")
         print(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
-        print(f"  Text Encoder Epochs: {text_encoder_epochs}")
+        print(f"  Text Encoder Epochs: {', '.join(tenc_epochs)}")
         print(f"  Total optimization steps = {sched_train_steps}")
         print(f"  Total training steps = {max_train_steps}")
         print(f"  Resuming from checkpoint: {resume_from_checkpoint}")
@@ -451,7 +460,6 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         def check_save(pbar: mytqdm, is_epoch_check = False):
             nonlocal last_model_save
             nonlocal last_image_save
-            save_model_interval = args.save_embedding_every
             save_image_interval = args.save_preview_every
             save_completed = session_epoch >= max_train_epochs
             save_canceled = status.interrupted
@@ -459,7 +467,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
             save_model = False
             if not save_canceled and not save_completed:
                 # Check to see if the number of epochs since last save is gt the interval
-                if 0 < save_model_interval <= session_epoch - last_model_save:
+                if 0 < args.save_embedding_every <= session_epoch - last_model_save:
                     save_model = True
                     last_model_save = session_epoch
 
@@ -725,7 +733,7 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
                 break
 
             unet.train()
-            train_tenc = epoch < text_encoder_epochs
+            train_tenc = ((epoch % save_model_interval) / save_model_interval) < args.stop_text_encoder
             if args.stop_text_encoder == 0:
                 train_tenc = False
             text_encoder.train(train_tenc)
