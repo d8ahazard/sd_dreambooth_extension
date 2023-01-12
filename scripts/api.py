@@ -1,5 +1,4 @@
 import base64
-import base64
 import functools
 import hashlib
 import io
@@ -128,6 +127,7 @@ class DreamboothParameters(BaseModel):
     save_lora_cancel: bool = False
     save_lora_during: bool = True
     save_preview_every: int = 5
+    save_safetensors: bool = False
     save_state_after: bool = False
     save_state_cancel: bool = False
     save_state_during: bool = False
@@ -315,6 +315,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         Returns:
             A single image or zip of images, depending on how many exist.
         """
+        key_check = check_api_key(api_key)
+        if key_check is not None:
+            return key_check
         db_shared.status.set_current_image()
         images = db_shared.status.current_image
         if not isinstance(images, List):
@@ -385,15 +388,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
     @app.get("/dreambooth/get_checkpoint")
     async def get_checkpoint(
             model_name: str = Query(description="The model name of the checkpoint to get."),
-            snapshot_revision: str = Query("", description="A checkpoint revision to use."),
             skip_build: bool = Query(True, description="Set to false to re-compile the checkpoint before retrieval."),
-            lora_model_name: str = Query("",
-                                         description="The (optional) name of the lora model to merge with the checkpoint."),
-            save_model_name: str = Query("", description="A custom name to use when generating the checkpoint."),
-            save_safetensors: bool = Query(False, description="Save the model in .safetensors format instead of .ckpt"),
-            lora_weight: int = Query(1, description="The weight of the lora UNET when merged with the checkpoint."),
-            lora_text_weight: int = Query(1,
-                                          description="The weight of the lora Text Encoder when merged with the checkpoint."),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ):
         """
@@ -411,8 +406,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             print("Something is already running.")
             return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
         path = None
-        if save_model_name == "" or save_model_name is None:
-            save_model_name = model_name
+        save_model_name = config.model_name
+        if config.custom_model_name:
+            save_model_name = config.custom_model_name
         if skip_build:
             ckpt_dir = db_shared.ckpt_dir
             models_path = os.path.join(db_shared.models_path, "Stable-diffusion")
@@ -426,7 +422,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
                 checkpoint_path = os.path.join(models_path, save_model_name, f"{save_model_name}_{total_steps}.ckpt")
             else:
                 checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}.ckpt")
-            if save_safetensors:
+            if config.save_safetensors:
                 checkpoint_path = checkpoint_path.replace(".ckpt", ".safetensors")
             print(f"Looking for checkpoint at {checkpoint_path}")
             if os.path.exists(checkpoint_path):
@@ -436,8 +432,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
                 skip_build = False
         if not skip_build:
             db_shared.status.begin()
-            ckpt_result = compile_checkpoint(model_name, config.half_model, False, lora_model_name, lora_weight,
-                                             lora_text_weight, save_model_name, False, True, snapshot_revision, save_safetensors)
+            ckpt_result = compile_checkpoint(model_name, reload_models=False, log=False)
             db_shared.status.end()
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()

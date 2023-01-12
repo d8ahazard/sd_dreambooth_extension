@@ -10,6 +10,7 @@ import traceback
 from typing import Dict
 
 import safetensors.torch
+from torch import Tensor
 from tqdm.auto import tqdm
 import torch
 from diffusers import DiffusionPipeline
@@ -17,6 +18,7 @@ from diffusers import DiffusionPipeline
 from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
+from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import mytqdm
 from extensions.sd_dreambooth_extension.dreambooth.utils import printi, unload_system_models, \
     reload_system_models
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
@@ -214,6 +216,57 @@ textenc_pattern = re.compile("|".join(protected.keys()))
 # Ordering is from https://github.com/pytorch/pytorch/blob/master/test/cpp/api/modules.cpp
 code2idx = {'q': 0, 'k': 1, 'v': 2}
 
+def conv_fp16(t: Tensor):
+    return t.half()
+
+
+def conv_bf16(t: Tensor):
+    return t.bfloat16()
+
+
+def conv_full(t):
+    return t
+
+
+_g_precision_func = {
+    "no": conv_full,
+    "fp16": conv_fp16,
+    "bf16": conv_bf16,
+}
+
+def check_weight_type(k: str) -> str:
+    if k.startswith("model.diffusion_model"):
+        return "unet"
+    elif k.startswith("first_stage_model"):
+        return "vae"
+    elif k.startswith("cond_stage_model"):
+        return "clip"
+    return "other"
+
+def split_dict(state_dict):
+    ok = {}
+    json_dict = {}
+
+    def _hf(wk: str, t: Tensor):
+        if isinstance(t, Tensor) or str(type(t)) == "tensor":
+            ok[wk] = t
+        else:
+            if isinstance(t, int) or isinstance(t, float):
+                json_dict[wk] = str(t)
+            if isinstance(t, str):
+                json_dict[wk] = t
+            if isinstance(t, Dict):
+                moar_ok, moar_json = split_dict(t)
+                ok.update(moar_ok)
+                json_dict.update(moar_json)
+
+    print("Converting model...")
+
+
+    for k, v in mytqdm(state_dict.items()):
+        _hf(k, v)
+
+    return ok, json_dict
 
 def convert_text_enc_state_dict_v20(text_enc_dict: Dict[str, torch.Tensor]):
     new_state_dict = {}
@@ -261,22 +314,14 @@ def convert_text_enc_state_dict(text_enc_dict: Dict[str, torch.Tensor]):
     return text_enc_dict
 
 
-def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lora_path: str=None, lora_alpha: float =1.0,
-                       lora_txt_alpha: float = 1.0, custom_model_name: str = "", reload_models: bool = True,
-                       log:bool =True, snap_rev: str="", save_safetensors: bool = False):
+def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool = True, log:bool =True, snap_rev: str=""):
     """
 
-    @param lora_txt_alpha:
-    @param custom_model_name:
     @param model_name: The model name to compile
-    @param half: Use FP16 when compiling
-    @param use_subdir: Save to a subdirectory of the checkpoints folder
     @param reload_models: Whether to reload the system list of checkpoints.
     @param lora_path: The path to a lora pt file to merge with the unet. Auto set during training.
-    @param lora_alpha: The overall weight of the lora model when adding to unet. Default is 1.0
     @param log: Whether to print messages to console/UI.
     @param snap_rev: The revision of snapshot to load from
-    @param save_safetensors: Save checkpoint in .safetensors format
     @return: status: What happened, path: Checkpoint path
     """
     unload_system_models()
@@ -284,11 +329,14 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     status.job_no = 0
     status.job_count = 7
 
-    save_model_name = model_name if custom_model_name == "" else custom_model_name
-    if custom_model_name == "":
+    config = from_file(model_name)
+    if lora_path is None and config.lora_model_name:
+        lora_path = config.lora_model_name
+    save_model_name = model_name if config.custom_model_name == "" else config.custom_model_name
+    if config.custom_model_name == "":
         printi(f"Compiling checkpoint for {model_name}...", log=log)
     else:
-        printi(f"Compiling checkpoint for {model_name} with a custom name {custom_model_name}", log=log)
+        printi(f"Compiling checkpoint for {model_name} with a custom name {config.custom_model_name}", log=log)
 
     if not model_name:
         msg = "Select a model to compile."
@@ -300,15 +348,15 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
     if ckpt_dir is not None:
         models_path = ckpt_dir
 
-    config = from_file(model_name)
+    save_safetensors = config.save_safetensors
     lora_diffusers = ""
     v2 = config.v2
     total_steps = config.revision
-    if use_subdir:
+    if config.use_subdir:
         os.makedirs(os.path.join(models_path, save_model_name), exist_ok=True)
-        checkpoint_path = os.path.join(models_path, save_model_name, f"{save_model_name}_{total_steps}.ckpt")
-    else:
-        checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}.ckpt")
+        models_path = os.path.join(models_path, save_model_name)
+
+    checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}.ckpt")
 
     model_path = config.pretrained_model_name_or_path
     unet_path = None
@@ -349,15 +397,15 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
             printi(f"Loading lora from {lora_path}", log=log)
             if os.path.exists(lora_path):
                 checkpoint_path = checkpoint_path.replace(".ckpt", "_lora.ckpt")
-                printi(f"Applying lora weight of alpha: {lora_alpha} to unet...", log=log)
-                weight_apply_lora(loaded_pipeline.unet, torch.load(lora_path), alpha=lora_alpha)
+                printi(f"Applying lora weight of alpha: {config.lora_weight} to unet...", log=log)
+                weight_apply_lora(loaded_pipeline.unet, torch.load(lora_path), alpha=config.lora_weight)
                 printi("Saving lora unet...", log=log)
                 loaded_pipeline.unet.save_pretrained(os.path.join(config.pretrained_model_name_or_path, "unet_lora"))
                 unet_path = osp.join(config.pretrained_model_name_or_path, "unet_lora", "diffusion_pytorch_model.bin")
             lora_txt = lora_path.replace(".pt", "_txt.pt")
             if os.path.exists(lora_txt):
-                printi(f"Applying lora weight of alpha: {lora_txt_alpha} to text encoder...", log=log)
-                weight_apply_lora(loaded_pipeline.text_encoder, torch.load(lora_txt), target_replace_module=["CLIPAttention"], alpha=lora_txt_alpha)
+                printi(f"Applying lora weight of alpha: {config.lora_txt_weight} to text encoder...", log=log)
+                weight_apply_lora(loaded_pipeline.text_encoder, torch.load(lora_txt), target_replace_module=["CLIPAttention"], alpha=config.lora_weight)
                 printi("Saving lora text encoder...", log=log)
                 loaded_pipeline.text_encoder.save_pretrained(
                     os.path.join(config.pretrained_model_name_or_path, "text_encoder_lora"))
@@ -393,16 +441,16 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
 
         # Put together new checkpoint
         state_dict = {**unet_state_dict, **vae_state_dict, **text_enc_dict}
-        if half:
+        if config.half_model:
             state_dict = {k: v.half() for k, v in state_dict.items()}
 
         state_dict = {"db_global_step": config.revision, "db_epoch": config.epoch, "state_dict": state_dict}
         printi(f"Saving checkpoint to {checkpoint_path}...", log=log)
         if save_safetensors:
-            print("Saving safetensors!")
+            print("Safe tensors already saved?")
             checkpoint_path = checkpoint_path.replace(".ckpt", ".safetensors")
-            os.environ["SAFETENSORS_FAST_GPU"] = "1"
-            safetensors.torch.save_file(state_dict, checkpoint_path)
+            safe_dict, json_dict = split_dict(state_dict)
+            safetensors.torch.save_file(safe_dict, checkpoint_path, json_dict)
         else:
             torch.save(state_dict, checkpoint_path)
         cfg_file = None
@@ -415,6 +463,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
 
         if cfg_file is not None:
             cfg_dest = checkpoint_path.replace(".ckpt", ".yaml")
+            cfg_dest = checkpoint_path.replace(".safetensors", ".yaml")
             printi(f"Copying config file from {cfg_dest} to {cfg_dest}", log=log)
             shutil.copyfile(cfg_file, cfg_dest)
 

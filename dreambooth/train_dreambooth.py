@@ -66,13 +66,11 @@ def stop_profiler(profiler):
         except:
             pass
 
-def main(args: DreamboothConfig, snapshot_revision: str = "", use_txt2img: bool = True, save_safetensors:bool = False) -> TrainResult:
+def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
     """
 
     @param args: The model config to use.
-    @param snapshot_revision: The revision of snapshot to resume.
     @param use_txt2img: Use txt2img when generating class images.
-    @param save_safetensors: Save in safetensors format instead of .ckpt
     @return: TrainResult
     """
     logging_dir = Path(args.model_dir, "logging")
@@ -90,6 +88,30 @@ def main(args: DreamboothConfig, snapshot_revision: str = "", use_txt2img: bool 
         args.tokenizer_name = None
         global last_samples
         global last_prompts
+
+        if db_shared.debug:
+            method_names = [
+                "from_pretrained",
+                "to",
+                "requires_grad_",
+                "set_diffusers_xformers_flag",
+                "inject_trainable_lora",
+                "eval",
+                "get_scheduler",
+                "init_trackers",
+                "check_save",
+                "save_weights",
+                "encode",
+                "mse_loss",
+                "step",
+                "load",
+                "backward",
+                "compile_checkpoint",
+                "generate_dataset"
+
+            ]
+            #print("Debugging enabled, setting up VRAMMonitor.")
+            #vram_logger = VRAMMonitor(method_names)
 
         n_workers = 0
         args.max_token_length = int(args.max_token_length)
@@ -415,7 +437,7 @@ def main(args: DreamboothConfig, snapshot_revision: str = "", use_txt2img: bool 
         last_model_save = 0
         last_image_save = 0
         resume_from_checkpoint = False
-        new_hotness = os.path.join(args.model_dir, "checkpoints", f"checkpoint-{snapshot_revision}")
+        new_hotness = os.path.join(args.model_dir, "checkpoints", f"checkpoint-{args.snapshot}")
         if os.path.exists(new_hotness):
             accelerator.print(f"Resuming from checkpoint {new_hotness}")
             try:
@@ -607,10 +629,9 @@ def main(args: DreamboothConfig, snapshot_revision: str = "", use_txt2img: bool 
 
                             if save_checkpoint:
                                 pbar.set_description("Compiling Checkpoint")
-                                compile_checkpoint(args.model_name, half=args.half_model, use_subdir=args.use_subdir,
-                                                   reload_models=False, lora_path=out_file, log=False,
-                                                   custom_model_name=args.custom_model_name, snap_rev=snapshot_revision,
-                                                   save_safetensors=save_safetensors)
+                                snap_rev = str(args.revision) if save_snapshot else ""
+                                compile_checkpoint(args.model_name, reload_models=False, lora_path=out_file, log=False,
+                                                   snap_rev=snap_rev)
                                 pbar.update()
                             if args.use_ema:
                                 ema_unet.restore(unet.parameters())
@@ -896,6 +917,7 @@ def main(args: DreamboothConfig, snapshot_revision: str = "", use_txt2img: bool 
         result.config = args
         result.samples = last_samples
         stop_profiler(profiler)
+        status.end()
         return result
 
     return inner_loop()

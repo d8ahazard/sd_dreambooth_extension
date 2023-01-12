@@ -135,20 +135,15 @@ def check_progress_call_initial():
     return pspan, gr_show(False), gr.update(value=[]), textinfo_result, gr.update(value=[]), gr_show(False)
 
 
-def ui_gen_ckpt(model_name: str, save_safetensors: bool, snap_revision: str):
+def ui_gen_ckpt(model_name: str):
     if isinstance(model_name, List):
         model_name = model_name[0]
     if model_name == "" or model_name is None:
         return "Please select a model."
     config = from_file(model_name)
-    half = config.half_model
-    use_subdir = config.use_subdir
+    printm("Config loaded")
     lora_path = config.lora_model_name
-    lora_alpha = config.lora_weight
-    lora_txt_alpha = config.lora_txt_weight
-    custom_model_name = config.custom_model_name
-    res = compile_checkpoint(model_name, half, use_subdir, lora_path, lora_alpha, lora_txt_alpha, custom_model_name,
-                             True, True, snap_revision, save_safetensors)
+    res = compile_checkpoint(model_name, lora_path, True, True, config.snapshot)
     return res
 
 
@@ -171,7 +166,7 @@ def on_ui_tabs():
                         "choices": sorted(get_db_models())},
                                           "refresh_db_models")
                 with gr.Row():
-                    db_snaps = gr.Dropdown(label="Snapshot to Resume")
+                    db_snapshot = gr.Dropdown(label="Snapshot to Resume")
                 with gr.Row(visible=False) as lora_model_row:
                     db_lora_model_name = gr.Dropdown(label='Lora Model', choices=sorted(get_lora_models()))
                     create_refresh_button(db_lora_model_name, get_lora_models, lambda: {
@@ -567,12 +562,14 @@ def on_ui_tabs():
             db_save_lora_cancel,
             db_save_lora_during,
             db_save_preview_every,
+            db_save_safetensors,
             db_save_state_after,
             db_save_state_cancel,
             db_save_state_during,
             db_scheduler,
             db_src,
             db_shuffle_tags,
+            db_snapshot,
             db_train_batch_size,
             db_train_imagic_only,
             db_stop_text_encoder,
@@ -701,10 +698,12 @@ def on_ui_tabs():
                 db_save_lora_cancel,
                 db_save_lora_during,
                 db_save_preview_every,
+                db_save_safetensors,
                 db_save_state_after,
                 db_save_state_cancel,
                 db_save_state_during,
                 db_shuffle_tags,
+                db_snapshot,
                 db_train_batch_size,
                 db_train_imagic_only,
                 db_stop_text_encoder,
@@ -826,7 +825,7 @@ def on_ui_tabs():
             _js="clear_loaded",
             fn=load_model_params,
             inputs=[db_model_name],
-            outputs=[db_model_path, db_revision, db_epochs, db_v2, db_has_ema, db_src, db_scheduler, db_snaps, db_status]
+            outputs=[db_model_path, db_revision, db_epochs, db_v2, db_has_ema, db_src, db_scheduler, db_snapshot, db_status]
         )
 
         db_use_concepts.change(
@@ -931,9 +930,7 @@ def on_ui_tabs():
             _js="db_start_checkpoint",
             fn=wrap_gpu_call(ui_gen_ckpt),
             inputs=[
-                db_model_name,
-                db_save_safetensors,
-                db_snaps
+                db_model_name
             ],
             outputs=[
                 db_status
@@ -981,8 +978,6 @@ def on_ui_tabs():
             _js="db_start_train",
             inputs=[
                 db_model_name,
-                db_snaps,
-                db_save_safetensors,
                 db_use_txt2img
             ],
             outputs=[
