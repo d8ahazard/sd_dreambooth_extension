@@ -454,7 +454,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 resume_from_checkpoint = True
                 first_epoch = args.epoch
                 global_epoch = first_epoch
-
             except Exception as lex:
                 print(f"Exception loading checkpoint: {lex}")
 
