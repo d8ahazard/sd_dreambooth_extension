@@ -454,15 +454,16 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 resume_from_checkpoint = True
                 first_epoch = args.epoch
                 global_epoch = first_epoch
-                # Calculate tenc epochs
-                num_saves = int(max_train_epochs / save_model_interval)
-                tenc_epochs_per_save = int(save_model_interval * args.stop_text_encoder)
-                for j in range(0, num_saves):
-                    start = j * save_model_interval + first_epoch
-                    tenc_epochs.append(str(start) + "-" + str(start + tenc_epochs_per_save))
 
             except Exception as lex:
                 print(f"Exception loading checkpoint: {lex}")
+
+        # Calculate tenc epochs
+        num_saves = int(max_train_epochs / save_model_interval)
+        tenc_epochs_per_save = int(save_model_interval * args.stop_text_encoder)
+        for j in range(0, num_saves):
+            start = j * save_model_interval + first_epoch
+            tenc_epochs.append(str(start) + "-" + str(start + tenc_epochs_per_save))
 
         print("  ***** Running training *****")
         print(f"  Num batches each epoch = {len(train_dataloader)}")
