@@ -790,6 +790,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             printi("Loading checkpoint...")
             _, extension = os.path.splitext(checkpoint_file)
             if extension.lower() == ".safetensors":
+                os.environ["SAFETENSORS_FAST_GPU"] = "1"
                 device = db_shared.device
                 checkpoint = safetensors.torch.load_file(checkpoint_file, device=device)
             else:

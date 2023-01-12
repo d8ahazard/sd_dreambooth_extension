@@ -401,6 +401,7 @@ def compile_checkpoint(model_name: str, half: bool, use_subdir: bool = False, lo
         if save_safetensors:
             print("Saving safetensors!")
             checkpoint_path = checkpoint_path.replace(".ckpt", ".safetensors")
+            os.environ["SAFETENSORS_FAST_GPU"] = "1"
             safetensors.torch.save_file(state_dict, checkpoint_path)
         else:
             torch.save(state_dict, checkpoint_path)

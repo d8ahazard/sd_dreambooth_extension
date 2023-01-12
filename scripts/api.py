@@ -435,8 +435,10 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             else:
                 skip_build = False
         if not skip_build:
+            db_shared.status.begin()
             ckpt_result = compile_checkpoint(model_name, config.half_model, False, lora_model_name, lora_weight,
                                              lora_text_weight, save_model_name, False, True, snapshot_revision, save_safetensors)
+            db_shared.status.end()
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()
                 print(f"Checkpoint aved to path: {path}")
@@ -489,6 +491,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if db_shared.status.job_count != 0:
             print("Something is already running.")
             return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
+        db_shared.status.begin()
         images, msg, status = ui_samples(
             model_dir=model_name,
             save_sample_prompt=sample_prompt,
@@ -503,6 +506,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             steps=steps,
             scale=scale
         )
+        db_shared.status.end()
         if len(images) > 1:
             return zip_files(model_name, images, "_sample")
         else:

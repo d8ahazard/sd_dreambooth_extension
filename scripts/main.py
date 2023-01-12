@@ -11,7 +11,7 @@ from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generat
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret, create_secret, clear_secret
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, list_attention, \
-    list_floats, get_lora_models, wrap_gpu_call, parse_logs
+    list_floats, get_lora_models, wrap_gpu_call, parse_logs, printm
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
     training_wizard, training_wizard_person, load_model_params, ui_classifiers, ui_samples, debug_buckets
@@ -135,7 +135,7 @@ def check_progress_call_initial():
     return pspan, gr_show(False), gr.update(value=[]), textinfo_result, gr.update(value=[]), gr_show(False)
 
 
-def ui_gen_ckpt(model_name: str, save_safetensors, snap_revision: str):
+def ui_gen_ckpt(model_name: str, save_safetensors: bool, snap_revision: str):
     if isinstance(model_name, List):
         model_name = model_name[0]
     if model_name == "" or model_name is None:

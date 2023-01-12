@@ -960,6 +960,7 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
         print(f"Exception generating dataset: {str(p)}")
         traceback.print_exc()
         if ui:
+            db_shared.status.end()
             return 0, []
         else:
             return 0, inst_paths, class_paths
@@ -968,6 +969,7 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     if set_len == 0:
         print("Nothing to generate.")
         if ui:
+            db_shared.status.end()
             return 0, []
         else:
             return 0, inst_paths, class_paths
@@ -1035,6 +1037,7 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     cleanup()
     print(f"Generated {generated} new class images.")
     if ui:
+        db_shared.status.end()
         return generated, out_images
     else:
         print("UI RETURN.")
