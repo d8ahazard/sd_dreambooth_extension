@@ -378,7 +378,7 @@ def on_ui_tabs():
                         db_save_ckpt_cancel = gr.Checkbox(label="Generate a .ckpt file when training is canceled.")
                     with gr.Column(visible=False) as lora_save_col:
                         gr.HTML("Lora")
-                        db_lora_rank = gr.Slider(label="Lora Rank", value=4, minimum=1, maximum=10, step=1)
+                        db_lora_rank = gr.Slider(label="Lora Rank", value=4, minimum=1, maximum=100, step=1)
                         db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1)
                         db_lora_txt_weight = gr.Slider(label="Lora Text Weight", value=1, minimum=0.1, maximum=1,
                                                        step=0.1)
