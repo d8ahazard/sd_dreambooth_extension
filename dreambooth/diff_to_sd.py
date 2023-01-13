@@ -447,7 +447,6 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
         state_dict = {"db_global_step": config.revision, "db_epoch": config.epoch, "state_dict": state_dict}
         printi(f"Saving checkpoint to {checkpoint_path}...", log=log)
         if save_safetensors:
-            print("Safe tensors already saved?")
             safe_dict, json_dict = split_dict(state_dict)
             safetensors.torch.save_file(safe_dict, checkpoint_path, json_dict)
         else:

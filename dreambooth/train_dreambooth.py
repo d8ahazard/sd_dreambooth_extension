@@ -22,6 +22,7 @@ from transformers import AutoTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth import xattention, db_shared
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SampleData
+from extensions.sd_dreambooth_extension.dreambooth.db_bucket_sampler import BucketSampler
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.db_optimization import get_scheduler
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
@@ -56,7 +57,21 @@ last_prompts = []
 
 
 def collate_fn(examples):
-    return examples[0]
+    input_ids = [example["input_id"] for example in examples]
+    pixel_values = [example["image"] for example in examples]
+    loss_weights = torch.tensor([example["loss_weight"] for example in examples], dtype=torch.float32)
+
+    pixel_values = torch.stack(pixel_values)
+    pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
+    input_ids = torch.cat(input_ids, dim=0)
+
+    batch = {
+        "input_ids": input_ids,
+        "images": pixel_values,
+        "loss_weights": loss_weights.mean()
+    }
+    return batch
+
 
 def stop_profiler(profiler):
     if profiler is not None:
@@ -368,11 +383,16 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             stop_profiler(profiler)
             return result
 
+        sampler = BucketSampler(train_dataset, train_batch_size)
 
         train_dataloader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=1, shuffle=False, collate_fn=collate_fn, num_workers=n_workers)
+            train_dataset,
+            batch_size=1,
+            batch_sampler=sampler,
+            collate_fn=collate_fn,
+            num_workers=n_workers)
 
-        max_train_steps = args.num_train_epochs * len(train_dataloader) * train_batch_size
+        max_train_steps = args.num_train_epochs * len(train_dataset)
 
         # This is separate, because optimizer.step is only called once per "step" in training, so it's not
         # affected by batch size
@@ -456,7 +476,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 print(f"Exception loading checkpoint: {lex}")
 
         print("  ***** Running training *****")
-        print(f"  Num batches each epoch = {len(train_dataloader)}")
+        print(f"  Num batches each epoch = {len(train_dataset) // train_batch_size}")
         print(f"  Num Epochs = {max_train_epochs}")
         print(f"  Batch Size Per Device = {train_batch_size}")
         print(f"  Gradient Accumulation steps = {gradient_accumulation_steps}")
@@ -738,6 +758,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         # Only show the progress bar once on each machine.
         progress_bar = mytqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
         progress_bar.set_description("Steps")
+        progress_bar.set_postfix(refresh=True)
         lifetime_step = args.revision
         status.job_count = max_train_steps
         status.job_no = global_step
@@ -804,7 +825,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
                     loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="none")
                     loss = loss.mean([1, 2, 3])
-                    loss = loss * batch["loss_weight"]
+                    loss = loss * batch["loss_weights"]
                     loss = loss.mean()
 
                     accelerator.backward(loss)

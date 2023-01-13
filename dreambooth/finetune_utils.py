@@ -913,12 +913,11 @@ def generate_dataset(model_name: str, instance_paths = None, class_paths = None,
         print(f"Found {len(reg_img_path_captions)} reg images.")
 
     min_bucket_reso = (int(args.resolution * 0.28125) // 64) * 64
-    from extensions.sd_dreambooth_extension.dreambooth.finetuning_dataset import DbDataset, BucketCounter
+    from extensions.sd_dreambooth_extension.dreambooth.finetuning_dataset import DbDataset
 
     print("Preparing dataset...")
     train_dataset = DbDataset(
         batch_size=batch_size,
-        counter=BucketCounter(),
         train_img_path_captions=train_img_path_captions,
         class_img_path_captions=reg_img_path_captions,
         tokens=tokens,
@@ -932,6 +931,7 @@ def generate_dataset(model_name: str, instance_paths = None, class_paths = None,
         debug_dataset=debug
     )
     train_dataset.make_buckets_with_caching(vae, min_bucket_reso)
+    #train_dataset = train_dataset.pin_memory()
     print(f"Total dataset length (steps): {len(train_dataset)}")
     return train_dataset
 

@@ -12,6 +12,7 @@ import torch.utils.data.dataloader
 from accelerate import find_executable_batch_size
 from diffusers.utils import logging as dl
 
+from extensions.sd_dreambooth_extension.dreambooth.db_bucket_sampler import BucketSampler
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
@@ -662,8 +663,16 @@ def ui_classifiers(model_name: str,
         status.textinfo = msg
     return images, msg
 
-def collate_fn(examples):
-    return examples[0]
+def debug_collate_fn(examples):
+    input_ids = [example["input_id"] for example in examples]
+    pixel_values = [example["image"] for example in examples]
+    loss_weights = torch.tensor([example["loss_weight"] for example in examples], dtype=torch.float32)
+    batch = {
+        "input_ids": input_ids,
+        "images": pixel_values,
+        "loss_weights": loss_weights
+    }
+    return batch
 
 def debug_buckets(model_name):
     print("Debug click?")
@@ -679,8 +688,20 @@ def debug_buckets(model_name):
     class_paths = prompt_dataset.class_paths
     print("Generating training dataset...")
     dataset = generate_dataset(model_name, inst_paths, class_paths, 10, debug=True)
+
+    sampler = BucketSampler(dataset, args.train_batch_size)
+    n_workers = 0
+
     dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=1, shuffle=False, collate_fn=collate_fn, num_workers=0)
+        dataset,
+        batch_sampler=sampler,
+        batch_size=1,
+        shuffle=False,
+        drop_last=False,
+        collate_fn=debug_collate_fn,
+        pin_memory=True,
+        num_workers=n_workers)
+
 
     lines = []
     test_epochs = 10
@@ -689,9 +710,8 @@ def debug_buckets(model_name):
         for step, batch in enumerate(dataloader):
             image_names = batch["images"]
             captions = batch["input_ids"]
-            losses = batch["loss_weight"]
-            res = batch["res"]
-            line = f"Epoch: {epoch}, Batch: {step}, Images: {len(image_names)}, Res: {res}, Loss: {losses.mean()}"
+            losses = batch["loss_weights"]
+            line = f"Epoch: {epoch}, Batch: {step}, Images: {len(image_names)}, Loss: {losses.mean()}"
             print(line)
             lines.append(line)
             for image, caption in zip(image_names, captions):
