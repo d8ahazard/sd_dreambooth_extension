@@ -21,6 +21,7 @@ import traceback
 import gradio as gr
 import safetensors.torch
 import torch
+from diffusers.pipelines.paint_by_example import PaintByExampleImageEncoder
 
 from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, sanitize_name
@@ -48,11 +49,11 @@ from diffusers import (
     LMSDiscreteScheduler,
     PNDMScheduler,
     StableDiffusionPipeline,
-    UNet2DConditionModel,
+    UNet2DConditionModel, PaintByExamplePipeline,
 )
 from diffusers.pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBertConfig, LDMBertModel
 from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
-from transformers import AutoFeatureExtractor, BertTokenizerFast, CLIPTextModel, CLIPTokenizer
+from transformers import AutoFeatureExtractor, BertTokenizerFast, CLIPTextModel, CLIPTokenizer, CLIPVisionConfig
 
 
 def shave_segments(path, n_shave_prefix_segments=1):
@@ -413,7 +414,6 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
         attentions_paths, new_checkpoint, unet_state_dict, additional_replacements=[meta_path], config=config
     )
 
-    print(f"We have {num_output_blocks} output blocks.")
     for i in range(num_output_blocks):
         block_id = i // (config["layers_per_block"] + 1)
         layer_in_block_id = i % (config["layers_per_block"] + 1)
@@ -426,11 +426,12 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
                 output_block_list[layer_id].append(layer_name)
             else:
                 output_block_list[layer_id] = [layer_name]
+
         if len(output_block_list) > 1:
             resnets = [key for key in output_blocks[i] if f"output_blocks.{i}.0" in key]
             attentions = [key for key in output_blocks[i] if f"output_blocks.{i}.1" in key]
 
-            # resnet_0_paths = renew_resnet_paths(resnets)
+            resnet_0_paths = renew_resnet_paths(resnets)
             paths = renew_resnet_paths(resnets)
 
             meta_path = {"old": f"output_blocks.{i}.0", "new": f"up_blocks.{block_id}.resnets.{layer_in_block_id}"}
@@ -441,11 +442,11 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
             output_block_list = {k: sorted(v) for k, v in output_block_list.items()}
             if ["conv.bias", "conv.weight"] in output_block_list.values():
                 index = list(output_block_list.values()).index(["conv.bias", "conv.weight"])
-                new_checkpoint[f"up_blocks.{block_id}.upsamplers.0.conv.bias"] = unet_state_dict[
-                    f"output_blocks.{i}.{index}.conv.bias"
-                ]
                 new_checkpoint[f"up_blocks.{block_id}.upsamplers.0.conv.weight"] = unet_state_dict[
                     f"output_blocks.{i}.{index}.conv.weight"
+                ]
+                new_checkpoint[f"up_blocks.{block_id}.upsamplers.0.conv.bias"] = unet_state_dict[
+                    f"output_blocks.{i}.{index}.conv.bias"
                 ]
 
                 # Clear attentions as they have been attributed above.
@@ -656,19 +657,88 @@ textenc_conversion_lst = [
     ('cond_stage_model.model.ln_final.bias', 'text_model.final_layer_norm.bias')
 ]
 textenc_conversion_map = {x[0]: x[1] for x in textenc_conversion_lst}
+
 textenc_transformer_conversion_lst = [
-    ('resblocks.', 'text_model.encoder.layers.'),
-    ('ln_1', 'layer_norm1'),
-    ('ln_2', 'layer_norm2'),
-    ('.c_fc.', '.fc1.'),
-    ('.c_proj.', '.fc2.'),
-    ('.attn', '.self_attn'),
-    ('ln_final.', 'transformer.text_model.final_layer_norm.'),
-    ('token_embedding.weight', 'transformer.text_model.embeddings.token_embedding.weight'),
-    ('positional_embedding', 'transformer.text_model.embeddings.position_embedding.weight')
+    # (stable-diffusion, HF Diffusers)
+    ("resblocks.", "text_model.encoder.layers."),
+    ("ln_1", "layer_norm1"),
+    ("ln_2", "layer_norm2"),
+    (".c_fc.", ".fc1."),
+    (".c_proj.", ".fc2."),
+    (".attn", ".self_attn"),
+    ("ln_final.", "transformer.text_model.final_layer_norm."),
+    ("token_embedding.weight", "transformer.text_model.embeddings.token_embedding.weight"),
+    ("positional_embedding", "transformer.text_model.embeddings.position_embedding.weight"),
 ]
 protected = {re.escape(x[0]): x[1] for x in textenc_transformer_conversion_lst}
 textenc_pattern = re.compile("|".join(protected.keys()))
+
+
+def convert_paint_by_example_checkpoint(checkpoint):
+    config = CLIPVisionConfig.from_pretrained("openai/clip-vit-large-patch14")
+    model = PaintByExampleImageEncoder(config)
+
+    keys = list(checkpoint.keys())
+
+    text_model_dict = {}
+
+    for key in keys:
+        if key.startswith("cond_stage_model.transformer"):
+            text_model_dict[key[len("cond_stage_model.transformer.") :]] = checkpoint[key]
+
+    # load clip vision
+    model.model.load_state_dict(text_model_dict)
+
+    # load mapper
+    keys_mapper = {
+        k[len("cond_stage_model.mapper.res") :]: v
+        for k, v in checkpoint.items()
+        if k.startswith("cond_stage_model.mapper")
+    }
+
+    MAPPING = {
+        "attn.c_qkv": ["attn1.to_q", "attn1.to_k", "attn1.to_v"],
+        "attn.c_proj": ["attn1.to_out.0"],
+        "ln_1": ["norm1"],
+        "ln_2": ["norm3"],
+        "mlp.c_fc": ["ff.net.0.proj"],
+        "mlp.c_proj": ["ff.net.2"],
+    }
+
+    mapped_weights = {}
+    for key, value in keys_mapper.items():
+        prefix = key[: len("blocks.i")]
+        suffix = key.split(prefix)[-1].split(".")[-1]
+        name = key.split(prefix)[-1].split(suffix)[0][1:-1]
+        mapped_names = MAPPING[name]
+
+        num_splits = len(mapped_names)
+        for i, mapped_name in enumerate(mapped_names):
+            new_name = ".".join([prefix, mapped_name, suffix])
+            shape = value.shape[0] // num_splits
+            mapped_weights[new_name] = value[i * shape : (i + 1) * shape]
+
+    model.mapper.load_state_dict(mapped_weights)
+
+    # load final layer norm
+    model.final_layer_norm.load_state_dict(
+        {
+            "bias": checkpoint["cond_stage_model.final_ln.bias"],
+            "weight": checkpoint["cond_stage_model.final_ln.weight"],
+        }
+    )
+
+    # load final proj
+    model.proj_out.load_state_dict(
+        {
+            "bias": checkpoint["proj_out.bias"],
+            "weight": checkpoint["proj_out.weight"],
+        }
+    )
+
+    # load uncond vector
+    model.uncond_vector.data = torch.nn.Parameter(checkpoint["learnable_vector"])
+    return model
 
 
 def convert_open_clip_checkpoint(checkpoint):
@@ -681,28 +751,27 @@ def convert_open_clip_checkpoint(checkpoint):
     else:
         print("No projection shape found, setting to 1024")
         d_model = 1024
-    text_model_dict["text_model.embeddings.position_ids"] = \
-        text_model.text_model.embeddings.get_buffer('position_ids')
+    text_model_dict["text_model.embeddings.position_ids"] = text_model.text_model.embeddings.get_buffer("position_ids")
 
     for key in keys:
-        if 'resblocks.23' in key:  # Diffusers drops the final layer and only uses the penultimate layer
+        if "resblocks.23" in key:  # Diffusers drops the final layer and only uses the penultimate layer
             continue
         if key in textenc_conversion_map:
             text_model_dict[textenc_conversion_map[key]] = checkpoint[key]
         if key.startswith("cond_stage_model.model.transformer."):
-            new_key = key[len("cond_stage_model.model.transformer."):]
+            new_key = key[len("cond_stage_model.model.transformer.") :]
             if new_key.endswith(".in_proj_weight"):
-                new_key = new_key[:-len(".in_proj_weight")]
+                new_key = new_key[: -len(".in_proj_weight")]
                 new_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], new_key)
-                text_model_dict[new_key + '.q_proj.weight'] = checkpoint[key][:d_model, :]
-                text_model_dict[new_key + '.k_proj.weight'] = checkpoint[key][d_model:d_model * 2, :]
-                text_model_dict[new_key + '.v_proj.weight'] = checkpoint[key][d_model * 2:, :]
+                text_model_dict[new_key + ".q_proj.weight"] = checkpoint[key][:d_model, :]
+                text_model_dict[new_key + ".k_proj.weight"] = checkpoint[key][d_model : d_model * 2, :]
+                text_model_dict[new_key + ".v_proj.weight"] = checkpoint[key][d_model * 2 :, :]
             elif new_key.endswith(".in_proj_bias"):
-                new_key = new_key[:-len(".in_proj_bias")]
+                new_key = new_key[: -len(".in_proj_bias")]
                 new_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], new_key)
-                text_model_dict[new_key + '.q_proj.bias'] = checkpoint[key][:d_model]
-                text_model_dict[new_key + '.k_proj.bias'] = checkpoint[key][d_model:d_model * 2]
-                text_model_dict[new_key + '.v_proj.bias'] = checkpoint[key][d_model * 2:]
+                text_model_dict[new_key + ".q_proj.bias"] = checkpoint[key][:d_model]
+                text_model_dict[new_key + ".k_proj.bias"] = checkpoint[key][d_model : d_model * 2]
+                text_model_dict[new_key + ".v_proj.bias"] = checkpoint[key][d_model * 2 :]
             else:
                 new_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], new_key)
 
@@ -795,6 +864,8 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                 checkpoint = safetensors.torch.load_file(checkpoint_file, device="cpu")
             else:
                 checkpoint = torch.load(checkpoint_file, map_location=map_location or shared.weight_load_location)
+                checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
+
             rev_keys = ["db_global_step", "global_step"]
             epoch_keys = ["db_epoch", "epoch"]
             for key in rev_keys:
@@ -939,18 +1010,18 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                     feature_extractor=None,
                     requires_safety_checker=False,
                 )
-            # elif text_model_type == "PaintByExample":
-            #     vision_model = convert_paint_by_example_checkpoint(checkpoint)
-            #     tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
-            #     feature_extractor = AutoFeatureExtractor.from_pretrained("CompVis/stable-diffusion-safety-checker")
-            #     pipe = PaintByExamplePipeline(
-            #         vae=vae,
-            #         image_encoder=vision_model,
-            #         unet=unet,
-            #         scheduler=scheduler,
-            #         safety_checker=None,
-            #         feature_extractor=feature_extractor,
-            #     )
+            elif text_model_type == "PaintByExample":
+                vision_model = convert_paint_by_example_checkpoint(checkpoint)
+                tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
+                feature_extractor = AutoFeatureExtractor.from_pretrained("CompVis/stable-diffusion-safety-checker")
+                pipe = PaintByExamplePipeline(
+                    vae=vae,
+                    image_encoder=vision_model,
+                    unet=unet,
+                    scheduler=scheduler,
+                    safety_checker=None,
+                    feature_extractor=feature_extractor,
+                )
             elif text_model_type == "FrozenCLIPEmbedder":
                 text_model = convert_ldm_clip_checkpoint(checkpoint)
                 tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")

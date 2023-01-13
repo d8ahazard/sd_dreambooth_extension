@@ -295,17 +295,17 @@ def convert_text_enc_state_dict_v20(text_enc_dict: Dict[str, torch.Tensor]):
 
         new_state_dict[relabelled_key] = v
 
-    for k_pre, tensors in capture_qkv_weight.items():
-        if None in tensors:
-            raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
-        relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
-        new_state_dict[relabelled_key + ".in_proj_weight"] = torch.cat(tensors)
-
-    for k_pre, tensors in capture_qkv_bias.items():
-        if None in tensors:
-            raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
-        relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
-        new_state_dict[relabelled_key + ".in_proj_bias"] = torch.cat(tensors)
+    re_keys = {
+        '.in_proj_weight': capture_qkv_weight,
+        '.in_proj_bias': capture_qkv_bias
+    }
+    for new_key in re_keys:
+        for k_pre, tensors in re_keys[new_key].items():
+            for t in tensors:
+                if t is None:
+                    raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
+            relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
+            new_state_dict[relabelled_key + new_key] = torch.cat(tensors)
 
     return new_state_dict
 
