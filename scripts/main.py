@@ -324,11 +324,19 @@ def on_ui_tabs():
                                     db_stop_text_encoder = gr.Slider(label="Step Ratio of Text Encoder Training", minimum=0, maximum=1, step=0.01, value=1, visible=True)
                                     db_clip_skip = gr.Slider(label="Clip Skip", value=1, minimum=1, maximum=12, step=1)
                                     db_adamw_weight_decay = gr.Slider(label="AdamW Weight Decay", minimum=0, maximum=1, step=1e-7, value=1e-2, visible=True)
-                                    db_prior_loss_weight = gr.Slider(label="Prior Loss Weight", minimum=0.01, maximum=1, step=.01, value=0.75)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
                                     db_shuffle_tags = gr.Checkbox(label="Shuffle Tags", value=True)
                                     db_max_token_length = gr.Slider(label="Max Token Length", minimum=75, maximum=300,
                                                                     step=75)
+                                with gr.Column():
+                                    gr.HTML(value="Prior Loss")
+                                    db_prior_loss_scale = gr.Checkbox(label="Scale Prior Loss", value=False)
+                                    db_prior_loss_weight = gr.Slider(label="Prior Loss Weight", minimum=0.01, maximum=1,
+                                                                     step=.01, value=0.75)
+                                    db_prior_loss_target = gr.Number(label="Prior Loss Target", value=100)
+                                    db_prior_loss_weight_min = gr.Slider(label="Minimum Prior Loss Weight", minimum=0.01,
+                                                                  maximum=1, step=.01, value=0.1)
+
 
                     with gr.Row():
                         with gr.Column(scale=2):
@@ -417,13 +425,14 @@ def on_ui_tabs():
                 db_check_progress = gr.Button("Check Progress", elem_id=f"db_check_progress", visible=False)
                 db_update_params = gr.Button("Update Parameters", elem_id="db_update_params", visible=False)
 
-                def check_toggles(use_ema, use_lora, lr_scheduler, stop_text_encoder):
+                def check_toggles(use_ema, use_lora, lr_scheduler, stop_text_encoder, scale_prior):
                     pad_tokens = update_pad_tokens(stop_text_encoder)
                     show_ema, lora_save, lora_lr, lora_model = disable_ema(use_lora)
                     if not use_lora and use_ema:
                         disable_lora(use_ema)
                     lr_power, lr_cycles, lr_scale_pos, lr_factor, learning_rate_min, lr_warmup_steps = toggle_lr_min(
                         lr_scheduler)
+                    loss_min, loss_tgt = toggle_loss_items(scale_prior)
                     return pad_tokens,\
                         show_ema,\
                         lora_save,\
@@ -434,11 +443,13 @@ def on_ui_tabs():
                         lr_scale_pos,\
                         lr_factor,\
                         learning_rate_min,\
-                        lr_warmup_steps
+                        lr_warmup_steps, \
+                        loss_min, \
+                        loss_tgt
 
                 db_update_params.click(
                     fn=check_toggles,
-                    inputs=[db_use_ema, db_use_lora, db_lr_scheduler, db_stop_text_encoder],
+                    inputs=[db_use_ema, db_use_lora, db_lr_scheduler, db_stop_text_encoder, db_prior_loss_scale],
                     outputs=[db_pad_tokens,
                              db_use_ema,
                              lora_save_col,
@@ -449,7 +460,9 @@ def on_ui_tabs():
                              db_lr_scale_pos,
                              db_lr_factor,
                              db_learning_rate_min,
-                             db_lr_warmup_steps]
+                             db_lr_warmup_steps,
+                             db_prior_loss_weight_min,
+                             db_prior_loss_target]
 
                 )
 
@@ -548,7 +561,10 @@ def on_ui_tabs():
             db_num_train_epochs,
             db_pad_tokens,
             db_pretrained_vae_name_or_path,
+            db_prior_loss_scale,
+            db_prior_loss_target,
             db_prior_loss_weight,
+            db_prior_loss_weight_min,
             db_resolution,
             db_revision,
             db_sample_batch_size,
@@ -685,7 +701,10 @@ def on_ui_tabs():
                 db_num_train_epochs,
                 db_pad_tokens,
                 db_pretrained_vae_name_or_path,
+                db_prior_loss_scale,
+                db_prior_loss_target,
                 db_prior_loss_weight,
+                db_prior_loss_weight_min,
                 db_resolution,
                 db_sample_batch_size,
                 db_sanity_prompt,
@@ -773,10 +792,19 @@ def on_ui_tabs():
         def toggle_new_rows(create_from):
             return gr.update(visible=create_from), gr.update(visible=not create_from)
 
+        def toggle_loss_items(scale):
+            return gr.update(visible=scale), gr.update(visible=scale)
+
         db_create_from_hub.change(
             fn=toggle_new_rows,
             inputs=[db_create_from_hub],
             outputs=[hub_row, local_row],
+        )
+
+        db_prior_loss_scale.change(
+            fn=toggle_loss_items,
+            inputs=[db_prior_loss_scale],
+            outputs=[db_prior_loss_weight_min, db_prior_loss_target]
         )
 
         def disable_ema(x):

@@ -113,7 +113,10 @@ class DreamboothParameters(BaseModel):
     num_train_epochs: int = 100
     pad_tokens: bool = True
     pretrained_vae_name_or_path: Union[str, None] = ""
+    prior_loss_scale: bool = False
+    prior_loss_target: int = 100
     prior_loss_weight: float = 1.0
+    prior_loss_weight_min: float = 0.1
     resolution: int = 512
     revision: int = 0
     sample_batch_size: int = 1

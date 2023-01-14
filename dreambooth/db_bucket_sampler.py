@@ -15,6 +15,7 @@ class BucketSampler:
         self.current_bucket = 0
         self.current_index = 0
         self.total_samples = 0
+        self.prior_loss_weight = 1.0
         self.set_buckets()
 
     def __iter__(self):
@@ -35,6 +36,10 @@ class BucketSampler:
 
     def __len__(self):
         return len(self.dataset.active_resolution) * self.batch_size
+
+
+    def set_prior_loss(self, loss):
+        self.prior_loss_weight = loss
 
     def set_buckets(self):
         # Initialize list of bucket counts if not set
@@ -71,6 +76,7 @@ class BucketSampler:
         batch = []
         repeats = 0
         while len(batch) < self.batch_size:
+            self.dataset.prior_loss_weight = self.prior_loss_weight
             self.dataset.active_resolution = current_res
             img_index, img_repeats = self.dataset.get_example(current_res)
             #next_item = torch.as_tensor(next_item, device='cpu', dtype=torch.float)

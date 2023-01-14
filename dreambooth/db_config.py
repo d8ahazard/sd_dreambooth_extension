@@ -58,7 +58,10 @@ class DreamboothConfig:
                  num_train_epochs: int = 100,
                  pad_tokens: bool = True,
                  pretrained_vae_name_or_path: str = "",
+                 prior_loss_scale: bool = False,
+                 prior_loss_target: int = 100,
                  prior_loss_weight: float = 1.0,
+                 prior_loss_weight_min: float = 0.1,
                  resolution: int = 512,
                  revision: int = 0,
                  sample_batch_size: int = 1,
@@ -196,7 +199,10 @@ class DreamboothConfig:
         self.pad_tokens = pad_tokens
         self.pretrained_model_name_or_path = working_dir
         self.pretrained_vae_name_or_path = pretrained_vae_name_or_path
+        self.prior_loss_scale = prior_loss_scale
+        self.prior_loss_target = prior_loss_target
         self.prior_loss_weight = prior_loss_weight
+        self.prior_loss_weight_min = prior_loss_weight_min
         self.resolution = resolution
         self.revision = int(revision)
         self.sample_batch_size = sample_batch_size

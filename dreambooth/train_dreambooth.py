@@ -73,6 +73,20 @@ def collate_fn(examples):
     return batch
 
 
+def current_prior_loss(args, current_epoch):
+    if not args.prior_loss_scale:
+        return args.prior_loss_weight
+    if not args.prior_loss_target:
+        args.prior_loss_target = 150
+    if not args.prior_loss_weight_min:
+        args.prior_loss_weight_min = 0.1
+    if current_epoch >= args.prior_loss_target:
+        return args.prior_loss_weight_min
+    percentage_completed = current_epoch / args.prior_loss_target
+    prior = args.prior_loss_weight * (1 - percentage_completed) + args.prior_loss_weight_min * percentage_completed
+    return prior
+
+
 def stop_profiler(profiler):
     if profiler is not None:
         try:
@@ -392,6 +406,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             collate_fn=collate_fn,
             num_workers=n_workers)
 
+        # Todo: Update prior loss values with args
+        sampler.set_prior_loss(current_prior_loss(args, args.epoch))
+
         max_train_steps = args.num_train_epochs * len(train_dataset)
 
         # This is separate, because optimizer.step is only called once per "step" in training, so it's not
@@ -491,6 +508,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         print(f"  Gradient Checkpointing: {args.gradient_checkpointing}")
         print(f"  EMA: {args.use_ema}")
         print(f"  LR: {args.learning_rate})")
+
 
         def check_save(pbar: mytqdm, is_epoch_check = False):
             nonlocal last_model_save
@@ -760,6 +778,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         progress_bar.set_description("Steps")
         progress_bar.set_postfix(refresh=True)
         lifetime_step = args.revision
+        lifetime_epoch = args.epoch
         status.job_count = max_train_steps
         status.job_no = global_step
         training_complete = False
@@ -778,6 +797,10 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 text_encoder.requires_grad_(train_tenc)
 
             loss_total = 0
+
+            # Todo: Update prior loss values with args
+
+            sampler.set_prior_loss(current_prior_loss(args, lifetime_epoch))
 
             for step, batch in enumerate(train_dataloader):
                 # Skip steps until we reach the resumed step
@@ -898,6 +921,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
             args.epoch += 1
             global_epoch += 1
+            lifetime_epoch += 1
             session_epoch += 1
 
             status.job_count = max_train_steps
