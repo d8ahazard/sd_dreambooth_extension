@@ -860,8 +860,10 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             _, extension = os.path.splitext(checkpoint_file)
             if extension.lower() == ".safetensors":
                 os.environ["SAFETENSORS_FAST_GPU"] = "1"
-                device = db_shared.device
-                checkpoint = safetensors.torch.load_file(checkpoint_file, device="cpu")
+                try:
+                    checkpoint = safetensors.torch.load_file(checkpoint_file, device="cpu")
+                except Exception as e:
+                    checkpoint = torch.jit.load(checkpoint_file)
             else:
                 checkpoint = torch.load(checkpoint_file, map_location=map_location or shared.weight_load_location)
                 checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
