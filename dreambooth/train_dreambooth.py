@@ -56,22 +56,6 @@ last_samples = []
 last_prompts = []
 
 
-def collate_fn(examples):
-    input_ids = [example["input_id"] for example in examples]
-    pixel_values = [example["image"] for example in examples]
-    loss_weights = torch.tensor([example["loss_weight"] for example in examples], dtype=torch.float32)
-
-    pixel_values = torch.stack(pixel_values)
-    pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
-    input_ids = torch.cat(input_ids, dim=0)
-
-    batch = {
-        "input_ids": input_ids,
-        "images": pixel_values,
-        "loss_weights": loss_weights.mean()
-    }
-    return batch
-
 
 def current_prior_loss(args, current_epoch):
     if not args.prior_loss_scale:
@@ -396,6 +380,23 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             result.config = args
             stop_profiler(profiler)
             return result
+
+        def collate_fn(examples):
+            input_ids = [example["input_id"] for example in examples]
+            pixel_values = [example["image"] for example in examples]
+            loss_weights = torch.tensor([example["loss_weight"] for example in examples], dtype=torch.float32)
+
+            pixel_values = torch.stack(pixel_values)
+            if not args.cache_latents:
+                pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
+            input_ids = torch.cat(input_ids, dim=0)
+
+            batch = {
+                "input_ids": input_ids,
+                "images": pixel_values,
+                "loss_weights": loss_weights.mean()
+            }
+            return batch
 
         sampler = BucketSampler(train_dataset, train_batch_size)
 
