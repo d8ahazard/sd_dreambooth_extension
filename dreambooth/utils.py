@@ -466,14 +466,16 @@ def parse_logs(model_name: str, for_ui: bool = False):
 
         ram_img = os.path.join(model_config.model_dir, "logging", f"ram_plot_{model_config.revision}.png")
         plotted_ram.figure.savefig(ram_img)
-        log_ram = Image.open(ram_img)
-        out_images.append(log_ram)
+        out_images.append(ram_img)
         out_names.append("VRAM Usage")
         if for_ui:
             out_names = "<br>".join(out_names)
     except:
         pass
-
+    
+    del out_loss
+    del out_lr
+    del out_ram
     return out_images, out_names
 
 

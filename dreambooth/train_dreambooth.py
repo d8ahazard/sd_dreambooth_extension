@@ -718,8 +718,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                                          width=args.resolution,
                                                          generator=g_cuda).images[0]
                                     sample_prompts.append(c.prompt)
-                                    samples.append(s_image)
                                     image_name = os.path.join(sample_dir, f"sample_{args.revision}-{ci}.png")
+                                    samples.append(image_name)
                                     txt_name = image_name.replace(".png", ".txt")
                                     with open(txt_name, "w", encoding="utf8") as txt_file:
                                         txt_file.write(c.prompt)
@@ -766,7 +766,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     # Preserve the reference again
                     vae = None
 
-                unload_system_models()
                 status.current_image = last_samples
                 printm("Cleanup.")
                 optim_to(torch, profiler, optimizer, accelerator.device)
