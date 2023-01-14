@@ -208,6 +208,8 @@ def performance_wizard(model_name):
     use_lora = False
     use_ema = False
     config = None
+    save_samples_every = gradio.update(visible=True)
+    save_weights_every = gradio.update(visible=True)
     if model_name == "" or model_name is None:
         print("Can't load config, specify a model name!")
     else:
@@ -269,6 +271,8 @@ def performance_wizard(model_name):
             train_batch_size = 1
         if gb < 12:
             use_lora = True
+            save_samples_every = gradio.update(value=0)
+            save_weights_every = gradio.update(value=0)
 
         msg = f"Calculated training params based on {gb}GB of VRAM:"
     except Exception as e:
@@ -283,7 +287,8 @@ def performance_wizard(model_name):
     for key in log_dict:
         msg += f"<br>{key}: {log_dict[key]}"
     return attention, gradient_checkpointing, gradient_accumulation_steps, mixed_precision, cache_latents, \
-        sample_batch_size, train_batch_size, stop_text_encoder, use_8bit_adam, use_lora, use_ema, msg
+        sample_batch_size, train_batch_size, stop_text_encoder, use_8bit_adam, use_lora, use_ema, save_samples_every,\
+        save_weights_every, msg
 
 
 
