@@ -518,10 +518,16 @@ class ImageBuilder:
             current_model = sd_models.select_checkpoint()
             new_model_info = get_checkpoint_match(config.src)
             if new_model_info is not None and current_model is not None:
-                if new_model_info[0] != current_model[0]:
+                if isinstance(new_model_info, sd_models.CheckpointInfo) and new_model_info.sha256 != current_model.sha256:
+                    self.last_model = current_model
+                    print(f"Loading model: {new_model_info.model_name}")
+                    sd_models.load_model(new_model_info)
+                # named tuple fallback for older CheckpointInfo data structure
+                elif isinstance(new_model_info, tuple) and new_model_info[0] != current_model[0]:
                     self.last_model = current_model
                     print(f"Loading model: {new_model_info[0]}")
                     sd_models.load_model(new_model_info)
+
             if new_model_info is not None and current_model is None:
                 sd_models.load_model(new_model_info)
             shared.sd_model.to(shared.device)
