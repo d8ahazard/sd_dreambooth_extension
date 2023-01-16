@@ -387,15 +387,13 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         if args.gradient_checkpointing:
             unet.enable_gradient_checkpointing()
             text_encoder.gradient_checkpointing_enable()
-            
+
         # Based on https://github.com/openai/CLIP/issues/83
         text_encoder_params = {
-                    "params": itertools.chain(*text_encoder_lora_params),
-                    "lr": args.lora_txt_learning_rate,
+                    "lr": args.lora_txt_learning_rate if args.use_lora else 5e-5,
                     "eps": 1e-6,
                     "weight_decay": 0.2
                 }
-
         if args.use_lora:
             params_to_optimize = ([
                 {
@@ -411,7 +409,10 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
                     "params": itertools.chain(*unet.parameters()),
                     "lr": args.learning_rate
                 },
-                {"params": itertools.chain(*text_encoder.parameters()), **text_encoder_params}
+                {
+                    "params": itertools.chain(*text_encoder.parameters()),
+                    **text_encoder_params
+                } if args.stop_text_encoder == 0 else {}
             ])
 
         optimizer = optimizer_class(params_to_optimize)
