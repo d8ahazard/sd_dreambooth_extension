@@ -387,17 +387,34 @@ def main(args: DreamboothConfig, use_txt2img=True) -> TrainResult:
         if args.gradient_checkpointing:
             unet.enable_gradient_checkpointing()
             text_encoder.gradient_checkpointing_enable()
+            
+        # Based on https://github.com/openai/CLIP/issues/83
+        text_encoder_params = {
+                    "params": itertools.chain(*text_encoder_lora_params),
+                    "lr": args.lora_txt_learning_rate,
+                    "eps": 1e-6,
+                    "weight_decay": 0.2
+                }
+
         if args.use_lora:
             params_to_optimize = ([
-                {"params": itertools.chain(*unet_lora_params), "lr": args.lora_learning_rate},
-                {"params": itertools.chain(*text_encoder_lora_params),"lr": args.lora_txt_learning_rate}
+                {
+                    "params": itertools.chain(*unet_lora_params),
+                    "lr": args.lora_learning_rate,
+                    "weight_decay": args.adamw_weight_decay
+                },
+                {"params": itertools.chain(*text_encoder_lora_params), **text_encoder_params}
             ])
         else:
-            params_to_optimize = (
-                itertools.chain(unet.parameters(), text_encoder.parameters())
-            )
+            params_to_optimize = ([
+                {
+                    "params": itertools.chain(*unet.parameters()),
+                    "lr": args.learning_rate
+                },
+                {"params": itertools.chain(*text_encoder.parameters()), **text_encoder_params}
+            ])
 
-        optimizer = optimizer_class(params_to_optimize, lr=args.learning_rate if not args.use_lora else args.lora_learning_rate)
+        optimizer = optimizer_class(params_to_optimize)
 
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset, batch_size=1, shuffle=False, collate_fn=collate_fn, num_workers=n_workers)
