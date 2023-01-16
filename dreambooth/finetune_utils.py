@@ -983,6 +983,10 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     generated = 0
     actual_idx = 0
     pbar = mytqdm(total=set_len, desc="Generating class images")
+    for j in range(set_len):
+        # Prepend class token if not present in the class prompt
+        if args.concepts_list[0].class_token != '' and prompt_dataset.prompts[(512, 512)][j].prompt.find(args.concepts_list[0].class_token) ==-1 :
+            prompt_dataset.prompts[(512, 512)][j].prompt = args.concepts_list[0].class_token +", "+ prompt_dataset.prompts[(512, 512)][j].prompt
     for i in range(set_len):
         first_res = None
         if status.interrupted or generated >= set_len:
