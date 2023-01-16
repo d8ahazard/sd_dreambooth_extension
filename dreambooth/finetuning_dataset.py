@@ -1,21 +1,21 @@
 import os.path
 import random
+from typing import List
 
 import cv2
 import numpy as np
 import torch.utils.data
 from PIL import Image
 from torchvision.transforms import transforms
-from tqdm import tqdm
 
 from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import closest_resolution, make_bucket_resolutions, \
-    get_dim, mytqdm
+    mytqdm, PromptData
 
 
 class DbDataset(torch.utils.data.Dataset):
-    def __init__(self, batch_size, train_img_path_captions, class_img_path_captions, tokens, tokenizer,
+    def __init__(self, batch_size, instance_prompts, class_prompts, tokens, tokenizer,
                  resolution, prior_loss_weight, hflip, random_crop, shuffle_tokens, not_pad_tokens, debug_dataset) -> None:
         super().__init__()
         self.batch_indices = []
@@ -45,10 +45,10 @@ class DbDataset(torch.utils.data.Dataset):
         self._length = 0
         self.batch_size = batch_size
         self.batch_sampler = torch.utils.data.BatchSampler(self, batch_size, drop_last=True)
-        self.train_img_path_captions = train_img_path_captions
-        self.class_img_path_captions = class_img_path_captions
-        self.num_train_images = len(self.train_img_path_captions)
-        self.num_class_images = len(self.class_img_path_captions)
+        self.train_img_data = instance_prompts
+        self.class_img_data = class_prompts
+        self.num_train_images = len(self.train_img_data)
+        self.num_class_images = len(self.class_img_data)
 
         self.tokenizer = tokenizer
         self.resolution = resolution
@@ -145,14 +145,16 @@ class DbDataset(torch.utils.data.Dataset):
         self.train_dict = {}
 
 
-        def sort_images(img_path_captions, resos, target_dict, is_class_img):
-            for path, cap in img_path_captions:
-                image_width, image_height = get_dim(path, self.resolution)
+        def sort_images(img_data: List[PromptData], resos, target_dict, is_class_img):
+            for prompt_data in img_data:
+                path = prompt_data.src_image
+                image_width, image_height = prompt_data.resolution
+                cap = prompt_data.prompt
                 reso = closest_resolution(image_width, image_height, resos)
                 target_dict.setdefault(reso, []).append((path, cap, is_class_img))
 
-        sort_images(self.train_img_path_captions, bucket_resos, self.train_dict, False)
-        sort_images(self.class_img_path_captions, bucket_resos, self.class_dict, True)
+        sort_images(self.train_img_data, bucket_resos, self.train_dict, False)
+        sort_images(self.class_img_data, bucket_resos, self.class_dict, True)
 
         # Enumerate by resolution, cache as needed
         def cache_images(images, reso, p_bar):
@@ -212,7 +214,9 @@ class DbDataset(torch.utils.data.Dataset):
         sample_dict = {}
         batch_indices = []
         batch_samples = []
-        for key in self.train_dict.keys():
+        keys = list(self.train_dict.keys())
+        random.shuffle(keys)
+        for key in keys:
             sample_list = []
             random.shuffle(self.train_dict[key])
             for entry in self.train_dict[key]:

@@ -902,6 +902,8 @@ def on_ui_tabs():
                 db_use_8bit_adam,
                 db_use_lora,
                 db_use_ema,
+                db_save_preview_every,
+                db_save_embedding_every,
                 db_status
             ]
         )

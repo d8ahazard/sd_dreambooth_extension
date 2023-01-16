@@ -96,6 +96,8 @@ def load_auto_settings():
             lora_models_path = ws.cmd_opts.lora_models_path
         except:
             pass
+        if dreambooth_models_path == "" or dreambooth_models_path is None:
+            dreambooth_models_path = os.path.join(models_path, "stable-diffusion")
 
     except:
         print("Exception importing SD-WebUI module.")

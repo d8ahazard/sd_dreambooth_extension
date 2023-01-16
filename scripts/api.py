@@ -134,6 +134,7 @@ class DreamboothParameters(BaseModel):
     save_state_after: bool = False
     save_state_cancel: bool = False
     save_state_during: bool = False
+    snapshot: str = False
     src: Union[str, None] = ""
     shuffle_tags: bool = False
     train_batch_size: int = 1
