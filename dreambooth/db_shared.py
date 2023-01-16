@@ -229,9 +229,7 @@ class DreamState:
 
             real_images = []
             for check in to_check:
-                #List[numpy.array | PIL.Image | str]
-                # numpy.array, PIL.Image or str or pathlib.Path
-                if isinstance(check, numpy.array) or isinstance(check, type(PIL.Image)) or isinstance(check, type(pathlib.Path)):
+                if isinstance(check, (numpy.ndarray, PIL.Image.Image, pathlib.Path)):
                     real_images.append(check)
             self.current_image = real_images if len(real_images) > 1 else real_images[0]
 
