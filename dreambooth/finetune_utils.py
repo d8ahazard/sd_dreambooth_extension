@@ -30,35 +30,8 @@ from modules import shared, devices, sd_models, sd_hijack, prompt_parser, lowvra
 from modules.processing import StableDiffusionProcessingTxt2Img, StableDiffusionProcessing, Processed, \
     get_fixed_seed, create_infotext, decode_first_stage
 from modules.sd_hijack import model_hijack
+from PIL import Image
 
-
-@dataclass
-class PromptData:
-    prompt:str = ""
-    prompt_tokens: Union[List[str], None] = None
-    negative_prompt:str = ""
-    instance_token: str = ""
-    class_token: str = ""
-    src_image: str = ""
-    steps:int = 60
-    scale:float = 7.5
-    out_dir:str = ""
-    seed:int = -1
-    resolution: Tuple[int, int] = (512, 512)
-
-    @property
-    def __dict__(self):
-        """
-        get a python dictionary
-        """
-        return asdict(self)
-
-    @property
-    def json(self):
-        """
-        get the json formated string
-        """
-        return json.dumps(self.__dict__)
 
 
 class mytqdm(tqdm):
@@ -137,10 +110,6 @@ class mytqdm(tqdm):
     def unpause_ui(self):
         self.update_ui = True
 
-
-
-
-
 class CustomAccelerator(Accelerator):
     def __init__(self, logfile, *args, **kwargs):
         self.logfile = logfile
@@ -152,6 +121,91 @@ class CustomAccelerator(Accelerator):
                 tensorflow.summary.scalar(name, value, step=step)
             self.summary_writer.flush()
 
+class EMAModel:
+    """
+    Exponential Moving Average of models weights
+    """
+
+    def __init__(self, parameters: Iterable[torch.nn.Parameter], decay=0.9999):
+        parameters = list(parameters)
+        self.shadow_params = [p.clone().detach() for p in parameters]
+
+        self.decay = decay
+        self.optimization_step = 0
+        self.collected_params = []
+
+    def get_decay(self, optimization_step):
+        """
+        Compute the decay factor for the exponential moving average.
+        """
+        value = (1 + optimization_step) / (10 + optimization_step)
+        return 1 - min(self.decay, value)
+
+    @torch.no_grad()
+    def step(self, parameters):
+        parameters = list(parameters)
+        self.optimization_step += 1
+        self.decay = self.get_decay(self.optimization_step)
+        for s_param, param in zip(self.shadow_params, parameters):
+            if param.requires_grad:
+                tmp = self.decay * (s_param - param)
+                s_param.sub_(tmp)
+            else:
+                s_param.copy_(param)
+
+        db_shared.torch_gc()
+
+    def copy_to(self, parameters: Iterable[torch.nn.Parameter]) -> None:
+        """
+        Copy current averaged parameters into given collection of parameters.
+        Args:
+            parameters: Iterable of `torch.nn.Parameter`; the parameters to be
+                updated with the stored moving averages. If `None`, the
+                parameters with which this `ExponentialMovingAverage` was
+                initialized will be used.
+        """
+        parameters = list(parameters)
+        for s_param, param in zip(self.shadow_params, parameters):
+            param.data.copy_(s_param.data)
+
+    # From CompVis LitEMA implementation
+    def store(self, parameters):
+        """
+        Save the current parameters for restoring later.
+        Args:
+          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
+            temporarily stored.
+        """
+        self.collected_params = [param.clone() for param in parameters]
+
+    def restore(self, parameters):
+        """
+        Restore the parameters stored with the `store` method.
+        Useful to validate the model with EMA parameters without affecting the
+        original optimization process. Store the parameters before the
+        `copy_to` method. After validation (or model saving), use this to
+        restore the former parameters.
+        Args:
+          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
+            updated with the stored parameters.
+        """
+        for c_param, param in zip(self.collected_params, parameters):
+            param.data.copy_(c_param.data)
+
+        del self.collected_params
+        gc.collect()
+
+    def to(self, device=None, dtype=None) -> None:
+        r"""Move internal buffers of the ExponentialMovingAverage to `device`.
+        Args:
+            device: like `device` argument to `torch.Tensor.to`
+            dtype: Floating point-type for the stuff.
+        """
+        # .to() on the tensors handles None correctly
+        self.shadow_params = [
+            p.to(device=device, dtype=dtype) if p.is_floating_point() else p.to(device=device)
+            for p in self.shadow_params
+        ]
 
 class FilenameTextGetter:
     """Adapted from modules.textual_inversion.dataset.PersonalizedBase to get caption for image."""
@@ -228,91 +282,33 @@ class FilenameTextGetter:
         output = ','.join(tags)
         return output
 
+@dataclass
+class PromptData:
+    prompt:str = ""
+    prompt_tokens: Union[List[str], None] = None
+    negative_prompt:str = ""
+    instance_token: str = ""
+    class_token: str = ""
+    src_image: str = ""
+    steps:int = 60
+    scale:float = 7.5
+    out_dir:str = ""
+    seed:int = -1
+    resolution: Tuple[int, int] = (512, 512)
 
-from PIL import Image
+    @property
+    def __dict__(self):
+        """
+        get a python dictionary
+        """
+        return asdict(self)
 
-def get_dim(filename, max_res):
-    with Image.open(filename) as im:
-        width, height = im.size
-        exif = im.getexif()
-        if exif:
-            orientation = exif.get(274)
-            if orientation == 3 or orientation == 6:
-                width, height = height, width
-        if width > max_res or height > max_res:
-            aspect_ratio = width / height
-            if width > height:
-                width = max_res
-                height = int(max_res / aspect_ratio)
-            else:
-                height = max_res
-                width = int(max_res * aspect_ratio)
-        return width, height
-
-
-def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str, bucket_resos: List[Tuple[int, int]],
-                 is_class: bool) -> Dict[Tuple[int, int], PromptData]:
-    prompts = {}
-    images = get_images(img_dir)
-    max_dim = 0
-    for (w, h) in bucket_resos:
-        if w > max_dim:
-            max_dim = w
-        if h > max_dim:
-            max_dim = h
-    _, dirr = os.path.split(img_dir)
-    for img in mytqdm(images, desc=f"Pre-processing {dirr}"):
-        # Get prompt
-        text = text_getter.read_text(img)
-        prompt = text_getter.create_text(concept.class_prompt, text, concept.instance_token, concept.class_token, is_class)
-        w, h = get_dim(img, max_dim)
-        reso = closest_resolution(w, h, bucket_resos)
-        prompt_list = prompts[reso] if reso in prompts else []
-        pd = PromptData(prompt, prompt_to_tags(prompt), None, concept.instance_token, concept.class_token, img, resolution=reso)
-        prompt_list.append(pd)
-        prompts[reso] = prompt_list
-            
-    return dict(sorted(prompts.items()))
-
-def prompt_to_tags(src_prompt: str, instance_token: str = None, class_token: str = None):
-    src_tags = src_prompt.split(',')
-    if class_token:
-        conjunctions = ['a ', 'an ', 'the ']
-        src_tags = [tag.replace(conjunction + class_token, '') for tag in src_tags for conjunction in conjunctions]
-    if class_token and instance_token:
-        src_tags = [tag.replace(instance_token, '').replace(class_token, '') for tag in src_tags]
-    src_tags = [' '.join(tag.split()) for tag in src_tags]
-    src_tags = [tag.strip() for tag in src_tags if tag]
-    return src_tags
-
-
-def compare_prompts(src_prompt: str, check_prompt: str, tokens: [Tuple[str, str]]):
-    src_tags = src_prompt.split(',')
-    check_tags = check_prompt.split(',')
-    conjunctions = ['a ', 'an ', 'the ']
-    # Loop pairs of tokens
-    for token_pair in tokens:
-        # Filter conjunctions
-        for conjunction in conjunctions:
-            src_tags = [tag.replace(conjunction + token_pair[1], '') for tag in src_tags]
-            check_tags = [tag.replace(conjunction + token_pair[1], '') for tag in check_tags]
-        # Remove individual tags
-        src_tags = [tag.replace(token_pair[0], '').replace(token_pair[1], '') for tag in src_tags]
-        check_tags = [tag.replace(token_pair[0], '').replace(token_pair[1], '') for tag in check_tags]
-
-    # Strip double spaces
-    src_tags = [' '.join(tag.split()) for tag in src_tags]
-    check_tags = [' '.join(tag.split()) for tag in check_tags]
-
-    # Strip
-    src_tags = [tag.strip() for tag in src_tags]
-    check_tags = [tag.strip() for tag in check_tags]
-
-    # Remove empty tags
-    src_tags = [tag for tag in src_tags if tag]
-    check_tags = [tag for tag in check_tags if tag]
-    return set(src_tags) == set(check_tags)
-
+    @property
+    def json(self):
+        """
+        get the json formated string
+        """
+        return json.dumps(self.__dict__)
 
 class PromptDataset(Dataset):
     """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
@@ -419,148 +415,6 @@ class PromptDataset(Dataset):
                 res_index += 1
         print(f"Invalid index: {index}/{self.required_prompts}")
         return None
-
-
-class EMAModel:
-    """
-    Exponential Moving Average of models weights
-    """
-
-    def __init__(self, parameters: Iterable[torch.nn.Parameter], decay=0.9999):
-        parameters = list(parameters)
-        self.shadow_params = [p.clone().detach() for p in parameters]
-
-        self.decay = decay
-        self.optimization_step = 0
-        self.collected_params = []
-
-    def get_decay(self, optimization_step):
-        """
-        Compute the decay factor for the exponential moving average.
-        """
-        value = (1 + optimization_step) / (10 + optimization_step)
-        return 1 - min(self.decay, value)
-
-    @torch.no_grad()
-    def step(self, parameters):
-        parameters = list(parameters)
-
-        self.optimization_step += 1
-        self.decay = self.get_decay(self.optimization_step)
-
-        for s_param, param in zip(self.shadow_params, parameters):
-            if param.requires_grad:
-                tmp = self.decay * (s_param - param)
-                s_param.sub_(tmp)
-            else:
-                s_param.copy_(param)
-
-        db_shared.torch_gc()
-
-    def copy_to(self, parameters: Iterable[torch.nn.Parameter]) -> None:
-        """
-        Copy current averaged parameters into given collection of parameters.
-        Args:
-            parameters: Iterable of `torch.nn.Parameter`; the parameters to be
-                updated with the stored moving averages. If `None`, the
-                parameters with which this `ExponentialMovingAverage` was
-                initialized will be used.
-        """
-        parameters = list(parameters)
-        for s_param, param in zip(self.shadow_params, parameters):
-            param.data.copy_(s_param.data)
-
-    # From CompVis LitEMA implementation
-    def store(self, parameters):
-        """
-        Save the current parameters for restoring later.
-        Args:
-          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
-            temporarily stored.
-        """
-        self.collected_params = [param.clone() for param in parameters]
-
-    def restore(self, parameters):
-        """
-        Restore the parameters stored with the `store` method.
-        Useful to validate the model with EMA parameters without affecting the
-        original optimization process. Store the parameters before the
-        `copy_to` method. After validation (or model saving), use this to
-        restore the former parameters.
-        Args:
-          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
-            updated with the stored parameters.
-        """
-        for c_param, param in zip(self.collected_params, parameters):
-            param.data.copy_(c_param.data)
-
-        del self.collected_params
-        gc.collect()
-
-    def to(self, device=None, dtype=None) -> None:
-        r"""Move internal buffers of the ExponentialMovingAverage to `device`.
-        Args:
-            device: like `device` argument to `torch.Tensor.to`
-            dtype: Floating point-type for the stuff.
-        """
-        # .to() on the tensors handles None correctly
-        self.shadow_params = [
-            p.to(device=device, dtype=dtype) if p.is_floating_point() else p.to(device=device)
-            for p in self.shadow_params
-        ]
-
-
-def make_bucket_resolutions(max_size, min_size=256, divisible=64):
-    resos = set()
-
-    w = max_size
-    while w > min_size:
-        h = max_size
-        while h > min_size:
-            resos.add((w, h))
-            resos.add((h, w))
-            h -= divisible
-        w -= divisible
-
-    resos = list(resos)
-    resos.sort()
-    return resos
-
-
-def closest_resolution(width, height, resos):
-    def distance(reso):
-        w, h = reso
-        if w > width or h > height:
-            return float("inf")
-        return (w - width) ** 2 + (h - height) ** 2
-
-    return min(resos, key=distance)
-
-def load_dreambooth_dir(db_dir, concept: Concept, is_class: bool = True):
-    img_paths = get_images(db_dir)
-    captions = []
-    text_getter = FilenameTextGetter()
-    for img_path in img_paths:
-        cap_for_img = text_getter.read_text(img_path)
-        final_caption = text_getter.create_text(concept.instance_prompt, cap_for_img, concept.instance_token,
-                                                concept.class_token, is_class)
-        captions.append(final_caption)
-
-    return list(zip(img_paths, captions))
-
-def get_captions(concept: Concept, paths: List[str], is_class: bool = True):
-    captions = []
-    text_getter = FilenameTextGetter()
-    src_dir = concept.instance_data_dir if not is_class else concept.class_data_dir
-    for img_path in paths:
-        if src_dir not in str(img_path):
-            continue
-        cap_for_img = text_getter.read_text(img_path)
-        final_caption = text_getter.create_text(concept.instance_prompt, cap_for_img, concept.instance_token,
-                                                concept.class_token, is_class)
-        captions.append(final_caption)
-
-    return list(zip(paths, captions))
 
 class ImageBuilder:
     def __init__(self, config: DreamboothConfig, use_txt2img: bool, lora_model: str = None, lora_weight: float = 1,
@@ -697,6 +551,144 @@ class ImageBuilder:
         # If there was a model loaded already, reload it
         if self.last_model is not None and not is_ui:
             sd_models.load_model(self.last_model)
+
+
+def get_dim(filename, max_res):
+    with Image.open(filename) as im:
+        width, height = im.size
+        exif = im.getexif()
+        if exif:
+            orientation = exif.get(274)
+            if orientation == 3 or orientation == 6:
+                width, height = height, width
+        if width > max_res or height > max_res:
+            aspect_ratio = width / height
+            if width > height:
+                width = max_res
+                height = int(max_res / aspect_ratio)
+            else:
+                height = max_res
+                width = int(max_res * aspect_ratio)
+        return width, height
+
+
+def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str, bucket_resos: List[Tuple[int, int]],
+                 is_class: bool) -> Dict[Tuple[int, int], PromptData]:
+    prompts = {}
+    images = get_images(img_dir)
+    max_dim = 0
+    for (w, h) in bucket_resos:
+        if w > max_dim:
+            max_dim = w
+        if h > max_dim:
+            max_dim = h
+    _, dirr = os.path.split(img_dir)
+    for img in mytqdm(images, desc=f"Pre-processing {dirr}"):
+        # Get prompt
+        text = text_getter.read_text(img)
+        prompt = text_getter.create_text(concept.class_prompt, text, concept.instance_token, concept.class_token, is_class)
+        w, h = get_dim(img, max_dim)
+        reso = closest_resolution(w, h, bucket_resos)
+        prompt_list = prompts[reso] if reso in prompts else []
+        pd = PromptData(prompt, prompt_to_tags(prompt), None, concept.instance_token, concept.class_token, img, resolution=reso)
+        prompt_list.append(pd)
+        prompts[reso] = prompt_list
+            
+    return dict(sorted(prompts.items()))
+
+def prompt_to_tags(src_prompt: str, instance_token: str = None, class_token: str = None):
+    src_tags = src_prompt.split(',')
+    if class_token:
+        conjunctions = ['a ', 'an ', 'the ']
+        src_tags = [tag.replace(conjunction + class_token, '') for tag in src_tags for conjunction in conjunctions]
+    if class_token and instance_token:
+        src_tags = [tag.replace(instance_token, '').replace(class_token, '') for tag in src_tags]
+    src_tags = [' '.join(tag.split()) for tag in src_tags]
+    src_tags = [tag.strip() for tag in src_tags if tag]
+    return src_tags
+
+
+def compare_prompts(src_prompt: str, check_prompt: str, tokens: [Tuple[str, str]]):
+    src_tags = src_prompt.split(',')
+    check_tags = check_prompt.split(',')
+    conjunctions = ['a ', 'an ', 'the ']
+    # Loop pairs of tokens
+    for token_pair in tokens:
+        # Filter conjunctions
+        for conjunction in conjunctions:
+            src_tags = [tag.replace(conjunction + token_pair[1], '') for tag in src_tags]
+            check_tags = [tag.replace(conjunction + token_pair[1], '') for tag in check_tags]
+        # Remove individual tags
+        src_tags = [tag.replace(token_pair[0], '').replace(token_pair[1], '') for tag in src_tags]
+        check_tags = [tag.replace(token_pair[0], '').replace(token_pair[1], '') for tag in check_tags]
+
+    # Strip double spaces
+    src_tags = [' '.join(tag.split()) for tag in src_tags]
+    check_tags = [' '.join(tag.split()) for tag in check_tags]
+
+    # Strip
+    src_tags = [tag.strip() for tag in src_tags]
+    check_tags = [tag.strip() for tag in check_tags]
+
+    # Remove empty tags
+    src_tags = [tag for tag in src_tags if tag]
+    check_tags = [tag for tag in check_tags if tag]
+    return set(src_tags) == set(check_tags)
+
+
+
+
+def make_bucket_resolutions(max_size, min_size=256, divisible=64):
+    resos = set()
+
+    w = max_size
+    while w > min_size:
+        h = max_size
+        while h > min_size:
+            resos.add((w, h))
+            resos.add((h, w))
+            h -= divisible
+        w -= divisible
+
+    resos = list(resos)
+    resos.sort()
+    return resos
+
+
+def closest_resolution(width, height, resos):
+    def distance(reso):
+        w, h = reso
+        if w > width or h > height:
+            return float("inf")
+        return (w - width) ** 2 + (h - height) ** 2
+
+    return min(resos, key=distance)
+
+def load_dreambooth_dir(db_dir, concept: Concept, is_class: bool = True):
+    img_paths = get_images(db_dir)
+    captions = []
+    text_getter = FilenameTextGetter()
+    for img_path in img_paths:
+        cap_for_img = text_getter.read_text(img_path)
+        final_caption = text_getter.create_text(concept.instance_prompt, cap_for_img, concept.instance_token,
+                                                concept.class_token, is_class)
+        captions.append(final_caption)
+
+    return list(zip(img_paths, captions))
+
+def get_captions(concept: Concept, paths: List[str], is_class: bool = True):
+    captions = []
+    text_getter = FilenameTextGetter()
+    src_dir = concept.instance_data_dir if not is_class else concept.class_data_dir
+    for img_path in paths:
+        if src_dir not in str(img_path):
+            continue
+        cap_for_img = text_getter.read_text(img_path)
+        final_caption = text_getter.create_text(concept.instance_prompt, cap_for_img, concept.instance_token,
+                                                concept.class_token, is_class)
+        captions.append(final_caption)
+
+    return list(zip(paths, captions))
 
 
 def process_txt2img(p: StableDiffusionProcessing) -> [Image]:
