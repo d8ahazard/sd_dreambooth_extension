@@ -97,7 +97,7 @@ def load_auto_settings():
         except:
             pass
         if dreambooth_models_path == "" or dreambooth_models_path is None:
-            dreambooth_models_path = os.path.join(models_path, "stable-diffusion")
+            dreambooth_models_path = os.path.join(models_path, "dreambooth")
 
     except:
         print("Exception importing SD-WebUI module.")
