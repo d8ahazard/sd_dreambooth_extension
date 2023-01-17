@@ -5,7 +5,7 @@ import traceback
 from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 
-
+ui_keys = []
 def sanitize_name(name):
     return "".join(x for x in name if (x.isalnum() or x in "._- "))
 
@@ -321,6 +321,7 @@ class DreamboothConfig:
             config_file = os.path.join(models_path, self.model_name, "backups", f"db_config_{self.revision}.json")
         with open(config_file, "w") as outfile:
             json.dump(self.__dict__, outfile, indent=4)
+
 
 
 def save_json(model_name: str, json_cfg: str):
