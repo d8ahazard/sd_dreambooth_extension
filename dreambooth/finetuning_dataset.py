@@ -115,7 +115,7 @@ class DbDataset(torch.utils.data.Dataset):
 
     def cache_latent(self, image_path, res):
         latents = None
-        if self.vae is not None:
+        if self.vae is not None and image_path not in self.latents_cache:
             image = self.open_and_trim(image_path, res)
             img_tensor = self.image_transforms(image)
             img_tensor = img_tensor.unsqueeze(0).to(device=self.vae.device, dtype=self.vae.dtype)
@@ -124,7 +124,7 @@ class DbDataset(torch.utils.data.Dataset):
 
     def cache_caption(self, image_path, caption):
         input_ids = None
-        if self.tokenizer is not None:
+        if self.tokenizer is not None and image_path not in self.caption_cache:
             if self.not_pad_tokens:
                 input_ids = self.tokenizer(caption, padding=True, truncation=True,
                                            return_tensors="pt").input_ids
