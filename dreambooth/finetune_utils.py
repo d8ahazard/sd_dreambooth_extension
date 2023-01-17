@@ -278,12 +278,12 @@ class FilenameTextGetter:
             first_tag = tags.pop(0)
             random.shuffle(tags)
             tags.insert(0, first_tag)
-        
+
         if is_class:
-            if class_token is not None and class_token != "" and class_token not in tags:
+            if class_token and class_token not in tags:
                 tags.insert(0, class_token)
         else:
-            if instance_token is not None and instance_token != "" and instance_token not in tags:
+            if instance_token and instance_token not in tags:
                 tags.insert(0, instance_token)
 
         output = ','.join(tags)
