@@ -280,11 +280,13 @@ class FilenameTextGetter:
             tags.insert(0, first_tag)
 
         if is_class:
-            if class_token and class_token not in tags:
-                tags.insert(0, class_token)
+            if class_token is not None and class_token != "":
+                if not any(class_token in tag for tag in tags):
+                    tags.insert(0, class_token)
         else:
-            if instance_token and instance_token not in tags:
-                tags.insert(0, instance_token)
+            if instance_token is not None and instance_token != "":
+                if not any(instance_token in tag for tag in tags):
+                    tags.insert(0, instance_token)
 
         output = ','.join(tags)
         return output
