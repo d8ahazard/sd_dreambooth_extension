@@ -505,9 +505,8 @@ def db_save_image(image: Image, prompt_data: PromptData=None, seed=None, save_tx
              if v is not None])
 
 
-        prompt_string = f"{prompt_data.prompt}Negative prompt:{prompt_data.negative_prompt}\n{generation_params_text}".strip()
-        pnginfo_data.add_text("Parameters", prompt_string)
-
+        prompt_string = f"{prompt_data.prompt}\nNegative prompt: {prompt_data.negative_prompt}\n{generation_params_text}".strip()
+        pnginfo_data.add_text("parameters", prompt_string)
 
     image_format = Image.registered_extensions()[".png"]
 
