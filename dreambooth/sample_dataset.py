@@ -3,7 +3,8 @@ import random
 from typing import List
 
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, PromptData
+from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter
+from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_images
 
 

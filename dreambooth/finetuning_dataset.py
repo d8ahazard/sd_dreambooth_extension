@@ -1,5 +1,6 @@
 import os.path
 import random
+import traceback
 from typing import List
 
 import cv2
@@ -11,7 +12,8 @@ from torchvision.transforms import transforms
 from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import closest_resolution, make_bucket_resolutions, \
-    mytqdm, PromptData
+    mytqdm
+from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 
 
 class DbDataset(torch.utils.data.Dataset):
@@ -159,12 +161,17 @@ class DbDataset(torch.utils.data.Dataset):
         # Enumerate by resolution, cache as needed
         def cache_images(images, reso, p_bar):
             for img_path, cap, is_prior in images:
-                if self.cache_latents and not self.debug_dataset:
-                    self.cache_latent(img_path, reso)
-                self.cache_caption(img_path, cap)
-                self.sample_indices.append(img_path)
-                self.sample_cache.append((img_path, cap, is_prior))
-                pbar.update()
+                try:
+                    if self.cache_latents and not self.debug_dataset:
+                        self.cache_latent(img_path, reso)
+                    self.cache_caption(img_path, cap)
+                    self.sample_indices.append(img_path)
+                    self.sample_cache.append((img_path, cap, is_prior))
+                    p_bar.update()
+                except Exception as e:
+                    traceback.print_exc()
+                    print(f"Exception caching: {img_path}: {e}")
+
 
         bucket_idx = 0
         total_len = 0

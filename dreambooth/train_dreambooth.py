@@ -29,11 +29,12 @@ from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_webhook import send_training_update
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import EMAModel, generate_classifiers, \
-    PromptData, generate_dataset, TrainResult, CustomAccelerator, mytqdm
+    generate_dataset, TrainResult, CustomAccelerator, mytqdm
+from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
 from extensions.sd_dreambooth_extension.dreambooth.sample_dataset import SampleDataset
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models, parse_logs, printm, \
-    import_model_class_from_model_name_or_path
+    import_model_class_from_model_name_or_path, db_save_image
 from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, inject_trainable_lora
 from modules import shared, paths
@@ -717,13 +718,10 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                                          height=args.resolution,
                                                          width=args.resolution,
                                                          generator=g_cuda).images[0]
+
                                     sample_prompts.append(c.prompt)
-                                    image_name = os.path.join(sample_dir, f"sample_{args.revision}-{ci}.png")
+                                    image_name = db_save_image(s_image,c, seed, custom_name=f"sample_{args.revision}-{ci}")
                                     samples.append(image_name)
-                                    txt_name = image_name.replace(".png", ".txt")
-                                    with open(txt_name, "w", encoding="utf8") as txt_file:
-                                        txt_file.write(c.prompt)
-                                    s_image.save(image_name)
                                     pbar.update()
                                     ci += 1
                                 for sample in samples:
@@ -747,6 +745,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                         del g_cuda
                         g_cuda = None
                     try:
+                        printm("Parse logs.")
                         log_images, log_names = parse_logs(model_name=args.model_name)
                         pbar.update()
                         for log_image in log_images:

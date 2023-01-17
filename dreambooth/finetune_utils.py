@@ -1,19 +1,18 @@
 import gc
-import hashlib
 import json
 import os
 import random
 import re
 import traceback
-from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Iterable, Dict, List, Tuple, Union
+from typing import Iterable, Dict, List, Tuple
 
 import gradio
 import numpy as np
 import tensorflow
 import torch
 import torch.utils.checkpoint
+from PIL import Image
 from accelerate import Accelerator
 from diffusers import DiffusionPipeline, AutoencoderKL
 from torch.utils.data import Dataset
@@ -24,14 +23,13 @@ from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, from_file
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, get_checkpoint_match, get_images
+from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, get_checkpoint_match, get_images, db_save_image
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import apply_lora_weights
 from modules import shared, devices, sd_models, sd_hijack, prompt_parser, lowvram
 from modules.processing import StableDiffusionProcessingTxt2Img, StableDiffusionProcessing, Processed, \
     get_fixed_seed, create_infotext, decode_first_stage
 from modules.sd_hijack import model_hijack
-from PIL import Image
-
 
 
 class mytqdm(tqdm):
@@ -291,33 +289,6 @@ class FilenameTextGetter:
         output = ','.join(tags)
         return output
 
-@dataclass
-class PromptData:
-    prompt:str = ""
-    prompt_tokens: Union[List[str], None] = None
-    negative_prompt:str = ""
-    instance_token: str = ""
-    class_token: str = ""
-    src_image: str = ""
-    steps:int = 60
-    scale:float = 7.5
-    out_dir:str = ""
-    seed:int = -1
-    resolution: Tuple[int, int] = (512, 512)
-
-    @property
-    def __dict__(self):
-        """
-        get a python dictionary
-        """
-        return asdict(self)
-
-    @property
-    def json(self):
-        """
-        get the json formated string
-        """
-        return json.dumps(self.__dict__)
 
 class PromptDataset(Dataset):
     """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
@@ -993,30 +964,28 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
         new_images = builder.generate_images(prompts)
         i_idx = 0
         preview_images = []
+        preview_prompts = []
         for image in new_images:
             if generated >= set_len:
                 break
             try:
                 pd = prompts[i_idx]
-                image_base = hashlib.sha1(image.tobytes()).hexdigest()
-                image_filename = os.path.join(pd.out_dir, f"{image_base}.png")
-                image.save(image_filename)
+                image_filename = db_save_image(image, pd)
                 class_prompts.append(pd)
                 if ui:
                     out_images.append(image)
-                txt_filename = image_filename.replace(".png", ".txt")
-                with open(txt_filename, "w", encoding="utf8") as file:
-                    file.write(pd.prompt)
                 pbar.update()
                 i_idx += 1
                 generated += 1
-                preview_images.append(image)
-                status.textinfo = f"Class image {generated}/{set_len}, Prompt: '{pd.prompt}'"
+                preview_images.append(image_filename)
+                preview_prompts.append(pd.prompt)
+                status.textinfo = f"Class image(s) {generated}/{set_len}:'"
             except Exception as e:
                 print(f"Exception generating images: {e}")
                 traceback.print_exc()
 
         status.current_image = preview_images
+        status.sample_prompts = preview_prompts
     builder.unload(ui)
     del prompt_dataset
     cleanup()

@@ -17,8 +17,9 @@ from extensions.sd_dreambooth_extension.dreambooth.db_bucket_sampler import Buck
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, PromptData, generate_dataset, \
+from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, generate_dataset, \
     PromptDataset, mytqdm
+from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, get_images, \
     get_lora_models, cleanup
 from modules import shared
@@ -412,7 +413,6 @@ def load_params(model_dir):
                 output.append(0)
             else:
                 output.append(None)
-    print(f"Returning {output}")
     return output
 
 
@@ -471,7 +471,6 @@ def start_training(model_dir: str, use_txt2img: bool = True):
         lora_model_name = gradio.update(visible=True)
         return lora_model_name, 0, 0, [], msg
     config = from_file(model_dir)
-
     # Clear pretrained VAE Name if applicable
     if config.pretrained_vae_name_or_path == "":
         config.pretrained_vae_name_or_path = None
