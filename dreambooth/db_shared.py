@@ -231,7 +231,7 @@ class DreamState:
             for check in to_check:
                 if isinstance(check, (numpy.ndarray, PIL.Image.Image, pathlib.Path)):
                     real_images.append(check)
-            self.current_image = real_images if len(real_images) > 1 else real_images[0]
+            self.current_image = real_images if len(real_images) > 2 else real_images[0] if len (real_images) == 1 else None
 
 
 def stop_safe_unpickle():

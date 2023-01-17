@@ -275,10 +275,19 @@ class FilenameTextGetter:
             output.replace(s_char, "")
 
         tags = output.split(',')
+                
         if self.shuffle_tags and len(tags) > 2:
             first_tag = tags.pop(0)
             random.shuffle(tags)
             tags.insert(0, first_tag)
+        
+        if is_class:
+            if class_token is not None and class_token != "" and class_token not in tags:
+                tags.insert(0, class_token)
+        else:
+            if instance_token is not None and instance_token != "" and instance_token not in tags:
+                tags.insert(0, instance_token)
+
         output = ','.join(tags)
         return output
 
@@ -962,10 +971,6 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     generated = 0
     actual_idx = 0
     pbar = mytqdm(total=set_len, desc="Generating class images")
-    for j in range(set_len):
-        # Prepend class token if not present in the class prompt
-        if args.concepts_list[0].class_token != '' and prompt_dataset.prompts[(512, 512)][j].prompt.find(args.concepts_list[0].class_token) ==-1 :
-            prompt_dataset.prompts[(512, 512)][j].prompt = args.concepts_list[0].class_token +", "+ prompt_dataset.prompts[(512, 512)][j].prompt
     for i in range(set_len):
         first_res = None
         if status.interrupted or generated >= set_len:
