@@ -524,6 +524,7 @@ def on_ui_tabs():
         global params_to_save
         global params_to_load
 
+        # This is how we're going to populate our config and stuff
         params_to_save = [
             db_model_name,
             db_attention,
@@ -654,17 +655,20 @@ def on_ui_tabs():
         ]
         params_to_exclude = [db_model_name,db_epochs,db_has_ema,db_model_path,db_revision,db_scheduler,db_src,db_v2]
         params_to_load = []
+        save_keys = []
         ui_keys = []
 
         for param in params_to_save:
+            var_name = [var_name for var_name, var in locals().items() if var is param]
+            save_keys.append(var_name[0])
             if param not in params_to_exclude:
-                var_name = [var_name for var_name, var in locals().items() if var is param]
                 ui_keys.append(var_name[0])
                 params_to_load.append(param)
+
         ui_keys.append("db_status")
         params_to_load.append(db_status)
         from extensions.sd_dreambooth_extension.dreambooth import db_config
-        print(f"UI Keys: {ui_keys}")
+        db_config.save_keys = save_keys
         db_config.ui_keys = ui_keys
 
         db_save_params.click(
