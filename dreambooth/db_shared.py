@@ -96,6 +96,8 @@ def load_auto_settings():
             lora_models_path = ws.cmd_opts.lora_models_path
         except:
             pass
+        if dreambooth_models_path == "" or dreambooth_models_path is None:
+            dreambooth_models_path = os.path.join(models_path, "dreambooth")
 
     except:
         print("Exception importing SD-WebUI module.")
@@ -187,6 +189,7 @@ class DreamState:
     def end(self):
         self.job = ""
         self.job_count = 0
+        self.job_no = 0
         torch_gc()
 
     def nextjob(self):
@@ -227,11 +230,9 @@ class DreamState:
 
             real_images = []
             for check in to_check:
-                #List[numpy.array | PIL.Image | str]
-                # numpy.array, PIL.Image or str or pathlib.Path
-                if isinstance(check, numpy.array) or isinstance(check, type(PIL.Image)) or isinstance(check, type(pathlib.Path)):
+                if isinstance(check, (numpy.ndarray, PIL.Image.Image, pathlib.Path)):
                     real_images.append(check)
-            self.current_image = real_images if len(real_images) > 1 else real_images[0]
+            self.current_image = real_images if len(real_images) > 2 else real_images[0] if len (real_images) == 1 else None
 
 
 def stop_safe_unpickle():

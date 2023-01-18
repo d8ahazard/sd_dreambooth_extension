@@ -295,17 +295,17 @@ def convert_text_enc_state_dict_v20(text_enc_dict: Dict[str, torch.Tensor]):
 
         new_state_dict[relabelled_key] = v
 
-    for k_pre, tensors in capture_qkv_weight.items():
-        if None in tensors:
-            raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
-        relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
-        new_state_dict[relabelled_key + ".in_proj_weight"] = torch.cat(tensors)
-
-    for k_pre, tensors in capture_qkv_bias.items():
-        if None in tensors:
-            raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
-        relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
-        new_state_dict[relabelled_key + ".in_proj_bias"] = torch.cat(tensors)
+    re_keys = {
+        '.in_proj_weight': capture_qkv_weight,
+        '.in_proj_bias': capture_qkv_bias
+    }
+    for new_key in re_keys:
+        for k_pre, tensors in re_keys[new_key].items():
+            for t in tensors:
+                if t is None:
+                    raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
+            relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
+            new_state_dict[relabelled_key + new_key] = torch.cat(tensors)
 
     return new_state_dict
 
@@ -355,8 +355,8 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
     if config.use_subdir:
         os.makedirs(os.path.join(models_path, save_model_name), exist_ok=True)
         models_path = os.path.join(models_path, save_model_name)
-
-    checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}.ckpt")
+    checkpoint_ext = ".ckpt" if not config.save_safetensors else ".safetensors"
+    checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}{checkpoint_ext}")
 
     model_path = config.pretrained_model_name_or_path
     unet_path = None
@@ -396,7 +396,7 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
                 lora_path = os.path.join(model_dir, "lora", lora_path)
             printi(f"Loading lora from {lora_path}", log=log)
             if os.path.exists(lora_path):
-                checkpoint_path = checkpoint_path.replace(".ckpt", "_lora.ckpt")
+                checkpoint_path = checkpoint_path.replace(checkpoint_ext, f"_lora{checkpoint_ext}")
                 printi(f"Applying lora weight of alpha: {config.lora_weight} to unet...", log=log)
                 weight_apply_lora(loaded_pipeline.unet, torch.load(lora_path), alpha=config.lora_weight)
                 printi("Saving lora unet...", log=log)
@@ -447,8 +447,6 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
         state_dict = {"db_global_step": config.revision, "db_epoch": config.epoch, "state_dict": state_dict}
         printi(f"Saving checkpoint to {checkpoint_path}...", log=log)
         if save_safetensors:
-            print("Safe tensors already saved?")
-            checkpoint_path = checkpoint_path.replace(".ckpt", ".safetensors")
             safe_dict, json_dict = split_dict(state_dict)
             safetensors.torch.save_file(safe_dict, checkpoint_path, json_dict)
         else:
@@ -462,8 +460,7 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
             cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs", "v2-inference-v.yaml")
 
         if cfg_file is not None:
-            cfg_dest = checkpoint_path.replace(".ckpt", ".yaml")
-            cfg_dest = checkpoint_path.replace(".safetensors", ".yaml")
+            cfg_dest = checkpoint_path.replace(checkpoint_ext, ".yaml")
             printi(f"Copying config file from {cfg_dest} to {cfg_dest}", log=log)
             shutil.copyfile(cfg_file, cfg_dest)
 

@@ -414,11 +414,11 @@ def optim_to(torch, profiler, optim: torch.optim.Optimizer, device="cpu"):
             obj._grad.data = obj._grad.data.to(target)
 
     if isinstance(optim, torch.optim.Optimizer):
-        for param in optim.state.values():
-            if isinstance(param, torch.Tensor):
+        for group in optim.param_groups:
+            for param in group['params']:
                 inplace_move(param, device)
-            elif isinstance(param, dict):
-                for subparams in param.values():
-                    inplace_move(subparams, device)
+        for key, value in optim.state.items():
+            if isinstance(value, torch.Tensor):
+                inplace_move(value, device)
     if profiler is None:
         torch.cuda.empty_cache()

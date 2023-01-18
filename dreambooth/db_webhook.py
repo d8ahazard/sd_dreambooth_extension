@@ -3,7 +3,7 @@ from typing import Union, List
 from enum import Enum
 import hashlib
 
-from PIL.Image import Image
+from PIL import Image
 
 from modules import shared, images
 import discord_webhook
@@ -48,7 +48,7 @@ def save_and_test_webhook(url: str) -> str:
 hook_url = get_webhook_url()
 
 def send_training_update(
-    image: Union[List[Image], Image],
+    imgs: Union[List[str], str],
     model_name: str,
     prompt: Union[List[str], str],
     training_step: Union[str, int],
@@ -57,8 +57,14 @@ def send_training_update(
     global hook_url
     if _is_valid_notification_target(hook_url):
         # Accept a list, make a grid
-        if isinstance(image, List):
-            image = images.image_grid(image)
+        if isinstance(images, List):
+            out_imgs = []
+            for image in images:
+                imgs.append(Image.open(image))
+            image = images.image_grid(out_imgs)
+            del out_imgs
+        else:
+            image = Image.open(imgs)
         if isinstance(prompt, List):
             prompt = "\r\n".join(prompt)
         target = __detect_webhook_target(hook_url)
