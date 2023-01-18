@@ -353,9 +353,11 @@ class PromptDataset(Dataset):
                     else:
                         missing_prompts = num_classes - len(class_check)
                         while missing_prompts > 0:
-                            rand = random.choice(prompts)
-                            instance_prompt = rand.prompt
-                            sample_prompt = text_getter.create_text(concept.class_prompt, instance_prompt, rand.instance_token, rand.class_token, True)
+
+                            prompt = prompts[missing_prompts % len(prompts)]
+                            sample_prompt = text_getter.create_text(
+                                concept.class_prompt, prompt.prompt, prompt.instance_token, prompt.class_token, True)
+
                             pd = PromptData(
                                 prompt=sample_prompt,
                                 prompt_tokens=[(concept.instance_token, concept.class_token)],
@@ -566,7 +568,9 @@ def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str
     for img in mytqdm(images, desc=f"Pre-processing {dirr}"):
         # Get prompt
         text = text_getter.read_text(img)
-        prompt = text_getter.create_text(concept.class_prompt, text, concept.instance_token, concept.class_token, is_class)
+        prompt = text_getter.create_text(
+            concept.class_prompt if is_class else concept.instance_prompt,
+            text, concept.instance_token, concept.class_token, is_class)
         w, h = get_dim(img, max_dim)
         reso = closest_resolution(w, h, bucket_resos)
         prompt_list = prompts[reso] if reso in prompts else []
@@ -655,20 +659,6 @@ def load_dreambooth_dir(db_dir, concept: Concept, is_class: bool = True):
         captions.append(final_caption)
 
     return list(zip(img_paths, captions))
-
-def get_captions(concept: Concept, paths: List[str], is_class: bool = True):
-    captions = []
-    text_getter = FilenameTextGetter()
-    src_dir = concept.instance_data_dir if not is_class else concept.class_data_dir
-    for img_path in paths:
-        if src_dir not in str(img_path):
-            continue
-        cap_for_img = text_getter.read_text(img_path)
-        final_caption = text_getter.create_text(concept.instance_prompt, cap_for_img, concept.instance_token,
-                                                concept.class_token, is_class)
-        captions.append(final_caption)
-
-    return list(zip(paths, captions))
 
 
 def process_txt2img(p: StableDiffusionProcessing) -> [Image]:
@@ -972,8 +962,11 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
                 break
             try:
                 pd = prompts[i_idx]
-                image_filename = db_save_image(image, pd)
+
+                image_base = hashlib.sha1(image.tobytes()).hexdigest()
+                image_filename = db_save_image(image, pd, custom_name=f"{pd.prompt[0:64]}-{image_base[0:8]}")
                 pd.src_image = image_filename
+
                 class_prompts.append(pd)
                 if ui:
                     out_images.append(image)
