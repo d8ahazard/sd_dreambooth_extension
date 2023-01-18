@@ -368,6 +368,13 @@ def on_ui_tabs():
                             c3_class_token, c3_num_class_images_per, c3_class_negative_prompt, c3_class_guidance_scale, \
                             c3_class_infer_steps, c3_save_sample_negative_prompt, c3_n_save_sample, c3_sample_seed, \
                             c3_save_guidance_scale, c3_save_infer_steps = build_concept_panel()
+                            
+                        with gr.Tab("Concept 4"):
+                            c4_instance_data_dir, c4_class_data_dir, c4_instance_prompt, \
+                            c4_class_prompt, c4_num_class_images, c4_save_sample_prompt, c4_save_sample_template, c4_instance_token, \
+                            c4_class_token, c4_num_class_images_per, c4_class_negative_prompt, c4_class_guidance_scale, \
+                            c4_class_infer_steps, c4_save_sample_negative_prompt, c4_n_save_sample, c4_sample_seed, \
+                            c4_save_guidance_scale, c4_save_infer_steps = build_concept_panel()
                 with gr.Tab("Saving"):
                     with gr.Column():
                         gr.HTML("General")
@@ -525,7 +532,8 @@ def on_ui_tabs():
         global params_to_save
         global params_to_load
 
-        # This is how we're going to populate our config and stuff
+
+        # List of all the things that we need to save
         params_to_save = [
             db_model_name,
             db_attention,
@@ -653,9 +661,30 @@ def on_ui_tabs():
             c3_save_infer_steps,
             c3_save_sample_negative_prompt,
             c3_save_sample_prompt,
-            c3_save_sample_template
+            c3_save_sample_template,
+            c4_class_data_dir,
+            c4_class_guidance_scale,
+            c4_class_infer_steps,
+            c4_class_negative_prompt,
+            c4_class_prompt,
+            c4_class_token,
+            c4_instance_data_dir,
+            c4_instance_prompt,
+            c4_instance_token,
+            c4_n_save_sample,
+            c4_num_class_images,
+            c4_num_class_images_per,
+            c4_sample_seed,
+            c4_save_guidance_scale,
+            c4_save_infer_steps,
+            c4_save_sample_negative_prompt,
+            c4_save_sample_prompt,
+            c4_save_sample_template
         ]
+        # Do not load these values when 'load settings' is clicked
         params_to_exclude = [db_model_name,db_epochs,db_has_ema,db_model_path,db_revision,db_scheduler,db_src,db_v2]
+
+        # Populate by the below method and handed out to other elements
         params_to_load = []
         save_keys = []
         ui_keys = []
@@ -819,6 +848,7 @@ def on_ui_tabs():
                 c1_num_class_images_per,
                 c2_num_class_images_per,
                 c3_num_class_images_per,
+                c4_num_class_images_per,
                 db_status
             ]
         )
@@ -834,6 +864,7 @@ def on_ui_tabs():
                 c1_num_class_images_per,
                 c2_num_class_images_per,
                 c3_num_class_images_per,
+                c4_num_class_images_per,
                 db_status
             ]
         )

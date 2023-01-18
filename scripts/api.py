@@ -54,100 +54,14 @@ class DbImagesRequest(BaseModel):
                                           description="List of images to work on. Must be Base64 strings")
 
 
-# API Representation of concept data
-class DreamboothConcept(BaseModel):
-    instance_data_dir: str = ""
-    class_data_dir: str = ""
-    instance_prompt: str = ""
-    class_prompt: Union[str, None] = ""
-    save_sample_prompt: Union[str, None] = ""
-    save_sample_template: Union[str, None] = ""
-    instance_token: Union[str, None] = ""
-    class_token: Union[str, None] = ""
-    num_class_images_per: int = 0
-    class_negative_prompt: Union[str, None] = ""
-    class_guidance_scale: float = 7.5
-    class_infer_steps: int = 60
-    save_sample_negative_prompt: Union[str, None] = ""
-    n_save_sample: int = 1
-    sample_seed: int = -1
-    save_guidance_scale: float = 7.5
-    save_infer_steps: int = 60
-
-
-# API Representation of db config
-class DreamboothParameters(BaseModel):
-    concepts_list: List[DreamboothConcept]
-    attention: str = "default"
-    cache_latents: bool = True
-    center_crop: bool = False
-    clip_skip: int = 1
-    concepts_path: Union[str, None] = ""
-    custom_model_name: Union[str, None] = ""
-    epoch_pause_frequency: int = 0
-    epoch_pause_time: int = 60
-    gradient_accumulation_steps: int = 1
-    gradient_checkpointing: bool = True
-    gradient_set_to_none: bool = True
-    graph_smoothing: int = 50
-    half_model: bool = False
-    hflip: bool = True
-    learning_rate: float = 0.000002
-    learning_rate_min: float = 0.000001
-    lora_learning_rate: float = 0.0002
-    lora_model_name: str = ""
-    lora_rank: int = 4
-    lora_txt_learning_rate: float = 0.0002
-    lora_txt_weight: int = 1
-    lora_weight: int = 1
-    lr_cycles: int = 1
-    lr_factor: float = 0.5
-    lr_power: float = 1.0
-    lr_scale_pos: float = 0.5
-    lr_scheduler: str = "constant"
-    lr_warmup_steps: int = 500
-    max_token_length: int = 75
-    mixed_precision: str = "no"
-    adamw_weight_decay: float = 0.01
-    model_name: str = ""
-    num_train_epochs: int = 100
-    pad_tokens: bool = True
-    pretrained_vae_name_or_path: Union[str, None] = ""
-    prior_loss_scale: bool = False
-    prior_loss_target: int = 100
-    prior_loss_weight: float = 1.0
-    prior_loss_weight_min: float = 0.1
-    resolution: int = 512
-    revision: int = 0
-    sample_batch_size: int = 1
-    sanity_prompt: str = ""
-    sanity_seed: int = 420420
-    save_ckpt_after: bool = True
-    save_ckpt_cancel: bool = False
-    save_ckpt_during: bool = True
-    save_embedding_every: int = 25
-    save_lora_after: bool = True
-    save_lora_cancel: bool = False
-    save_lora_during: bool = True
-    save_preview_every: int = 5
-    save_safetensors: bool = False
-    save_state_after: bool = False
-    save_state_cancel: bool = False
-    save_state_during: bool = False
-    snapshot: str = False
-    src: Union[str, None] = ""
-    shuffle_tags: bool = False
-    train_batch_size: int = 1
-    train_imagic: bool = False
-    stop_text_encoder: float = 0
-    use_8bit_adam: bool = False
-    use_concepts: bool = False
-    use_ema: bool = True
-    use_lora: bool = False
-    use_subdir: bool = True
-
 
 import asyncio
+
+def is_running():
+    if db_shared.status.job_count != 0 and db_shared.status.job_count is not None:
+        print("Something is already running.")
+        return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
+    return False
 
 def run_in_background(func, *args, **kwargs):
     """
@@ -234,10 +148,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if new_model_name is None or new_model_name == "":
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
 
-        if db_shared.status.job_count != 0:
-            print("Something is already running.")
-            return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
-
+        status = is_running()
+        if status:
+            return status
 
         print("Creating new Checkpoint: " + new_model_name)
         _ = extract_checkpoint(new_model_name,
@@ -267,14 +180,12 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
-        if db_shared.status.job_count != 0:
-            print("Something is already running.")
-            return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
+
+        status = is_running()
+        if status:
+            return status
 
         print("Starting Training")
-        if db_shared.status.job_count != 0:
-            print("Something is already running.")
-            return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
         db_shared.status.begin()
         run_in_background(dreambooth.start_training, model_name, use_tx2img)
         return {"Status": "Training started."}
@@ -359,15 +270,15 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
-        if db_shared.status.job_count != 0:
-            print("Something is already running.")
-            return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
+        status = is_running()
+        if status:
+            return status
 
         return JSONResponse(content=config.__dict__)
 
     @app.post("/dreambooth/model_config")
     async def set_model_config(
-            model_cfg: DreamboothParameters = Body(description="The config to save"),
+            model_cfg: DreamboothConfig = Body(description="The config to save"),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ):
         """
@@ -406,9 +317,11 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
-        if db_shared.status.job_count != 0:
-            print("Something is already running.")
-            return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
+
+        status = is_running()
+        if status:
+            return status
+
         path = None
         save_model_name = config.model_name
         if config.custom_model_name:
@@ -487,9 +400,11 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if db_shared.status.job_count != 0:
-            print("Something is already running.")
-            return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
+
+        status = is_running()
+        if status:
+            return status
+
         db_shared.status.begin()
         images, msg, status = ui_samples(
             model_dir=model_name,
@@ -533,9 +448,11 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
-        if db_shared.status.job_count != 0:
-            print("Something is already running.")
-            return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
+
+        status = is_running()
+        if status:
+            return status
+
         db_shared.status.begin()
         run_in_background(
             generate_classifiers,
@@ -559,7 +476,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if key_check is not None:
             return key_check
         config = from_file(model_name)
-        concepts = config.concepts_list
+        concepts = config.concepts()
         concept_dict = {}
         out_images = []
         if concept_idx >= 0:
@@ -635,7 +552,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
                 tx_file.writelines(prompt)
             image_paths.append(image_path)
 
-        return {"Status": f"Saved {len(image_paths)} images.", "Images": {x for x in image_paths}}
+        return {"Status": f"Saved {len(image_paths)} images.", "Image dir": {image_dir}}
 
     @app.get("/dreambooth/testimg")
     async def generate_test_data():

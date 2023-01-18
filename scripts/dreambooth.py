@@ -46,7 +46,6 @@ def get_model_snapshot(config: DreamboothConfig):
                 rev_parts = file.split("-")
                 if rev_parts[0] == "checkpoint" and len(rev_parts) == 2:
                     snaps.append(rev_parts[1])
-    print(f"Snaps: {snaps}")
     return snaps
 
 def training_wizard_person(model_dir):
@@ -62,66 +61,26 @@ def training_wizard(model_dir, is_person=False):
     c1_num_class_images_per,
     c2_num_class_images_per,
     c3_num_class_images_per,
+    c4_num_class_images_per,
     db_status
     """
     if model_dir == "" or model_dir is None:
-        return -1, 0, -1, 0, -1, 0, "Please select a model."
-    # Load config, get total steps
-    config = from_file(model_dir)
+        return 100, 0, 0, 0, 0, "Please select a model."
+    step_mult = 150 if is_person else 100
 
-    if config is None:
-        w_status = "Unable to load config."
-        return 100, -1, 0, -1, 0, -1, w_status
+
+    if is_person:
+        class_count = 5
     else:
-        # Build concepts list using current settings
-        concepts = config.concepts_list
+        class_count = 0
 
-        # Count the total number of images in all datasets
-        total_images = 0
-        counts_list = []
-        max_images = 0
+    w_status = f"Wizard results:"
+    w_status += f"<br>Num Epochs: {step_mult}"
+    w_status += f"<br>Num instance images per class image: {class_count}"
 
-        # Set "base" value, which is 100 steps/image at LR of .000002
-        if is_person:
-            class_mult = 1
-        else:
-            class_mult = 0
-        step_mult = 150 if is_person else 100
+    print(w_status)
 
-        for concept in concepts:
-            if not os.path.exists(concept.instance_data_dir):
-                print("Nonexistent instance directory.")
-            else:
-                concept_images = get_images(concept.instance_data_dir)
-                total_images += len(concept_images)
-                image_count = len(concept_images)
-                print(f"Image count in {concept.instance_data_dir} is {image_count}")
-                if image_count > max_images:
-                    max_images = image_count
-                c_dict = {
-                    "concept": concept,
-                    "images": image_count,
-                    "classifiers": image_count * class_mult
-                }
-                counts_list.append(c_dict)
-
-        c_list = []
-        w_status = f"Wizard results:"
-        w_status += f"<br>Num Epochs: {step_mult}"
-        w_status += f"<br>Max Steps: {0}"
-
-        for x in range(3):
-            if x < len(counts_list):
-                c_dict = counts_list[x]
-                c_list.append(int(c_dict["classifiers"]))
-                w_status += f"<br>Concept {x} Class Images: {c_dict['classifiers']}"
-
-            else:
-                c_list.append(0)
-
-        print(w_status)
-
-    return int(step_mult), c_list[0], c_list[1], c_list[2], w_status
+    return int(step_mult), class_count, class_count, class_count, class_count, w_status
 
 def largest_prime_factor(n):
     # Special case for n = 2
@@ -220,7 +179,7 @@ def performance_wizard(model_name):
         mixed_precision = 'bf16'
     if config is not None:
         total_images = 0
-        for concept in config.concepts_list:
+        for concept in config.concepts():
             idd = concept.instance_data_dir
             if idd != "" and idd is not None and os.path.exists(idd):
                 images = get_images(idd)
@@ -367,7 +326,6 @@ def ui_samples(model_dir: str,
 
 def load_params(model_dir):
     data = from_file(model_dir)
-    concepts = []
     ui_dict = {}
     msg = ""
     if data is None:
@@ -379,40 +337,23 @@ def load_params(model_dir):
     else:
         for key in data.__dict__:
             value = data.__dict__[key]
-            if key == "concepts_list":
-                concepts = value
-            else:
-                if key == "pretrained_model_name_or_path":
-                    key = "model_path"
-                ui_dict[f"db_{key}"] = value
-                msg = "Loaded config."
+            if key == "pretrained_model_name_or_path":
+                key = "model_path"
+            ui_dict[f"db_{key}"] = value
+            msg = "Loaded config."
 
-    ui_concept_list = concepts if concepts is not None else []
-    if len(ui_concept_list) < 3:
-        while len(ui_concept_list) < 3:
-            ui_concept_list.append(Concept())
+    ui_concept_list = data.concepts(4)
     c_idx = 1
     for ui_concept in ui_concept_list:
-        if c_idx > 3:
-            break
-
-        for key in sorted(ui_concept):
-            ui_dict[f"c{c_idx}_{key}"] = ui_concept[key]
+        for key in sorted(ui_concept.__dict__):
+            ui_dict[f"c{c_idx}_{key}"] = ui_concept.__dict__[key]
         c_idx += 1
     ui_dict["db_status"] = msg
     ui_keys = db_config.ui_keys
     output = []
     for key in ui_keys:
-        if key in ui_dict:
-            if key == "db_v2" or key == "db_has_ema":
-                output.append("True" if ui_dict[key] else "False")
-            else:
-                output.append(ui_dict[key])
-        else:
-            if 'epoch' in key:
-                output.append(0)
-            else:
-                output.append(None)
+        output.append(ui_dict[key] if key in ui_dict else None)
+
     return output
 
 
@@ -479,7 +420,7 @@ def start_training(model_dir: str, use_txt2img: bool = True):
     if config.attention == "xformers":
         if config.mixed_precision == "no":
             msg = "Using xformers, please set mixed precision to 'fp16' or 'bf16' to continue."
-    if not len(config.concepts_list):
+    if not len(config.concepts()):
         msg = "Please configure some concepts."
     if not os.path.exists(config.pretrained_model_name_or_path):
         msg = "Invalid training data directory."
@@ -562,7 +503,7 @@ def ui_classifiers(model_name: str,
     if config.attention == "xformers":
         if config.mixed_precision == "no":
             msg = "Using xformers, please set mixed precision to 'fp16' or 'bf16' to continue."
-    if not len(config.concepts_list):
+    if not len(config.concepts()):
         msg = "Please configure some concepts."
     if not os.path.exists(config.pretrained_model_name_or_path):
         msg = "Invalid training data directory."
@@ -612,7 +553,7 @@ def debug_buckets(model_name):
     if args is None:
         return "Invalid config."
     print("Preparing prompt dataset...")
-    prompt_dataset = PromptDataset(args.concepts_list, args.model_dir, args.resolution)
+    prompt_dataset = PromptDataset(args.concepts(), args.model_dir, args.resolution)
     inst_paths = prompt_dataset.instance_prompts
     class_paths = prompt_dataset.class_prompts
     print("Generating training dataset...")

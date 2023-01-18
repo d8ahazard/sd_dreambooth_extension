@@ -189,6 +189,7 @@ class DreamState:
     def end(self):
         self.job = ""
         self.job_count = 0
+        self.job_no = 0
         torch_gc()
 
     def nextjob(self):
