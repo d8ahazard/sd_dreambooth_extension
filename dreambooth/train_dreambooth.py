@@ -694,14 +694,15 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                             sample_dir = os.path.join(save_dir, "samples")
                             os.makedirs(sample_dir, exist_ok=True)
                             with accelerator.autocast(), torch.inference_mode():
-                                sd = SampleDataset(args.concepts_list, args.shuffle_tags)
+                                sd = SampleDataset(args.concepts(), args.shuffle_tags)
                                 prompts = sd.get_prompts()
+                                concepts = args.concepts()
                                 if args.sanity_prompt != "" and args.sanity_prompt is not None:
                                     epd = PromptData()
                                     epd.prompt = args.sanity_prompt
                                     epd.seed = args.sanity_seed
-                                    epd.negative_prompt = args.concepts_list[0].save_sample_negative_prompt
-                                    extra = SampleData(args.sanity_prompt, concept=args.concepts_list[0])
+                                    epd.negative_prompt = concepts[0].save_sample_negative_prompt
+                                    extra = SampleData(args.sanity_prompt, concept=concepts[0])
                                     extra.seed = args.sanity_seed
                                     prompts.append(extra)
                                 pbar.set_description("Generating Samples")
@@ -709,6 +710,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                 ci = 0
                                 for c in prompts:
                                     c.out_dir = os.path.join(args.model_dir, "samples")
+                                    c.resolution = (args.resolution, args.resolution)
                                     seed = int(c.seed)
                                     if seed is None or seed == '' or seed == -1:
                                         seed = int(random.randrange(21474836147))

@@ -1,6 +1,9 @@
 import json
 import os
 import traceback
+from typing import List, Dict
+
+from pydantic import BaseModel
 
 from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared, db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
@@ -11,30 +14,117 @@ save_keys = []
 # Keys to return to the ui when Load Settings is clicked.
 ui_keys = []
 
-param_defaults = {"model_name": "", "attention": "default", "cache_latents": True, "center_crop": True, "clip_skip": 1,
-    "concepts_path": "", "concepts_list": [], "custom_model_name": "", "epoch": 0, "epoch_pause_frequency": 0,
-    "epoch_pause_time": 0, "gradient_accumulation_steps": 1, "gradient_checkpointing": True,
-    "gradient_set_to_none": True, "graph_smoothing": 50, "half_model": False, "has_ema": False, "hflip": False,
-    "initial_revision": 0, "learning_rate": 5e-6, "learning_rate_min": 1e-6, "lifetime_revision": 0,
-    "lora_learning_rate": 1e-4, "lora_model_name": "", "lora_rank": 4, "lora_txt_learning_rate": 5e-5,
-    "lora_txt_weight": 1.0, "lora_weight": 1.0, "lr_cycles": 1, "lr_factor": 0.5, "lr_power": 1.0, "lr_scale_pos": 0.5,
-    "lr_scheduler": "constant_with_warmup", "lr_warmup_steps": 0, "max_token_length": 75, "mixed_precision": "fp16",
-    "adamw_weight_decay": 0.01, "model_path": "", "num_train_epochs": 100, "pad_tokens": True,
-    "pretrained_vae_name_or_path": "", "prior_loss_scale": False, "prior_loss_target": 100, "prior_loss_weight": 1.0,
-    "prior_loss_weight_min": 0.1, "resolution": 512, "revision": 0, "sample_batch_size": 1, "sanity_prompt": "",
-    "sanity_seed": 420420, "save_ckpt_after": True, "save_ckpt_cancel": False, "save_ckpt_during": True,
-    "save_embedding_every": 25, "save_lora_after": True, "save_lora_cancel": False, "save_lora_during": True,
-    "save_preview_every": 5, "save_safetensors": False, "save_state_after": False, "save_state_cancel": False,
-    "save_state_during": False, "scheduler": "ddim", "src": "", "shuffle_tags": False, "snapshot": "",
-    "train_batch_size": 1, "train_imagic": False, "stop_text_encoder": 1.0, "use_8bit_adam": True,
-    "use_concepts": False, "use_ema": True, "use_lora": False, "use_subdir": False, "v2": False}
-
 
 def sanitize_name(name):
     return "".join(x for x in name if (x.isalnum() or x in "._- "))
 
 
-class DreamboothConfig:
+class DreamboothConfig(BaseModel):
+    adamw_weight_decay: float = 0.01
+    attention: str = "default"
+    cache_latents: bool = True
+    center_crop: bool = True
+    clip_skip: int = 1
+    concepts_list: List[Dict] = []
+    concepts_path: str = ""
+    custom_model_name: str = ""
+    epoch: int = 0
+    epoch_pause_frequency: int = 0
+    epoch_pause_time: int = 0
+    gradient_accumulation_steps: int = 1
+    gradient_checkpointing: bool = True
+    gradient_set_to_none: bool = True
+    graph_smoothing: int = 50
+    half_model: bool = False
+    has_ema: bool = False
+    hflip: bool = False
+    initial_revision: int = 0
+    learning_rate: float = 5e-6
+    learning_rate_min: float = 1e-6
+    lifetime_revision: int = 0
+    lora_learning_rate: float = 1e-4
+    lora_model_name: str = ""
+    lora_rank: int = 4
+    lora_txt_learning_rate: float = 5e-5
+    lora_txt_weight: float = 1.0
+    lora_weight: float = 1.0
+    lr_cycles: int = 1
+    lr_factor: float = 0.5
+    lr_power: float = 1.0
+    lr_scale_pos: float = 0.5
+    lr_scheduler: str = "constant_with_warmup"
+    lr_warmup_steps: int = 0
+    max_token_length: int = 75
+    mixed_precision: str = "fp16"
+    model_name: str = ""
+    model_dir: str = ""
+    model_path: str = ""
+    num_train_epochs: int = 100
+    pad_tokens: bool = True
+    pretrained_model_name_or_path: str = ""
+    pretrained_vae_name_or_path: str = ""
+    prior_loss_scale: bool = False
+    prior_loss_target: int = 100
+    prior_loss_weight: float = 1.0
+    prior_loss_weight_min: float = 0.1
+    resolution: int = 512
+    revision: int = 0
+    sample_batch_size: int = 1
+    sanity_prompt: str = ""
+    sanity_seed: int = 420420
+    save_ckpt_after: bool = True
+    save_ckpt_cancel: bool = False
+    save_ckpt_during: bool = True
+    save_embedding_every: int = 25
+    save_lora_after: bool = True
+    save_lora_cancel: bool = False
+    save_lora_during: bool = True
+    save_preview_every: int = 5
+    save_safetensors: bool = False
+    save_state_after: bool = False
+    save_state_cancel: bool = False
+    save_state_during: bool = False
+    scheduler: str = "ddim"
+    shuffle_tags: bool = False
+    snapshot: str = ""
+    src: str = ""
+    stop_text_encoder: float = 1.0
+    train_batch_size: int = 1
+    train_imagic: bool = False
+    use_8bit_adam: bool = True
+    use_concepts: bool = False
+    use_ema: bool = True
+    use_lora: bool = False
+    use_subdir: bool = False
+    v2: bool = False
+
+    def __init__(self, model_name: str = "", scheduler: str = "ddim", v2: bool = False, src: str = "",
+                 resolution: int = 512, **kwargs):
+
+        super().__init__(**kwargs)
+        model_name = sanitize_name(model_name)
+        models_path = shared.dreambooth_models_path
+        if models_path == "" or models_path is None:
+            models_path = os.path.join(shared.models_path, "dreambooth")
+        model_dir = os.path.join(models_path, model_name)
+        working_dir = os.path.join(model_dir, "working")
+
+        if not os.path.exists(working_dir):
+            os.makedirs(working_dir)
+
+        self.model_name = model_name
+        self.model_dir = model_dir
+        self.pretrained_model_name_or_path = working_dir
+        self.resolution = resolution
+        self.src = src
+        self.scheduler = scheduler
+        if v2 == 'True':
+            self.v2 = True
+        elif v2 == 'False':
+            self.v2 = False
+        else:
+            self.v2 = v2
+
     # Actually save as a file
     def save(self, backup=False):
         """
@@ -53,33 +143,34 @@ class DreamboothConfig:
         with open(config_file, "w") as outfile:
             json.dump(self.__dict__, outfile, indent=4)
 
-    # Take a list of params from the UI, load, save
-    # Pass a dict of values to set attributes
-    def load_params(self, params_dict=None):
-        if params_dict is None:
-            params_dict = param_defaults
+    def load_params(self, params_dict):
         for key, value in params_dict.items():
             if "db_" in key:
                 key = key.replace("db_", "")
-            if key == "concepts_list":
-                try:
-                    value = self.load_concepts(value)
-                except Exception as e:
-                    print(f"Exception loading concepts: {e}")
             if hasattr(self, key):
                 setattr(self, key, value)
 
     # Pass a dict and return a list of Concept objects
-    def load_concepts(self, concepts_list):
+    def concepts(self, required: int = -1):
         concepts = []
         c_idx = 0
-        for concept_dict in concepts_list:
+        if required == -1:
+            required = len(self.concepts_list)
+        print(f"Four concepts required, we have {len(self.concepts_list)} currently.")
+        for concept_dict in self.concepts_list:
             concept = Concept(input_dict=concept_dict)
-            if concept.is_valid():
-                if "class_data_dir" not in concept.__dict__ or concept.class_data_dir == "" or concept.class_data_dir is None:
+            if concept.is_valid:
+                if concept.class_data_dir == "" or concept.class_data_dir is None:
                     concept.class_data_dir = os.path.join(self.model_dir, f"classifiers_{c_idx}")
                 concepts.append(concept)
                 c_idx += 1
+            else:
+                print(f"Invalid concept: {concept.instance_data_dir}")
+
+        missing = len(concepts) - required
+        if missing > 0:
+            print(f"Adding {missing} blank concepts?")
+            concepts.extend([Concept(None)] * missing)
         return concepts
 
     # Set default values
@@ -100,108 +191,10 @@ class DreamboothConfig:
             self.model_dir = model_dir
             self.pretrained_model_name_or_path = working_dir
 
-    def __init__(self, model_name: str = "", scheduler: str = "ddim", v2: bool = False, src: str = "",
-                 resolution: int = 512):
-
-        model_name = sanitize_name(model_name)
-        models_path = shared.dreambooth_models_path
-        if models_path == "" or models_path is None:
-            models_path = os.path.join(shared.models_path, "dreambooth")
-        model_dir = os.path.join(models_path, model_name)
-        working_dir = os.path.join(model_dir, "working")
-
-        if not os.path.exists(working_dir):
-            os.makedirs(working_dir)
-
-        self.attention = None
-        self.cache_latents = None
-        self.center_crop = None
-        self.clip_skip = None
-        self.concepts_path = None
-        self.concepts_list = None
-        self.custom_model_name = None
-        self.epoch = None
-        self.epoch_pause_frequency = None
-        self.epoch_pause_time = None
-        self.gradient_accumulation_steps = None
-        self.gradient_checkpointing = None
-        self.gradient_set_to_none = None
-        self.graph_smoothing = None
-        self.half_model = None
-        self.has_ema = None
-        self.hflip = None
-        self.initial_revision = None
-        self.learning_rate = None
-        self.learning_rate_min = None
-        self.lifetime_revision = None
-        self.lora_learning_rate = None
-        self.lora_model_name = None
-        self.lora_rank = None
-        self.lora_txt_learning_rate = None
-        self.lora_txt_weight = None
-        self.lora_weight = None
-        self.lr_cycles = None
-        self.lr_factor = None
-        self.lr_power = None
-        self.lr_scale_pos = None
-        self.lr_scheduler = None
-        self.lr_warmup_steps = None
-        self.max_token_length = None
-        self.mixed_precision = None
-        self.adamw_weight_decay = None
-        self.num_train_epochs = None
-        self.pad_tokens = None
-        self.pretrained_vae_name_or_path = None
-        self.prior_loss_scale = None
-        self.prior_loss_target = None
-        self.prior_loss_weight = None
-        self.prior_loss_weight_min = None
-        self.revision = None
-        self.sample_batch_size = None
-        self.sanity_prompt = None
-        self.sanity_seed = None
-        self.save_ckpt_after = None
-        self.save_ckpt_cancel = None
-        self.save_ckpt_during = None
-        self.save_embedding_every = None
-        self.save_lora_after = None
-        self.save_lora_cancel = None
-        self.save_lora_during = None
-        self.save_preview_every = None
-        self.save_safetensors = None
-        self.save_state_after = None
-        self.save_state_cancel = None
-        self.save_state_during = None
-        self.shuffle_tags = None
-        self.snapshot = None
-        self.train_batch_size = None
-        self.train_imagic = None
-        self.stop_text_encoder = None
-        self.use_8bit_adam = None
-        self.use_concepts = None
-        self.use_ema = None
-        self.use_lora = None
-        self.use_subdir = None
-
-        self.load_params()
-
-        self.model_name = model_name
-        self.model_dir = model_dir
-        self.pretrained_model_name_or_path = working_dir
-        self.resolution = resolution
-        self.src = src
-        self.scheduler = scheduler
-        if v2 == 'True':
-            self.v2 = True
-        elif v2 == 'False':
-            self.v2 = False
-        else:
-            self.v2 = v2
-
 
 def save_config(*args):
     params = list(args)
-    concept_keys = ["c1_", "c2_", "c3_"]
+    concept_keys = ["c1_", "c2_", "c3_", "c4_"]
     model_name = params[0]
     if model_name is None or model_name == "":
         print("Invalid model name.")
@@ -214,17 +207,15 @@ def save_config(*args):
     for concept_key in concept_keys:
         concept_dict = {}
         for key, param in params_dict.items():
-            if concept_key in key:
+            if concept_key in key and param is not None:
                 concept_dict[key.replace(concept_key, "")] = param
-
-
-        concepts_list.append(concept_dict)
+        concept_test = Concept(concept_dict)
+        if concept_test.is_valid:
+            concepts_list.append(concept_test.__dict__)
     existing_concepts = params_dict["concepts_list"] if "concepts_list" in params_dict else []
     if len(concepts_list) and not len(existing_concepts):
-        print(f"Got concepts: {concepts_list}")
         params_dict["concepts_list"] = concepts_list
 
-    print("Applying new params...")
     config.load_params(params_dict)
 
     print("Saved settings.")
@@ -253,7 +244,6 @@ def from_file(model_name):
             config_dict = json.load(openfile)
 
         config = DreamboothConfig(model_name)
-        print("Config created, loading params...")
         config.load_params(config_dict)
         return config
     except Exception as e:

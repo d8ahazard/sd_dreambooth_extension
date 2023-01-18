@@ -310,12 +310,11 @@ class PromptDataset(Dataset):
 
         # Create available resolutions
         bucket_resos = make_bucket_resolutions(max_width, min_width)
-
         c_idx = 0
 
         for concept in concepts:
             instance_dir = concept.instance_data_dir
-            if not concept.is_valid():
+            if not concept.is_valid:
                 continue
             class_dir = concept.class_data_dir
             instance_prompts = {}
@@ -808,7 +807,7 @@ def generate_prompts(model_dir):
     status.job_no = 1
     status.textinfo = "Building dataset from existing files..."
     train_dataset = SuperDataset(
-        concepts_list=config.concepts_list,
+        concepts_list=config.concepts(),
         tokenizer=tokenizer,
         size=config.resolution,
         center_crop=config.center_crop,
@@ -833,7 +832,7 @@ def generate_prompts(model_dir):
 
     status.job_no = 3
     status.textinfo = "Building dataset for 'new' class images..."
-    for concept in config.concepts_list:
+    for concept in config.concepts():
         c_idx = 0
         class_images_dir = Path(concept["class_data_dir"])
         if class_images_dir == "" or class_images_dir is None or class_images_dir == db_shared.script_path:
@@ -841,7 +840,7 @@ def generate_prompts(model_dir):
         class_images_dir.mkdir(parents=True, exist_ok=True)
         cur_class_images = len(get_images(class_images_dir))
         if cur_class_images < concept.num_class_images:
-            sample_dataset = PromptDataset(config.concepts_list, config.model_dir, config.resolution)
+            sample_dataset = PromptDataset(config.concepts(), config.model_dir, config.resolution)
             for i in mytqdm(range(sample_dataset.__len__()), desc="Generating prompts"):
                 prompt = sample_dataset.__getitem__(i)
                 output["new_class_prompts"].append(prompt.prompt)
@@ -913,7 +912,7 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     class_prompts = []
     try:
         status.textinfo = "Preparing dataset..."
-        prompt_dataset = PromptDataset(args.concepts_list, args.model_dir, args.resolution)
+        prompt_dataset = PromptDataset(args.concepts(), args.model_dir, args.resolution)
         instance_prompts = prompt_dataset.instance_prompts
         class_prompts = prompt_dataset.class_prompts
     except Exception as p:

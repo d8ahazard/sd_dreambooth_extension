@@ -205,7 +205,8 @@ def train_imagic(args: DreamboothConfig):
     text_encoder.to(accelerator.device, dtype=weight_dtype)
     vae.to(accelerator.device, dtype=weight_dtype)
     pil_features = list_features()
-    concept = args.concepts_list[0]
+    concepts = args.concepts()
+    concept = concepts[0]
     instance_dir = concept.instance_data_dir
     input_image = None
 
