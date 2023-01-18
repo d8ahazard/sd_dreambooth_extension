@@ -201,6 +201,7 @@ class DreamboothConfig:
 
 def save_config(*args):
     params = list(args)
+    concept_keys = ["c1_", "c2_", "c3_"]
     model_name = params[0]
     if model_name is None or model_name == "":
         print("Invalid model name.")
@@ -209,8 +210,23 @@ def save_config(*args):
     if config is None:
         config = DreamboothConfig(model_name)
     params_dict = dict(zip(save_keys, params))
+    concepts_list = []
+    for concept_key in concept_keys:
+        concept_dict = {}
+        for key, param in params_dict.items():
+            if concept_key in key:
+                concept_dict[key.replace(concept_key, "")] = param
+
+
+        concepts_list.append(concept_dict)
+    existing_concepts = params_dict["concepts_list"] if "concepts_list" in params_dict else []
+    if len(concepts_list) and not len(existing_concepts):
+        print(f"Got concepts: {concepts_list}")
+        params_dict["concepts_list"] = concepts_list
+
     print("Applying new params...")
     config.load_params(params_dict)
+
     print("Saved settings.")
     config.save()
 
