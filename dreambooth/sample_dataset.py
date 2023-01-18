@@ -62,7 +62,7 @@ class SampleDataset:
         self.prompts = prompts
         self.concepts = valid_concepts
 
-    def get_prompts(self):
+    def get_prompts(self) -> List[PromptData]:
         concept_index = 0
         output = []
         for concept in self.concepts:

@@ -29,7 +29,7 @@ from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_webhook import send_training_update
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import EMAModel, generate_classifiers, \
-    generate_dataset, TrainResult, CustomAccelerator, mytqdm
+    generate_dataset, TrainResult, CustomAccelerator, mytqdm, encode_hidden_state
 from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
 from extensions.sd_dreambooth_extension.dreambooth.sample_dataset import SampleDataset
@@ -708,6 +708,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                 pbar.reset(len(prompts) + 2)
                                 ci = 0
                                 for c in prompts:
+                                    c.out_dir = os.path.join(args.model_dir, "samples")
                                     seed = int(c.seed)
                                     if seed is None or seed == '' or seed == -1:
                                         seed = int(random.randrange(21474836147))
@@ -830,11 +831,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     # Add noise to the latents according to the noise magnitude at each timestep
                     # (this is the forward diffusion process)
                     noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
-
-                    enc_out = text_encoder(batch["input_ids"], output_hidden_states=True, return_dict=True)
-                    encoder_hidden_states = enc_out['hidden_states'][-int(args.clip_skip)]
-                    # encoder_hidden_states = encoder_hidden_states.to(device=accelerator.device, dtype=weight_dtype)
-                    encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states)
+                    encoder_hidden_states = encode_hidden_state(text_encoder,batch["input_ids"], args.pad_tokens, b_size, args.max_token_length, tokenizer.model_max_length)
 
                     # Predict the noise residual
                     noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
