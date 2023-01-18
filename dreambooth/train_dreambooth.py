@@ -99,7 +99,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                 logging_dir=logging_dir)
     def inner_loop(train_batch_size: int, gradient_accumulation_steps: int, profiler: profile, logfile: str):
         text_encoder = None
-        args.tokenizer_name = None
         global last_samples
         global last_prompts
 
@@ -188,18 +187,11 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             return new_vae
 
         # Load the tokenizer
-        if args.tokenizer_name:
-            tokenizer = AutoTokenizer.from_pretrained(
-                args.tokenizer_name,
-                revision=args.revision,
-                use_fast=False,
-            )
-        else:
-            tokenizer = AutoTokenizer.from_pretrained(
-                os.path.join(args.pretrained_model_name_or_path, "tokenizer"),
-                revision=args.revision,
-                use_fast=False,
-            )
+        tokenizer = AutoTokenizer.from_pretrained(
+            os.path.join(args.pretrained_model_name_or_path, "tokenizer"),
+            revision=args.revision,
+            use_fast=False,
+        )
 
         # import correct text encoder class
         text_encoder_cls = import_model_class_from_model_name_or_path(args.pretrained_model_name_or_path, args.revision)
@@ -397,12 +389,12 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
             input_ids = torch.cat(input_ids, dim=0)
 
-            batch = {
+            batch_data = {
                 "input_ids": input_ids,
                 "images": pixel_values,
                 "loss_weights": loss_weights.mean()
             }
-            return batch
+            return batch_data
 
         sampler = BucketSampler(train_dataset, train_batch_size)
 
@@ -746,13 +738,10 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                             pass
                 printm("Starting cleanup.")
                 del s_pipeline
-                s_pipeline = None
                 del scheduler
-                scheduler = None
                 if save_image:
                     if g_cuda:
                         del g_cuda
-                        g_cuda = None
                     try:
                         printm("Parse logs.")
                         log_images, log_names = parse_logs(model_name=args.model_name)

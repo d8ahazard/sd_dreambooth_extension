@@ -157,7 +157,6 @@ class DreamboothConfig(BaseModel):
         c_idx = 0
         if required == -1:
             required = len(self.concepts_list)
-        print(f"Four concepts required, we have {len(self.concepts_list)} currently.")
         for concept_dict in self.concepts_list:
             concept = Concept(input_dict=concept_dict)
             if concept.is_valid:
@@ -165,12 +164,9 @@ class DreamboothConfig(BaseModel):
                     concept.class_data_dir = os.path.join(self.model_dir, f"classifiers_{c_idx}")
                 concepts.append(concept)
                 c_idx += 1
-            else:
-                print(f"Invalid concept: {concept.instance_data_dir}")
 
         missing = len(concepts) - required
         if missing > 0:
-            print(f"Adding {missing} blank concepts?")
             concepts.extend([Concept(None)] * missing)
         return concepts
 
@@ -218,8 +214,6 @@ def save_config(*args):
         params_dict["concepts_list"] = concepts_list
 
     config.load_params(params_dict)
-
-    print("Saved settings.")
     config.save()
 
 

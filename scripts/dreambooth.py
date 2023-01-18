@@ -461,14 +461,16 @@ def start_training(model_dir: str, use_txt2img: bool = True):
         else:
             log_dir = os.path.join(config.model_dir, "logging", "dreambooth", "*")
             list_of_files = glob.glob(log_dir)
-            latest_file = max(list_of_files, key=os.path.getmtime)
-            print(f"No training was completed, deleting log: {latest_file}")
-            os.remove(latest_file)
+            if len(list_of_files):
+                latest_file = max(list_of_files, key=os.path.getmtime)
+                print(f"No training was completed, deleting log: {latest_file}")
+                os.remove(latest_file)
         total_steps = config.revision
         res = f"Training {'interrupted' if status.interrupted else 'finished'}. " \
               f"Total lifetime steps: {total_steps} \n"
     except Exception as e:
         res = f"Exception training model: '{e}'."
+        status.end()
         traceback.print_exc()
         pass
 
