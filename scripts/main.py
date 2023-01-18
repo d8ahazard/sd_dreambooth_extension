@@ -87,6 +87,8 @@ def check_progress_call():
     progressbar = f"""<div class='progressDiv'><div class='progress' style="overflow:visible;width:{progress * 100}%;white-space:nowrap;">{"&nbsp;" * 2 + str(int(progress * 100)) + "%" + time_left if progress > 0.01 else ""}</div></div>"""
     status.set_current_image()
     image = status.current_image
+    preview = None
+    gallery = None
 
     if image is None:
         preview = gr.update(visible=False, value=None)
@@ -97,7 +99,7 @@ def check_progress_call():
                 status.current_image = None
                 preview = gr.update(visible=False, value=None)
                 gallery = gr.update(visible=True, value=image)
-            else:
+            elif len(image) == 1:
                 preview = gr.update(visible=True, value=image[0])
                 gallery = gr.update(visible=True, value=None)
         else:

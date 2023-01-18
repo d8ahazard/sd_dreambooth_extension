@@ -73,14 +73,13 @@ class DbDataset(torch.utils.data.Dataset):
 
     @staticmethod
     def open_and_trim(image_path, reso):
-        image = Image.open(image_path)
-        if not image.mode == "RGB":
-            image = image.convert("RGB")
-        image = np.array(image, np.uint8)
-        image_height, image_width = image.shape[0:2]
+        # Read
+        image = cv2.imread(str(image_path))
+        image_height, image_width, _ = image.shape
         # Don't resize and junk if the image is already properly sized
         if image_width == reso[0] and image_height == reso[1]:
             return image
+        # Resize
         ar_img = image_width / image_height
         ar_reso = reso[0] / reso[1]
         if ar_img > ar_reso:
@@ -88,14 +87,15 @@ class DbDataset(torch.utils.data.Dataset):
         else:
             scale = reso[0] / image_width
         resized_size = (int(image_width * scale + .5), int(image_height * scale + .5))
-
         image = cv2.resize(image, resized_size, interpolation=cv2.INTER_AREA)
+        # Trim
         if resized_size[0] > reso[0]:
             trim_size = resized_size[0] - reso[0]
             image = image[:, trim_size // 2:trim_size // 2 + reso[0]]
         elif resized_size[1] > reso[1]:
             trim_size = resized_size[1] - reso[1]
             image = image[trim_size // 2:trim_size // 2 + reso[1]]
+        # Verify and return
         assert image.shape[0] == reso[1] and image.shape[1] == reso[0], \
             f"internal error, illegal trimmed size: {image.shape}, {reso}"
         return image

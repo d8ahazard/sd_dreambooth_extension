@@ -380,13 +380,17 @@ function db_progressbar(){
                 return;
             }
 
+           if(progressbarParent) {
+               progressbar.style.width = progressbarParent.clientWidth + "px"
+               gradioApp().querySelector(".progressDiv").style.width = progressbarParent.clientWidth + "px"
+           }
+
             let preview = gradioApp().getElementById("db_preview");
             let gallery = gradioApp().getElementById("db_gallery");
 
             if(preview != null && gallery != null){
                 preview.style.width = gallery.clientWidth + "px"
                 preview.style.height = gallery.clientHeight + "px"
-                if(progressbarParent) progressbar.style.width = progressbarParent.clientWidth + "px"
 
 				//only watch gallery if there is a generation process going on
                 checkDbGallery();
