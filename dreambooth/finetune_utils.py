@@ -232,39 +232,38 @@ class FilenameTextGetter:
         filename_text = filename_text.replace("\\", "")  # work with \(franchies\)
         return filename_text
 
-    def create_text(self, text_template, filename_text, instance_token, class_token, is_class=True):
+    def create_text(self, base_prompt, filewords_text, instance_token, class_token, is_class=True):
+        # Append the filename text to the template first...THEN shuffle it all.
+        output = base_prompt.replace("[filewords]", filewords_text)
+
         # If we are creating text for a class image and it has our instance token in it, remove/replace it
         class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
         if instance_token != "" and class_token != "":
-            if is_class and instance_token in filename_text:
-                if class_token in filename_text:
-                    filename_text = filename_text.replace(instance_token, "")
-                    filename_text = filename_text.replace("  ", " ")
+            if is_class and instance_token in output:
+                if class_token in output:
+                    output = output.replace(instance_token, "")
+                    output = output.replace("  ", " ")
                 else:
-                    filename_text = filename_text.replace(instance_token, class_token)
+                    output = output.replace(instance_token, class_token)
 
             if not is_class:
-                if class_token in filename_text:
+                if class_token in output:
                     # Do nothing if we already have class and instance in string
-                    if instance_token in filename_text:
+                    if instance_token in output:
                         pass
                     # Otherwise, substitute class tokens for the base token
                     else:
                         for token in class_tokens:
-                            if token in filename_text:
-                                filename_text = filename_text.replace(token, f"{class_token}")
+                            if token in output:
+                                output = output.replace(token, f"{class_token}")
                     # Now, replace class with instance + class tokens
-                    filename_text = filename_text.replace(class_token, f"{instance_token} {class_token}")
+                    output = output.replace(class_token, f"{instance_token} {class_token}")
                 else:
                     # If class is not in the string, check if instance is
-                    if instance_token in filename_text:
-                        filename_text = filename_text.replace(instance_token, f"{instance_token} {class_token}")
-                    else:
-                        # Description only, insert both at the front?
-                        filename_text = f"{instance_token} {class_token}, {filename_text}"
+                    if instance_token in output:
+                        output = output.replace(instance_token, f"{instance_token} {class_token}")
 
-        # Append the filename text to the template first...THEN shuffle it all.
-        output = text_template.replace("[filewords]", filename_text)
+
         # Remove underscores, double-spaces, and other characters that will cause issues.
         output.replace("_", " ")
         output.replace("  ", " ")
@@ -357,7 +356,7 @@ class PromptDataset(Dataset):
                         while missing_prompts > 0:
                             rand = random.choice(prompts)
                             instance_prompt = rand.prompt
-                            sample_prompt = text_getter.create_text(concept.class_prompt, instance_prompt, rand.instance_token,rand.class_token, True)
+                            sample_prompt = text_getter.create_text(concept.class_prompt, instance_prompt, rand.instance_token, rand.class_token, True)
                             pd = PromptData(
                                 prompt=sample_prompt,
                                 prompt_tokens=[(concept.instance_token, concept.class_token)],
@@ -373,7 +372,6 @@ class PromptDataset(Dataset):
                             new_prompts.append(pd)
                             self.required_prompts += 1
                             missing_prompts -= 1
-                    self.class_prompts.extend(class_check)
 
                 if len(new_prompts):
                     if res in self.new_prompts:
@@ -501,6 +499,7 @@ class ImageBuilder:
                 cfg_scale=scale,
                 width=width,
                 height=height,
+                sampler_name="Euler a",
                 do_not_save_grid=True,
                 do_not_save_samples=True,
                 do_not_reload_embeddings=True
@@ -962,6 +961,8 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
             if pd.resolution == first_res:
                 prompts.append(pd)
                 actual_idx += 1
+            else:
+                break
 
         new_images = builder.generate_images(prompts)
         i_idx = 0
