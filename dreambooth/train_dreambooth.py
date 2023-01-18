@@ -350,8 +350,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         printm("Loading dataset...")
         train_dataset = generate_dataset(
             model_name=args.model_name,
-            instance_prompts = instance_prompts,
-            class_prompts = class_prompts,
+            instance_prompts=instance_prompts,
+            class_prompts=class_prompts,
             batch_size=train_batch_size,
             tokenizer=tokenizer,
             vae=vae if args.cache_latents else None,
