@@ -176,6 +176,7 @@ class DreamboothConfig:
         self.snapshot = None
         self.train_batch_size = None
         self.train_imagic = None
+        self.train_unet = None 
         self.stop_text_encoder = None
         self.use_8bit_adam = None
         self.use_concepts = None
