@@ -1,4 +1,5 @@
 import gc
+import hashlib
 import json
 import os
 import random
