@@ -1,19 +1,18 @@
 import gc
-import hashlib
 import json
 import os
 import random
 import re
 import traceback
-from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Iterable, Dict, List, Tuple, Union
+from typing import Iterable, Dict, List, Tuple
 
 import gradio
 import numpy as np
 import tensorflow
 import torch
 import torch.utils.checkpoint
+from PIL import Image
 from accelerate import Accelerator
 from diffusers import DiffusionPipeline, AutoencoderKL
 from torch.utils.data import Dataset
@@ -24,14 +23,13 @@ from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, from_file
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, get_checkpoint_match, get_images
+from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, get_checkpoint_match, get_images, db_save_image
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import apply_lora_weights
 from modules import shared, devices, sd_models, sd_hijack, prompt_parser, lowvram
 from modules.processing import StableDiffusionProcessingTxt2Img, StableDiffusionProcessing, Processed, \
     get_fixed_seed, create_infotext, decode_first_stage
 from modules.sd_hijack import model_hijack
-from PIL import Image
-
 
 
 class mytqdm(tqdm):
@@ -234,39 +232,38 @@ class FilenameTextGetter:
         filename_text = filename_text.replace("\\", "")  # work with \(franchies\)
         return filename_text
 
-    def create_text(self, text_template, filename_text, instance_token, class_token, is_class=True):
+    def create_text(self, base_prompt, filewords_text, instance_token, class_token, is_class=True):
+        # Append the filename text to the template first...THEN shuffle it all.
+        output = base_prompt.replace("[filewords]", filewords_text)
+
         # If we are creating text for a class image and it has our instance token in it, remove/replace it
         class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
         if instance_token != "" and class_token != "":
-            if is_class and instance_token in filename_text:
-                if class_token in filename_text:
-                    filename_text = filename_text.replace(instance_token, "")
-                    filename_text = filename_text.replace("  ", " ")
+            if is_class and instance_token in output:
+                if class_token in output:
+                    output = output.replace(instance_token, "")
+                    output = output.replace("  ", " ")
                 else:
-                    filename_text = filename_text.replace(instance_token, class_token)
+                    output = output.replace(instance_token, class_token)
 
             if not is_class:
-                if class_token in filename_text:
+                if class_token in output:
                     # Do nothing if we already have class and instance in string
-                    if instance_token in filename_text:
+                    if instance_token in output:
                         pass
                     # Otherwise, substitute class tokens for the base token
                     else:
                         for token in class_tokens:
-                            if token in filename_text:
-                                filename_text = filename_text.replace(token, f"{class_token}")
+                            if token in output:
+                                output = output.replace(token, f"{class_token}")
                     # Now, replace class with instance + class tokens
-                    filename_text = filename_text.replace(class_token, f"{instance_token} {class_token}")
+                    output = output.replace(class_token, f"{instance_token} {class_token}")
                 else:
                     # If class is not in the string, check if instance is
-                    if instance_token in filename_text:
-                        filename_text = filename_text.replace(instance_token, f"{instance_token} {class_token}")
-                    else:
-                        # Description only, insert both at the front?
-                        filename_text = f"{instance_token} {class_token}, {filename_text}"
+                    if instance_token in output:
+                        output = output.replace(instance_token, f"{instance_token} {class_token}")
 
-        # Append the filename text to the template first...THEN shuffle it all.
-        output = text_template.replace("[filewords]", filename_text)
+
         # Remove underscores, double-spaces, and other characters that will cause issues.
         output.replace("_", " ")
         output.replace("  ", " ")
@@ -281,36 +278,18 @@ class FilenameTextGetter:
             random.shuffle(tags)
             tags.insert(0, first_tag)
 
+        if is_class:
+            if class_token is not None and class_token != "":
+                if not any(class_token in tag for tag in tags):
+                    tags.insert(0, class_token)
+        else:
+            if instance_token is not None and instance_token != "":
+                if not any(instance_token in tag for tag in tags):
+                    tags.insert(0, instance_token)
+
         output = ','.join(tags)
         return output
 
-@dataclass
-class PromptData:
-    prompt:str = ""
-    prompt_tokens: Union[List[str], None] = None
-    negative_prompt:str = ""
-    instance_token: str = ""
-    class_token: str = ""
-    src_image: str = ""
-    steps:int = 60
-    scale:float = 7.5
-    out_dir:str = ""
-    seed:int = -1
-    resolution: Tuple[int, int] = (512, 512)
-
-    @property
-    def __dict__(self):
-        """
-        get a python dictionary
-        """
-        return asdict(self)
-
-    @property
-    def json(self):
-        """
-        get the json formated string
-        """
-        return json.dumps(self.__dict__)
 
 class PromptDataset(Dataset):
     """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
@@ -331,12 +310,11 @@ class PromptDataset(Dataset):
 
         # Create available resolutions
         bucket_resos = make_bucket_resolutions(max_width, min_width)
-
         c_idx = 0
 
         for concept in concepts:
             instance_dir = concept.instance_data_dir
-            if not concept.is_valid():
+            if not concept.is_valid:
                 continue
             class_dir = concept.class_data_dir
             instance_prompts = {}
@@ -375,9 +353,11 @@ class PromptDataset(Dataset):
                     else:
                         missing_prompts = num_classes - len(class_check)
                         while missing_prompts > 0:
+
                             prompt = prompts[missing_prompts % len(prompts)]
                             sample_prompt = text_getter.create_text(
                                 concept.class_prompt, prompt.prompt, prompt.instance_token, prompt.class_token, True)
+
                             pd = PromptData(
                                 prompt=sample_prompt,
                                 prompt_tokens=[(concept.instance_token, concept.class_token)],
@@ -393,7 +373,6 @@ class PromptDataset(Dataset):
                             new_prompts.append(pd)
                             self.required_prompts += 1
                             missing_prompts -= 1
-                    self.class_prompts.extend(class_check)
 
                 if len(new_prompts):
                     if res in self.new_prompts:
@@ -521,6 +500,7 @@ class ImageBuilder:
                 cfg_scale=scale,
                 width=width,
                 height=height,
+                sampler_name="Euler a",
                 do_not_save_grid=True,
                 do_not_save_samples=True,
                 do_not_reload_embeddings=True
@@ -817,7 +797,7 @@ def generate_prompts(model_dir):
     status.job_no = 1
     status.textinfo = "Building dataset from existing files..."
     train_dataset = SuperDataset(
-        concepts_list=config.concepts_list,
+        concepts_list=config.concepts(),
         tokenizer=tokenizer,
         size=config.resolution,
         center_crop=config.center_crop,
@@ -842,7 +822,7 @@ def generate_prompts(model_dir):
 
     status.job_no = 3
     status.textinfo = "Building dataset for 'new' class images..."
-    for concept in config.concepts_list:
+    for concept in config.concepts():
         c_idx = 0
         class_images_dir = Path(concept["class_data_dir"])
         if class_images_dir == "" or class_images_dir is None or class_images_dir == db_shared.script_path:
@@ -850,7 +830,7 @@ def generate_prompts(model_dir):
         class_images_dir.mkdir(parents=True, exist_ok=True)
         cur_class_images = len(get_images(class_images_dir))
         if cur_class_images < concept.num_class_images:
-            sample_dataset = PromptDataset(config.concepts_list, config.model_dir, config.resolution)
+            sample_dataset = PromptDataset(config.concepts(), config.model_dir, config.resolution)
             for i in mytqdm(range(sample_dataset.__len__()), desc="Generating prompts"):
                 prompt = sample_dataset.__getitem__(i)
                 output["new_class_prompts"].append(prompt.prompt)
@@ -922,7 +902,7 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     class_prompts = []
     try:
         status.textinfo = "Preparing dataset..."
-        prompt_dataset = PromptDataset(args.concepts_list, args.model_dir, args.resolution)
+        prompt_dataset = PromptDataset(args.concepts(), args.model_dir, args.resolution)
         instance_prompts = prompt_dataset.instance_prompts
         class_prompts = prompt_dataset.class_prompts
     except Exception as p:
@@ -970,34 +950,38 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
             if pd.resolution == first_res:
                 prompts.append(pd)
                 actual_idx += 1
+            else:
+                break
 
         new_images = builder.generate_images(prompts)
         i_idx = 0
         preview_images = []
+        preview_prompts = []
         for image in new_images:
             if generated >= set_len:
                 break
             try:
                 pd = prompts[i_idx]
+
                 image_base = hashlib.sha1(image.tobytes()).hexdigest()
-                image_filename = os.path.join(pd.out_dir, f"{pd.prompt[0:64]}-{image_base[0:8]}.png")
-                image.save(image_filename)
+                image_filename = db_save_image(image, pd, custom_name=f"{pd.prompt[0:64]}-{image_base[0:8]}")
+                pd.src_image = image_filename
+
                 class_prompts.append(pd)
                 if ui:
                     out_images.append(image)
-                txt_filename = image_filename.replace(".png", ".txt")
-                with open(txt_filename, "w", encoding="utf8") as file:
-                    file.write(pd.prompt)
                 pbar.update()
                 i_idx += 1
                 generated += 1
-                preview_images.append(image)
-                status.textinfo = f"Class image {generated}/{set_len}, Prompt: '{pd.prompt}'"
+                preview_images.append(image_filename)
+                preview_prompts.append(pd.prompt)
+                status.textinfo = f"Class image(s) {generated}/{set_len}:'"
             except Exception as e:
                 print(f"Exception generating images: {e}")
                 traceback.print_exc()
 
         status.current_image = preview_images
+        status.sample_prompts = preview_prompts
     builder.unload(ui)
     del prompt_dataset
     cleanup()

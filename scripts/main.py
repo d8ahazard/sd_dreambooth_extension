@@ -19,6 +19,7 @@ from modules import script_callbacks, sd_models
 from modules.ui import gr_show, create_refresh_button
 
 params_to_save = []
+params_to_load = []
 refresh_symbol = '\U0001f504'  # 🔄
 delete_symbol = '\U0001F5D1'  # 🗑️
 update_symbol = '\U0001F51D'  # 🠝
@@ -323,6 +324,7 @@ def on_ui_tabs():
                                         label="Memory Attention", value="default",
                                         choices=list_attention())
                                     db_cache_latents = gr.Checkbox(label="Cache Latents", value=True)
+                                    db_train_unet = gr.Checkbox(label="Train UNET", value=True)
                                     db_stop_text_encoder = gr.Slider(label="Step Ratio of Text Encoder Training", minimum=0, maximum=1, step=0.01, value=1, visible=True)
                                     db_clip_skip = gr.Slider(label="Clip Skip", value=1, minimum=1, maximum=12, step=1)
                                     db_adamw_weight_decay = gr.Slider(label="AdamW Weight Decay", minimum=0, maximum=1, step=1e-7, value=1e-2, visible=True)
@@ -368,6 +370,13 @@ def on_ui_tabs():
                             c3_class_token, c3_num_class_images_per, c3_class_negative_prompt, c3_class_guidance_scale, \
                             c3_class_infer_steps, c3_save_sample_negative_prompt, c3_n_save_sample, c3_sample_seed, \
                             c3_save_guidance_scale, c3_save_infer_steps = build_concept_panel()
+                            
+                        with gr.Tab("Concept 4"):
+                            c4_instance_data_dir, c4_class_data_dir, c4_instance_prompt, \
+                            c4_class_prompt, c4_num_class_images, c4_save_sample_prompt, c4_save_sample_template, c4_instance_token, \
+                            c4_class_token, c4_num_class_images_per, c4_class_negative_prompt, c4_class_guidance_scale, \
+                            c4_class_infer_steps, c4_save_sample_negative_prompt, c4_n_save_sample, c4_sample_seed, \
+                            c4_save_guidance_scale, c4_save_infer_steps = build_concept_panel()
                 with gr.Tab("Saving"):
                     with gr.Column():
                         gr.HTML("General")
@@ -523,7 +532,10 @@ def on_ui_tabs():
                 )
 
         global params_to_save
+        global params_to_load
 
+
+        # List of all the things that we need to save
         params_to_save = [
             db_model_name,
             db_attention,
@@ -590,6 +602,7 @@ def on_ui_tabs():
             db_snapshot,
             db_train_batch_size,
             db_train_imagic_only,
+            db_train_unet,            
             db_stop_text_encoder,
             db_use_8bit_adam,
             db_use_concepts,
@@ -650,8 +663,46 @@ def on_ui_tabs():
             c3_save_infer_steps,
             c3_save_sample_negative_prompt,
             c3_save_sample_prompt,
-            c3_save_sample_template
+            c3_save_sample_template,
+            c4_class_data_dir,
+            c4_class_guidance_scale,
+            c4_class_infer_steps,
+            c4_class_negative_prompt,
+            c4_class_prompt,
+            c4_class_token,
+            c4_instance_data_dir,
+            c4_instance_prompt,
+            c4_instance_token,
+            c4_n_save_sample,
+            c4_num_class_images,
+            c4_num_class_images_per,
+            c4_sample_seed,
+            c4_save_guidance_scale,
+            c4_save_infer_steps,
+            c4_save_sample_negative_prompt,
+            c4_save_sample_prompt,
+            c4_save_sample_template
         ]
+        # Do not load these values when 'load settings' is clicked
+        params_to_exclude = [db_model_name,db_epochs,db_has_ema,db_model_path,db_revision,db_scheduler,db_src,db_v2]
+
+        # Populate by the below method and handed out to other elements
+        params_to_load = []
+        save_keys = []
+        ui_keys = []
+
+        for param in params_to_save:
+            var_name = [var_name for var_name, var in locals().items() if var is param]
+            save_keys.append(var_name[0])
+            if param not in params_to_exclude:
+                ui_keys.append(var_name[0])
+                params_to_load.append(param)
+
+        ui_keys.append("db_status")
+        params_to_load.append(db_status)
+        from extensions.sd_dreambooth_extension.dreambooth import db_config
+        db_config.save_keys = save_keys
+        db_config.ui_keys = ui_keys
 
         db_save_params.click(
             _js="check_save",
@@ -660,135 +711,13 @@ def on_ui_tabs():
             outputs=[]
         )
 
-
-
         db_load_params.click(
             _js="db_start_load_params",
             fn=dreambooth.load_params,
             inputs=[
                 db_model_name
             ],
-            outputs=[
-                db_attention,
-                db_cache_latents,
-                db_center_crop,
-                db_clip_skip,
-                db_concepts_path,
-                db_custom_model_name,
-                db_epoch_pause_frequency,
-                db_epoch_pause_time,
-                db_gradient_accumulation_steps,
-                db_gradient_checkpointing,
-                db_gradient_set_to_none,
-                db_graph_smoothing,
-                db_half_model,
-                db_hflip,
-                db_learning_rate,
-                db_learning_rate_min,
-                db_lora_learning_rate,
-                db_lora_model_name,
-                db_lora_rank,
-                db_lora_txt_learning_rate,
-                db_lora_txt_weight,
-                db_lora_weight,
-                db_lr_cycles,
-                db_lr_factor,
-                db_lr_power,
-                db_lr_scale_pos,
-                db_lr_scheduler,
-                db_lr_warmup_steps,
-                db_max_token_length,
-                db_mixed_precision,
-                db_adamw_weight_decay,
-                db_num_train_epochs,
-                db_pad_tokens,
-                db_pretrained_vae_name_or_path,
-                db_prior_loss_scale,
-                db_prior_loss_target,
-                db_prior_loss_weight,
-                db_prior_loss_weight_min,
-                db_resolution,
-                db_sample_batch_size,
-                db_sanity_prompt,
-                db_sanity_seed,
-                db_save_ckpt_after,
-                db_save_ckpt_cancel,
-                db_save_ckpt_during,
-                db_save_embedding_every,
-                db_save_lora_after,
-                db_save_lora_cancel,
-                db_save_lora_during,
-                db_save_preview_every,
-                db_save_safetensors,
-                db_save_state_after,
-                db_save_state_cancel,
-                db_save_state_during,
-                db_shuffle_tags,
-                db_snapshot,
-                db_train_batch_size,
-                db_train_imagic_only,
-                db_stop_text_encoder,
-                db_use_8bit_adam,
-                db_use_concepts,
-                db_use_ema,
-                db_use_lora,
-                db_use_subdir,
-                c1_class_data_dir,
-                c1_class_guidance_scale,
-                c1_class_infer_steps,
-                c1_class_negative_prompt,
-                c1_class_prompt,
-                c1_class_token,
-                c1_instance_data_dir,
-                c1_instance_prompt,
-                c1_instance_token,
-                c1_n_save_sample,
-                c1_num_class_images,
-                c1_num_class_images_per,
-                c1_sample_seed,
-                c1_save_guidance_scale,
-                c1_save_infer_steps,
-                c1_save_sample_negative_prompt,
-                c1_save_sample_prompt,
-                c1_save_sample_template,
-                c2_class_data_dir,
-                c2_class_guidance_scale,
-                c2_class_infer_steps,
-                c2_class_negative_prompt,
-                c2_class_prompt,
-                c2_class_token,
-                c2_instance_data_dir,
-                c2_instance_prompt,
-                c2_instance_token,
-                c2_n_save_sample,
-                c2_num_class_images,
-                c2_num_class_images_per,
-                c2_sample_seed,
-                c2_save_guidance_scale,
-                c2_save_infer_steps,
-                c2_save_sample_negative_prompt,
-                c2_save_sample_prompt,
-                c2_save_sample_template,
-                c3_class_data_dir,
-                c3_class_guidance_scale,
-                c3_class_infer_steps,
-                c3_class_negative_prompt,
-                c3_class_prompt,
-                c3_class_token,
-                c3_instance_data_dir,
-                c3_instance_prompt,
-                c3_instance_token,
-                c3_n_save_sample,
-                c3_num_class_images,
-                c3_num_class_images_per,
-                c3_sample_seed,
-                c3_save_guidance_scale,
-                c3_save_infer_steps,
-                c3_save_sample_negative_prompt,
-                c3_save_sample_prompt,
-                c3_save_sample_template,
-                db_status
-            ]
+            outputs=params_to_load
         )
 
         def toggle_new_rows(create_from):
@@ -921,6 +850,7 @@ def on_ui_tabs():
                 c1_num_class_images_per,
                 c2_num_class_images_per,
                 c3_num_class_images_per,
+                c4_num_class_images_per,
                 db_status
             ]
         )
@@ -936,6 +866,7 @@ def on_ui_tabs():
                 c1_num_class_images_per,
                 c2_num_class_images_per,
                 c3_num_class_images_per,
+                c4_num_class_images_per,
                 db_status
             ]
         )
