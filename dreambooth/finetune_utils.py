@@ -973,6 +973,7 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
             try:
                 pd = prompts[i_idx]
                 image_filename = db_save_image(image, pd)
+                pd.src_image = image_filename
                 class_prompts.append(pd)
                 if ui:
                     out_images.append(image)
