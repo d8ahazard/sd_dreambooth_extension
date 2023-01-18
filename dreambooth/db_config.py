@@ -91,6 +91,7 @@ class DreamboothConfig(BaseModel):
     stop_text_encoder: float = 1.0
     train_batch_size: int = 1
     train_imagic: bool = False
+    train_unet: bool = True
     use_8bit_adam: bool = True
     use_concepts: bool = False
     use_ema: bool = True

@@ -235,11 +235,13 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
 
         if args.gradient_checkpointing:
-            unet.enable_gradient_checkpointing()
+            if args.train_unet:
+                unet.enable_gradient_checkpointing()
             if args.stop_text_encoder != 0:
                 text_encoder.gradient_checkpointing_enable()
             else:
                 text_encoder.to(accelerator.device, dtype=weight_dtype)
+
         unet_lora_params = None
         text_encoder_lora_params = None
 
@@ -270,7 +272,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             printm("Lora loaded")
             cleanup()
             printm("Cleaned")
-
+        else:
+            if not args.train_unet:
+                unet.requires_grad_(False)
         
 
         # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
@@ -299,8 +303,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             )
         else:
             params_to_optimize = (
-                itertools.chain(unet.parameters(), text_encoder.parameters()) if args.stop_text_encoder != 0
-                else unet.parameters()
+                itertools.chain(text_encoder.parameters()) if args.stop_text_encoder != 0 and not args.train_unet else 
+                itertools.chain(unet.parameters(), text_encoder.parameters()) if args.stop_text_encoder != 0 else 
+                unet.parameters()                
             )
         optimizer = optimizer_class(
             params_to_optimize,
@@ -509,6 +514,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         print(f"  Lora: {args.use_lora}, Adam: {use_adam}, Prec: {args.mixed_precision}")
         print(f"  Gradient Checkpointing: {args.gradient_checkpointing}")
         print(f"  EMA: {args.use_ema}")
+        print(f"  UNET: {args.train_unet}")
         print(f"  LR: {args.learning_rate})")
 
 
@@ -790,7 +796,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 print("Training complete, breaking epoch.")
                 break
 
-            unet.train()
+            if args.train_unet:
+                unet.train()
+                
             train_tenc = epoch < text_encoder_epochs
             if args.stop_text_encoder == 0:
                 train_tenc = False
