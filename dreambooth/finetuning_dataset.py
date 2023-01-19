@@ -76,12 +76,11 @@ class DbDataset(torch.utils.data.Dataset):
     @staticmethod
     def open_and_trim(image_path, reso):
         # Read
-        image = cv2.imread(str(image_path))
-        if image.shape[2] == 3:
-            image_height, image_width = image.shape[0:2]
-        else:
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            image_height, image_width = image.shape[0:2]
+        image = Image.open(image_path)
+        if not image.mode == "RGB":
+            image = image.convert("RGB")
+        image = np.array(image, np.uint8)
+        image_height, image_width = image.shape[0:2]
         # Don't resize and junk if the image is already properly sized
         if image_width == reso[0] and image_height == reso[1]:
             return image
