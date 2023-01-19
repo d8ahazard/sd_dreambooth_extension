@@ -208,8 +208,8 @@ def apply_lora_weights(target_unet, target_text_encoder, config: DreamboothConfi
             target_text_encoder,
             lora_path, 
             lora_txt, 
-            lora_alpha, 
-            lora_txt_alpha
+            config.lora_weight,
+            config.lora_txt_weight
         )
         return
 
