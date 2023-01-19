@@ -6,7 +6,8 @@ fastapi==0.87.0
 ftfy==6.1.1
 modelcards==0.1.6
 tensorboard==2.11.0
-tensorflow==2.11.0
+tensorflow==2.11.0; sys_platform != 'darwin'
+tensorflow-macos==2.11.0; sys_platform == 'darwin'
 tqdm==4.64.1
 transformers==4.25.1
 discord-webhook==1.0.0
