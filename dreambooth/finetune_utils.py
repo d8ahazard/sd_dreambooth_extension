@@ -236,7 +236,7 @@ class FilenameTextGetter:
 
     def create_text(self, text_template, filename_text, instance_token, class_token, is_class=True):
         # Append the filename text to the template first...THEN shuffle it all.
-        filename_text = text_template.replace("[filewords]", text_template)
+        filename_text = text_template.replace("[filewords]", filename_text)
         # If we are creating text for a class image and it has our instance token in it, remove/replace it
         class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
         if instance_token != "" and class_token != "":
@@ -358,7 +358,7 @@ class PromptDataset(Dataset):
                 class_prompt_datas = sort_prompts(concept, text_getter, str(class_dir), bucket_resos, True)
 
             print(f"Concept requires {concept.num_class_images_per} class images per instance image.")
-            for res, i_prompt_datas in mytqdm(instance_prompt_datas.items(), desc="Sorting instance prompts"):
+            for res, i_prompt_datas in mytqdm(instance_prompt_datas.items(), desc="Sorting instance images"):
                 c_prompt_datas = class_prompt_datas[res] if res in class_prompt_datas.keys() else []
 
                 class_prompts = [img.prompt for img in c_prompt_datas]
