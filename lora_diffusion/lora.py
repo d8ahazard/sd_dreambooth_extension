@@ -146,6 +146,8 @@ def weight_apply_lora(
 def apply_lora_weights(lora_model, target_unet, target_text_encoder, lora_alpha=1, lora_txt_alpha=1, device=None):
     if device is None:
         device = shared.device
+    if not lora_model:
+        lora_model = ""
     target_unet.requires_grad_(False)
     lora_path = os.path.join(paths.models_path, "lora", lora_model)
     lora_txt = lora_path.replace(".pt", "_txt.pt")
