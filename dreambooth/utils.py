@@ -5,16 +5,15 @@ import html
 import os
 import sys
 import traceback
-
-import gradio
-from tqdm.auto import tqdm
 from io import StringIO
 from pathlib import Path
 from typing import Optional, Union, Tuple, List
 
+import gradio
 import matplotlib
 import pandas as pd
 from pandas.plotting._matplotlib.style import get_standard_colors
+from tqdm.auto import tqdm
 from transformers import PretrainedConfig
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'

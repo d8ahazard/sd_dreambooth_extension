@@ -10,10 +10,10 @@ import traceback
 from typing import Dict
 
 import safetensors.torch
-from torch import Tensor
-from tqdm.auto import tqdm
 import torch
 from diffusers import DiffusionPipeline
+from torch import Tensor
+from tqdm.auto import tqdm
 
 from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file

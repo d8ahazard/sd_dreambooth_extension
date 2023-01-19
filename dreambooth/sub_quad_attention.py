@@ -11,18 +11,17 @@
 #   Self-attention Does Not Need O(n2) Memory":
 #   https://arxiv.org/abs/2112.05682v2
 
+import math
 from functools import partial
+from typing import Optional, NamedTuple, Protocol, List
 
 import psutil
 import torch
 from einops import rearrange
 from torch import Tensor
 from torch.utils.checkpoint import checkpoint
-import math
-from typing import Optional, NamedTuple, Protocol, List
 
 from extensions.sd_dreambooth_extension.dreambooth import db_shared
-
 
 
 def narrow_trunc(input, dim, start, length):

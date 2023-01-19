@@ -3,9 +3,7 @@ import random
 from typing import List
 
 import cv2
-import numpy as np
 import torch.utils.data
-from PIL import Image
 from torchvision.transforms import transforms
 
 from extensions.sd_dreambooth_extension.dreambooth import db_shared

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import inspect
 import math
-from typing import Any, Dict, List, Union, Optional
+from typing import Any, Dict, Union, Optional
 
 import diffusers
 import torch

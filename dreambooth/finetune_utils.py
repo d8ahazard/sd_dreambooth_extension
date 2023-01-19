@@ -1,4 +1,4 @@
-import functools
+import gc
 import gc
 import hashlib
 import json
@@ -15,6 +15,7 @@ import numpy as np
 import tensorflow
 import torch
 import torch.utils.checkpoint
+from PIL import Image
 from accelerate import Accelerator
 from diffusers import DiffusionPipeline, AutoencoderKL
 from torch.utils.data import Dataset
@@ -31,8 +32,6 @@ from modules import shared, devices, sd_models, sd_hijack, prompt_parser, lowvra
 from modules.processing import StableDiffusionProcessingTxt2Img, StableDiffusionProcessing, Processed, \
     get_fixed_seed, create_infotext, decode_first_stage
 from modules.sd_hijack import model_hijack
-from PIL import Image
-
 
 
 class mytqdm(tqdm):
@@ -360,8 +359,8 @@ class PromptDataset(Dataset):
             for res, i_prompt_datas in mytqdm(instance_prompt_datas.items(), desc="Sorting instance prompts"):
                 c_prompt_datas = class_prompt_datas[res] if res in class_prompt_datas.keys() else []
 
-                class_prompts = list(map(lambda x: x.prompt, c_prompt_datas))
-                instance_prompts = list(map(lambda x: x.prompt, i_prompt_datas))
+                class_prompts = [img.prompt for img in c_prompt_datas]
+                instance_prompts = [img.prompt for img in i_prompt_datas]
                 new_prompts = []
 
                 for prompt in instance_prompts:
