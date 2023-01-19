@@ -55,6 +55,4 @@ class Concept(BaseModel):
                 self.is_valid = os.path.isdir(self.instance_data_dir)
             else:
                 self.is_valid = False
-        if not self.is_valid:
-            print(f"Invalid concept: {self.instance_data_dir}")
 

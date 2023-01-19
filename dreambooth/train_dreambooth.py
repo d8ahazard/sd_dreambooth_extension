@@ -507,7 +507,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         print(f"  Gradient Checkpointing: {args.gradient_checkpointing}")
         print(f"  EMA: {args.use_ema}")
         print(f"  UNET: {args.train_unet}")
-        print(f"  LR: {args.learning_rate})")
+        print(f"  LR: {args.learning_rate}")
+        print(f"  V2: {args.v2}")
 
 
         def check_save(pbar: mytqdm, is_epoch_check = False):
@@ -830,7 +831,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     # Add noise to the latents according to the noise magnitude at each timestep
                     # (this is the forward diffusion process)
                     noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
-                    encoder_hidden_states = encode_hidden_state(text_encoder,batch["input_ids"], args.pad_tokens, b_size, args.max_token_length, tokenizer.model_max_length)
+
+                    encoder_hidden_states = encode_hidden_state(text_encoder, batch["input_ids"], args.pad_tokens,
+                                                                b_size, args.max_token_length, tokenizer.model_max_length)
 
                     # Predict the noise residual
                     noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample

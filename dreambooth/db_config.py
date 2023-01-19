@@ -119,28 +119,20 @@ class DreamboothConfig(BaseModel):
         self.resolution = resolution
         self.src = src
         self.scheduler = scheduler
-        if v2 == 'True':
-            self.v2 = True
-        elif v2 == 'False':
-            self.v2 = False
-        else:
-            self.v2 = v2
+        self.v2 = v2
 
     # Actually save as a file
     def save(self, backup=False):
         """
         Save the config file
         """
-        models_path = shared.dreambooth_models_path
-        if models_path == "" or models_path is None:
-            models_path = os.path.join(shared.models_path, "dreambooth")
-
-        config_file = os.path.join(models_path, self.model_name, "db_config.json")
+        models_path = self.model_dir
+        config_file = os.path.join(models_path, "db_config.json")
         if backup:
-            backup_dir = os.path.join(models_path, self.model_name, "backups")
+            backup_dir = os.path.join(models_path, "backups")
             if not os.path.exists(backup_dir):
                 os.makedirs(backup_dir)
-            config_file = os.path.join(models_path, self.model_name, "backups", f"db_config_{self.revision}.json")
+            config_file = os.path.join(models_path, "backups", f"db_config_{self.revision}.json")
         with open(config_file, "w") as outfile:
             json.dump(self.__dict__, outfile, indent=4)
 

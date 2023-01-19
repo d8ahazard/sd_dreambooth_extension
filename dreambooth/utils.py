@@ -220,10 +220,6 @@ def wrap_gpu_call(func, extra_outputs=None):
 
             res = extra_outputs_array + [f"<div class='error'>{html.escape(type(e).__name__ + ': ' + str(e))}</div>"]
 
-        status.skipped = False
-        status.interrupted = False
-        status.job_count = 0
-
         return res
 
     return f

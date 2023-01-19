@@ -64,6 +64,7 @@ def check_progress_call():
     """
     Check the progress from share dreamstate and return appropriate UI elements.
     @return:
+    active: Checkbox to physically holde an active state
     pspan: Progress bar span contents
     preview: Preview Image/Visibility
     gallery: Gallery Image/Visibility
@@ -71,9 +72,11 @@ def check_progress_call():
     sample_prompts: List = A list of prompts corresponding with gallery contents
     check_progress_initial: Hides the manual 'check progress' button
     """
-    if status.job_count == 0:
-        return "", gr.update(visible=False, value=None), gr.update(visible=True), gr_show(True), gr_show(True), \
+    active_box = gr.update(value=status.active)
+    if not status.active:
+        return active_box, "", gr.update(visible=False, value=None), gr.update(visible=True), gr_show(True), gr_show(True), \
                gr_show(False)
+
     progress = 0
 
     if status.job_count > 0:
@@ -84,7 +87,6 @@ def check_progress_call():
         status.time_left_force_display = True
 
     progress = min(progress, 1)
-
     progressbar = f"""<div class='progressDiv'><div class='progress' style="overflow:visible;width:{progress * 100}%;white-space:nowrap;">{"&nbsp;" * 2 + str(int(progress * 100)) + "%" + time_left if progress > 0.01 else ""}</div></div>"""
     status.set_current_image()
     image = status.current_image
@@ -123,19 +125,13 @@ def check_progress_call():
             prompts = status.sample_prompts[0]
 
     pspan = f"<span id='db_progress_span' style='display: none'>{time.time()}</span><p>{progressbar}</p>"
-    return pspan, preview, gallery, textinfo_result, gr.update(value=prompts), gr_show(False)
+    return active_box, pspan, preview, gallery, textinfo_result, gr.update(value=prompts), gr_show(False)
 
 
 def check_progress_call_initial():
-    status.job_count = -1
-    status.current_latent = None
-    status.current_image = None
-    status.textinfo = None
-    status.textinfo2 = None
-    status.time_start = time.time()
-    status.time_left_force_display = False
-    pspan, preview, gallery, textinfo_result, prompts_result, pbutton_result = check_progress_call()
-    return pspan, gr_show(False), gr.update(value=[]), textinfo_result, gr.update(value=[]), gr_show(False)
+    status.begin()
+    active_box, pspan, preview, gallery, textinfo_result, prompts_result, pbutton_result = check_progress_call()
+    return active_box, pspan, gr_show(False), gr.update(value=[]), textinfo_result, gr.update(value=[]), gr_show(False)
 
 
 def ui_gen_ckpt(model_name: str):
@@ -424,9 +420,12 @@ def on_ui_tabs():
 
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")
-                ui_check_progress_initial = gr.Button(value=update_symbol, elem_id="ui_check_progress_initial")
-                db_check_progress_initial = gr.Button(value=update_symbol, elem_id="db_check_progress_initial", visible=False)
+                db_check_progress_initial = gr.Button(value=update_symbol, elem_id="db_check_progress_initial",
+                                                      visible=False)
                 # These two should be updated while doing things
+                db_active = gr.Checkbox(elem_id="db_active", value=False, visible=False)
+
+                ui_check_progress_initial = gr.Button(value=update_symbol, elem_id="ui_check_progress_initial")
                 db_status = gr.HTML(elem_id="db_status", value="")
                 db_progressbar = gr.HTML(elem_id="db_progressbar")
                 db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery').style(grid=4)
@@ -509,26 +508,28 @@ def on_ui_tabs():
                     outputs=[db_secret]
                 )
 
+                # Elements to update when progress changes
+                progress_elements = [db_active, db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, ui_check_progress_initial]
+
                 db_check_progress.click(
                     fn=lambda: check_progress_call(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, ui_check_progress_initial],
+                    outputs=progress_elements,
                 )
 
                 db_check_progress_initial.click(
                     fn=lambda: check_progress_call_initial(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, ui_check_progress_initial],
+                    outputs=progress_elements,
                 )
 
                 ui_check_progress_initial.click(
                     fn=lambda: check_progress_call(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list,
-                             ui_check_progress_initial],
+                    outputs=progress_elements,
                 )
 
         global params_to_save
@@ -552,7 +553,6 @@ def on_ui_tabs():
             db_gradient_set_to_none,
             db_graph_smoothing,
             db_half_model,
-            db_has_ema,
             db_hflip,
             db_learning_rate,
             db_learning_rate_min,
@@ -609,7 +609,6 @@ def on_ui_tabs():
             db_use_ema,
             db_use_lora,
             db_use_subdir,
-            db_v2,
             c1_class_data_dir,
             c1_class_guidance_scale,
             c1_class_infer_steps,
@@ -684,7 +683,7 @@ def on_ui_tabs():
             c4_save_sample_template
         ]
         # Do not load these values when 'load settings' is clicked
-        params_to_exclude = [db_model_name,db_epochs,db_has_ema,db_model_path,db_revision,db_scheduler,db_src,db_v2]
+        params_to_exclude = [db_model_name,db_epochs,db_model_path,db_revision,db_scheduler,db_src]
 
         # Populate by the below method and handed out to other elements
         params_to_load = []

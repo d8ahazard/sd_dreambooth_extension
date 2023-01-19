@@ -140,6 +140,7 @@ class DreamState:
     time_start = None
     need_restart = False
     time_left_force_display = False
+    active = False
 
     def interrupt(self):
         self.interrupted = True
@@ -167,7 +168,8 @@ class DreamState:
             "sampling_step": self.sampling_step,
             "sampling_steps": self.sampling_steps,
             "last_status": self.textinfo,
-            "sample_prompts": self.sample_prompts
+            "sample_prompts": self.sample_prompts,
+            "active": self.active
         }
 
         return obj
@@ -184,12 +186,16 @@ class DreamState:
         self.textinfo = None
         self.sample_prompts = []
         self.time_start = time.time()
+        self.textinfo2 = None
+        self.time_left_force_display = False
+        self.active = True
         torch_gc()
 
     def end(self):
         self.job = ""
         self.job_count = 0
         self.job_no = 0
+        self.active = False
         torch_gc()
 
     def nextjob(self):
@@ -199,6 +205,7 @@ class DreamState:
         self.job_no += 1
         self.sampling_step = 0
         self.current_image_sampling_step = 0
+        self.active = False
 
     """sets self.current_image from self.current_latent if enough sampling steps have been made after the last call to this"""
 

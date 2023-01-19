@@ -233,38 +233,41 @@ class FilenameTextGetter:
         filename_text = filename_text.replace("\\", "")  # work with \(franchies\)
         return filename_text
 
-    def create_text(self, base_prompt, filewords_text, instance_token, class_token, is_class=True):
+    def create_text(self, text_template, filename_text, instance_token, class_token, is_class=True):
         # Append the filename text to the template first...THEN shuffle it all.
-        output = base_prompt.replace("[filewords]", filewords_text)
-
+        filename_text = text_template.replace("[filewords]", filename_text)
         # If we are creating text for a class image and it has our instance token in it, remove/replace it
         class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
         if instance_token != "" and class_token != "":
-            if is_class and instance_token in output:
-                if class_token in output:
-                    output = output.replace(instance_token, "")
-                    output = output.replace("  ", " ")
+            if is_class and re.search(f'\\b{instance_token}\\b', filename_text):
+                if re.search(f'\\b{class_token}\\b', filename_text):
+                    filename_text = filename_text.replace(instance_token, "")
+                    filename_text = filename_text.replace("  ", " ")
                 else:
-                    output = output.replace(instance_token, class_token)
+                    filename_text = filename_text.replace(instance_token, class_token)
 
             if not is_class:
-                if class_token in output:
+                if re.search(f'\\b{class_token}\\b', filename_text):
                     # Do nothing if we already have class and instance in string
-                    if instance_token in output:
+                    if re.search(f'\\b{instance_token}\\b', filename_text):
                         pass
                     # Otherwise, substitute class tokens for the base token
                     else:
                         for token in class_tokens:
-                            if token in output:
-                                output = output.replace(token, f"{class_token}")
+                            if re.search(f'\\b{token}\\b', filename_text):
+                                filename_text = filename_text.replace(token, f"{class_token}")
                     # Now, replace class with instance + class tokens
-                    output = output.replace(class_token, f"{instance_token} {class_token}")
+                    filename_text = filename_text.replace(class_token, f"{instance_token} {class_token}")
                 else:
                     # If class is not in the string, check if instance is
-                    if instance_token in output:
-                        output = output.replace(instance_token, f"{instance_token} {class_token}")
+                    if re.search(f'\\b{instance_token}\\b', filename_text):
+                        filename_text = filename_text.replace(instance_token, f"{instance_token} {class_token}")
+                    else:
+                        # Description only, insert both at the front?
+                        filename_text = f"{instance_token} {class_token}, {filename_text}"
 
-
+        # We already replaced [filewords] up there ^^
+        output = filename_text
         # Remove underscores, double-spaces, and other characters that will cause issues.
         output.replace("_", " ")
         output.replace("  ", " ")
@@ -279,17 +282,8 @@ class FilenameTextGetter:
             random.shuffle(tags)
             tags.insert(0, first_tag)
 
-        if is_class:
-            if class_token is not None and class_token != "":
-                if not any(class_token in tag for tag in tags):
-                    tags.insert(0, class_token)
-        else:
-            if instance_token is not None and instance_token != "":
-                if not any(instance_token in tag for tag in tags):
-                    tags.insert(0, instance_token)
-
         output = ','.join(tags)
-        return output
+        return output.strip()
 
 
 class PromptDataset(Dataset):
@@ -318,7 +312,8 @@ class PromptDataset(Dataset):
             if not concept.is_valid:
                 continue
             class_dir = concept.class_data_dir
-            instance_prompts = {}
+            instance_prompt_datas = {}
+            class_prompt_datas = {}
 
             # Filter empty class dir and set/create if necessary
             if class_dir == "" or class_dir is None or class_dir == db_shared.script_path:
@@ -328,54 +323,43 @@ class PromptDataset(Dataset):
 
             status.textinfo = "Sorting images..."
             # Sort existing prompts
-            if instance_dir:
-                instance_prompts = sort_prompts(concept, text_getter, instance_dir, bucket_resos, False)
+            class_prompt_datas = {}
+            instance_prompt_datas = sort_prompts(concept, text_getter, instance_dir, bucket_resos, False)
             if concept.num_class_images_per > 0 and class_dir:
-                class_prompts = sort_prompts(concept, text_getter, class_dir, bucket_resos, True)
-            else:
-                class_prompts = {}
-            idx = 0
-            matched_resos = []
-            new_prompts = []
+                class_prompt_datas = sort_prompts(concept, text_getter, str(class_dir), bucket_resos, True)
+
             print(f"Concept requires {concept.num_class_images_per} class images per instance image.")
-            for res, prompts in mytqdm(instance_prompts.items(), desc="Sorting instance prompts"):
-                if len(prompts) == 0:
-                    print(f"No prompts for res {re}")
-                    continue
-                self.instance_prompts.extend(prompts)
-                matched_resos.append((idx, res))
-                idx += 1
+            for res, i_prompt_datas in mytqdm(instance_prompt_datas.items(), desc="Sorting instance images"):
+                c_prompt_datas = class_prompt_datas[res] if res in class_prompt_datas.keys() else []
 
-                if concept.num_class_images_per > 0:
-                    class_check = class_prompts[res] if res in class_prompts.keys() else []
-                    num_classes = len(prompts) * concept.num_class_images_per
-                    if len(class_check) >= num_classes:
-                        class_check = random.sample(class_check, num_classes)
-                    else:
-                        missing_prompts = num_classes - len(class_check)
-                        while missing_prompts > 0:
+                class_prompts = [img.prompt for img in c_prompt_datas]
+                instance_prompts = [img.prompt for img in i_prompt_datas]
+                new_prompts = []
 
-                            prompt = prompts[missing_prompts % len(prompts)]
-                            sample_prompt = text_getter.create_text(
-                                concept.class_prompt, prompt.prompt, prompt.instance_token, prompt.class_token, True)
+                for prompt in instance_prompts:
+                    sample_prompt = text_getter.create_text(
+                        concept.class_prompt, prompt, concept.instance_token, concept.class_token, True)
+                    num_to_gen = concept.num_class_images_per - class_prompts.count(sample_prompt)
+                    for _ in range(num_to_gen):
+                        pd = PromptData(
+                            prompt=sample_prompt,
+                            prompt_tokens=[(concept.instance_token, concept.class_token)],
+                            negative_prompt=concept.class_negative_prompt,
+                            instance_token=concept.instance_token,
+                            class_token=concept.class_token,
+                            steps=concept.class_infer_steps,
+                            scale=concept.class_guidance_scale,
+                            out_dir=class_dir,
+                            seed=-1,
+                            resolution=res)
+                        new_prompts.append(pd)
+                        c_prompt_datas.append(pd)
 
-                            pd = PromptData(
-                                prompt=sample_prompt,
-                                prompt_tokens=[(concept.instance_token, concept.class_token)],
-                                negative_prompt=concept.class_negative_prompt,
-                                instance_token=concept.instance_token,
-                                class_token=concept.class_token,
-                                steps=concept.class_infer_steps,
-                                scale=concept.class_guidance_scale,
-                                out_dir=class_dir,
-                                seed=-1,
-                                resolution=res
-                            )
-                            new_prompts.append(pd)
-                            self.required_prompts += 1
-                            missing_prompts -= 1
+                self.instance_prompts.extend(i_prompt_datas)
+                self.class_prompts.extend(c_prompt_datas)
 
                 if len(new_prompts):
+                    self.required_prompts += len(new_prompts)
                     if res in self.new_prompts:
                         self.new_prompts[res].extend(new_prompts)
                     else:
@@ -493,6 +477,7 @@ class ImageBuilder:
 
         if self.use_txt2img:
             p = StableDiffusionProcessingTxt2Img(
+                sampler_name='DPM++ 2S a Karras',
                 sd_model=shared.sd_model,
                 prompt=positive_prompts,
                 negative_prompt=negative_prompts,
@@ -501,7 +486,6 @@ class ImageBuilder:
                 cfg_scale=scale,
                 width=width,
                 height=height,
-                sampler_name="Euler a",
                 do_not_save_grid=True,
                 do_not_save_samples=True,
                 do_not_reload_embeddings=True

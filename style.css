@@ -2,7 +2,6 @@
     z-index: 1000;
     right: 0;
     bottom: -10px;
-    padding-left: 5px;
     padding-right: 5px;
     display: block;
     max-height: 20px;
@@ -25,6 +24,10 @@
     text-align: center;
 }
 
+.gr-form.overflow-hidden {
+
+}
+
 #refresh_db_models, #refresh_lora_models, #refresh_sd_models, #refresh_secret, #clear_secret, #ui_check_progress_initial {
     margin-top: 0.75em;
     max-width: 2.5em;
@@ -34,7 +37,7 @@
 
 #ui_check_progress_initial {
     position: absolute;
-    top: 0;
+    top: -3px;
     right: 10px;
 }
 

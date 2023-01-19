@@ -77,7 +77,11 @@ class DbDataset(torch.utils.data.Dataset):
     def open_and_trim(image_path, reso):
         # Read
         image = cv2.imread(str(image_path))
-        image_height, image_width, _ = image.shape
+        if image.shape[2] == 3:
+            image_height, image_width = image.shape[0:2]
+        else:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            image_height, image_width = image.shape[0:2]
         # Don't resize and junk if the image is already properly sized
         if image_width == reso[0] and image_height == reso[1]:
             return image
@@ -171,6 +175,14 @@ class DbDataset(torch.utils.data.Dataset):
                 except Exception as e:
                     traceback.print_exc()
                     print(f"Exception caching: {img_path}: {e}")
+                    if img_path in self.caption_cache:
+                        del self.caption_cache[img_path]
+                    if (img_path, cap, is_prior) in self.sample_cache:
+                        del self.sample_cache[(img_path, cap, is_prior)]
+                    if img_path in self.sample_indices:
+                        del self.sample_indices[img_path]
+                    if img_path in self.latents_cache:
+                        del self.latents_cache[img_path]
 
 
         bucket_idx = 0
@@ -215,7 +227,7 @@ class DbDataset(torch.utils.data.Dataset):
         pbar.write(f"Totals: Buckets {bucket_str} | Instance Images: {inst_str} | Class Images: {class_str} | Examples/batch: {tot_str}")
         self._length = len(self.train_dict.items()) * self.batch_size
         self._length = total_len
-        print(f"Total images / batch: {self._length}, total examples: {total_len}")
+        print(f"\nTotal images / batch: {self._length}, total examples: {total_len}")
 
     def shuffle_buckets(self):
         sample_dict = {}

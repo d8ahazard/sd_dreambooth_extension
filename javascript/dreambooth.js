@@ -47,17 +47,17 @@ function update_params() {
     if (params_loaded === false) {
         params_loaded = true;
     }
-    setTimeout(function(){
+    setTimeout(function () {
         let btn = gradioApp().getElementById("db_update_params");
         if (btn == null) return;
         btn.click();
-    },500);
+    }, 500);
 }
 
 function getRealElement(selector) {
     let elem = gradioApp().getElementById(selector);
     if (elem) {
-    let child = elem.querySelector('#' + selector);
+        let child = elem.querySelector('#' + selector);
         if (child) {
             return child;
         } else {
@@ -174,8 +174,8 @@ let db_titles = {
     "Existing Prompt Contents": "If using [filewords], this tells the string builder how the existing prompts are formatted.",
     "Extract EMA Weights": "If EMA weights are saved in a model, these will be extracted instead of the full Unet. Probably not necessary for training or fine-tuning.",
     "Generate a .ckpt file when saving during training.": "When enabled, a checkpoint will be generated at the specified epoch intervals while training is active. This also controls manual generation using the 'save weights' button while training is active.",
-    "Generate a .ckpt file when training completes.":"When enabled, a checkpoint will be generated when training completes successfully.",
-    "Generate a .ckpt file when training is cancelled.":"When enabled, a checkpoint will be generated when training is cancelled by the user.",
+    "Generate a .ckpt file when training completes.": "When enabled, a checkpoint will be generated when training completes successfully.",
+    "Generate a .ckpt file when training is cancelled.": "When enabled, a checkpoint will be generated when training is cancelled by the user.",
     "Generate Ckpt": "Generate a checkpoint at the current training level.",
     "Generate Class Images": "Create classification images using training settings without training.",
     "Generate Classification Images Using txt2img": "Use the source checkpoint and TXT2IMG to generate class images.",
@@ -237,9 +237,9 @@ let db_titles = {
     "Scale Position": "The percent in training where the 'final' learning rate should be achieved. If training at 100 epochs and this is set to 0.25, the final LR will be reached at epoch 25.",
     "Save Checkpoint to Subdirectory": "When enabled, checkpoints will be saved to a subdirectory in the selected checkpoints folder.",
     "Save Settings": "Save the current training parameters to the model config file.",
-    "Save separate diffusers snapshots when saving during training.":"When enabled, a unique snapshot of the diffusion weights will be saved at each specified epoch interval. This uses more HDD space (A LOT), but allows resuming from training, including the optimizer state.",
-    "Save separate diffusers snapshots when training completes.":"When enabled, a unique snapshot of the diffusion weights will be saved when training completes. This uses more HDD space, but allows resuming from training including the optimizer state.",
-    "Save separate diffusers snapshots when training is cancelled.":"When enabled, a unique snapshot of the diffusion weights will be saved when training is canceled. This uses more HDD space, but allows resuming from training including the optimizer state.",
+    "Save separate diffusers snapshots when saving during training.": "When enabled, a unique snapshot of the diffusion weights will be saved at each specified epoch interval. This uses more HDD space (A LOT), but allows resuming from training, including the optimizer state.",
+    "Save separate diffusers snapshots when training completes.": "When enabled, a unique snapshot of the diffusion weights will be saved when training completes. This uses more HDD space, but allows resuming from training including the optimizer state.",
+    "Save separate diffusers snapshots when training is cancelled.": "When enabled, a unique snapshot of the diffusion weights will be saved when training is canceled. This uses more HDD space, but allows resuming from training including the optimizer state.",
     "Save Model Frequency (Epochs)": "Save a checkpoint every N epochs.",
     "Save Preview(s) Frequency (Epochs)": "Generate preview images every N epochs.",
     "Save Model Frequency (Step)": "Save a checkpoint every N epochs. Must be divisible by batch number.",
@@ -270,6 +270,10 @@ let db_titles = {
 
 // Do a thing when the UI updates
 onUiUpdate(function () {
+    let db_active = document.getElementById("db_active");
+    if (db_active) {
+        db_active.parentElement.style.display = "none";
+    }
     db_progressbar();
 
     gradioApp().querySelectorAll('span, button, select, p').forEach(function (span) {
@@ -302,7 +306,7 @@ onUiUpdate(function () {
 
     gradioApp().querySelectorAll('.gallery-item').forEach(function (btn) {
         if (btn.onchange != null) return;
-        btn.onchange = function() {
+        btn.onchange = function () {
             // Dummy function, so we don't keep setting up the observer.
         }
         checkPrompts();
@@ -341,63 +345,77 @@ let progressTimeout = null;
 let galleryObserver = null;
 let gallerySet = false;
 
-function db_progressbar(){
+function db_progressbar() {
     // gradio 3.8's enlightened approach allows them to create two nested div elements inside each other with same id
     // every time you use gr.HTML(elem_id='xxx'), so we handle this here
     let progressbar = gradioApp().querySelector("#db_progressbar #db_progressbar");
     let progressbarParent;
-    if(progressbar){
+    if (progressbar) {
         progressbarParent = gradioApp().querySelector("#db_progressbar");
-    } else{
+    } else {
         progressbar = gradioApp().getElementById("db_progressbar");
         progressbarParent = null;
     }
 
+    let galleryButtons = gradioApp().querySelectorAll('#db_gallery .gallery-item');
+    let gallery = gradioApp().getElementById("db_gallery");
+
+    if (gallery !== null && gallery !== undefined) {
+        if (galleryButtons.length !== 0) {
+            gallery.style.display = "block";
+        } else {
+            gallery.style.display = "none !important";
+        }
+    }
     // let skip = id_skip ? gradioApp().getElementById(id_skip) : null;
     let interrupt = gradioApp().getElementById("db_cancel");
     let gen_sample = gradioApp().getElementById("db_train_sample");
     let gen_ckpt = gradioApp().getElementById("db_gen_ckpt");
     let gen_ckpt_during = gradioApp().getElementById("db_gen_ckpt_during")
     let train = gradioApp().getElementById("db_train");
-    
-    if(progressbar && progressbar.offsetParent){
-        if(progressbar.innerText){
+
+    if (progressbar && progressbar.offsetParent) {
+        if (progressbar.innerText) {
             let newtitle = '[' + progressbar.innerText.trim() + '] Stable Diffusion';
-            if(document.title !== newtitle){
-                document.title =  newtitle;          
+            if (document.title !== newtitle) {
+                document.title = newtitle;
             }
-        }else{
+        } else {
             let newtitle = 'Stable Diffusion'
-            if(document.title !== newtitle){
-                document.title =  newtitle;          
+            if (document.title !== newtitle) {
+                document.title = newtitle;
             }
         }
     }
-    
-	if(progressbar != null){
-	    let mutationObserver = new MutationObserver(function(m){
-            if(progressTimeout) {
+
+    if (progressbar != null) {
+        let mutationObserver = new MutationObserver(function (m) {
+            if (progressTimeout) {
                 return;
             }
 
-           if(progressbarParent) {
-               progressbar.style.width = progressbarParent.clientWidth + "px"
-               gradioApp().querySelector(".progressDiv").style.width = progressbarParent.clientWidth + "px"
-           }
+            let progress_indicator = gradioApp().querySelector("#db_active input[type='checkbox']");
+            let is_active = progress_indicator.checked;
+            console.log("Active:", is_active, progress_indicator);
+
+            let progressDiv = gradioApp().querySelector(".progressDiv");
+            if (progressbarParent && progressDiv) {
+                progressbar.style.width = progressbarParent.clientWidth + "px";
+                progressDiv.style.width = progressbarParent.clientWidth + "px";
+            }
 
             let preview = gradioApp().getElementById("db_preview");
             let gallery = gradioApp().getElementById("db_gallery");
 
-            if(preview != null && gallery != null){
+            if (preview != null && gallery != null) {
                 preview.style.width = gallery.clientWidth + "px"
                 preview.style.height = gallery.clientHeight + "px"
 
-				//only watch gallery if there is a generation process going on
+                //only watch gallery if there is a generation process going on
                 checkDbGallery();
 
-                let progressDiv = gradioApp().querySelectorAll('#db_progress_span').length > 0;
-                if(progressDiv){
-                    progressTimeout = window.setTimeout(function() {
+                if (is_active) {
+                    progressTimeout = window.setTimeout(function () {
                         requestMoreDbProgress();
                     }, 500);
                 } else {
@@ -407,7 +425,7 @@ function db_progressbar(){
                     gen_ckpt_during.style.display = "none";
                     gen_ckpt.style.display = "block";
                     train.style.display = "block";
-			
+
                     //disconnect observer once generation finished, so user can close selected image if they want
                     if (galleryObserver) {
                         galleryObserver.disconnect();
@@ -418,26 +436,33 @@ function db_progressbar(){
             }
 
         });
-        mutationObserver.observe( progressbar, { childList:true, subtree:true });
-	}
+        mutationObserver.observe(progressbar, {childList: true, subtree: true});
+    }
 }
 
-function checkDbGallery(){
+function checkDbGallery() {
     if (gallerySet) return;
     let gallery = gradioApp().getElementById("db_gallery");
     // if gallery has no change, no need to setting up observer again.
-    if (gallery){
-        if(galleryObserver){
+    if (gallery) {
+        if (galleryObserver) {
             galleryObserver.disconnect();
         }
         // Get the last selected item in the gallery.
         let prevSelectedIndex = selected_gallery_index();
 
         // Make things clickable?
-        galleryObserver = new MutationObserver(function (){
+        galleryObserver = new MutationObserver(function () {
             let galleryButtons = gradioApp().querySelectorAll('#db_gallery .gallery-item');
             let galleryBtnSelected = gradioApp().querySelector('#db_gallery .gallery-item.\\!ring-2');
-            if (prevSelectedIndex !== -1 && galleryButtons.length>prevSelectedIndex && !galleryBtnSelected) {
+            let gallery = gradioApp().getElementById("db_gallery");
+            if (galleryButtons.length !== 0) {
+                gallery.style.display = "block";
+            } else {
+                gallery.style.display = "none !important";
+            }
+
+            if (prevSelectedIndex !== -1 && galleryButtons.length > prevSelectedIndex && !galleryBtnSelected) {
                 // automatically re-open previously selected index (if exists)
                 let activeElement = gradioApp().activeElement;
                 let scrollX = window.scrollX;
@@ -447,12 +472,12 @@ function checkDbGallery(){
 
                 // When the gallery button is clicked, it gains focus and scrolls itself into view
                 // We need to scroll back to the previous position
-                setTimeout(function (){
+                setTimeout(function () {
                     window.scrollTo(scrollX, scrollY);
                 }, 50);
 
-                if(activeElement){
-                    setTimeout(function (){
+                if (activeElement) {
+                    setTimeout(function () {
                         activeElement.focus({
                             preventScroll: true // Refocus the element that was focused before the gallery was opened without scrolling to it
                         })
@@ -460,15 +485,15 @@ function checkDbGallery(){
                 }
             }
         })
-        galleryObserver.observe( gallery, { childList:true, subtree:false });
+        galleryObserver.observe(gallery, {childList: true, subtree: false});
         gallerySet = true;
 
     }
 }
 
-function requestDbProgress(){
+function requestDbProgress() {
     let btn = gradioApp().getElementById("db_check_progress_initial");
-    if(btn==null) {
+    if (btn == null) {
         console.log("Can't find da button!.")
         return;
     }
@@ -476,9 +501,9 @@ function requestDbProgress(){
     db_progressbar();
 }
 
-function requestMoreDbProgress(){
+function requestMoreDbProgress() {
     let btn = gradioApp().getElementById("db_check_progress");
-    if(btn==null) {
+    if (btn == null) {
         console.log("Check progress button is null!");
         return;
     }
@@ -492,7 +517,7 @@ function requestMoreDbProgress(){
     let gen_sample = gradioApp().getElementById("db_train_sample");
     let gen_ckpt = gradioApp().getElementById("db_gen_ckpt");
     let gen_ckpt_during = gradioApp().getElementById("db_gen_ckpt_during");
-    if(progressDiv && interrupt && train && gen_sample){
+    if (progressDiv && interrupt && train && gen_sample) {
         if (training_started) {
             gen_sample.style.display = "block";
             train.style.display = "none";

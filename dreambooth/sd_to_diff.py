@@ -17,6 +17,7 @@ import os
 import re
 import shutil
 import traceback
+from datetime import datetime
 
 import gradio as gr
 import safetensors.torch
@@ -814,7 +815,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
     revision = 0
     epoch = 0
     upcast_attention = False
-
+    checkpoint_file = None
     # Needed for V2 models so we can create the right text encoder.
     msg = None
     new_model_name = sanitize_name(new_model_name)
@@ -826,6 +827,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         msg = "Please provide a URL and token for huggingface models."
     if msg is not None:
         return "", "", 0, 0, "", "", "", "", 512, "", msg
+
 
     reset_safe = stop_safe_unpickle()
     db_shared.status.job_count = 11
