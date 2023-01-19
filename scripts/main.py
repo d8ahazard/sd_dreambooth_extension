@@ -322,6 +322,7 @@ def on_ui_tabs():
                                     db_cache_latents = gr.Checkbox(label="Cache Latents", value=True)
                                     db_train_unet = gr.Checkbox(label="Train UNET", value=True)
                                     db_stop_text_encoder = gr.Slider(label="Step Ratio of Text Encoder Training", minimum=0, maximum=1, step=0.01, value=1, visible=True)
+                                    db_stop_tenc = gr.Slider(label="Step Ratio of Text Encoder Training", minimum=0, maximum=1, step=0.01, value=1, visible=False)
                                     db_clip_skip = gr.Slider(label="Clip Skip", value=1, minimum=1, maximum=12, step=1)
                                     db_adamw_weight_decay = gr.Slider(label="AdamW Weight Decay", minimum=0, maximum=1, step=1e-7, value=1e-2, visible=True)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
@@ -435,15 +436,16 @@ def on_ui_tabs():
                 db_check_progress = gr.Button("Check Progress", elem_id=f"db_check_progress", visible=False)
                 db_update_params = gr.Button("Update Parameters", elem_id="db_update_params", visible=False)
 
-                def check_toggles(use_ema, use_lora, lr_scheduler, stop_text_encoder, scale_prior):
-                    pad_tokens = update_pad_tokens(stop_text_encoder)
+                def check_toggles(use_ema, use_lora, lr_scheduler, train_unet, stop_text_encoder, stop_tenc, scale_prior):
+                    stop_text_encoder, stop_tenc = update_stop_tenc(train_unet, stop_text_encoder, stop_tenc)
                     show_ema, lora_save, lora_lr, lora_model = disable_ema(use_lora)
                     if not use_lora and use_ema:
                         disable_lora(use_ema)
                     lr_power, lr_cycles, lr_scale_pos, lr_factor, learning_rate_min, lr_warmup_steps = toggle_lr_min(
                         lr_scheduler)
                     loss_min, loss_tgt = toggle_loss_items(scale_prior)
-                    return pad_tokens,\
+                    return stop_text_encoder,\
+                        stop_tenc,\
                         show_ema,\
                         lora_save,\
                         lora_lr,\
@@ -459,8 +461,10 @@ def on_ui_tabs():
 
                 db_update_params.click(
                     fn=check_toggles,
-                    inputs=[db_use_ema, db_use_lora, db_lr_scheduler, db_stop_text_encoder, db_prior_loss_scale],
-                    outputs=[db_pad_tokens,
+                    inputs=[db_use_ema, db_use_lora, db_lr_scheduler, db_train_unet, db_stop_text_encoder, db_stop_tenc,
+                            db_prior_loss_scale],
+                    outputs=[db_stop_text_encoder,
+                             db_stop_tenc,
                              db_use_ema,
                              lora_save_col,
                              lora_lr_row,
@@ -489,17 +493,17 @@ def on_ui_tabs():
                 )
 
 
-                def update_pad_tokens(x):
-                    if x == 0:
-                        return gr.update(visible=True)
+                def update_stop_tenc(train_unet, stop_text_encoder, stop_tenc):
+                    # If train unet enabled, read "hidden" value from stop_tenc and restore
+                    if train_unet:
+                        return gr.update(value=stop_tenc, interactive=True), gr.update(visible=False)
                     else:
-                        return gr.update(value=True)
+                        return gr.update(value=1, interactive=False), gr.update(value=stop_text_encoder, visible=False)
 
-
-                db_stop_text_encoder.change(
-                    fn=update_pad_tokens,
-                    inputs=[db_stop_text_encoder],
-                    outputs=[db_pad_tokens]
+                db_train_unet.change(
+                    fn=update_stop_tenc,
+                    inputs=[db_train_unet, db_stop_text_encoder, db_stop_tenc],
+                    outputs=[db_stop_text_encoder, db_stop_tenc]
                 )
 
                 db_clear_secret.click(

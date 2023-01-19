@@ -837,8 +837,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     # Add noise to the latents according to the noise magnitude at each timestep
                     # (this is the forward diffusion process)
                     noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
-
-                    encoder_hidden_states = encode_hidden_state(text_encoder, batch["input_ids"], args.pad_tokens,
+                    pad_tokens = args.pad_tokens if train_tenc else False
+                    encoder_hidden_states = encode_hidden_state(text_encoder, batch["input_ids"], pad_tokens,
                                                                 b_size, args.max_token_length, tokenizer.model_max_length)
 
                     # Predict the noise residual
