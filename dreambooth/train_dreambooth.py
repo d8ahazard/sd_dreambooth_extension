@@ -231,6 +231,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 unet.enable_gradient_checkpointing()
             if args.stop_text_encoder != 0:
                 text_encoder.gradient_checkpointing_enable()
+                if args.use_lora:
+                    text_encoder.text_model.embeddings.requires_grad_(True)
             else:
                 text_encoder.to(accelerator.device, dtype=weight_dtype)
 
@@ -713,6 +715,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                     seed = int(c.seed)
                                     if seed is None or seed == '' or seed == -1:
                                         seed = int(random.randrange(21474836147))
+                                    c.seed = seed
                                     g_cuda = torch.Generator(device=accelerator.device).manual_seed(seed)
                                     s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
                                                          guidance_scale=c.scale,
@@ -795,6 +798,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             text_encoder.train(train_tenc)
             if not args.use_lora:
                 text_encoder.requires_grad_(train_tenc)
+            else:
+                if train_tenc:
+                    text_encoder.text_model.embeddings.requires_grad_(True)
 
             loss_total = 0
 
