@@ -235,6 +235,8 @@ class FilenameTextGetter:
         return filename_text
 
     def create_text(self, text_template, filename_text, instance_token, class_token, is_class=True):
+        # Append the filename text to the template first...THEN shuffle it all.
+        filename_text = text_template.replace("[filewords]", text_template)
         # If we are creating text for a class image and it has our instance token in it, remove/replace it
         class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
         if instance_token != "" and class_token != "":
@@ -265,8 +267,8 @@ class FilenameTextGetter:
                         # Description only, insert both at the front?
                         filename_text = f"{instance_token} {class_token}, {filename_text}"
 
-        # Append the filename text to the template first...THEN shuffle it all.
-        output = text_template.replace("[filewords]", filename_text)
+        # We already replaced [filewords] up there ^^
+        output = filename_text
         # Remove underscores, double-spaces, and other characters that will cause issues.
         output.replace("_", " ")
         output.replace("  ", " ")
