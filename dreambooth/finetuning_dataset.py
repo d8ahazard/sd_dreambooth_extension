@@ -235,7 +235,6 @@ class DbDataset(torch.utils.data.Dataset):
         class_str = str(total_classes).rjust(len(str(nc)), " ")
         tot_str = str(total_len).rjust(len(str(ti)), " ")
         pbar.write(f"Total Buckets {bucket_str} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {tot_str}")
-        self._length = len(self.train_dict.items()) * self.batch_size
         self._length = total_len
         print(f"\nTotal images / batch: {self._length}, total examples: {total_len}")
 
@@ -259,8 +258,6 @@ class DbDataset(torch.utils.data.Dataset):
                     batch_samples.append(selection)
                     sample_list.append(selection)
             sample_dict[key] = sample_list
-        if self.debug_dataset:
-            print(f"Shuffled bucket keys: {sample_dict.keys()}")
         self.sample_dict = sample_dict
         self.batch_indices = batch_indices
         self.batch_samples = batch_samples

@@ -312,7 +312,6 @@ class PromptDataset(Dataset):
             if not concept.is_valid:
                 continue
             class_dir = concept.class_data_dir
-
             # Filter empty class dir and set/create if necessary
             if class_dir == "" or class_dir is None or class_dir == db_shared.script_path:
                 class_dir = os.path.join(model_dir, f"classifiers_{c_idx}")
@@ -327,33 +326,55 @@ class PromptDataset(Dataset):
                 class_prompt_datas = sort_prompts(concept, text_getter, str(class_dir), bucket_resos, c_idx, True)
 
             print(f"Concept requires {concept.num_class_images_per} class images per instance image.")
+
+            # Iterate over each resolution of images, per concept
             for res, i_prompt_datas in mytqdm(instance_prompt_datas.items(), desc="Sorting instance images"):
+                # Extend instance prompts by the instance data
+                self.instance_prompts.extend(i_prompt_datas)
+
+                classes_per_bucket = len(i_prompt_datas) * concept.num_class_images_per
+                # Don't do anything else if we don't need class images
+
+                if concept.num_class_images_per == 0 or classes_per_bucket == 0:
+                    continue
+
+                # Get class prompt list, if it exists
                 c_prompt_datas = class_prompt_datas[res] if res in class_prompt_datas.keys() else []
-                class_prompts = [img.prompt for img in c_prompt_datas]
-                instance_prompts = [img.prompt for img in i_prompt_datas]
+
+                # We may not need this, so initialize it here
                 new_prompts = []
 
-                for prompt in instance_prompts:
-                    sample_prompt = text_getter.create_text(
-                        concept.class_prompt, prompt, concept.instance_token, concept.class_token, True)
-                    num_to_gen = concept.num_class_images_per - class_prompts.count(sample_prompt)
-                    for _ in range(num_to_gen):
-                        pd = PromptData(
-                            prompt=sample_prompt,
-                            prompt_tokens=[(concept.instance_token, concept.class_token)],
-                            negative_prompt=concept.class_negative_prompt,
-                            instance_token=concept.instance_token,
-                            class_token=concept.class_token,
-                            steps=concept.class_infer_steps,
-                            scale=concept.class_guidance_scale,
-                            out_dir=class_dir,
-                            seed=-1,
-                            concept_index=c_idx,
-                            resolution=res)
-                        new_prompts.append(pd)
-                        c_prompt_datas.append(pd)
+                # If we have enough or more classes already, randomly select the required amount
+                if len(c_prompt_datas) >= classes_per_bucket:
+                    c_prompt_datas = random.sample(c_prompt_datas, classes_per_bucket)
 
-                self.instance_prompts.extend(i_prompt_datas)
+                # Otherwise, generate and append new class images
+                else:
+                    class_prompts = [img.prompt for img in c_prompt_datas]
+                    instance_prompts = [img.prompt for img in i_prompt_datas]
+
+                    for prompt in instance_prompts:
+                        sample_prompt = text_getter.create_text(
+                            concept.class_prompt, prompt, concept.instance_token, concept.class_token, True)
+                        num_to_gen = concept.num_class_images_per - class_prompts.count(sample_prompt)
+                        for _ in range(num_to_gen):
+                            pd = PromptData(
+                                prompt=sample_prompt,
+                                prompt_tokens=[(concept.instance_token, concept.class_token)],
+                                negative_prompt=concept.class_negative_prompt,
+                                instance_token=concept.instance_token,
+                                class_token=concept.class_token,
+                                steps=concept.class_infer_steps,
+                                scale=concept.class_guidance_scale,
+                                out_dir=class_dir,
+                                seed=-1,
+                                concept_index=c_idx,
+                                resolution=res)
+                            new_prompts.append(pd)
+                            # BAD BAD BAD. Need to append this after generating, so we have the output path
+                            # c_prompt_datas.append(pd)
+
+                # Extend class prompts by the proper amount
                 self.class_prompts.extend(c_prompt_datas)
 
                 if len(new_prompts):
@@ -906,6 +927,7 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
         else:
             batch_size = args.sample_batch_size
         for b in range(batch_size):
+            # Get the new prompt data
             pd = prompt_dataset.__getitem__(actual_idx)
             # Ensure that our image batches have the right resolutions
             if first_res is None:
@@ -924,12 +946,14 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
             if generated >= set_len:
                 break
             try:
+                # Retrieve prompt data object
                 pd = prompts[i_idx]
-
                 image_base = hashlib.sha1(image.tobytes()).hexdigest()
+                # Save image and get new filename
                 image_filename = db_save_image(image, pd, custom_name=f"{pd.prompt[0:64]}-{image_base[0:8]}")
+                # Set filename here for later retrieval
                 pd.src_image = image_filename
-
+                # NOW STORE IT
                 class_prompts.append(pd)
                 if ui:
                     out_images.append(image)
