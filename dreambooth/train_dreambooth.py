@@ -928,7 +928,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             global_epoch += 1
             lifetime_epoch += 1
             session_epoch += 1
-            lr_scheduler.step(epoch=True)
+            lr_scheduler.step(is_epoch=True)
             status.job_count = max_train_steps
             status.job_no = global_step
 
