@@ -331,7 +331,6 @@ class PromptDataset(Dataset):
             print(f"Concept requires {concept.num_class_images_per} class images per instance image.")
             for res, i_prompt_datas in mytqdm(instance_prompt_datas.items(), desc="Sorting instance images"):
                 c_prompt_datas = class_prompt_datas[res] if res in class_prompt_datas.keys() else []
-
                 class_prompts = [img.prompt for img in c_prompt_datas]
                 instance_prompts = [img.prompt for img in i_prompt_datas]
                 new_prompts = []
@@ -351,6 +350,7 @@ class PromptDataset(Dataset):
                             scale=concept.class_guidance_scale,
                             out_dir=class_dir,
                             seed=-1,
+                            concept_index=c_idx,
                             resolution=res)
                         new_prompts.append(pd)
                         c_prompt_datas.append(pd)
@@ -565,7 +565,7 @@ def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str
             
     return dict(sorted(prompts.items()))
 
-def prompt_to_tags(src_prompt: str, instance_token: str = None, class_token: str = None):
+def prompt_to_tags(src_prompt: str, instance_token: str = None, class_token: str = None) -> List[str]:
     src_tags = src_prompt.split(',')
     if class_token:
         conjunctions = ['a ', 'an ', 'the ']
@@ -577,37 +577,8 @@ def prompt_to_tags(src_prompt: str, instance_token: str = None, class_token: str
     return src_tags
 
 
-def compare_prompts(src_prompt: str, check_prompt: str, tokens: [Tuple[str, str]]):
-    src_tags = src_prompt.split(',')
-    check_tags = check_prompt.split(',')
-    conjunctions = ['a ', 'an ', 'the ']
-    # Loop pairs of tokens
-    for token_pair in tokens:
-        # Filter conjunctions
-        for conjunction in conjunctions:
-            src_tags = [tag.replace(conjunction + token_pair[1], '') for tag in src_tags]
-            check_tags = [tag.replace(conjunction + token_pair[1], '') for tag in check_tags]
-        # Remove individual tags
-        src_tags = [tag.replace(token_pair[0], '').replace(token_pair[1], '') for tag in src_tags]
-        check_tags = [tag.replace(token_pair[0], '').replace(token_pair[1], '') for tag in check_tags]
 
-    # Strip double spaces
-    src_tags = [' '.join(tag.split()) for tag in src_tags]
-    check_tags = [' '.join(tag.split()) for tag in check_tags]
-
-    # Strip
-    src_tags = [tag.strip() for tag in src_tags]
-    check_tags = [tag.strip() for tag in check_tags]
-
-    # Remove empty tags
-    src_tags = [tag for tag in src_tags if tag]
-    check_tags = [tag for tag in check_tags if tag]
-    return set(src_tags) == set(check_tags)
-
-
-
-
-def make_bucket_resolutions(max_size, min_size=256, divisible=64):
+def make_bucket_resolutions(max_size, min_size=256, divisible=64) -> List[Tuple[int,int]]:
     resos = set()
 
     w = max_size
@@ -624,7 +595,7 @@ def make_bucket_resolutions(max_size, min_size=256, divisible=64):
     return resos
 
 
-def closest_resolution(width, height, resos):
+def closest_resolution(width, height, resos) -> Tuple[int, int]:
     def distance(reso):
         w, h = reso
         if w > width or h > height:
@@ -633,7 +604,7 @@ def closest_resolution(width, height, resos):
 
     return min(resos, key=distance)
 
-def load_dreambooth_dir(db_dir, concept: Concept, is_class: bool = True):
+def load_dreambooth_dir(db_dir, concept: Concept, is_class: bool = True) -> List[Tuple[str, str]]:
     img_paths = get_images(db_dir)
     captions = []
     text_getter = FilenameTextGetter()

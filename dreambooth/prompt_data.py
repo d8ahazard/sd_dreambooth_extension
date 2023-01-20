@@ -16,6 +16,7 @@ class PromptData:
     out_dir:str = ""
     seed:int = -1
     resolution: Tuple[int, int] = (512, 512)
+    concept_index: int = 0
 
     @property
     def __dict__(self):

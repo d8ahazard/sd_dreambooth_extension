@@ -156,7 +156,10 @@ class DbDataset(torch.utils.data.Dataset):
                 image_width, image_height = prompt_data.resolution
                 cap = prompt_data.prompt
                 reso = closest_resolution(image_width, image_height, resos)
-                target_dict.setdefault(reso, []).append((path, cap, is_class_img))
+                concept_idx = prompt_data.concept_index
+                # Append the concept index to the resolution, and boom, we got ourselves split concepts.
+                dict_idx = (*reso, concept_idx)
+                target_dict.setdefault(dict_idx, []).append((path, cap, is_class_img))
 
         sort_images(self.train_img_data, bucket_resos, self.train_dict, False)
         sort_images(self.class_img_data, bucket_resos, self.class_dict, True)
@@ -197,27 +200,35 @@ class DbDataset(torch.utils.data.Dataset):
         total_instances = 0
         total_classes = 0
         pbar = mytqdm(range(p_len), desc="Caching latents..." if self.cache_latents else "Processing images...")
-        for res, train_images in self.train_dict.items():
+        for dict_idx, train_images in self.train_dict.items():
             if not train_images:
                 continue
-            self.resolutions.append(res)
+            # Separate the resolution from the index where we need it
+            res = (dict_idx[0], dict_idx[1])
+            # This should really be the index, because we want the bucket sampler to shuffle them all
+            self.resolutions.append(dict_idx)
+            # Cache with the actual res, because it's used to crop
             cache_images(train_images, res, pbar)
             inst_count = len(train_images)
             class_count = 0
-            if res in self.class_dict:
-                class_images = self.class_dict[res]
+            if dict_idx in self.class_dict:
+                # Use dict index to find class images
+                class_images = self.class_dict[dict_idx]
+                # Use actual res here as well
                 cache_images(class_images, res, pbar)
                 class_count = len(class_images)
             total_instances += inst_count
             total_classes += class_count
             example_len = inst_count if class_count == 0 else inst_count * 2
-            bucket_len[res] = example_len
+            # Use index here, not res
+            bucket_len[dict_idx] = example_len
             total_len += example_len
             bucket_str = str(bucket_idx).rjust(max_idx_chars, " ")
             inst_str = str(len(train_images)).rjust(len(str(ni)), " ")
             class_str = str(class_count).rjust(len(str(nc)), " ")
             ex_str = str(example_len).rjust(len(str(ti * 2)), " ")
-            pbar.write(f"Bucket {bucket_str} {res} - Instance Images: {inst_str} | Class Images: {class_str} | Examples/batch: {ex_str}")
+            # Log both here
+            pbar.write(f"Bucket {bucket_str} {bucket_idx} - Instance Images: {inst_str} | Class Images: {class_str} | Examples/batch: {ex_str}")
             bucket_idx += 1
         bucket_str = str(bucket_idx).rjust(max_idx_chars, " ")
         inst_str = str(total_instances).rjust(len(str(ni)), " ")

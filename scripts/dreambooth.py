@@ -434,7 +434,7 @@ def start_training(model_dir: str, use_txt2img: bool = True):
         print(msg)
         lora_model_name = gradio.update(visible=True)
         return lora_model_name, 0, 0, [], msg
-
+    status.begin()
     # Clear memory and do "stuff" only after we've ensured all the things are right
     if config.custom_model_name:
         print(f"Custom model name is {config.custom_model_name}")
