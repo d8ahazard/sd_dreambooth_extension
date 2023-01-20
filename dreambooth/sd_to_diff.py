@@ -837,7 +837,7 @@ def download_model(db_config: DreamboothConfig, token):
 
     siblings = repo_info.siblings
 
-    diffusion_dirs = ["text_encoder", "unet", "vae", "tokenizer", "scheduler"]
+    diffusion_dirs = ["text_encoder", "unet", "vae", "tokenizer", "scheduler", "feature_extractor", "safety_checker"]
     config_file = None
     model_index = None
     model_files = []
