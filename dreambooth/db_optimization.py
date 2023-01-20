@@ -138,7 +138,6 @@ def get_constant_schedule_with_warmup(optimizer: Optimizer, num_warmup_steps: in
     def lr_lambda(current_step: int):
         if current_step < num_warmup_steps:
             lamb = float(current_step) / float(max(1, num_warmup_steps))
-            print(f"BAAA: {current_step} / {num_warmup_steps} ({lamb})")
             return max(min_lr, lamb)
         return 1.0
 
