@@ -142,7 +142,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 gradient_accumulation_steps=gradient_accumulation_steps,
                 mixed_precision=args.mixed_precision,
                 log_with="tensorboard",
-                logging_dir=logging_dir
+                logging_dir=logging_dir,
+                cpu=db_shared.force_cpu
             )
         except Exception as e:
             if "AcceleratorState" in str(e):
@@ -275,7 +276,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         use_adam = False
         optimizer_class = torch.optim.AdamW
 
-        if args.use_8bit_adam:
+        if args.use_8bit_adam and not db_shared.force_cpu:
             try:
                 import bitsandbytes as bnb
                 optimizer_class = bnb.optim.AdamW8bit
@@ -285,7 +286,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 traceback.print_exc()
 
         if args.use_lora:
-
             args.learning_rate = args.lora_learning_rate
         
             params_to_optimize = ([
@@ -866,7 +866,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                         accelerator.clip_grad_norm_(params_to_clip, 1)
 
                     optimizer.step()
-                    lr_scheduler.step()
+                    lr_scheduler.step(train_batch_size)
                     if args.use_ema and ema_unet is not None:
                         ema_unet.step(unet.parameters())
                     if profiler is not None:

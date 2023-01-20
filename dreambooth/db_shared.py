@@ -33,6 +33,7 @@ sub_quad_kv_chunk_size = None
 sub_quad_chunk_threshold = None
 CLIP_stop_at_last_layers = 2
 config = os.path.join(script_path, "configs", "v1-inference.yaml")
+force_cpu = False
 
 device = torch.device("cpu")
 if torch.cuda.is_available():
@@ -68,7 +69,7 @@ def image_grid(imgs, batch_size=1, rows=None):
 def load_auto_settings():
     global models_path, script_path, ckpt_dir, device_id, disable_safe_unpickle, dataset_filename_word_regex, \
         dataset_filename_join_string, show_progress_every_n_steps, parallel_processing_allowed, state, ckptfix, medvram, \
-        lowvram, dreambooth_models_path, lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config
+        lowvram, dreambooth_models_path, lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config, device
     try:
         from modules import shared as ws, devices, images
         from modules import paths
@@ -98,6 +99,13 @@ def load_auto_settings():
             pass
         if dreambooth_models_path == "" or dreambooth_models_path is None:
             dreambooth_models_path = os.path.join(models_path, "dreambooth")
+
+        try:
+            force_cpu = ws.cmd_opts.force_cpu
+            if force_cpu:
+                device = torch.device("cpu")
+        except:
+            pass
 
     except:
         print("Exception importing SD-WebUI module.")

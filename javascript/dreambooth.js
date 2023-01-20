@@ -120,7 +120,7 @@ function db_start_load_params() {
 
 // Create new checkpoint
 function db_start_create() {
-    return db_start(7, false, true, arguments);
+    return db_start(8, false, true, arguments);
 }
 
 // Train!
@@ -191,7 +191,7 @@ let db_titles = {
     "Graph Smoothing Steps": "How many timesteps to smooth graph data over. A lower value means a more jagged graph with more information, higher value will make things prettier but slightly less accurate.",
     "Half Model": "Enable this to generate model with fp16 precision. Results in a smaller checkpoint with minimal loss in quality.",
     "HuggingFace Token": "Your huggingface token to use for cloning files.",
-    "Import Model from Huggingface Hub": "Import a model from Huggingface.co instead of using a local checkpoint. Hub model MUST contain diffusion weights.",
+    "Create From Hub": "Import a model from Huggingface.co instead of using a local checkpoint. Hub model MUST contain diffusion weights.",
     "Instance Prompt": "A prompt describing the subject. Use [Filewords] to parse image filename/.txt to insert existing prompt here.",
     "Instance Token": "When using [filewords], this is the instance identifier that is unique to your subject. Should be a single word.",
     "Learning Rate Scheduler": "The learning rate scheduler to use. All schedulers use the provided warmup time except for 'constant'.",

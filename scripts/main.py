@@ -200,7 +200,9 @@ def on_ui_tabs():
                     with gr.Column():
                         db_create_model = gr.Button(value="Create Model", variant='primary')
                     db_new_model_name = gr.Textbox(label="Name")
-                    db_create_from_hub = gr.Checkbox(label="Import Model from Huggingface Hub", value=False)
+                    with gr.Row():
+                        db_create_from_hub = gr.Checkbox(label="Create From Hub", value=False)
+                        db_512_model = gr.Checkbox(label="512x Model", value=True)
                     with gr.Column(visible=False) as hub_row:
                         db_new_model_url = gr.Textbox(label="Model Path", placeholder="runwayml/stable-diffusion-v1-5")
                         db_new_model_token = gr.Textbox(label="HuggingFace Token", value="")
@@ -932,7 +934,8 @@ def on_ui_tabs():
                 db_create_from_hub,
                 db_new_model_url,
                 db_new_model_token,
-                db_new_model_extract_ema
+                db_new_model_extract_ema,
+                db_512_model
             ],
             outputs=[
                 db_model_name, db_model_path, db_revision, db_epochs, db_scheduler, db_src, db_has_ema, db_v2, db_resolution,

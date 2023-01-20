@@ -23,7 +23,7 @@ from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBu
 from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, get_images, \
-    get_lora_models, cleanup, get_checkpoint_match
+    get_lora_models, cleanup, get_checkpoint_match, printm
 from modules import shared
 
 try:
@@ -538,12 +538,14 @@ def ui_classifiers(model_name: str,
     return images, msg
 
 def create_model(new_model_name: str, ckpt_path: str, scheduler_type="ddim", from_hub=False, new_model_url="",
-                       new_model_token="", extract_ema=False):
+                       new_model_token="", extract_ema=False, is_512=True):
+    printm("Extracting model.")
+    res = 512 if is_512 else 768
     status.begin()
     if new_model_name is None or new_model_name == "":
         print("No model name.")
         err_msg = "Please select a model"
-        return "", "", 0, 0, "", "", "", "", 512, "", err_msg
+        return "", "", 0, 0, "", "", "", "", res, "", err_msg
 
     new_model_name = sanitize_name(new_model_name)
 
@@ -552,16 +554,17 @@ def create_model(new_model_name: str, ckpt_path: str, scheduler_type="ddim", fro
         if checkpoint_info is None or not os.path.exists(checkpoint_info.filename):
             err_msg = "Unable to find checkpoint file!"
             print(err_msg)
-            return "", "", 0, 0, "", "", "", "", 512, "", err_msg
+            return "", "", 0, 0, "", "", "", "", res, "", err_msg
         ckpt_path = checkpoint_info.filename
 
     unload_system_models()
-    res = extract_checkpoint(new_model_name, ckpt_path, scheduler_type, from_hub, new_model_url, new_model_token,
-                              extract_ema)
+    result = extract_checkpoint(new_model_name, ckpt_path, scheduler_type, from_hub, new_model_url, new_model_token,
+                              extract_ema, is_512)
     cleanup()
     reload_system_models()
+    printm("Extraction complete.")
     status.end()
-    return res
+    return result
 
 def debug_collate_fn(examples):
     input_ids = [example["input_id"] for example in examples]
