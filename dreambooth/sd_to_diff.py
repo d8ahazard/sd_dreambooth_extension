@@ -839,6 +839,7 @@ def download_model(db_config: DreamboothConfig, token):
 
     diffusion_dirs = ["text_encoder", "unet", "vae", "tokenizer", "scheduler"]
     config_file = None
+    model_index = None
     model_files = []
     diffusion_files = []
 
@@ -846,6 +847,9 @@ def download_model(db_config: DreamboothConfig, token):
         name = sibling.rfilename
         if "inference.yaml" in name:
             config_file = name
+            continue
+        if "model_index.json" in name:
+            model_index = name
             continue
         if (".ckpt" in name or ".safetensors" in name) and not "/" in name:
             # model_files.append(name)
@@ -875,6 +879,8 @@ def download_model(db_config: DreamboothConfig, token):
         files_to_fetch = [model_file]
     elif len(diffusion_files):
         files_to_fetch = diffusion_files
+        if model_index is not None:
+            files_to_fetch.append(model_index)
 
     if files_to_fetch and config_file:
         files_to_fetch.append(config_file)
@@ -902,6 +908,8 @@ def download_model(db_config: DreamboothConfig, token):
         file_name = os.path.basename(out)
         if "yaml" in repo_file:
             dest = os.path.join(db_config.model_dir)
+        if "model_index" in repo_file:
+            dest = db_config.pretrained_model_name_or_path
         if not dest:
             for diffusion_dir in diffusion_dirs:
                 if diffusion_dir in out:
