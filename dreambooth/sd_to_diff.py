@@ -852,7 +852,7 @@ def download_model(db_config: DreamboothConfig, token):
             model_index = name
             continue
         if (".ckpt" in name or ".safetensors" in name) and not "/" in name:
-            # model_files.append(name)
+            model_files.append(name)
             continue
         for diffusion_dir in diffusion_dirs:
             if f"{diffusion_dir}/" in name:
