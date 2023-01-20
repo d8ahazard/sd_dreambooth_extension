@@ -415,11 +415,11 @@ class UniversalScheduler:
 
     def step(self, steps: int = 1, is_epoch: bool = False):
         if self.is_torch_scheduler and is_epoch:
-            print("EPOCH STEP!")
+            self.current_step += steps
+            self.scheduler.step(self.current_step)
         else:
-            print("STEP!")
-        self.current_step += steps
-        self.scheduler.step(self.current_step)
+            self.current_step += steps
+            self.scheduler.step(self.current_step)
 
     def state_dict(self) -> dict:
         return self.scheduler.state_dict()
