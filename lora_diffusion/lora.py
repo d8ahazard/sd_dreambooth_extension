@@ -199,8 +199,11 @@ def apply_lora_weights(target_unet, target_text_encoder, config: DreamboothConfi
     if device is None:
         device = db_shared.device
     target_unet.requires_grad_(False)
-    lora_path = os.path.join(db_shared.models_path, "lora", config.lora_model_name)
-    lora_txt = lora_path.replace(".pt", "_txt.pt")
+    lora_path = None
+    lora_txt = None
+    if db_shared.models_path and config.lora_model_name:
+        lora_path = os.path.join(db_shared.models_path, "lora", config.lora_model_name)
+        lora_txt = lora_path.replace(".pt", "_txt.pt")
 
     if is_ui:
         apply_lora_weights_sample(

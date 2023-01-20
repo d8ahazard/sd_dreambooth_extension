@@ -402,8 +402,7 @@ class PromptDataset(Dataset):
         return None
 
 class ImageBuilder:
-    def __init__(self, config: DreamboothConfig, use_txt2img: bool, lora_model: str = None, lora_weight: float = 1,
-                 lora_txt_weight: float = 1, batch_size: int = 1, accelerator: Accelerator = None):
+    def __init__(self, config: DreamboothConfig, use_txt2img: bool, lora_model: str = None, batch_size: int = 1, accelerator: Accelerator = None):
         self.image_pipe = None
         self.txt_pipe = None
         self.resolution = config.resolution
@@ -911,8 +910,8 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     status.textinfo = f"Generating {set_len} class images for training..."
     status.job_count = set_len
     status.job_no = 0
-    builder = ImageBuilder(args, use_txt2img=use_txt2img, lora_model=args.lora_model_name, lora_weight=args.lora_weight,
-                           lora_txt_weight=args.lora_txt_weight, batch_size=args.sample_batch_size, accelerator=accelerator)
+    builder = ImageBuilder(args, use_txt2img=use_txt2img, lora_model=args.lora_model_name,
+                           batch_size=args.sample_batch_size, accelerator=accelerator)
     generated = 0
     actual_idx = 0
     pbar = mytqdm(total=set_len, desc="Generating class images")

@@ -291,8 +291,6 @@ def ui_samples(model_dir: str,
                 config,
                 False,
                 lora_model_path,
-                lora_weight,
-                lora_txt_weight,
                 batch_size)
             status.textinfo = f"Generating sample image for model {config.model_name}..."
             pd = PromptData()
