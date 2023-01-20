@@ -244,13 +244,15 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             unet.requires_grad_(False)
             if args.lora_model_name:
                 lora_path = os.path.join(db_shared.models_path, "lora", args.lora_model_name)
-            else:
-                lora_path = None
-            if not os.path.exists(lora_path) or not os.path.isfile(lora_path):
-                lora_path = None
-                lora_txt = None
-            else:
                 lora_txt = lora_path.replace(".pt", "_txt.pt")
+
+                if not os.path.exists(lora_path) or not os.path.isfile(lora_path):
+                    lora_path = None
+                    lora_txt = None
+
+            else:
+                lora_path = None
+
 
             unet_lora_params, _ = inject_trainable_lora(
                 unet,
