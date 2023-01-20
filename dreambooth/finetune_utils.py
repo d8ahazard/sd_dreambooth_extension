@@ -312,8 +312,6 @@ class PromptDataset(Dataset):
             if not concept.is_valid:
                 continue
             class_dir = concept.class_data_dir
-            instance_prompt_datas = {}
-            class_prompt_datas = {}
 
             # Filter empty class dir and set/create if necessary
             if class_dir == "" or class_dir is None or class_dir == db_shared.script_path:
@@ -324,9 +322,9 @@ class PromptDataset(Dataset):
             status.textinfo = "Sorting images..."
             # Sort existing prompts
             class_prompt_datas = {}
-            instance_prompt_datas = sort_prompts(concept, text_getter, instance_dir, bucket_resos, False)
+            instance_prompt_datas = sort_prompts(concept, text_getter, instance_dir, bucket_resos, c_idx, False)
             if concept.num_class_images_per > 0 and class_dir:
-                class_prompt_datas = sort_prompts(concept, text_getter, str(class_dir), bucket_resos, True)
+                class_prompt_datas = sort_prompts(concept, text_getter, str(class_dir), bucket_resos, c_idx, True)
 
             print(f"Concept requires {concept.num_class_images_per} class images per instance image.")
             for res, i_prompt_datas in mytqdm(instance_prompt_datas.items(), desc="Sorting instance images"):
@@ -540,7 +538,7 @@ def get_dim(filename, max_res):
 
 
 def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str, bucket_resos: List[Tuple[int, int]],
-                 is_class: bool) -> Dict[Tuple[int, int], PromptData]:
+                 concept_index: int, is_class: bool) -> Dict[Tuple[int, int], PromptData]:
     prompts = {}
     images = get_images(img_dir)
     max_dim = 0
@@ -559,7 +557,16 @@ def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str
         w, h = get_dim(img, max_dim)
         reso = closest_resolution(w, h, bucket_resos)
         prompt_list = prompts[reso] if reso in prompts else []
-        pd = PromptData(prompt, prompt_to_tags(prompt), None, concept.instance_token, concept.class_token, img, resolution=reso)
+        pd = PromptData(
+            prompt=prompt,
+            prompt_tokens=prompt_to_tags(prompt),
+            negative_prompt=concept.class_negative_prompt if is_class else None,
+            instance_token=concept.instance_token,
+            class_token=concept.class_token,
+            src_image=img,
+            resolution=reso,
+            concept_index=concept_index
+        )
         prompt_list.append(pd)
         prompts[reso] = prompt_list
             

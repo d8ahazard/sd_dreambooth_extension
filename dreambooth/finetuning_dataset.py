@@ -228,13 +228,13 @@ class DbDataset(torch.utils.data.Dataset):
             class_str = str(class_count).rjust(len(str(nc)), " ")
             ex_str = str(example_len).rjust(len(str(ti * 2)), " ")
             # Log both here
-            pbar.write(f"Bucket {bucket_str} {bucket_idx} - Instance Images: {inst_str} | Class Images: {class_str} | Examples/batch: {ex_str}")
+            pbar.write(f"Bucket {bucket_str} {dict_idx} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {ex_str}")
             bucket_idx += 1
         bucket_str = str(bucket_idx).rjust(max_idx_chars, " ")
         inst_str = str(total_instances).rjust(len(str(ni)), " ")
         class_str = str(total_classes).rjust(len(str(nc)), " ")
         tot_str = str(total_len).rjust(len(str(ti)), " ")
-        pbar.write(f"Totals: Buckets {bucket_str} | Instance Images: {inst_str} | Class Images: {class_str} | Examples/batch: {tot_str}")
+        pbar.write(f"Total Buckets {bucket_str} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {tot_str}")
         self._length = len(self.train_dict.items()) * self.batch_size
         self._length = total_len
         print(f"\nTotal images / batch: {self._length}, total examples: {total_len}")
