@@ -242,7 +242,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
         if args.use_lora:
             unet.requires_grad_(False)
-            if args.loramodel_name:
+            if args.lora_model_name:
                 lora_path = os.path.join(db_shared.models_path, "lora", args.lora_model_name)
             else:
                 lora_path = None
