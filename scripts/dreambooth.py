@@ -537,6 +537,32 @@ def ui_classifiers(model_name: str,
         status.textinfo = msg
     return images, msg
 
+def create_model(new_model_name: str, ckpt_path: str, scheduler_type="ddim", from_hub=False, new_model_url="",
+                       new_model_token="", extract_ema=False):
+    status.begin()
+    if new_model_name is None or new_model_name == "":
+        print("No model name.")
+        err_msg = "Please select a model"
+        return "", "", 0, 0, "", "", "", "", 512, "", err_msg
+
+    new_model_name = sanitize_name(new_model_name)
+
+    if not from_hub:
+        checkpoint_info = get_checkpoint_match(ckpt_path)
+        if checkpoint_info is None or not os.path.exists(checkpoint_info.filename):
+            err_msg = "Unable to find checkpoint file!"
+            print(err_msg)
+            return "", "", 0, 0, "", "", "", "", 512, "", err_msg
+        ckpt_path = checkpoint_info.filename
+
+    unload_system_models()
+    res = extract_checkpoint(new_model_name, ckpt_path, scheduler_type, from_hub, new_model_url, new_model_token,
+                              extract_ema)
+    cleanup()
+    reload_system_models()
+    status.end()
+    return res
+
 def debug_collate_fn(examples):
     input_ids = [example["input_id"] for example in examples]
     pixel_values = [example["image"] for example in examples]

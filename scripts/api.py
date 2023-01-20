@@ -21,11 +21,10 @@ from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, D
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import DreamState
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, generate_classifiers
-from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_images
 from extensions.sd_dreambooth_extension.scripts import dreambooth
-from extensions.sd_dreambooth_extension.scripts.dreambooth import ui_samples
+from extensions.sd_dreambooth_extension.scripts.dreambooth import ui_samples, create_model
 from modules import sd_models
 
 
@@ -127,7 +126,7 @@ def file_to_base64(file_path) -> str:
 
 def dreambooth_api(_: gr.Blocks, app: FastAPI):
     @app.post("/dreambooth/createModel")
-    async def create_model(
+    async def create_db_model(
             new_model_name: str = Query(None, description="The name of the model to create.", ),
             new_model_src: str = Query(None, description="The source checkpoint to extract to create this model.", ),
             new_model_scheduler: str = Query(None, description="The scheduler to use. V2+ models ignore this.", ),
@@ -153,7 +152,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             return status
 
         print("Creating new Checkpoint: " + new_model_name)
-        _ = extract_checkpoint(new_model_name,
+        _ = create_model(new_model_name,
                                new_model_src,
                                new_model_scheduler,
                                create_from_hub,

@@ -17,18 +17,20 @@ import os
 import re
 import shutil
 import traceback
-from datetime import datetime
+import zipfile
 
 import gradio as gr
+import huggingface_hub.utils.tqdm
 import safetensors.torch
 import torch
 from diffusers.pipelines.paint_by_example import PaintByExampleImageEncoder
+from huggingface_hub import snapshot_download, HfApi, hf_hub_download
 
 from extensions.sd_dreambooth_extension.dreambooth import db_shared
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, sanitize_name
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import stop_safe_unpickle
-from extensions.sd_dreambooth_extension.dreambooth.utils import printi, get_db_models, get_checkpoint_match
-from extensions.sd_dreambooth_extension.scripts.dreambooth import reload_system_models
+from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import mytqdm
+from extensions.sd_dreambooth_extension.dreambooth.utils import printi, get_db_models
 from modules import shared
 
 try:
@@ -783,12 +785,88 @@ def convert_open_clip_checkpoint(checkpoint):
     return text_model
 
 
-def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim", from_hub=False, new_model_url="",
+import requests
+import json
+
+
+def download_model(db_config: DreamboothConfig, token):
+    tmp_dir = os.path.join(db_config.model_dir, "src")
+    working_dir = db_config.pretrained_model_name_or_path
+
+    hub_url = db_config.src
+    if "http" in hub_url or "huggingface.co" in hub_url:
+        hub_url = "/".join(hub_url.split("/")[-2:])
+
+    api = HfApi()
+    repo_info = api.repo_info(
+        repo_id=hub_url,
+        repo_type="model",
+        revision="main",
+        token=token,
+    )
+
+    if repo_info.sha is None:
+        print("Unable to fetch repo?")
+        return None, None
+
+    siblings = repo_info.siblings
+
+    diffusion_dirs = ["text_encoder", "unet", "vae", "tokenizer", "scheduler"]
+    config_file = None
+    model_files = []
+    diffusion_files = []
+
+    for sibling in siblings:
+        name = sibling.rfilename
+        if "inference.yaml" in name:
+            config_file = name
+            continue
+        if (".ckpt" in name or ".safetensors" in name) and not "/" in name:
+            model_files.append(name)
+            continue
+        for diffusion_dir in diffusion_dirs:
+            if f"/{diffusion_dir}" in name:
+                diffusion_files.append(name)
+
+    model_file = next((x for x in model_files if ".safetensors" in x and "nonema" in x), next((x for x in model_files if "nonema" in x), next((x for x in model_files if ".safetensors" in x), model_files[0] if model_files else None)))
+
+    files_to_fetch = None
+
+    cache_dir = tmp_dir
+    if model_file is not None:
+        files_to_fetch = [model_file]
+    elif len(diffusion_files):
+        cache_dir = working_dir
+        files_to_fetch = diffusion_files
+
+    if files_to_fetch and config_file:
+        files_to_fetch.append(config_file)
+
+    print(f"Fetching files from hub fetch: {files_to_fetch}")
+
+    if not len(files_to_fetch):
+        print("Nothing to fetch!")
+        return None, None
+    huggingface_hub.utils.tqdm.tqdm = mytqdm
+    for repo_file in mytqdm(files_to_fetch, desc=f"Fetching {len(files_to_fetch)} files"):
+        _ = hf_hub_download(
+            hub_url,
+            filename=repo_file,
+            repo_type="model",
+            revision=repo_info.sha,
+            cache_dir=cache_dir,
+            token=token,
+        )
+
+    return cache_dir, config_file
+
+
+def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type="ddim", from_hub=False, new_model_url="",
                        new_model_token="", extract_ema=False):
     """
 
     @param new_model_name: The name of the new model
-    @param ckpt_path: The source checkpoint to use, if not from hub
+    @param ckpt_file: The source checkpoint to use, if not from hub. Needs full path
     @param scheduler_type: The target scheduler type
     @param from_hub: Are we making this model from the hub?
     @param new_model_url: The URL to pull. Should be formatted like compviz/stable-diffusion-2, not a full URL.
@@ -811,27 +889,41 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
     has_ema = False
     v2 = False
     is_512 = True
-    src = ""
     revision = 0
     epoch = 0
-    upcast_attention = False
-    checkpoint_file = None
+
     # Needed for V2 models so we can create the right text encoder.
+    upcast_attention = False
     msg = None
-    new_model_name = sanitize_name(new_model_name)
-    if new_model_name == "":
-        msg = "Please enter a model name."
-    if not from_hub and (ckpt_path == "" or ckpt_path is None):
-        msg = "Please select a source checkpoint."
+
     if from_hub and (new_model_url == "" or new_model_url is None) and (new_model_token is None or new_model_token == ""):
         msg = "Please provide a URL and token for huggingface models."
     if msg is not None:
         return "", "", 0, 0, "", "", "", "", 512, "", msg
 
+    # Create empty config
+    db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type,
+                                 src=checkpoint_file if not from_hub else new_model_url)
 
-    reset_safe = stop_safe_unpickle()
+    # Okay then. So, if it's from the hub, try to download it
+    if from_hub:
+        model_info, config = download_model(db_config, new_model_token)
+
+        if model_info is not None:
+            print("Got model info.")
+            if ".ckpt" in model_info or ".safetensors" in model_info:
+                # Set this to false, because we have a checkpoint where we can *maybe* get a revision.
+                from_hub = False
+                db_config.src = model_info
+        else:
+            msg = "Unable to fetch model from hub."
+            print(msg)
+            return "", "", 0, 0, "", "", "", "", 512, "", msg
+
+    reset_safe = False
     db_shared.status.job_count = 11
     original_config_file = None
+    
     try:
         db_shared.status.job_no = 0
         checkpoint = None
@@ -844,20 +936,9 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             print("UPDATE YOUR WEBUI!!!!")
             return "", "", 0, 0, "", "", "", "", 512, "", "Update your web UI."
 
-
-
-        # Try to determine if v1 or v2 model
+        # Try to determine if v1 or v2 model if we have a ckpt
         if not from_hub:
             printi("Loading model from checkpoint.")
-            checkpoint_info = get_checkpoint_match(ckpt_path)
-
-            if checkpoint_info is None or not os.path.exists(checkpoint_info.filename):
-                err_msg = "Unable to find checkpoint file!"
-                print(err_msg)
-                db_shared.status.job_no = 8
-                return "", "", 0, 0, "", "", "", "", 512, "", err_msg
-
-            checkpoint_file = checkpoint_info.filename
             printi("Loading checkpoint...")
             _, extension = os.path.splitext(checkpoint_file)
             if extension.lower() == ".safetensors":
@@ -867,6 +948,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                 except Exception as e:
                     checkpoint = torch.jit.load(checkpoint_file)
             else:
+                reset_safe = stop_safe_unpickle()
                 checkpoint = torch.load(checkpoint_file, map_location=map_location or shared.weight_load_location)
                 checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
 
@@ -897,14 +979,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             else:
                 v2 = False
 
-        else:
-            if new_model_token == "" or new_model_token is None:
-                msg = "Please provide a token to load models from the hub."
-                print(msg)
-                return "", "", 0, 0, "", "", "", "", 512, "", msg
-            printi("Loading model from hub.")
-            v2 = new_model_url == "stabilityai/stable-diffusion-2"
-
+        
         if v2 and not is_512:
             prediction_type = "v_prediction"
             image_size = 768
@@ -919,19 +994,18 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             else:
                 original_config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs",
                                                     "v1-inference.yaml")
+
         print(f"Pred and size are {prediction_type} and {image_size}")
-        db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type, v2=v2,
-                                     src=checkpoint_file if not from_hub else new_model_url,
-                                     resolution=image_size)
+        db_config.resolution = image_size
         db_config.lifetime_revision = revision
         db_config.epoch = epoch
 
         print(f"{'v2' if v2 else 'v1'} model loaded.")
 
         # Use existing YAML if present
-        if ckpt_path is not None:
-            if os.path.exists(ckpt_path.replace(".ckpt", ".yaml")):
-                original_config_file = ckpt_path.replace(".ckpt", ".yaml")
+        if checkpoint_file is not None:
+            if os.path.exists(checkpoint_file.replace(".ckpt", ".yaml")):
+                original_config_file = checkpoint_file.replace(".ckpt", ".yaml")
 
         original_config = OmegaConf.load(original_config_file)
 
@@ -973,6 +1047,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         if from_hub:
             print(f"Trying to create {new_model_name} from huggingface.co/{new_model_url}")
             printi("Loading model from hub.")
+
             pipe = DiffusionPipeline.from_pretrained(new_model_url, use_auth_token=new_model_token,
                                                      scheduler=scheduler, device_map=map_location)
             printi("Model loaded.")
@@ -986,7 +1061,7 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             unet = UNet2DConditionModel(**unet_config)
 
             converted_unet_checkpoint, has_ema = convert_ldm_unet_checkpoint(
-                checkpoint, unet_config, path=ckpt_path, extract_ema=extract_ema
+                checkpoint, unet_config, path=checkpoint_file, extract_ema=extract_ema
             )
             db_config.has_ema = has_ema
             db_config.save()
@@ -1091,8 +1166,6 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
 
     if reset_safe:
         db_shared.start_safe_unpickle()
-
-    reload_system_models()
     printi(result_status)
     dirs = get_db_models()
 

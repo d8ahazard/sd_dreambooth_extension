@@ -13,7 +13,7 @@ from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, l
     list_floats, get_lora_models, wrap_gpu_call, parse_logs, printm
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
-    training_wizard, training_wizard_person, load_model_params, ui_classifiers, ui_samples, debug_buckets
+    training_wizard, training_wizard_person, load_model_params, ui_classifiers, ui_samples, debug_buckets, create_model
 from modules import script_callbacks, sd_models
 from modules.ui import gr_show, create_refresh_button
 
@@ -923,7 +923,7 @@ def on_ui_tabs():
         )
 
         db_create_model.click(
-            fn=wrap_gpu_call(extract_checkpoint),
+            fn=wrap_gpu_call(create_model),
             _js="db_start_create",
             inputs=[
                 db_new_model_name,
