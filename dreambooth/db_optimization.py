@@ -19,13 +19,15 @@
 
 import math
 from enum import Enum
-from typing import Optional, Union
+from typing import Optional, Union, List
 
 from diffusers.utils import logging
 from torch.optim import Optimizer
+import torch.optim.lr_scheduler
 from torch.optim.lr_scheduler import LambdaLR, ConstantLR, LinearLR, CosineAnnealingLR, CosineAnnealingWarmRestarts
 
 logger = logging.get_logger(__name__)
+
 
 
 class SchedulerType(Enum):
@@ -39,48 +41,7 @@ class SchedulerType(Enum):
     CONSTANT = "constant"
     CONSTANT_WITH_WARMUP = "constant_with_warmup"
 
-
-def get_constant_schedule(optimizer: Optimizer, factor: float = 1.0, total_iters: int = 500):
-    """
-    Create a schedule with a constant learning rate, using the learning rate set in optimizer.
-
-    Args:
-        optimizer ([`~torch.optim.Optimizer`]):
-            The optimizer for which to schedule the learning rate.
-        factor (`float`, *optional*, defaults to 2.0):
-            The value the step will be divided by when total_iters is reached.
-        total_iters ('int', *optional*, defaults to 500):
-            The epoch number at which the LR will be adjusted
-
-    Return:
-        `torch.optim.lr_scheduler.ConstantLR` with the appropriate schedule.
-    """
-    return ConstantLR(optimizer, factor=factor, total_iters=total_iters)
-
-
-def get_constant_schedule_with_warmup(optimizer: Optimizer, num_warmup_steps: int):
-    """
-    Create a schedule with a constant learning rate preceded by a warmup period during which the learning rate
-    increases linearly between 0 and the initial lr set in the optimizer.
-
-    Args:
-        optimizer ([`~torch.optim.Optimizer`]):
-            The optimizer for which to schedule the learning rate.
-        num_warmup_steps (`int`):
-            The number of steps for the warmup phase.
-
-    Return:
-        `torch.optim.lr_scheduler.LambdaLR` with the appropriate schedule.
-    """
-
-    def lr_lambda(current_step: int):
-        if current_step < num_warmup_steps:
-            return float(current_step) / float(max(1.0, num_warmup_steps))
-        return 1.0
-
-    return LambdaLR(optimizer, lr_lambda, last_epoch=-1)
-
-
+#region New Schedulers
 def get_cosine_annealing_scheduler(optimizer: Optimizer, max_iter: int = 500, eta_min: float = 1e-6):
     """
     Adjust LR from initial rate to the minimum specified LR over the maximum number of steps.
@@ -138,6 +99,48 @@ def get_linear_schedule(optimizer: Optimizer, start_factor: float = 0.5, total_i
     """
 
     return LinearLR(optimizer, start_factor=start_factor, total_iters=total_iters)
+
+def get_constant_schedule(optimizer: Optimizer, factor: float = 1.0, total_iters: int = 500):
+    """
+    Create a schedule with a constant learning rate, using the learning rate set in optimizer.
+
+    Args:
+        optimizer ([`~torch.optim.Optimizer`]):
+            The optimizer for which to schedule the learning rate.
+        factor (`float`, *optional*, defaults to 2.0):
+            The value the step will be divided by when total_iters is reached.
+        total_iters ('int', *optional*, defaults to 500):
+            The epoch number at which the LR will be adjusted
+
+    Return:
+        `torch.optim.lr_scheduler.ConstantLR` with the appropriate schedule.
+    """
+    return ConstantLR(optimizer, factor=factor, total_iters=total_iters)
+
+#endregion
+
+#region originals
+def get_constant_schedule_with_warmup(optimizer: Optimizer, num_warmup_steps: int):
+    """
+    Create a schedule with a constant learning rate preceded by a warmup period during which the learning rate
+    increases linearly between 0 and the initial lr set in the optimizer.
+
+    Args:
+        optimizer ([`~torch.optim.Optimizer`]):
+            The optimizer for which to schedule the learning rate.
+        num_warmup_steps (`int`):
+            The number of steps for the warmup phase.
+
+    Return:
+        `torch.optim.lr_scheduler.LambdaLR` with the appropriate schedule.
+    """
+
+    def lr_lambda(current_step: int):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1.0, num_warmup_steps))
+        return 1.0
+
+    return LambdaLR(optimizer, lr_lambda, last_epoch=-1)
 
 
 def get_linear_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, last_epoch=-1):
@@ -288,6 +291,7 @@ def get_polynomial_decay_schedule_with_warmup(
 
     return LambdaLR(optimizer, lr_lambda, last_epoch)
 
+#endregion
 
 TYPE_TO_SCHEDULER_FUNCTION = {
     SchedulerType.LINEAR: get_linear_schedule,
@@ -374,3 +378,50 @@ def get_scheduler(
         )
 
     return schedule_func(optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=total_training_steps)
+
+class UniversalScheduler:
+    def __init__(self,
+        name: Union[str, SchedulerType],
+        optimizer: Optimizer,
+        num_warmup_steps: int,
+        total_training_steps: int,
+        total_epochs: int,
+        num_cycles: int = 1,
+        power: float = 1.0,
+        factor: float = 0.5,
+        min_lr: float = 1e-6,
+        scale_pos: float = 0.5
+    ):
+
+        self.scheduler = get_scheduler(
+            name,
+            optimizer,
+            num_warmup_steps,
+            total_training_steps,
+            num_cycles,
+            power,
+            factor,
+            min_lr,
+            scale_pos
+        )
+
+        og_schedulers = [
+            "constant_with_warmup",
+            "linear_with_warmup",
+            "cosine",
+            "cosine_with_restarts",
+            "polynomial"
+        ]
+
+        self.is_torch_scheduler = name in og_schedulers
+
+    def step(self, steps: int = 1, is_epoch: bool = False):
+        self.scheduler.step(steps)
+    def state_dict(self) -> dict:
+        return self.scheduler.state_dict()
+    def load_state_dict(self, state_dict: dict) -> None:
+        self.scheduler.load_state_dict(state_dict)
+    def get_last_lr(self) -> List[float]:
+        return self.scheduler.get_last_lr()
+    def get_lr(self) -> float:
+        return self.scheduler.get_lr()

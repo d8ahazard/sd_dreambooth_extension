@@ -419,7 +419,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         lr_scheduler = get_scheduler(
             args.lr_scheduler,
             optimizer=optimizer,
-            num_warmup_steps=args.lr_warmup_steps * gradient_accumulation_steps,
+            num_warmup_steps=args.lr_warmup_steps,
             total_training_steps=sched_train_steps,
             num_cycles=args.lr_cycles,
             power=args.lr_power,
