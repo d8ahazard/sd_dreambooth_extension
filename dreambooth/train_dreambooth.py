@@ -24,14 +24,14 @@ from extensions.sd_dreambooth_extension.dreambooth import xattention, db_shared
 from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SampleData
 from extensions.sd_dreambooth_extension.dreambooth.db_bucket_sampler import BucketSampler
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.db_optimization import get_scheduler
+from extensions.sd_dreambooth_extension.dreambooth.db_optimization import UniversalScheduler
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_webhook import send_training_update
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import EMAModel, generate_classifiers, \
     generate_dataset, TrainResult, CustomAccelerator, mytqdm, encode_hidden_state
-from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
+from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.sample_dataset import SampleDataset
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models, parse_logs, printm, \
     import_model_class_from_model_name_or_path, db_save_image
@@ -416,11 +416,12 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         # affected by batch size
         sched_train_steps = args.num_train_epochs * train_dataset.num_train_images
 
-        lr_scheduler = get_scheduler(
+        lr_scheduler = UniversalScheduler(
             args.lr_scheduler,
             optimizer=optimizer,
             num_warmup_steps=args.lr_warmup_steps,
             total_training_steps=sched_train_steps,
+            total_epochs=args.num_train_epochs,
             num_cycles=args.lr_cycles,
             power=args.lr_power,
             factor=args.lr_factor,
@@ -927,7 +928,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             global_epoch += 1
             lifetime_epoch += 1
             session_epoch += 1
-
+            lr_scheduler.step(epoch=True)
             status.job_count = max_train_steps
             status.job_no = global_step
 

@@ -8,7 +8,6 @@ from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_webhook import save_and_test_webhook
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generate_prompts
-from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret, create_secret, clear_secret
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, list_attention, \
     list_floats, get_lora_models, wrap_gpu_call, parse_logs, printm
@@ -411,6 +410,8 @@ def on_ui_tabs():
                         db_generate_graph = gr.Button(value="Generate Graph")
                         db_graph_smoothing = gr.Number(value=50, label="Graph Smoothing Steps")
                         db_debug_buckets = gr.Button(value="Debug Buckets")
+                        db_bucket_epochs = gr.Slider(value=10, step=1, minimum=1, maximum=1000, label="Epochs to Simulate")
+                        db_bucket_batch = gr.Slider(value=1, step=1, minimum=1, maximum=500, label="Batch Size to Simulate")
                         db_generate_sample = gr.Button(value="Generate Sample Images")
                         db_sample_prompt = gr.Textbox(label="Sample Prompt")
                         db_sample_negative = gr.Textbox(label="Sample Negative Prompt")
@@ -816,8 +817,8 @@ def on_ui_tabs():
         db_debug_buckets.click(
             _js="db_start_buckets",
             fn=debug_buckets,
-            inputs=[db_model_name],
-            outputs=[db_status]
+            inputs=[db_model_name, db_bucket_epochs, db_bucket_batch],
+            outputs=[db_status, db_status]
         )
 
         db_performance_wizard.click(

@@ -15,13 +15,15 @@ from diffusers.utils import logging as dl
 from extensions.sd_dreambooth_extension.dreambooth import db_config
 from extensions.sd_dreambooth_extension.dreambooth.db_bucket_sampler import BucketSampler
 from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
-from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, DreamboothConfig, sanitize_name
+from extensions.sd_dreambooth_extension.dreambooth.db_optimization import UniversalScheduler
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, generate_dataset, \
     PromptDataset, mytqdm
 from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, get_images, \
-    get_lora_models, cleanup
+    get_lora_models, cleanup, get_checkpoint_match
 from modules import shared
 
 try:
@@ -546,7 +548,7 @@ def debug_collate_fn(examples):
     }
     return batch
 
-def debug_buckets(model_name):
+def debug_buckets(model_name, num_epochs, batch_size):
     print("Debug click?")
     status.textinfo = "Preparing dataset..."
     if model_name == "" or model_name is None:
@@ -555,11 +557,33 @@ def debug_buckets(model_name):
     if args is None:
         return "Invalid config."
     print("Preparing prompt dataset...")
+
     prompt_dataset = PromptDataset(args.concepts(), args.model_dir, args.resolution)
     inst_paths = prompt_dataset.instance_prompts
     class_paths = prompt_dataset.class_prompts
     print("Generating training dataset...")
-    dataset = generate_dataset(model_name, inst_paths, class_paths, 10, debug=True)
+    dataset = generate_dataset(model_name, inst_paths, class_paths, batch_size, debug=True)
+    optimizer_class = torch.optim.AdamW
+    placeholder = [torch.Tensor(10, 20)]
+    sched_train_steps = args.num_train_epochs * dataset.__len__()
+    optimizer = optimizer_class(
+        placeholder,
+        lr=args.learning_rate,
+        weight_decay=args.adamw_weight_decay
+    )
+
+    lr_scheduler = UniversalScheduler(
+        args.lr_scheduler,
+        optimizer=optimizer,
+        num_warmup_steps=args.lr_warmup_steps,
+        total_training_steps=sched_train_steps,
+        total_epochs=num_epochs,
+        num_cycles=args.lr_cycles,
+        power=args.lr_power,
+        factor=args.lr_factor,
+        scale_pos=args.lr_scale_pos,
+        min_lr=args.learning_rate_min
+    )
 
     sampler = BucketSampler(dataset, args.train_batch_size)
     n_workers = 0
@@ -576,19 +600,26 @@ def debug_buckets(model_name):
 
 
     lines = []
-    test_epochs = 10
-    print(f"Simulating training for {test_epochs} epochs.")
+    test_epochs = num_epochs
+    sim_train_steps = test_epochs * (dataloader.__len__() // batch_size)
+    print(f"Simulating training for {test_epochs} epochs, batch size of {batch_size}, total steps {sim_train_steps}.")
     for epoch in mytqdm(range(test_epochs), desc="Simulating training."):
         for step, batch in enumerate(dataloader):
             image_names = batch["images"]
             captions = batch["input_ids"]
             losses = batch["loss_weights"]
-            line = f"Epoch: {epoch}, Batch: {step}, Images: {len(image_names)}, Loss: {losses.mean()}"
+            last_lr = lr_scheduler.get_last_lr()[0]
+            line = f"Epoch: {epoch}, Batch: {step}, Images: {len(image_names)}, Loss: {losses.mean()} Last LR: {last_lr}"
             print(line)
             lines.append(line)
+            loss_idx = 0
             for image, caption in zip(image_names, captions):
-                line = f"{image}, {caption}, {losses}"
+                line = f"{image}, {caption}, {losses[loss_idx]}"
                 lines.append(line)
+                loss_idx += 1
+            lr_scheduler.step(args.train_batch_size)
+            optimizer.step()
+        lr_scheduler.step(1, is_epoch=True)
     samples_dir = os.path.join(args.model_dir, "samples")
     if not os.path.exists(samples_dir):
         os.makedirs(samples_dir)
@@ -596,6 +627,6 @@ def debug_buckets(model_name):
     with open(bucket_file, "w") as outfile:
         json.dump(lines, outfile, indent=4)
     status.end()
-    return f"Debug output saved to {bucket_file}"
+    return "", f"Debug output saved to {bucket_file}"
 
 

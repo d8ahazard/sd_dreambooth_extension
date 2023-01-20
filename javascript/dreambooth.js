@@ -110,7 +110,7 @@ function db_start_prompts() {
 
 // Debug bucketing
 function db_start_buckets() {
-    return db_start(1, true, true, arguments);
+    return db_start(3, true, true, arguments);
 }
 
 function db_start_load_params() {
