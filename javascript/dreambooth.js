@@ -396,7 +396,6 @@ function db_progressbar() {
 
             let progress_indicator = gradioApp().querySelector("#db_active input[type='checkbox']");
             let is_active = progress_indicator.checked;
-            console.log("Active:", is_active, progress_indicator);
 
             let progressDiv = gradioApp().querySelector(".progressDiv");
             if (progressbarParent && progressDiv) {

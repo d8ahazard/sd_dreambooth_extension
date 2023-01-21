@@ -69,6 +69,7 @@ def current_prior_loss(args, current_epoch):
         return args.prior_loss_weight_min
     percentage_completed = current_epoch / args.prior_loss_target
     prior = args.prior_loss_weight * (1 - percentage_completed) + args.prior_loss_weight_min * percentage_completed
+    printm(f"Prior: {prior}")
     return prior
 
 
@@ -903,9 +904,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 del timesteps
                 del noisy_latents
                 del target
-                # if torch.cuda.is_available():
-                #     torch.cuda.empty_cache()
-                #     torch.cuda.ipc_collect()
+
                 logs = {"loss": float(current_loss), "loss_avg": avg_loss, "lr": last_lr, "vram_usage": float(cached)}
                 status.textinfo2 = f"Loss: {'%.2f' % current_loss}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
                                    f"VRAM: {allocated}/{cached} GB"

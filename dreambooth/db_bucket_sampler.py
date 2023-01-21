@@ -2,6 +2,7 @@ import random
 from typing import Tuple
 
 from extensions.sd_dreambooth_extension.dreambooth.finetuning_dataset import DbDataset
+from extensions.sd_dreambooth_extension.dreambooth.utils import printm
 
 
 class BucketSampler:
@@ -75,8 +76,9 @@ class BucketSampler:
         self.dataset.shuffle_buckets()
         batch = []
         repeats = 0
+        self.dataset.prior_loss_weight = self.prior_loss_weight
+        printm(f"Prior loss: {self.dataset.prior_loss_weight}")
         while len(batch) < self.batch_size:
-            self.dataset.prior_loss_weight = self.prior_loss_weight
             self.dataset.active_resolution = current_res
             img_index, img_repeats = self.dataset.get_example(current_res)
             #next_item = torch.as_tensor(next_item, device='cpu', dtype=torch.float)
