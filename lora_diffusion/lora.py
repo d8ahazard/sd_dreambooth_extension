@@ -177,55 +177,6 @@ def inject_trainable_lora(
     start_safe_unpickle()
     return require_grad_params, names
 
-def apply_lora_weights_sample(target_unet, target_text_encoder, lora_path, lora_txt, lora_alpha=1, lora_txt_alpha=1):
-    
-    print("Applying lora weights for sampling...")
-    
-    lora_dicts = [
-        {"path": lora_path, "model": target_unet, "alpha": lora_alpha, "is_text": False},
-        {"path": lora_txt, "model": target_text_encoder, "alpha": lora_txt_alpha, "is_text": True}
-    ]
-    
-    for loras in lora_dicts:
-        if os.path.exists(loras["path"]) and os.path.isfile(loras["path"]):
-            monkeypatch_lora(
-                loras["model"],
-                torch.load(loras["path"]), 
-                target_replace_module=None if loras["is_text"] == False else ["CLIPAttention"]
-            )
-            tune_lora_scale(loras["model"], loras["alpha"]) 
-
-def apply_lora_weights(target_unet, target_text_encoder, config: DreamboothConfig, device=None, is_ui=False):
-    if device is None:
-        device = db_shared.device
-    target_unet.requires_grad_(False)
-    lora_path = None
-    lora_txt = None
-    if db_shared.models_path and config.lora_model_name:
-        lora_path = os.path.join(db_shared.models_path, "lora", config.lora_model_name)
-        lora_txt = lora_path.replace(".pt", "_txt.pt")
-
-    if is_ui:
-        apply_lora_weights_sample(
-            target_unet,
-            target_text_encoder,
-            lora_path, 
-            lora_txt, 
-            config.lora_weight,
-            config.lora_txt_weight
-        )
-        return
-
-    print("Injecting trainable lora...")
-    unet_lora_params, _ = inject_trainable_lora(target_unet, None, config.lora_rank, lora_path, device)
-    text_encoder_lora_params = None
-
-    if target_text_encoder is not None:
-        target_text_encoder.requires_grad_(False)
-        text_encoder_lora_params, _ = inject_trainable_lora(target_text_encoder,
-                                                            ["CLIPAttention"], config.lora_rank, lora_txt, device)
-    return unet_lora_params, text_encoder_lora_params
-
 def extract_lora_ups_down(model, target_replace_module=None):
 
     if target_replace_module is None:
@@ -613,6 +564,9 @@ def _text_lora_path(path: str) -> str:
     return ".".join(path.split(".")[:-1] + ["text_encoder", "pt"])
 
 
+def _text_lora_path_ui(path: str) -> str:
+    return path.replace(".pt", "_txt.pt")
+
 def _ti_lora_path(path: str) -> str:
     assert path.endswith(".pt"), "Only .pt files are supported"
     return ".".join(path.split(".")[:-1] + ["ti", "pt"])
@@ -672,7 +626,7 @@ def patch_pipe(
     ), "Token cannot be empty. Input token non-empty token like <s>."
 
     ti_path = _ti_lora_path(unet_path)
-    text_path = _text_lora_path(unet_path)
+    text_path = _text_lora_path_ui(unet_path)
 
     if patch_unet:
         print("LoRA : Patching Unet")
@@ -683,7 +637,7 @@ def patch_pipe(
             target_replace_module=unet_target_replace_module,
         )
 
-    if patch_text:
+    if patch_text or os.path.exists(text_path):
         print("LoRA : Patching text encoder")
         monkeypatch_or_replace_lora(
             pipe.text_encoder,
