@@ -334,9 +334,9 @@ def on_ui_tabs():
                                     db_prior_loss_scale = gr.Checkbox(label="Scale Prior Loss", value=False)
                                     db_prior_loss_weight = gr.Slider(label="Prior Loss Weight", minimum=0.01, maximum=1,
                                                                      step=.01, value=0.75)
-                                    db_prior_loss_target = gr.Number(label="Prior Loss Target", value=100)
+                                    db_prior_loss_target = gr.Number(label="Prior Loss Target", value=100, visible=False)
                                     db_prior_loss_weight_min = gr.Slider(label="Minimum Prior Loss Weight", minimum=0.01,
-                                                                  maximum=1, step=.01, value=0.1)
+                                                                  maximum=1, step=.01, value=0.1, visible=False)
 
 
                     with gr.Row():
