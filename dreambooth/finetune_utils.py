@@ -463,17 +463,20 @@ class ImageBuilder:
                 if no_safe:
                     db_shared.start_safe_unpickle()
             if config.use_lora and lora_model is not None and lora_model != "":
+            
+                lora_model_path = os.path.join(db_shared.models_path, "lora", lora_model)
+                lora_txt_path = _text_lora_path_ui(lora_model)
+                
                 patch_pipe(
                     pipe=self.image_pipe,
-                    unet=config.lora_model,
+                    unet_path=lora_model_path,
+                    token="None",
                     r=config.lora_rank
                 )
-                tune_lora_scale(config.lora_model, config.lora_weight)
-
-                lora_txt_path = _text_lora_path_ui(config.lora_model)
                 
+                tune_lora_scale(self.image_pipe.unet, config.lora_weight)
                 if os.path.exists(lora_txt_path):
-                    tune_lora_scale(lora_txt_path, config.lora_txt_weight)
+                    tune_lora_scale(self.image_pipe.text_encoder, config.lora_txt_weight)
 
         else:
             current_model = sd_models.select_checkpoint()
