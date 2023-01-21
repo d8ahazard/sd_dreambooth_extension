@@ -491,7 +491,7 @@ class ImageBuilder:
             shared.sd_model.to(shared.device)
 
 
-    def generate_images(self, prompt_data: List[PromptData]) -> [Image]:
+    def generate_images(self, prompt_data: List[PromptData], pbar: mytqdm) -> [Image]:
         positive_prompts = []
         negative_prompts = []
         seed = -1
@@ -522,8 +522,12 @@ class ImageBuilder:
                 do_not_save_samples=True,
                 do_not_reload_embeddings=True
             )
+            auto_tqdm = shared.total_tqdm
+            shared.total_tqdm = pbar
+            pbar.reset(steps)
             processed = process_txt2img(p)
             p.close()
+            shared.total_tqdm = auto_tqdm
             output = processed
         else:
             with self.accelerator.autocast(), torch.inference_mode():
@@ -924,14 +928,13 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
             return 0, instance_prompts, class_prompts
 
     print(f"Generating {set_len} class images for training...")
-    status.textinfo = f"Generating {set_len} class images for training..."
-    status.job_count = set_len
-    status.job_no = 0
+    pbar = mytqdm(total=set_len, desc=f"Generating class images 0/{set_len}:")
+    db_shared.status.job_count = set_len
+    db_shared.status.job_no = 0
     builder = ImageBuilder(args, use_txt2img=use_txt2img, lora_model=args.lora_model_name,
                            batch_size=args.sample_batch_size, accelerator=accelerator)
     generated = 0
     actual_idx = 0
-    pbar = mytqdm(total=set_len, desc="Generating class images")
     for i in range(set_len):
         first_res = None
         if status.interrupted or generated >= set_len:
@@ -954,7 +957,7 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
             else:
                 break
 
-        new_images = builder.generate_images(prompts)
+        new_images = builder.generate_images(prompts, pbar)
         i_idx = 0
         preview_images = []
         preview_prompts = []
@@ -973,12 +976,14 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
                 class_prompts.append(pd)
                 if ui:
                     out_images.append(image)
-                pbar.update()
                 i_idx += 1
                 generated += 1
+                pbar.reset(set_len)
+                pbar.update()
+                pbar.set_description(f"Generating class images {generated}/{set_len}:", True)
+                db_shared.status.job_count = set_len
                 preview_images.append(image_filename)
                 preview_prompts.append(pd.prompt)
-                status.textinfo = f"Class image(s) {generated}/{set_len}:'"
             except Exception as e:
                 print(f"Exception generating images: {e}")
                 traceback.print_exc()

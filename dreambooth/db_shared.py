@@ -213,7 +213,6 @@ class DreamState:
         self.job_no += 1
         self.sampling_step = 0
         self.current_image_sampling_step = 0
-        self.active = False
 
     """sets self.current_image from self.current_latent if enough sampling steps have been made after the last call to this"""
 

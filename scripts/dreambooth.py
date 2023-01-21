@@ -303,7 +303,7 @@ def ui_samples(model_dir: str,
             pbar = mytqdm("Generating samples")
             while len(images) < num_samples:
                 prompts_out.append(save_sample_prompt)
-                out_images = img_builder.generate_images(prompts)
+                out_images = img_builder.generate_images(prompts, pbar)
                 for img in out_images:
                     if len(images) < num_samples:
                         pbar.update()
