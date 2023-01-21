@@ -63,14 +63,22 @@ class DbDataset(torch.utils.data.Dataset):
         self.vae = None
         self.cache_latents = False
         flip_p = 0.5 if hflip else 0.0
-        self.image_transforms = transforms.Compose(
-            [
-                transforms.RandomHorizontalFlip(flip_p),
-                transforms.ToTensor(),
-                transforms.Normalize([0.5], [0.5]),
-            ]
-        )
-
+        if hflip:
+            self.image_transforms = transforms.Compose(
+                [
+                    transforms.ToPILImage(),
+                    transforms.RandomHorizontalFlip(flip_p),
+                    transforms.ToTensor(),
+                    transforms.Normalize([0.5], [0.5]),
+                ]
+            )
+        else:
+            self.image_transforms = transforms.Compose(
+                [
+                    transforms.ToTensor(),
+                    transforms.Normalize([0.5], [0.5]),
+                ]
+            )
 
 
     @staticmethod
