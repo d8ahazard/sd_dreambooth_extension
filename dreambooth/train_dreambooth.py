@@ -239,7 +239,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
         unet_lora_params = None
         text_encoder_lora_params = None
-
+        lora_path = None
+        lora_txt = None
         if args.use_lora:
             unet.requires_grad_(False)
             if args.lora_model_name:
