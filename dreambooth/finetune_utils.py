@@ -26,7 +26,7 @@ from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothCo
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, get_checkpoint_match, get_images, db_save_image
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import patch_pipe
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import patch_pipe, tune_lora_scale, _text_lora_path_ui
 from modules import shared, devices, sd_models, sd_hijack, prompt_parser, lowvram
 from modules.processing import StableDiffusionProcessingTxt2Img, StableDiffusionProcessing, Processed, \
     get_fixed_seed, create_infotext, decode_first_stage
@@ -468,6 +468,13 @@ class ImageBuilder:
                     unet=config.lora_model,
                     r=config.lora_rank
                 )
+                tune_lora_scale(config.lora_model, config.lora_weight)
+
+                lora_txt_path = _text_lora_path_ui(config.lora_model)
+                
+                if os.path.exists(lora_txt_path):
+                    tune_lora_scale(lora_txt_path, config.lora_txt_weight)
+
         else:
             current_model = sd_models.select_checkpoint()
             new_model_info = get_checkpoint_match(config.src)
