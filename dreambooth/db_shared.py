@@ -69,7 +69,7 @@ def image_grid(imgs, batch_size=1, rows=None):
 def load_auto_settings():
     global models_path, script_path, ckpt_dir, device_id, disable_safe_unpickle, dataset_filename_word_regex, \
         dataset_filename_join_string, show_progress_every_n_steps, parallel_processing_allowed, state, ckptfix, medvram, \
-        lowvram, dreambooth_models_path, lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config, device
+        lowvram, dreambooth_models_path, lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config, device, force_cpu
     try:
         from modules import shared as ws, devices, images
         from modules import paths

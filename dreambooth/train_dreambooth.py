@@ -134,16 +134,20 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         if not args.pad_tokens and args.max_token_length > 75:
             print("Cannot raise token length limit above 75 when pad_tokens=False")
 
+        precision = args.mixed_precision if not db_shared.force_cpu else "no"
+
         weight_dtype = torch.float32
-        if args.mixed_precision == "fp16":
+        if precision == "fp16":
             weight_dtype = torch.float16
-        elif args.mixed_precision == "bf16":
+        elif precision == "bf16":
             weight_dtype = torch.bfloat16
+
+
         try:
             accelerator = CustomAccelerator(
                 logfile=logfile,
                 gradient_accumulation_steps=gradient_accumulation_steps,
-                mixed_precision=args.mixed_precision,
+                mixed_precision=precision,
                 log_with="tensorboard",
                 logging_dir=logging_dir,
                 cpu=db_shared.force_cpu
@@ -217,13 +221,11 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             torch_dtype=torch.float32
         )
 
-        if args.attention == "xformers":
+        if args.attention == "xformers" and not db_shared.force_cpu:
             xattention.replace_unet_cross_attn_to_xformers()
             xattention.set_diffusers_xformers_flag(unet, True)
             xattention.set_diffusers_xformers_flag(vae, True)
             xattention.set_diffusers_xformers_flag(text_encoder, True)
-        elif args.attention == "sub_quad":
-            xattention.replace_unet_cross_attn_to_quad()
         elif args.attention == "flash_attention":
             xattention.replace_unet_cross_attn_to_flash_attention()
         else:
@@ -503,6 +505,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 print(f"Exception loading checkpoint: {lex}")
 
         print("  ***** Running training *****")
+        if db_shared.force_cpu:
+            print(f"  TRAINING WITH CPU ONLY")
         print(f"  Num batches each epoch = {len(train_dataset) // train_batch_size}")
         print(f"  Num Epochs = {max_train_epochs}")
         print(f"  Batch Size Per Device = {train_batch_size}")
@@ -514,7 +518,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         print(f"  Resuming from checkpoint: {resume_from_checkpoint}")
         print(f"  First resume epoch: {first_epoch}")
         print(f"  First resume step: {resume_step}")
-        print(f"  Lora: {args.use_lora}, Adam: {use_adam}, Prec: {args.mixed_precision}")
+        print(f"  Lora: {args.use_lora}, Adam: {use_adam}, Prec: {precision}")
         print(f"  Gradient Checkpointing: {args.gradient_checkpointing}")
         print(f"  EMA: {args.use_ema}")
         print(f"  UNET: {args.train_unet}")
