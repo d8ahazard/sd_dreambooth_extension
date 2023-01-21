@@ -126,6 +126,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             #print("Debugging enabled, setting up VRAMMonitor.")
             #vram_logger = VRAMMonitor(method_names)
 
+        stop_text_percentage = args.stop_text_encoder
+        if not args.train_unet:
+            stop_text_percentage = 1
         n_workers = 0
         args.max_token_length = int(args.max_token_length)
         if not args.pad_tokens and args.max_token_length > 75:
@@ -159,13 +162,13 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         # accelerate.accumulate This will be enabled soon in accelerate. For now, we don't allow gradient
         # accumulation when training two models.
         # TODO (patil-suraj): Remove this check when gradient accumulation with two models is enabled in accelerate.
-        if args.stop_text_encoder != 0 and gradient_accumulation_steps > 1 and accelerator.num_processes > 1:
+        if stop_text_percentage != 0 and gradient_accumulation_steps > 1 and accelerator.num_processes > 1:
             msg = "Gradient accumulation is not supported when training the text encoder in distributed training. " \
                   "Please set gradient_accumulation_steps to 1. This feature will be supported in the future. Text " \
                   "encoder training will be disabled."
             print(msg)
             status.textinfo = msg
-            args.stop_text_encoder = 0
+            stop_text_percentage = 0
         count, instance_prompts, class_prompts = generate_classifiers(args, use_txt2img=use_txt2img, accelerator=accelerator, ui = False)
         if status.interrupted:
             result.msg = "Training interrupted."
@@ -230,7 +233,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         if args.gradient_checkpointing:
             if args.train_unet:
                 unet.enable_gradient_checkpointing()
-            if args.stop_text_encoder != 0:
+            if stop_text_percentage != 0:
                 text_encoder.gradient_checkpointing_enable()
                 if args.use_lora:
                     text_encoder.text_model.embeddings.requires_grad_(True)
@@ -261,7 +264,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 loras=lora_path
             )
 
-            if args.stop_text_encoder != 0:
+            if stop_text_percentage != 0:
                 text_encoder.requires_grad_(False)
                 text_encoder_lora_params, _ = inject_trainable_lora(
                     text_encoder,
@@ -297,13 +300,13 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     {"params": itertools.chain(*unet_lora_params), "lr": args.lora_learning_rate},
                     {"params": itertools.chain(*text_encoder_lora_params), "lr": args.lora_txt_learning_rate},
                 ]
-                if args.stop_text_encoder != 0
+                if stop_text_percentage != 0
                 else itertools.chain(*unet_lora_params)
             )
         else:
             params_to_optimize = (
-                itertools.chain(text_encoder.parameters()) if args.stop_text_encoder != 0 and not args.train_unet else 
-                itertools.chain(unet.parameters(), text_encoder.parameters()) if args.stop_text_encoder != 0 else 
+                itertools.chain(text_encoder.parameters()) if stop_text_percentage != 0 and not args.train_unet else
+                itertools.chain(unet.parameters(), text_encoder.parameters()) if stop_text_percentage != 0 else
                 unet.parameters()                
             )
         optimizer = optimizer_class(
@@ -438,7 +441,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         if args.use_ema:
             ema_unet = EMAModel(unet.parameters())
             ema_unet.to(accelerator.device, dtype=weight_dtype)
-            if args.stop_text_encoder != 0:
+            if stop_text_percentage != 0:
                 unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
                     unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler
                 )
@@ -448,7 +451,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 )
         else:
             ema_unet = None
-            if args.stop_text_encoder != 0:
+            if stop_text_percentage != 0:
                 unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
                     unet, text_encoder, optimizer, train_dataloader, lr_scheduler
                 )
@@ -460,7 +463,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         if not args.cache_latents and vae is not None:
             vae.to(accelerator.device, dtype=weight_dtype)
 
-        if args.stop_text_encoder == 0:
+        if stop_text_percentage == 0:
             text_encoder.to(accelerator.device, dtype=weight_dtype)
         # Afterwards we recalculate our number of training epochs
         # We need to initialize the trackers we use, and also store our configuration.
@@ -472,7 +475,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         total_batch_size = train_batch_size * accelerator.num_processes * gradient_accumulation_steps
         max_train_epochs = args.num_train_epochs
         # we calculate our number of tenc training epochs
-        text_encoder_epochs = round(args.num_train_epochs * args.stop_text_encoder)
+        text_encoder_epochs = round(args.num_train_epochs * stop_text_percentage)
         global_step = 0
         global_epoch = 0
         session_epoch = 0
@@ -666,7 +669,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                 # print(f"\nSaving lora weights at step {args.revision}")
                                 # Save a pt file
                                 save_lora_weight(s_pipeline.unet, out_file)
-                                if args.stop_text_encoder != 0:
+                                if stop_text_percentage != 0:
                                     out_txt = out_file.replace(".pt", "_txt.pt")
                                     save_lora_weight(s_pipeline.text_encoder,
                                                      out_txt,
@@ -799,7 +802,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 unet.train()
                 
             train_tenc = epoch < text_encoder_epochs
-            if args.stop_text_encoder == 0:
+            if stop_text_percentage == 0:
                 train_tenc = False
             text_encoder.train(train_tenc)
             if not args.use_lora:
