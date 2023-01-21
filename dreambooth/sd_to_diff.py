@@ -937,8 +937,8 @@ def get_config_path(
         config_base_name: str = "training",
         prediction_type: str = "epsilon"
     ):
-
     train_type = f"{train_type}" if not prediction_type == "v_prediction" else f"{train_type}-v"
+
     return os.path.join(
         os.path.dirname(os.path.realpath(__file__)), 
         "..", 
@@ -971,16 +971,20 @@ def get_config_file(train_conditioning=False, unfreeze_model=False, v2=False, pr
         if train_conditioning:
             model_train_type = train_types["cond"]
 
-        if unfreeze_model:
+        elif unfreeze_model:
             model_train_type = train_types["unfrozen"]
 
-        if train_conditioning and unfreeze_model:
+        elif train_conditioning and unfreeze_model:
             model_train_type = train_types["all"]
 
-        return get_config_path(model_version_name, model_train_type, config_base_name, prediction_type)
-        
+        else:
+            model_train_type = train_types["default"]
 
-    return get_config_path()
+        return get_config_path(model_version_name, model_train_type, config_base_name, prediction_type)
+
+    print("Could not find valid config. Returning default v1 config.")
+    return get_config_path(model_versions["v1"], train_types["default"], config_base_name, prediction_type="epsilon")
+        
 
 def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type="ddim", from_hub=False, new_model_url="",
                        new_model_token="", extract_ema=False, train_conditioning=False, unfreeze_model=False, is_512=True):
