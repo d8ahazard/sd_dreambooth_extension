@@ -334,79 +334,6 @@ if int(trans_ver.split(".")[1]) > 19:
     # transformers.GenerationMixin._validate_model_kwargs = _validate_model_kwargs
 
 
-async def process_api(
-        self,
-        fn_index: int,
-        inputs: List[Any],
-        username: str = None,
-        state: Dict[int, Any] | List[Dict[int, Any]] | None = None,
-        iterators: Dict[int, Any] | None = None,
-) -> Dict[str, Any]:
-    """
-    Processes API calls from the frontend. First preprocesses the data,
-    then runs the relevant function, then postprocesses the output.
-    Parameters:
-        fn_index: Index of function to run.
-        inputs: input data received from the frontend
-        username: name of user if authentication is set up (not used)
-        state: data stored from stateful components for session (key is input block id)
-        iterators: the in-progress iterators for each generator function (key is function index)
-    Returns: None
-    @param fn_index:
-    @param inputs:
-    @param username:
-    @param state:
-    @param iterators:
-    @param self:
-    """
-    if len(inputs) == 1 and isinstance(inputs[0], list):
-        print("Fixing inputs.")
-        inputs = inputs[0]
-    block_fn = self.fns[fn_index]
-    batch = self.dependencies[fn_index]["batch"]
-
-    if batch:
-        max_batch_size = self.dependencies[fn_index]["max_batch_size"]
-        batch_sizes = [len(inp) for inp in inputs]
-        batch_size = batch_sizes[0]
-        if inspect.isasyncgenfunction(block_fn.fn) or inspect.isgeneratorfunction(
-                block_fn.fn
-        ):
-            raise ValueError("Gradio does not support generators in batch mode.")
-        if not all(x == batch_size for x in batch_sizes):
-            raise ValueError(
-                f"All inputs to a batch function must have the same length but instead have sizes: {batch_sizes}."
-            )
-        if batch_size > max_batch_size:
-            raise ValueError(
-                f"Batch size ({batch_size}) exceeds the max_batch_size for this function ({max_batch_size})"
-            )
-
-        inputs = [self.preprocess_data(fn_index, i, state) for i in zip(*inputs)]
-        result = await self.call_function(fn_index, zip(*inputs), None)
-        preds = result["prediction"]
-        data = [self.postprocess_data(fn_index, o, state) for o in zip(*preds)]
-        data = list(zip(*data))
-        is_generating, iterator = None, None
-    else:
-        inputs = self.preprocess_data(fn_index, inputs, state)
-        iterator = iterators.get(fn_index, None) if iterators else None
-        result = await self.call_function(fn_index, inputs, iterator)
-        data = self.postprocess_data(fn_index, result["prediction"], state)
-        is_generating, iterator = result["is_generating"], result["iterator"]
-
-    block_fn.total_runtime += result["duration"]
-    block_fn.total_runs += 1
-
-    return {
-        "data": data,
-        "is_generating": is_generating,
-        "iterator": iterator,
-        "duration": result["duration"],
-        "average_duration": block_fn.total_runtime / block_fn.total_runs,
-    }
-
-
 def get_scheduler(
     name: Union[str, SchedulerType],
     optimizer: Optimizer,
@@ -461,3 +388,37 @@ def get_scheduler(
         )
 
     return schedule_func(optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
+
+
+def set_diffusers_xformers_flag(model, valid):
+    # Recursively walk through all the children.
+    # Any children which exposes the set_use_memory_efficient_attention_xformers method
+    # gets the message
+    def fn_recursive_set_mem_eff(module: torch.nn.Module):
+        if hasattr(module, 'set_use_memory_efficient_attention_xformers'):
+            module.set_use_memory_efficient_attention_xformers(valid)
+
+        for child in module.children():
+            fn_recursive_set_mem_eff(child)
+    try:
+        fn_recursive_set_mem_eff(model)
+    except:
+        pass
+
+
+def optim_to(torch, profiler, optim: torch.optim.Optimizer, device="cpu"):
+    def inplace_move(obj: torch.Tensor, target):
+        if hasattr(obj, 'data'):
+            obj.data = obj.data.to(target)
+        if hasattr(obj, '_grad') and obj._grad is not None:
+            obj._grad.data = obj._grad.data.to(target)
+
+    if isinstance(optim, torch.optim.Optimizer):
+        for group in optim.param_groups:
+            for param in group['params']:
+                inplace_move(param, device)
+        for key, value in optim.state.items():
+            if isinstance(value, torch.Tensor):
+                inplace_move(value, device)
+    if profiler is None:
+        torch.cuda.empty_cache()

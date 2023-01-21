@@ -33,6 +33,7 @@ sub_quad_kv_chunk_size = None
 sub_quad_chunk_threshold = None
 CLIP_stop_at_last_layers = 2
 config = os.path.join(script_path, "configs", "v1-inference.yaml")
+force_cpu = False
 
 device = torch.device("cpu")
 if torch.cuda.is_available():
@@ -68,7 +69,7 @@ def image_grid(imgs, batch_size=1, rows=None):
 def load_auto_settings():
     global models_path, script_path, ckpt_dir, device_id, disable_safe_unpickle, dataset_filename_word_regex, \
         dataset_filename_join_string, show_progress_every_n_steps, parallel_processing_allowed, state, ckptfix, medvram, \
-        lowvram, dreambooth_models_path, lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config
+        lowvram, dreambooth_models_path, lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config, device, force_cpu
     try:
         from modules import shared as ws, devices, images
         from modules import paths
@@ -94,6 +95,15 @@ def load_auto_settings():
         try:
             dreambooth_models_path = ws.cmd_opts.dreambooth_models_path
             lora_models_path = ws.cmd_opts.lora_models_path
+        except:
+            pass
+        if dreambooth_models_path == "" or dreambooth_models_path is None:
+            dreambooth_models_path = os.path.join(models_path, "dreambooth")
+
+        try:
+            force_cpu = ws.cmd_opts.force_cpu
+            if force_cpu:
+                device = torch.device("cpu")
         except:
             pass
 
@@ -138,6 +148,7 @@ class DreamState:
     time_start = None
     need_restart = False
     time_left_force_display = False
+    active = False
 
     def interrupt(self):
         self.interrupted = True
@@ -165,7 +176,8 @@ class DreamState:
             "sampling_step": self.sampling_step,
             "sampling_steps": self.sampling_steps,
             "last_status": self.textinfo,
-            "sample_prompts": self.sample_prompts
+            "sample_prompts": self.sample_prompts,
+            "active": self.active
         }
 
         return obj
@@ -182,11 +194,16 @@ class DreamState:
         self.textinfo = None
         self.sample_prompts = []
         self.time_start = time.time()
+        self.textinfo2 = None
+        self.time_left_force_display = False
+        self.active = True
         torch_gc()
 
     def end(self):
         self.job = ""
         self.job_count = 0
+        self.job_no = 0
+        self.active = False
         torch_gc()
 
     def nextjob(self):
@@ -227,11 +244,9 @@ class DreamState:
 
             real_images = []
             for check in to_check:
-                #List[numpy.array | PIL.Image | str]
-                # numpy.array, PIL.Image or str or pathlib.Path
-                if isinstance(check, numpy.array) or isinstance(check, type(PIL.Image)) or isinstance(check, type(pathlib.Path)):
+                if isinstance(check, (numpy.ndarray, PIL.Image.Image, pathlib.Path, str)):
                     real_images.append(check)
-            self.current_image = real_images if len(real_images) > 1 else real_images[0]
+            self.current_image = real_images if len(real_images) > 2 else real_images[0] if len (real_images) == 1 else None
 
 
 def stop_safe_unpickle():

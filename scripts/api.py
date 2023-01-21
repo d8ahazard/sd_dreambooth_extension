@@ -1,5 +1,4 @@
 import base64
-import base64
 import functools
 import hashlib
 import io
@@ -22,11 +21,10 @@ from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, D
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import DreamState
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter, generate_classifiers
-from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_images
 from extensions.sd_dreambooth_extension.scripts import dreambooth
-from extensions.sd_dreambooth_extension.scripts.dreambooth import ui_samples
+from extensions.sd_dreambooth_extension.scripts.dreambooth import ui_samples, create_model
 from modules import sd_models
 
 
@@ -55,93 +53,14 @@ class DbImagesRequest(BaseModel):
                                           description="List of images to work on. Must be Base64 strings")
 
 
-# API Representation of concept data
-class DreamboothConcept(BaseModel):
-    instance_data_dir: str = ""
-    class_data_dir: str = ""
-    instance_prompt: str = ""
-    class_prompt: Union[str, None] = ""
-    save_sample_prompt: Union[str, None] = ""
-    save_sample_template: Union[str, None] = ""
-    instance_token: Union[str, None] = ""
-    class_token: Union[str, None] = ""
-    num_class_images_per: int = 0
-    class_negative_prompt: Union[str, None] = ""
-    class_guidance_scale: float = 7.5
-    class_infer_steps: int = 60
-    save_sample_negative_prompt: Union[str, None] = ""
-    n_save_sample: int = 1
-    sample_seed: int = -1
-    save_guidance_scale: float = 7.5
-    save_infer_steps: int = 60
-
-
-# API Representation of db config
-class DreamboothParameters(BaseModel):
-    concepts_list: List[DreamboothConcept]
-    attention: str = "default"
-    cache_latents: bool = True
-    center_crop: bool = False
-    clip_skip: int = 1
-    concepts_path: Union[str, None] = ""
-    custom_model_name: Union[str, None] = ""
-    epoch_pause_frequency: int = 0
-    epoch_pause_time: int = 60
-    gradient_accumulation_steps: int = 1
-    gradient_checkpointing: bool = True
-    gradient_set_to_none: bool = True
-    graph_smoothing: int = 50
-    half_model: bool = False
-    hflip: bool = True
-    learning_rate: float = 0.000002
-    learning_rate_min: float = 0.000001
-    lora_learning_rate: float = 0.0002
-    lora_model_name: str = ""
-    lora_txt_learning_rate: float = 0.0002
-    lora_txt_weight: int = 1
-    lora_weight: int = 1
-    lr_cycles: int = 1
-    lr_factor: float = 0.5
-    lr_power: float = 1.0
-    lr_scale_pos: float = 0.5
-    lr_scheduler: str = "constant"
-    lr_warmup_steps: int = 500
-    max_token_length: int = 75
-    mixed_precision: str = "no"
-    model_name: str = ""
-    num_train_epochs: int = 100
-    pad_tokens: bool = True
-    pretrained_vae_name_or_path: Union[str, None] = ""
-    prior_loss_weight: float = 1.0
-    resolution: int = 512
-    revision: int = 0
-    sample_batch_size: int = 1
-    sanity_prompt: str = ""
-    sanity_seed: int = 420420
-    save_ckpt_after: bool = True
-    save_ckpt_cancel: bool = False
-    save_ckpt_during: bool = True
-    save_embedding_every: int = 25
-    save_lora_after: bool = True
-    save_lora_cancel: bool = False
-    save_lora_during: bool = True
-    save_preview_every: int = 5
-    save_state_after: bool = False
-    save_state_cancel: bool = False
-    save_state_during: bool = False
-    src: Union[str, None] = ""
-    shuffle_tags: bool = False
-    train_batch_size: int = 1
-    train_imagic: bool = False
-    stop_text_encoder: float = 0
-    use_8bit_adam: bool = False
-    use_concepts: bool = False
-    use_ema: bool = True
-    use_lora: bool = False
-    use_subdir: bool = True
-
 
 import asyncio
+
+def is_running():
+    if db_shared.status.job_count != 0 and db_shared.status.job_count is not None:
+        print("Something is already running.")
+        return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
+    return False
 
 def run_in_background(func, *args, **kwargs):
     """
@@ -207,7 +126,7 @@ def file_to_base64(file_path) -> str:
 
 def dreambooth_api(_: gr.Blocks, app: FastAPI):
     @app.post("/dreambooth/createModel")
-    async def create_model(
+    async def create_db_model(
             new_model_name: str = Query(None, description="The name of the model to create.", ),
             new_model_src: str = Query(None, description="The source checkpoint to extract to create this model.", ),
             new_model_scheduler: str = Query(None, description="The scheduler to use. V2+ models ignore this.", ),
@@ -228,13 +147,12 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if new_model_name is None or new_model_name == "":
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
 
-        if db_shared.status.job_count != 0:
-            print("Something is already running.")
-            return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
-
+        status = is_running()
+        if status:
+            return status
 
         print("Creating new Checkpoint: " + new_model_name)
-        _ = extract_checkpoint(new_model_name,
+        _ = create_model(new_model_name,
                                new_model_src,
                                new_model_scheduler,
                                create_from_hub,
@@ -261,14 +179,12 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
-        if db_shared.status.job_count != 0:
-            print("Something is already running.")
-            return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
+
+        status = is_running()
+        if status:
+            return status
 
         print("Starting Training")
-        if db_shared.status.job_count != 0:
-            print("Something is already running.")
-            return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
         db_shared.status.begin()
         run_in_background(dreambooth.start_training, model_name, use_tx2img)
         return {"Status": "Training started."}
@@ -313,6 +229,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         Returns:
             A single image or zip of images, depending on how many exist.
         """
+        key_check = check_api_key(api_key)
+        if key_check is not None:
+            return key_check
         db_shared.status.set_current_image()
         images = db_shared.status.current_image
         if not isinstance(images, List):
@@ -350,15 +269,15 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
-        if db_shared.status.job_count != 0:
-            print("Something is already running.")
-            return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
+        status = is_running()
+        if status:
+            return status
 
         return JSONResponse(content=config.__dict__)
 
     @app.post("/dreambooth/model_config")
     async def set_model_config(
-            model_cfg: DreamboothParameters = Body(description="The config to save"),
+            model_cfg: DreamboothConfig = Body(description="The config to save"),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ):
         """
@@ -384,12 +303,6 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
     async def get_checkpoint(
             model_name: str = Query(description="The model name of the checkpoint to get."),
             skip_build: bool = Query(True, description="Set to false to re-compile the checkpoint before retrieval."),
-            lora_model_name: str = Query("",
-                                         description="The (optional) name of the lora model to merge with the checkpoint."),
-            save_model_name: str = Query("", description="A custom name to use when generating the checkpoint."),
-            lora_weight: int = Query(1, description="The weight of the lora UNET when merged with the checkpoint."),
-            lora_text_weight: int = Query(1,
-                                          description="The weight of the lora Text Encoder when merged with the checkpoint."),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ):
         """
@@ -403,12 +316,15 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
-        if db_shared.status.job_count != 0:
-            print("Something is already running.")
-            return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
+
+        status = is_running()
+        if status:
+            return status
+
         path = None
-        if save_model_name == "" or save_model_name is None:
-            save_model_name = model_name
+        save_model_name = config.model_name
+        if config.custom_model_name:
+            save_model_name = config.custom_model_name
         if skip_build:
             ckpt_dir = db_shared.ckpt_dir
             models_path = os.path.join(db_shared.models_path, "Stable-diffusion")
@@ -422,6 +338,8 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
                 checkpoint_path = os.path.join(models_path, save_model_name, f"{save_model_name}_{total_steps}.ckpt")
             else:
                 checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}.ckpt")
+            if config.save_safetensors:
+                checkpoint_path = checkpoint_path.replace(".ckpt", ".safetensors")
             print(f"Looking for checkpoint at {checkpoint_path}")
             if os.path.exists(checkpoint_path):
                 print("Existing checkpoint found, returning.")
@@ -429,8 +347,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             else:
                 skip_build = False
         if not skip_build:
-            ckpt_result = compile_checkpoint(model_name, config.half_model, False, lora_model_name, lora_weight,
-                                             lora_text_weight, save_model_name, False, True)
+            db_shared.status.begin()
+            ckpt_result = compile_checkpoint(model_name, reload_models=False, log=False)
+            db_shared.status.end()
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()
                 print(f"Checkpoint aved to path: {path}")
@@ -462,6 +381,8 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             num_images: int = Query(1, description="The number of sample images to generate."),
             batch_size: int = Query(1, description="How many images to generate at once."),
             lora_model_path: str = Query("", description="The path to a lora model to use when generating images."),
+            lora_rank: int = Query(1,
+                                       description="The rank of LoRA models (the amount of data to retain in the LoRA file after training)"),
             lora_weight: float = Query(1.0,
                                        description="The weight of the lora unet when merging with the base model."),
             lora_txt_weight: float = Query(1.0,
@@ -478,15 +399,19 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if db_shared.status.job_count != 0:
-            print("Something is already running.")
-            return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
+
+        status = is_running()
+        if status:
+            return status
+
+        db_shared.status.begin()
         images, msg, status = ui_samples(
             model_dir=model_name,
             save_sample_prompt=sample_prompt,
             num_samples=num_images,
             sample_batch_size=batch_size,
             lora_model_path=lora_model_path,
+            lora_rank=lora_rank,
             lora_weight=lora_weight,
             lora_txt_weight=lora_txt_weight,
             negative_prompt=negative_prompt,
@@ -494,6 +419,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             steps=steps,
             scale=scale
         )
+        db_shared.status.end()
         if len(images) > 1:
             return zip_files(model_name, images, "_sample")
         else:
@@ -521,9 +447,11 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
-        if db_shared.status.job_count != 0:
-            print("Something is already running.")
-            return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
+
+        status = is_running()
+        if status:
+            return status
+
         db_shared.status.begin()
         run_in_background(
             generate_classifiers,
@@ -547,7 +475,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if key_check is not None:
             return key_check
         config = from_file(model_name)
-        concepts = config.concepts_list
+        concepts = config.concepts()
         concept_dict = {}
         out_images = []
         if concept_idx >= 0:
@@ -623,7 +551,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
                 tx_file.writelines(prompt)
             image_paths.append(image_path)
 
-        return {"Status": f"Saved {len(image_paths)} images.", "Images": {x for x in image_paths}}
+        return {"Status": f"Saved {len(image_paths)} images.", "Image dir": {image_dir}}
 
     @app.get("/dreambooth/testimg")
     async def generate_test_data():

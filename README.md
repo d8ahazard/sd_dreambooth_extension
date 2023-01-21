@@ -208,10 +208,7 @@ to better editability.
 
 *Max Token Length* - raise the tokenizer's default limit above 75. Requires Pad Tokens for > 75.
 
-
-### Adam Advanced
-
-I literally have no idea what any of these do. Any advice/input is welcome.
+*AdamW Weight Decay* - The weight decay of the AdamW Optimizer used for training. Values closer to 0 closely match your training dataset, and values closer to 1 generalize more and deviate from your training dataset. Default is 1e-2, values lower than 0.1 are recommended.
 
 ## Concepts
 

@@ -17,15 +17,20 @@ import os
 import re
 import shutil
 import traceback
+import zipfile
 
 import gradio as gr
+import huggingface_hub.utils.tqdm
+import safetensors.torch
 import torch
+from diffusers.pipelines.paint_by_example import PaintByExampleImageEncoder
+from huggingface_hub import snapshot_download, HfApi, hf_hub_download
 
 from extensions.sd_dreambooth_extension.dreambooth import db_shared
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig, sanitize_name
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import stop_safe_unpickle
-from extensions.sd_dreambooth_extension.dreambooth.utils import printi, get_db_models, get_checkpoint_match
-from extensions.sd_dreambooth_extension.scripts.dreambooth import reload_system_models
+from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import mytqdm
+from extensions.sd_dreambooth_extension.dreambooth.utils import printi, get_db_models
 from modules import shared
 
 try:
@@ -47,11 +52,11 @@ from diffusers import (
     LMSDiscreteScheduler,
     PNDMScheduler,
     StableDiffusionPipeline,
-    UNet2DConditionModel,
+    UNet2DConditionModel, PaintByExamplePipeline,
 )
 from diffusers.pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBertConfig, LDMBertModel
 from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
-from transformers import AutoFeatureExtractor, BertTokenizerFast, CLIPTextModel, CLIPTokenizer
+from transformers import AutoFeatureExtractor, BertTokenizerFast, CLIPTextModel, CLIPTokenizer, CLIPVisionConfig
 
 
 def shave_segments(path, n_shave_prefix_segments=1):
@@ -429,7 +434,7 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
             resnets = [key for key in output_blocks[i] if f"output_blocks.{i}.0" in key]
             attentions = [key for key in output_blocks[i] if f"output_blocks.{i}.1" in key]
 
-            # resnet_0_paths = renew_resnet_paths(resnets)
+            resnet_0_paths = renew_resnet_paths(resnets)
             paths = renew_resnet_paths(resnets)
 
             meta_path = {"old": f"output_blocks.{i}.0", "new": f"up_blocks.{block_id}.resnets.{layer_in_block_id}"}
@@ -437,8 +442,9 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
                 paths, new_checkpoint, unet_state_dict, additional_replacements=[meta_path], config=config
             )
 
-            if ["conv.weight", "conv.bias"] in output_block_list.values():
-                index = list(output_block_list.values()).index(["conv.weight", "conv.bias"])
+            output_block_list = {k: sorted(v) for k, v in output_block_list.items()}
+            if ["conv.bias", "conv.weight"] in output_block_list.values():
+                index = list(output_block_list.values()).index(["conv.bias", "conv.weight"])
                 new_checkpoint[f"up_blocks.{block_id}.upsamplers.0.conv.weight"] = unet_state_dict[
                     f"output_blocks.{i}.{index}.conv.weight"
                 ]
@@ -654,19 +660,88 @@ textenc_conversion_lst = [
     ('cond_stage_model.model.ln_final.bias', 'text_model.final_layer_norm.bias')
 ]
 textenc_conversion_map = {x[0]: x[1] for x in textenc_conversion_lst}
+
 textenc_transformer_conversion_lst = [
-    ('resblocks.', 'text_model.encoder.layers.'),
-    ('ln_1', 'layer_norm1'),
-    ('ln_2', 'layer_norm2'),
-    ('.c_fc.', '.fc1.'),
-    ('.c_proj.', '.fc2.'),
-    ('.attn', '.self_attn'),
-    ('ln_final.', 'transformer.text_model.final_layer_norm.'),
-    ('token_embedding.weight', 'transformer.text_model.embeddings.token_embedding.weight'),
-    ('positional_embedding', 'transformer.text_model.embeddings.position_embedding.weight')
+    # (stable-diffusion, HF Diffusers)
+    ("resblocks.", "text_model.encoder.layers."),
+    ("ln_1", "layer_norm1"),
+    ("ln_2", "layer_norm2"),
+    (".c_fc.", ".fc1."),
+    (".c_proj.", ".fc2."),
+    (".attn", ".self_attn"),
+    ("ln_final.", "transformer.text_model.final_layer_norm."),
+    ("token_embedding.weight", "transformer.text_model.embeddings.token_embedding.weight"),
+    ("positional_embedding", "transformer.text_model.embeddings.position_embedding.weight"),
 ]
 protected = {re.escape(x[0]): x[1] for x in textenc_transformer_conversion_lst}
 textenc_pattern = re.compile("|".join(protected.keys()))
+
+
+def convert_paint_by_example_checkpoint(checkpoint):
+    config = CLIPVisionConfig.from_pretrained("openai/clip-vit-large-patch14")
+    model = PaintByExampleImageEncoder(config)
+
+    keys = list(checkpoint.keys())
+
+    text_model_dict = {}
+
+    for key in keys:
+        if key.startswith("cond_stage_model.transformer"):
+            text_model_dict[key[len("cond_stage_model.transformer.") :]] = checkpoint[key]
+
+    # load clip vision
+    model.model.load_state_dict(text_model_dict)
+
+    # load mapper
+    keys_mapper = {
+        k[len("cond_stage_model.mapper.res") :]: v
+        for k, v in checkpoint.items()
+        if k.startswith("cond_stage_model.mapper")
+    }
+
+    MAPPING = {
+        "attn.c_qkv": ["attn1.to_q", "attn1.to_k", "attn1.to_v"],
+        "attn.c_proj": ["attn1.to_out.0"],
+        "ln_1": ["norm1"],
+        "ln_2": ["norm3"],
+        "mlp.c_fc": ["ff.net.0.proj"],
+        "mlp.c_proj": ["ff.net.2"],
+    }
+
+    mapped_weights = {}
+    for key, value in keys_mapper.items():
+        prefix = key[: len("blocks.i")]
+        suffix = key.split(prefix)[-1].split(".")[-1]
+        name = key.split(prefix)[-1].split(suffix)[0][1:-1]
+        mapped_names = MAPPING[name]
+
+        num_splits = len(mapped_names)
+        for i, mapped_name in enumerate(mapped_names):
+            new_name = ".".join([prefix, mapped_name, suffix])
+            shape = value.shape[0] // num_splits
+            mapped_weights[new_name] = value[i * shape : (i + 1) * shape]
+
+    model.mapper.load_state_dict(mapped_weights)
+
+    # load final layer norm
+    model.final_layer_norm.load_state_dict(
+        {
+            "bias": checkpoint["cond_stage_model.final_ln.bias"],
+            "weight": checkpoint["cond_stage_model.final_ln.weight"],
+        }
+    )
+
+    # load final proj
+    model.proj_out.load_state_dict(
+        {
+            "bias": checkpoint["proj_out.bias"],
+            "weight": checkpoint["proj_out.weight"],
+        }
+    )
+
+    # load uncond vector
+    model.uncond_vector.data = torch.nn.Parameter(checkpoint["learnable_vector"])
+    return model
 
 
 def convert_open_clip_checkpoint(checkpoint):
@@ -677,59 +752,197 @@ def convert_open_clip_checkpoint(checkpoint):
     if 'cond_stage_model.model.text_projection' in checkpoint:
         d_model = int(checkpoint['cond_stage_model.model.text_projection'].shape[0])
     else:
+        print("No projection shape found, setting to 1024")
         d_model = 1024
-    text_model_dict["text_model.embeddings.position_ids"] = \
-        text_model.text_model.embeddings.get_buffer('position_ids')
+    text_model_dict["text_model.embeddings.position_ids"] = text_model.text_model.embeddings.get_buffer("position_ids")
 
     for key in keys:
-        if 'resblocks.23' in key:  # Diffusers drops the final layer and only uses the penultimate layer
+        if "resblocks.23" in key:  # Diffusers drops the final layer and only uses the penultimate layer
             continue
         if key in textenc_conversion_map:
             text_model_dict[textenc_conversion_map[key]] = checkpoint[key]
         if key.startswith("cond_stage_model.model.transformer."):
-            new_key = key[len("cond_stage_model.model.transformer."):]
+            new_key = key[len("cond_stage_model.model.transformer.") :]
             if new_key.endswith(".in_proj_weight"):
-                new_key = new_key[:-len(".in_proj_weight")]
+                new_key = new_key[: -len(".in_proj_weight")]
                 new_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], new_key)
-                text_model_dict[new_key + '.q_proj.weight'] = checkpoint[key][:d_model, :]
-                text_model_dict[new_key + '.k_proj.weight'] = checkpoint[key][d_model:d_model * 2, :]
-                text_model_dict[new_key + '.v_proj.weight'] = checkpoint[key][d_model * 2:, :]
+                text_model_dict[new_key + ".q_proj.weight"] = checkpoint[key][:d_model, :]
+                text_model_dict[new_key + ".k_proj.weight"] = checkpoint[key][d_model : d_model * 2, :]
+                text_model_dict[new_key + ".v_proj.weight"] = checkpoint[key][d_model * 2 :, :]
             elif new_key.endswith(".in_proj_bias"):
-                new_key = new_key[:-len(".in_proj_bias")]
+                new_key = new_key[: -len(".in_proj_bias")]
                 new_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], new_key)
-                text_model_dict[new_key + '.q_proj.bias'] = checkpoint[key][:d_model]
-                text_model_dict[new_key + '.k_proj.bias'] = checkpoint[key][d_model:d_model * 2]
-                text_model_dict[new_key + '.v_proj.bias'] = checkpoint[key][d_model * 2:]
+                text_model_dict[new_key + ".q_proj.bias"] = checkpoint[key][:d_model]
+                text_model_dict[new_key + ".k_proj.bias"] = checkpoint[key][d_model : d_model * 2]
+                text_model_dict[new_key + ".v_proj.bias"] = checkpoint[key][d_model * 2 :]
             else:
                 new_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], new_key)
 
                 text_model_dict[new_key] = checkpoint[key]
 
     text_model.load_state_dict(text_model_dict)
-    # SKIP for now - need openclip -> HF conversion script here
-    #    keys = list(checkpoint.keys())
-    #
-    #    text_model_dict = {}
-    #    for key in keys:
-    #        if key.startswith("cond_stage_model.model.transformer"):
-    #            text_model_dict[key[len("cond_stage_model.model.transformer.") :]] = checkpoint[key]
-    #
-    #    text_model.load_state_dict(text_model_dict)
 
     return text_model
 
 
-def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim", from_hub=False, new_model_url="",
-                       new_model_token="", extract_ema=False):
+def replace_symlinks(path, base):
+    if os.path.islink(path):
+        # Get the target of the symlink
+        src = os.readlink(path)
+        blob = os.path.basename(src)
+        path_parts = path.split("/") if "/" in path else path.split("\\")
+        model_name = None
+        dir_name = None
+        save_next = False
+        for part in path_parts:
+            if save_next:
+                model_name = part
+                break
+            if part == "src" or part == "working":
+                dir_name = part
+                save_next = True
+        if model_name is not None and dir_name is not None:
+            blob_path = os.path.join(base, dir_name, model_name, "blobs", blob)
+        else:
+            blob_path = None
+
+        if blob_path is None:
+            print("NO BLOB")
+            return
+        os.replace(blob_path, path)
+    elif os.path.isdir(path):
+        # Recursively replace symlinks in the directory
+        for subpath in os.listdir(path):
+            replace_symlinks(os.path.join(path, subpath), base)
+
+def download_model(db_config: DreamboothConfig, token):
+    tmp_dir = os.path.join(db_config.model_dir, "src")
+    working_dir = db_config.pretrained_model_name_or_path
+
+    hub_url = db_config.src
+    if "http" in hub_url or "huggingface.co" in hub_url:
+        hub_url = "/".join(hub_url.split("/")[-2:])
+
+    api = HfApi()
+    repo_info = api.repo_info(
+        repo_id=hub_url,
+        repo_type="model",
+        revision="main",
+        token=token,
+    )
+
+    if repo_info.sha is None:
+        print("Unable to fetch repo?")
+        return None, None
+
+    siblings = repo_info.siblings
+
+    diffusion_dirs = ["text_encoder", "unet", "vae", "tokenizer", "scheduler", "feature_extractor", "safety_checker"]
+    config_file = None
+    model_index = None
+    model_files = []
+    diffusion_files = []
+
+    for sibling in siblings:
+        name = sibling.rfilename
+        if "inference.yaml" in name:
+            config_file = name
+            continue
+        if "model_index.json" in name:
+            model_index = name
+            continue
+        if (".ckpt" in name or ".safetensors" in name) and not "/" in name:
+            model_files.append(name)
+            continue
+        for diffusion_dir in diffusion_dirs:
+            if f"{diffusion_dir}/" in name:
+                diffusion_files.append(name)
+
+    for diffusion_dir in diffusion_dirs:
+        safe_model = None
+        bin_model = None
+        for diffusion_file in diffusion_files:
+            if diffusion_dir in diffusion_file:
+                if ".safetensors" in diffusion_file:
+                    safe_model = diffusion_file
+                if ".bin" in diffusion_file:
+                    bin_model = diffusion_file
+        if safe_model and bin_model:
+            diffusion_files.remove(bin_model)
+
+    model_file = next((x for x in model_files if ".safetensors" in x and "nonema" in x), next((x for x in model_files if "nonema" in x), next((x for x in model_files if ".safetensors" in x), model_files[0] if model_files else None)))
+
+    files_to_fetch = None
+
+    cache_dir = tmp_dir
+    if model_file is not None:
+        files_to_fetch = [model_file]
+    elif len(diffusion_files):
+        files_to_fetch = diffusion_files
+        if model_index is not None:
+            files_to_fetch.append(model_index)
+
+    if files_to_fetch and config_file:
+        files_to_fetch.append(config_file)
+
+    print(f"Fetching files: {files_to_fetch}")
+
+    if not len(files_to_fetch):
+        print("Nothing to fetch!")
+        return None, None
+
+
+    huggingface_hub.utils.tqdm.tqdm = mytqdm
+    out_model = None
+    for repo_file in mytqdm(files_to_fetch, desc=f"Fetching {len(files_to_fetch)} files"):
+        out = hf_hub_download(
+            hub_url,
+            filename=repo_file,
+            repo_type="model",
+            revision=repo_info.sha,
+            cache_dir=cache_dir,
+            token=token
+        )
+        replace_symlinks(out, db_config.model_dir)
+        dest = None
+        file_name = os.path.basename(out)
+        if "yaml" in repo_file:
+            dest = os.path.join(db_config.model_dir)
+        if "model_index" in repo_file:
+            dest = db_config.pretrained_model_name_or_path
+        if not dest:
+            for diffusion_dir in diffusion_dirs:
+                if diffusion_dir in out:
+                    out_model = db_config.pretrained_model_name_or_path
+                    dest = os.path.join(db_config.pretrained_model_name_or_path,diffusion_dir)
+        if not dest:
+            if ".ckpt" in out or ".safetensors" in out:
+                dest = os.path.join(db_config.model_dir, "src")
+                out_model = dest
+
+        if dest is not None:
+            if not os.path.exists(dest):
+                os.makedirs(dest)
+            dest_file = os.path.join(dest, file_name)
+            if os.path.exists(dest_file):
+                os.remove(dest_file)
+            shutil.copyfile(out, dest_file)
+
+    return out_model, config_file
+
+
+def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type="ddim", from_hub=False, new_model_url="",
+                       new_model_token="", extract_ema=False, is_512=True):
     """
 
     @param new_model_name: The name of the new model
-    @param ckpt_path: The source checkpoint to use, if not from hub
+    @param checkpoint_file: The source checkpoint to use, if not from hub. Needs full path
     @param scheduler_type: The target scheduler type
     @param from_hub: Are we making this model from the hub?
     @param new_model_url: The URL to pull. Should be formatted like compviz/stable-diffusion-2, not a full URL.
     @param new_model_token: Your huggingface.co token.
     @param extract_ema: Whether to extract EMA weights if present.
+    @param is_512: Is it a 512 model?
     @return:
         db_new_model_name: Gr.dropdown populated with our model name, if applicable.
         db_config.model_dir: The directory where our model was created.
@@ -741,35 +954,50 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         you did not extract them and they were, this will be false.
         db_resolution: The resolution the model trains at.
         db_v2: Is this a V2 Model?
+
         status
     """
     db_config = None
-    result_status = ""
     has_ema = False
     v2 = False
-    is_512 = True
-    model_dir = ""
-    scheduler = ""
-    src = ""
     revision = 0
     epoch = 0
-    upcast_attention = False
 
     # Needed for V2 models so we can create the right text encoder.
+    upcast_attention = False
     msg = None
-    new_model_name = sanitize_name(new_model_name)
-    if new_model_name == "":
-        msg = "Please enter a model name."
-    if not from_hub and (ckpt_path == "" or ckpt_path is None):
-        msg = "Please select a source checkpoint."
+
     if from_hub and (new_model_url == "" or new_model_url is None) and (new_model_token is None or new_model_token == ""):
         msg = "Please provide a URL and token for huggingface models."
     if msg is not None:
         return "", "", 0, 0, "", "", "", "", 512, "", msg
 
-    reset_safe = stop_safe_unpickle()
-    db_shared.status.job_count = 11
+    # Create empty config
+    db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type,
+                                 src=checkpoint_file if not from_hub else new_model_url)
+
     original_config_file = None
+
+    # Okay then. So, if it's from the hub, try to download it
+    if from_hub:
+        model_info, config = download_model(db_config, new_model_token)
+        if db_config is not None:
+            original_config_file = config
+        if model_info is not None:
+            print("Got model info.")
+            if ".ckpt" in model_info or ".safetensors" in model_info:
+                # Set this to false, because we have a checkpoint where we can *maybe* get a revision.
+                from_hub = False
+                db_config.src = model_info
+                checkpoint_file = model_info
+        else:
+            msg = "Unable to fetch model from hub."
+            print(msg)
+            return "", "", 0, 0, "", "", "", "", 512, "", msg
+
+    reset_safe = False
+    db_shared.status.job_count = 11
+
     try:
         db_shared.status.job_no = 0
         checkpoint = None
@@ -782,23 +1010,23 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
             print("UPDATE YOUR WEBUI!!!!")
             return "", "", 0, 0, "", "", "", "", 512, "", "Update your web UI."
 
-
-
-        # Try to determine if v1 or v2 model
+        # Try to determine if v1 or v2 model if we have a ckpt
         if not from_hub:
             printi("Loading model from checkpoint.")
-            checkpoint_info = get_checkpoint_match(ckpt_path)
+            _, extension = os.path.splitext(checkpoint_file)
+            if extension.lower() == ".safetensors":
+                os.environ["SAFETENSORS_FAST_GPU"] = "1"
+                try:
+                    print("Loading safetensors...")
+                    checkpoint = safetensors.torch.load_file(checkpoint_file, device="cpu")
+                except Exception as e:
+                    checkpoint = torch.jit.load(checkpoint_file)
+            else:
+                reset_safe = stop_safe_unpickle()
+                print("Loading ckpt...")
+                checkpoint = torch.load(checkpoint_file, map_location=map_location or shared.weight_load_location)
+                checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
 
-            if checkpoint_info is None or not os.path.exists(checkpoint_info.filename):
-                err_msg = "Unable to find checkpoint file!"
-                print(err_msg)
-                db_shared.status.job_no = 8
-                return "", "", 0, 0, "", "", "", "", 512, "", err_msg
-
-            ckpt_path = checkpoint_info.filename
-            printi("Loading checkpoint...")
-            checkpoint = torch.load(ckpt_path)
-            checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
             rev_keys = ["db_global_step", "global_step"]
             epoch_keys = ["db_epoch", "epoch"]
             for key in rev_keys:
@@ -813,25 +1041,27 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
 
             key_name = "model.diffusion_model.input_blocks.2.1.transformer_blocks.0.attn2.to_k.weight"
             if key_name in checkpoint and checkpoint[key_name].shape[-1] == 1024:
-                if revision == 110000:
+                if not is_512:
                     # v2.1 needs to upcast attention
+                    print("Setting upcast_attention")
                     upcast_attention = True
-                if revision == 875000 or revision == 220000:
-                    print(f"Model revision is {revision}, assuming v2, 512 model.")
-                    is_512 = True
-                else:
-                    is_512 = False
                 v2 = True
             else:
                 v2 = False
-
         else:
-            if new_model_token == "" or new_model_token is None:
-                msg = "Please provide a token to load models from the hub."
-                print(msg)
-                return "", "", 0, 0, "", "", "", "", 512, "", msg
-            printi("Loading model from hub.")
-            v2 = new_model_url == "stabilityai/stable-diffusion-2"
+            unet_dir = os.path.join(db_config.pretrained_model_name_or_path, "unet")
+            try:
+                unet = UNet2DConditionModel.from_pretrained(unet_dir)
+                print("Loaded unet.")
+                unet_dict = unet.state_dict()
+                key_name = "down_blocks.2.attentions.1.transformer_blocks.0.attn2.to_k.weight"
+                if key_name in unet_dict and unet_dict[key_name].shape[-1] == 1024:
+                    print("We got v2!")
+                    v2 = True
+
+            except:
+                print("Exception loading unet!")
+                traceback.print_exc()
 
         if v2 and not is_512:
             prediction_type = "v_prediction"
@@ -848,20 +1078,38 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
                 original_config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs",
                                                     "v1-inference.yaml")
 
-        db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type, v2=v2,
-                                     src=ckpt_path if not from_hub else new_model_url,
-                                     resolution=image_size)
+        print(f"Pred and size are {prediction_type} and {image_size}, using config: {original_config_file}")
+        db_config.resolution = image_size
         db_config.lifetime_revision = revision
         db_config.epoch = epoch
+        db_config.v2 = v2
+        if from_hub:
+            result_status = "Model fetched from hub."
+            db_config.save()
+            return gr.Dropdown.update(choices=sorted(get_db_models()), value=new_model_name), \
+                db_config.model_dir, \
+                revision, \
+                epoch, \
+                db_config.scheduler, \
+                db_config.src, \
+                "True" if has_ema else "False", \
+                "True" if v2 else "False", \
+                db_config.resolution, \
+                result_status
 
-        sched_keys = os.path.join(db_config.model_dir, "keys.txt")
         print(f"{'v2' if v2 else 'v1'} model loaded.")
 
         # Use existing YAML if present
-        if ckpt_path is not None:
-            if os.path.exists(ckpt_path.replace(".ckpt", ".yaml")):
-                original_config_file = ckpt_path.replace(".ckpt", ".yaml")
+        if checkpoint_file is not None:
+            config_check = checkpoint_file.replace(".ckpt", ".yaml") if ".ckpt" in checkpoint_file else checkpoint_file.replace(".safetensors", ".yaml")
+            if os.path.exists(config_check):
+                original_config_file = config_check
 
+        if original_config_file is None or not os.path.exists(original_config_file):
+            print("Unable to select a config file.")
+            return "", "", 0, 0, "", "", "", "", 512, "", "Unable to find a config file."
+
+        print(f"Trying to load: {original_config_file}")
         original_config = OmegaConf.load(original_config_file)
 
         num_train_timesteps = original_config.model.params.timesteps
@@ -899,82 +1147,74 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
         else:
             raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
 
-        if from_hub:
-            print(f"Trying to create {new_model_name} from huggingface.co/{new_model_url}")
-            printi("Loading model from hub.")
-            pipe = DiffusionPipeline.from_pretrained(new_model_url, use_auth_token=new_model_token,
-                                                     scheduler=scheduler, device_map=map_location)
-            printi("Model loaded.")
-            db_shared.status.job_no = 7
 
-        else:
-            printi("Converting unet...")
-            # Convert the UNet2DConditionModel model.
-            unet_config = create_unet_diffusers_config(original_config, image_size=image_size)
-            unet_config["upcast_attention"] = upcast_attention
-            unet = UNet2DConditionModel(**unet_config)
+        printi("Converting unet...")
+        # Convert the UNet2DConditionModel model.
+        unet_config = create_unet_diffusers_config(original_config, image_size=image_size)
+        unet_config["upcast_attention"] = upcast_attention
+        unet = UNet2DConditionModel(**unet_config)
 
-            converted_unet_checkpoint, has_ema = convert_ldm_unet_checkpoint(
-                checkpoint, unet_config, path=ckpt_path, extract_ema=extract_ema
+        converted_unet_checkpoint, has_ema = convert_ldm_unet_checkpoint(
+            checkpoint, unet_config, path=checkpoint_file, extract_ema=extract_ema
+        )
+        db_config.has_ema = has_ema
+        db_config.save()
+        unet.load_state_dict(converted_unet_checkpoint)
+        printi("Converting vae...")
+        # Convert the VAE model.
+        vae_config = create_vae_diffusers_config(original_config, image_size=image_size)
+        converted_vae_checkpoint = convert_ldm_vae_checkpoint(checkpoint, vae_config)
+
+        vae = AutoencoderKL(**vae_config)
+        vae.load_state_dict(converted_vae_checkpoint)
+        printi("Converting text encoder...")
+        # Convert the text model.
+        text_model_type = original_config.model.params.cond_stage_config.target.split(".")[-1]
+        if text_model_type == "FrozenOpenCLIPEmbedder":
+            text_model = convert_open_clip_checkpoint(checkpoint)
+            tokenizer = CLIPTokenizer.from_pretrained("stabilityai/stable-diffusion-2", subfolder="tokenizer")
+            pipe = StableDiffusionPipeline(
+                vae=vae,
+                text_encoder=text_model,
+                tokenizer=tokenizer,
+                unet=unet,
+                scheduler=scheduler,
+                safety_checker=None,
+                feature_extractor=None,
+                requires_safety_checker=False,
             )
-            db_config.has_ema = has_ema
-            db_config.save()
-            unet.load_state_dict(converted_unet_checkpoint)
-            printi("Converting vae...")
-            # Convert the VAE model.
-            vae_config = create_vae_diffusers_config(original_config, image_size=image_size)
-            converted_vae_checkpoint = convert_ldm_vae_checkpoint(checkpoint, vae_config)
-
-            vae = AutoencoderKL(**vae_config)
-            vae.load_state_dict(converted_vae_checkpoint)
-            printi("Converting text encoder...")
-            # Convert the text model.
-            text_model_type = original_config.model.params.cond_stage_config.target.split(".")[-1]
-            if text_model_type == "FrozenOpenCLIPEmbedder":
-                text_model = convert_open_clip_checkpoint(checkpoint)
-                tokenizer = CLIPTokenizer.from_pretrained("stabilityai/stable-diffusion-2", subfolder="tokenizer")
-                pipe = StableDiffusionPipeline(
-                    vae=vae,
-                    text_encoder=text_model,
-                    tokenizer=tokenizer,
-                    unet=unet,
-                    scheduler=scheduler,
-                    safety_checker=None,
-                    feature_extractor=None,
-                    requires_safety_checker=False,
-                )
-            # elif text_model_type == "PaintByExample":
-            #     vision_model = convert_paint_by_example_checkpoint(checkpoint)
-            #     tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
-            #     feature_extractor = AutoFeatureExtractor.from_pretrained("CompVis/stable-diffusion-safety-checker")
-            #     pipe = PaintByExamplePipeline(
-            #         vae=vae,
-            #         image_encoder=vision_model,
-            #         unet=unet,
-            #         scheduler=scheduler,
-            #         safety_checker=None,
-            #         feature_extractor=feature_extractor,
-            #     )
-            elif text_model_type == "FrozenCLIPEmbedder":
-                text_model = convert_ldm_clip_checkpoint(checkpoint)
-                tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
-                safety_checker = StableDiffusionSafetyChecker.from_pretrained("CompVis/stable-diffusion-safety-checker")
-                feature_extractor = AutoFeatureExtractor.from_pretrained("CompVis/stable-diffusion-safety-checker")
-                pipe = StableDiffusionPipeline(
-                    vae=vae,
-                    text_encoder=text_model,
-                    tokenizer=tokenizer,
-                    unet=unet,
-                    scheduler=scheduler,
-                    safety_checker=safety_checker,
-                    feature_extractor=feature_extractor
-                )
-            else:
-                text_config = create_ldm_bert_config(original_config)
-                text_model = convert_ldm_bert_checkpoint(checkpoint, text_config)
-                tokenizer = BertTokenizerFast.from_pretrained("bert-base-uncased")
-                pipe = LDMTextToImagePipeline(vqvae=vae, bert=text_model, tokenizer=tokenizer, unet=unet,
-                                              scheduler=scheduler)
+        elif text_model_type == "PaintByExample":
+            vision_model = convert_paint_by_example_checkpoint(checkpoint)
+            tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
+            feature_extractor = AutoFeatureExtractor.from_pretrained("CompVis/stable-diffusion-safety-checker")
+            pipe = PaintByExamplePipeline(
+                vae=vae,
+                image_encoder=vision_model,
+                unet=unet,
+                scheduler=scheduler,
+                safety_checker=None,
+                feature_extractor=feature_extractor,
+            )
+        elif text_model_type == "FrozenCLIPEmbedder":
+            text_model = convert_ldm_clip_checkpoint(checkpoint)
+            tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
+            safety_checker = StableDiffusionSafetyChecker.from_pretrained("CompVis/stable-diffusion-safety-checker")
+            feature_extractor = AutoFeatureExtractor.from_pretrained("CompVis/stable-diffusion-safety-checker")
+            pipe = StableDiffusionPipeline(
+                vae=vae,
+                text_encoder=text_model,
+                tokenizer=tokenizer,
+                unet=unet,
+                scheduler=scheduler,
+                safety_checker=safety_checker,
+                feature_extractor=feature_extractor
+            )
+        else:
+            text_config = create_ldm_bert_config(original_config)
+            text_model = convert_ldm_bert_checkpoint(checkpoint, text_config)
+            tokenizer = BertTokenizerFast.from_pretrained("bert-base-uncased")
+            pipe = LDMTextToImagePipeline(vqvae=vae, bert=text_model, tokenizer=tokenizer, unet=unet,
+                                          scheduler=scheduler)
     except Exception as e:
         print(f"Exception setting up output: {e}")
         pipe = None
@@ -1020,12 +1260,9 @@ def extract_checkpoint(new_model_name: str, ckpt_path: str, scheduler_type="ddim
 
     if reset_safe:
         db_shared.start_safe_unpickle()
-
-    reload_system_models()
     printi(result_status)
-    dirs = get_db_models()
 
-    return gr.Dropdown.update(choices=sorted(dirs), value=new_model_name), \
+    return gr.Dropdown.update(choices=sorted(get_db_models()), value=new_model_name), \
            model_dir, \
            revision, \
            epoch, \

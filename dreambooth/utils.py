@@ -1,23 +1,28 @@
 from __future__ import annotations
 
 import gc
+import hashlib
 import html
 import os
 import sys
 import traceback
-from tqdm.auto import tqdm
 from io import StringIO
 from pathlib import Path
 from typing import Optional, Union, Tuple, List
 
+import gradio
 import matplotlib
 import pandas as pd
 from pandas.plotting._matplotlib.style import get_standard_colors
+from tqdm.auto import tqdm
+from transformers import PretrainedConfig
+
+from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow
 import torch
-from PIL import features, Image
+from PIL import features, Image, PngImagePlugin
 from huggingface_hub import HfFolder, whoami
 from pandas import DataFrame
 from tensorboard.compat.proto import event_pb2
@@ -70,6 +75,22 @@ def get_lora_models():
                 if "_txt.pt" not in found and ".pt" in found:
                     output.append(found)
     return output
+
+
+def get_model_snapshots(model_name: str):
+    from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
+    result = gradio.update(visible=True)
+    if model_name == "" or model_name is None:
+        return result
+    config = from_file(model_name)
+    snaps_path = os.path.join(config.model_dir, "snapshots")
+    snaps = []
+    if os.path.exists(snaps_path):
+        for dir in os.listdir(snaps_path):
+            if "checkpoint_" in dir:
+                fullpath = os.path.join(snaps_path, dir)
+                snaps.append(fullpath)
+    return snaps
 
 
 def get_images(image_path):
@@ -199,10 +220,6 @@ def wrap_gpu_call(func, extra_outputs=None):
 
             res = extra_outputs_array + [f"<div class='error'>{html.escape(type(e).__name__ + ': ' + str(e))}</div>"]
 
-        status.skipped = False
-        status.interrupted = False
-        status.job_count = 0
-
         return res
 
     return f
@@ -226,7 +243,6 @@ def list_features():
                 if extension not in pil_features:
                     pil_features.append(extension)
     return pil_features
-
 
 def is_image(path: Path, feats=None):
     if feats is None:
@@ -434,6 +450,7 @@ def parse_logs(model_name: str, for_ui: bool = False):
         out_names.append("Learning Rate")
 
     loss_img = os.path.join(model_config.model_dir, "logging", f"loss_plot_{model_config.revision}.png")
+    printm(f"Saving {loss_img}")
     plotted_loss.figure.savefig(loss_img)
 
     log_pil = Image.open(loss_img)
@@ -447,13 +464,73 @@ def parse_logs(model_name: str, for_ui: bool = False):
         plotted_ram = all_df_ram.plot(x="Step", y="Value", title="VRAM Usage")
 
         ram_img = os.path.join(model_config.model_dir, "logging", f"ram_plot_{model_config.revision}.png")
+        printm(f"Saving {ram_img}")
         plotted_ram.figure.savefig(ram_img)
-        log_ram = Image.open(ram_img)
-        out_images.append(log_ram)
+        out_images.append(ram_img)
         out_names.append("VRAM Usage")
         if for_ui:
             out_names = "<br>".join(out_names)
     except:
         pass
-
+    
+    del out_loss
+    del out_lr
+    del out_ram
+    printm("Cleanup log parse.")
     return out_images, out_names
+
+
+def db_save_image(image: Image, prompt_data: PromptData=None, seed=None, save_txt: bool = True, custom_name: str = None):
+    image_base = hashlib.sha1(image.tobytes()).hexdigest()
+    image_filename = os.path.join(prompt_data.out_dir, f"{image_base}.tmp")
+    if custom_name is not None:
+        image_filename = os.path.join(prompt_data.out_dir, f"{custom_name}.tmp")
+
+    pnginfo_data = PngImagePlugin.PngInfo()
+    if prompt_data is not None:
+        size = prompt_data.resolution
+        generation_params = {
+            "Steps": prompt_data.steps,
+            "CFG scale": prompt_data.scale,
+            "Seed": prompt_data.seed,
+            "Size": f"{size[0]}x{size[1]}"
+        }
+
+        generation_params_text = ", ".join(
+            [k if k == v else f'{k}: {f"{k}" if "," in str(k) else k}' for k, v in generation_params.items()
+             if v is not None])
+
+
+        prompt_string = f"{prompt_data.prompt}\nNegative prompt: {prompt_data.negative_prompt}\n{generation_params_text}".strip()
+        pnginfo_data.add_text("parameters", prompt_string)
+
+    image_format = Image.registered_extensions()[".png"]
+
+    image.save(image_filename, format=image_format, pnginfo=pnginfo_data)
+
+    if save_txt and prompt_data is not None:
+        os.replace(image_filename, image_filename)
+        txt_filename = image_filename.replace(".tmp", ".txt")
+        with open(txt_filename, "w", encoding="utf8") as file:
+            file.write(prompt_data.prompt)
+    os.replace(image_filename, image_filename.replace(".tmp", ".png"))
+    return image_filename.replace(".tmp", ".png")
+
+def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision):
+    text_encoder_config = PretrainedConfig.from_pretrained(
+        pretrained_model_name_or_path,
+        subfolder="text_encoder",
+        revision=revision,
+    )
+    model_class = text_encoder_config.architectures[0]
+
+    if model_class == "CLIPTextModel":
+        from transformers import CLIPTextModel
+
+        return CLIPTextModel
+    elif model_class == "RobertaSeriesModelWithTransformation":
+        from diffusers.pipelines.alt_diffusion.modeling_roberta_series import RobertaSeriesModelWithTransformation
+
+        return RobertaSeriesModelWithTransformation
+    else:
+        raise ValueError(f"{model_class} is not supported.")

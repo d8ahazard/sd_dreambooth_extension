@@ -14,6 +14,8 @@ def preload(parser: argparse.ArgumentParser):
                         default=None)
     parser.add_argument("--ckptfix", action='store_true',
                         help="(Dreambooth) Enable fix for OOM errors when extracting checkpoints.")
+    parser.add_argument("--force-cpu", action='store_true',
+                        help="(Dreambooth) Train using CPU only.")
     parser.add_argument("--profile-db", action='store_true',
                         help="Set this to enable memory profiling while training. For science only.")
     parser.add_argument("--debug-db", action='store_true',

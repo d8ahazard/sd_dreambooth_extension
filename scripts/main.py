@@ -8,17 +8,17 @@ from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.db_webhook import save_and_test_webhook
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generate_prompts
-from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret, create_secret, clear_secret
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, list_attention, \
-    list_floats, get_lora_models, wrap_gpu_call, parse_logs
+    list_floats, get_lora_models, wrap_gpu_call, parse_logs, printm
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
-    training_wizard, training_wizard_person, load_model_params, ui_classifiers, ui_samples, debug_buckets
+    training_wizard, training_wizard_person, load_model_params, ui_classifiers, ui_samples, debug_buckets, create_model
 from modules import script_callbacks, sd_models
 from modules.ui import gr_show, create_refresh_button
 
 params_to_save = []
+params_to_load = []
 refresh_symbol = '\U0001f504'  # 🔄
 delete_symbol = '\U0001F5D1'  # 🗑️
 update_symbol = '\U0001F51D'  # 🠝
@@ -37,7 +37,10 @@ def calc_time_left(progress, threshold, label, force_display):
     if progress == 0:
         return ""
     else:
-        time_since_start = time.time() - status.time_start
+        if status.time_start is None:
+            time_since_start = 0
+        else:
+            time_since_start = time.time() - status.time_start
         eta = (time_since_start / progress)
         eta_relative = eta - time_since_start
         if (eta_relative > threshold and progress > 0.02) or force_display:
@@ -60,6 +63,7 @@ def check_progress_call():
     """
     Check the progress from share dreamstate and return appropriate UI elements.
     @return:
+    active: Checkbox to physically holde an active state
     pspan: Progress bar span contents
     preview: Preview Image/Visibility
     gallery: Gallery Image/Visibility
@@ -67,9 +71,11 @@ def check_progress_call():
     sample_prompts: List = A list of prompts corresponding with gallery contents
     check_progress_initial: Hides the manual 'check progress' button
     """
-    if status.job_count == 0:
-        return "", gr.update(visible=False, value=None), gr.update(visible=True), gr_show(True), gr_show(True), \
+    active_box = gr.update(value=status.active)
+    if not status.active:
+        return active_box, "", gr.update(visible=False, value=None), gr.update(visible=True), gr_show(True), gr_show(True), \
                gr_show(False)
+
     progress = 0
 
     if status.job_count > 0:
@@ -80,10 +86,11 @@ def check_progress_call():
         status.time_left_force_display = True
 
     progress = min(progress, 1)
-
     progressbar = f"""<div class='progressDiv'><div class='progress' style="overflow:visible;width:{progress * 100}%;white-space:nowrap;">{"&nbsp;" * 2 + str(int(progress * 100)) + "%" + time_left if progress > 0.01 else ""}</div></div>"""
     status.set_current_image()
     image = status.current_image
+    preview = None
+    gallery = None
 
     if image is None:
         preview = gr.update(visible=False, value=None)
@@ -94,7 +101,7 @@ def check_progress_call():
                 status.current_image = None
                 preview = gr.update(visible=False, value=None)
                 gallery = gr.update(visible=True, value=image)
-            else:
+            elif len(image) == 1:
                 preview = gr.update(visible=True, value=image[0])
                 gallery = gr.update(visible=True, value=None)
         else:
@@ -117,19 +124,13 @@ def check_progress_call():
             prompts = status.sample_prompts[0]
 
     pspan = f"<span id='db_progress_span' style='display: none'>{time.time()}</span><p>{progressbar}</p>"
-    return pspan, preview, gallery, textinfo_result, gr.update(value=prompts), gr_show(False)
+    return active_box, pspan, preview, gallery, textinfo_result, gr.update(value=prompts), gr_show(False)
 
 
 def check_progress_call_initial():
-    status.job_count = -1
-    status.current_latent = None
-    status.current_image = None
-    status.textinfo = None
-    status.textinfo2 = None
-    status.time_start = time.time()
-    status.time_left_force_display = False
-    pspan, preview, gallery, textinfo_result, prompts_result, pbutton_result = check_progress_call()
-    return pspan, gr_show(False), gr.update(value=[]), textinfo_result, gr.update(value=[]), gr_show(False)
+    status.begin()
+    active_box, pspan, preview, gallery, textinfo_result, prompts_result, pbutton_result = check_progress_call()
+    return active_box, pspan, gr_show(False), gr.update(value=[]), textinfo_result, gr.update(value=[]), gr_show(False)
 
 
 def ui_gen_ckpt(model_name: str):
@@ -138,14 +139,9 @@ def ui_gen_ckpt(model_name: str):
     if model_name == "" or model_name is None:
         return "Please select a model."
     config = from_file(model_name)
-    half = config.half_model
-    use_subdir = config.use_subdir
+    printm("Config loaded")
     lora_path = config.lora_model_name
-    lora_alpha = config.lora_weight
-    lora_txt_alpha = config.lora_txt_weight
-    custom_model_name = config.custom_model_name
-    res = compile_checkpoint(model_name, half, use_subdir, lora_path, lora_alpha, lora_txt_alpha, custom_model_name,
-                             True, True)
+    res = compile_checkpoint(model_name, lora_path, True, True, config.snapshot)
     return res
 
 
@@ -167,6 +163,8 @@ def on_ui_tabs():
                     create_refresh_button(db_model_name, get_db_models, lambda: {
                         "choices": sorted(get_db_models())},
                                           "refresh_db_models")
+                with gr.Row():
+                    db_snapshot = gr.Dropdown(label="Snapshot to Resume")
                 with gr.Row(visible=False) as lora_model_row:
                     db_lora_model_name = gr.Dropdown(label='Lora Model', choices=sorted(get_lora_models()))
                     create_refresh_button(db_lora_model_name, get_lora_models, lambda: {
@@ -202,7 +200,9 @@ def on_ui_tabs():
                     with gr.Column():
                         db_create_model = gr.Button(value="Create Model", variant='primary')
                     db_new_model_name = gr.Textbox(label="Name")
-                    db_create_from_hub = gr.Checkbox(label="Import Model from Huggingface Hub", value=False)
+                    with gr.Row():
+                        db_create_from_hub = gr.Checkbox(label="Create From Hub", value=False)
+                        db_512_model = gr.Checkbox(label="512x Model", value=True)
                     with gr.Column(visible=False) as hub_row:
                         db_new_model_url = gr.Textbox(label="Model Path", placeholder="runwayml/stable-diffusion-v1-5")
                         db_new_model_token = gr.Textbox(label="HuggingFace Token", value="")
@@ -321,13 +321,23 @@ def on_ui_tabs():
                                         label="Memory Attention", value="default",
                                         choices=list_attention())
                                     db_cache_latents = gr.Checkbox(label="Cache Latents", value=True)
+                                    db_train_unet = gr.Checkbox(label="Train UNET", value=True)
                                     db_stop_text_encoder = gr.Slider(label="Step Ratio of Text Encoder Training", minimum=0, maximum=1, step=0.01, value=1, visible=True)
                                     db_clip_skip = gr.Slider(label="Clip Skip", value=1, minimum=1, maximum=12, step=1)
-                                    db_prior_loss_weight = gr.Number(label="Prior Loss Weight", value=1.0, precision=1)
+                                    db_adamw_weight_decay = gr.Slider(label="AdamW Weight Decay", minimum=0, maximum=1, step=1e-7, value=1e-2, visible=True)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
                                     db_shuffle_tags = gr.Checkbox(label="Shuffle Tags", value=True)
                                     db_max_token_length = gr.Slider(label="Max Token Length", minimum=75, maximum=300,
                                                                     step=75)
+                                with gr.Column():
+                                    gr.HTML(value="Prior Loss")
+                                    db_prior_loss_scale = gr.Checkbox(label="Scale Prior Loss", value=False)
+                                    db_prior_loss_weight = gr.Slider(label="Prior Loss Weight", minimum=0.01, maximum=1,
+                                                                     step=.01, value=0.75)
+                                    db_prior_loss_target = gr.Number(label="Prior Loss Target", value=100, visible=False)
+                                    db_prior_loss_weight_min = gr.Slider(label="Minimum Prior Loss Weight", minimum=0.01,
+                                                                  maximum=1, step=.01, value=0.1, visible=False)
+
 
                     with gr.Row():
                         with gr.Column(scale=2):
@@ -357,11 +367,19 @@ def on_ui_tabs():
                             c3_class_token, c3_num_class_images_per, c3_class_negative_prompt, c3_class_guidance_scale, \
                             c3_class_infer_steps, c3_save_sample_negative_prompt, c3_n_save_sample, c3_sample_seed, \
                             c3_save_guidance_scale, c3_save_infer_steps = build_concept_panel()
+                            
+                        with gr.Tab("Concept 4"):
+                            c4_instance_data_dir, c4_class_data_dir, c4_instance_prompt, \
+                            c4_class_prompt, c4_num_class_images, c4_save_sample_prompt, c4_save_sample_template, c4_instance_token, \
+                            c4_class_token, c4_num_class_images_per, c4_class_negative_prompt, c4_class_guidance_scale, \
+                            c4_class_infer_steps, c4_save_sample_negative_prompt, c4_n_save_sample, c4_sample_seed, \
+                            c4_save_guidance_scale, c4_save_infer_steps = build_concept_panel()
                 with gr.Tab("Saving"):
                     with gr.Column():
                         gr.HTML("General")
                         db_custom_model_name = gr.Textbox(label="Custom Model Name", value="",
                                                           placeholder="Enter a model name for saving checkpoints and lora models.")
+                        db_save_safetensors = gr.Checkbox(label="Save in .safetensors format", value=False)
                     with gr.Column():
                         gr.HTML("Checkpoints")
                         db_half_model = gr.Checkbox(label="Half Model", value=False)
@@ -371,6 +389,7 @@ def on_ui_tabs():
                         db_save_ckpt_cancel = gr.Checkbox(label="Generate a .ckpt file when training is canceled.")
                     with gr.Column(visible=False) as lora_save_col:
                         gr.HTML("Lora")
+                        db_lora_rank = gr.Slider(label="Lora Rank", value=4, minimum=1, maximum=100, step=1)
                         db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1)
                         db_lora_txt_weight = gr.Slider(label="Lora Text Weight", value=1, minimum=0.1, maximum=1,
                                                        step=0.1)
@@ -392,6 +411,8 @@ def on_ui_tabs():
                         db_generate_graph = gr.Button(value="Generate Graph")
                         db_graph_smoothing = gr.Number(value=50, label="Graph Smoothing Steps")
                         db_debug_buckets = gr.Button(value="Debug Buckets")
+                        db_bucket_epochs = gr.Slider(value=10, step=1, minimum=1, maximum=1000, label="Epochs to Simulate")
+                        db_bucket_batch = gr.Slider(value=1, step=1, minimum=1, maximum=500, label="Batch Size to Simulate")
                         db_generate_sample = gr.Button(value="Generate Sample Images")
                         db_sample_prompt = gr.Textbox(label="Sample Prompt")
                         db_sample_negative = gr.Textbox(label="Sample Negative Prompt")
@@ -402,9 +423,12 @@ def on_ui_tabs():
 
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")
-                ui_check_progress_initial = gr.Button(value=update_symbol, elem_id="ui_check_progress_initial")
-                db_check_progress_initial = gr.Button(value=update_symbol, elem_id="db_check_progress_initial", visible=False)
+                db_check_progress_initial = gr.Button(value=update_symbol, elem_id="db_check_progress_initial",
+                                                      visible=False)
                 # These two should be updated while doing things
+                db_active = gr.Checkbox(elem_id="db_active", value=False, visible=False)
+
+                ui_check_progress_initial = gr.Button(value=update_symbol, elem_id="ui_check_progress_initial")
                 db_status = gr.HTML(elem_id="db_status", value="")
                 db_progressbar = gr.HTML(elem_id="db_progressbar")
                 db_gallery = gr.Gallery(label='Output', show_label=False, elem_id='db_gallery').style(grid=4)
@@ -414,14 +438,15 @@ def on_ui_tabs():
                 db_check_progress = gr.Button("Check Progress", elem_id=f"db_check_progress", visible=False)
                 db_update_params = gr.Button("Update Parameters", elem_id="db_update_params", visible=False)
 
-                def check_toggles(use_ema, use_lora, lr_scheduler, stop_text_encoder):
-                    pad_tokens = update_pad_tokens(stop_text_encoder)
+                def check_toggles(use_ema, use_lora, lr_scheduler, train_unet, scale_prior):
+                    stop_text_encoder = update_stop_tenc(train_unet)
                     show_ema, lora_save, lora_lr, lora_model = disable_ema(use_lora)
                     if not use_lora and use_ema:
                         disable_lora(use_ema)
                     lr_power, lr_cycles, lr_scale_pos, lr_factor, learning_rate_min, lr_warmup_steps = toggle_lr_min(
                         lr_scheduler)
-                    return pad_tokens,\
+                    loss_min, loss_tgt = toggle_loss_items(scale_prior)
+                    return stop_text_encoder,\
                         show_ema,\
                         lora_save,\
                         lora_lr,\
@@ -431,12 +456,14 @@ def on_ui_tabs():
                         lr_scale_pos,\
                         lr_factor,\
                         learning_rate_min,\
-                        lr_warmup_steps
+                        lr_warmup_steps, \
+                        loss_min, \
+                        loss_tgt
 
                 db_update_params.click(
                     fn=check_toggles,
-                    inputs=[db_use_ema, db_use_lora, db_lr_scheduler, db_stop_text_encoder],
-                    outputs=[db_pad_tokens,
+                    inputs=[db_use_ema, db_use_lora, db_lr_scheduler, db_train_unet, db_prior_loss_scale],
+                    outputs=[db_stop_text_encoder,
                              db_use_ema,
                              lora_save_col,
                              lora_lr_row,
@@ -446,7 +473,9 @@ def on_ui_tabs():
                              db_lr_scale_pos,
                              db_lr_factor,
                              db_learning_rate_min,
-                             db_lr_warmup_steps]
+                             db_lr_warmup_steps,
+                             db_prior_loss_weight_min,
+                             db_prior_loss_target]
 
                 )
 
@@ -463,17 +492,17 @@ def on_ui_tabs():
                 )
 
 
-                def update_pad_tokens(x):
-                    if x == 0:
-                        return gr.update(visible=True)
+                def update_stop_tenc(train_unet):
+                    # If train unet enabled, read "hidden" value from stop_tenc and restore
+                    if train_unet:
+                        return gr.update(interactive=True)
                     else:
-                        return gr.update(value=True)
+                        return gr.update(interactive=False)
 
-
-                db_stop_text_encoder.change(
-                    fn=update_pad_tokens,
-                    inputs=[db_stop_text_encoder],
-                    outputs=[db_pad_tokens]
+                db_train_unet.change(
+                    fn=update_stop_tenc,
+                    inputs=[db_train_unet, db_stop_text_encoder],
+                    outputs=[db_stop_text_encoder]
                 )
 
                 db_clear_secret.click(
@@ -482,30 +511,35 @@ def on_ui_tabs():
                     outputs=[db_secret]
                 )
 
+                # Elements to update when progress changes
+                progress_elements = [db_active, db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, ui_check_progress_initial]
+
                 db_check_progress.click(
                     fn=lambda: check_progress_call(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, ui_check_progress_initial],
+                    outputs=progress_elements,
                 )
 
                 db_check_progress_initial.click(
                     fn=lambda: check_progress_call_initial(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, ui_check_progress_initial],
+                    outputs=progress_elements,
                 )
 
                 ui_check_progress_initial.click(
                     fn=lambda: check_progress_call(),
                     show_progress=False,
                     inputs=[],
-                    outputs=[db_progressbar, db_preview, db_gallery, db_status, db_prompt_list,
-                             ui_check_progress_initial],
+                    outputs=progress_elements,
                 )
 
         global params_to_save
+        global params_to_load
 
+
+        # List of all the things that we need to save
         params_to_save = [
             db_model_name,
             db_attention,
@@ -522,12 +556,12 @@ def on_ui_tabs():
             db_gradient_set_to_none,
             db_graph_smoothing,
             db_half_model,
-            db_has_ema,
             db_hflip,
             db_learning_rate,
             db_learning_rate_min,
             db_lora_learning_rate,
             db_lora_model_name,
+            db_lora_rank,
             db_lora_txt_learning_rate,
             db_lora_txt_weight,
             db_lora_weight,
@@ -539,11 +573,15 @@ def on_ui_tabs():
             db_lr_warmup_steps,
             db_max_token_length,
             db_mixed_precision,
+            db_adamw_weight_decay,
             db_model_path,
             db_num_train_epochs,
             db_pad_tokens,
             db_pretrained_vae_name_or_path,
+            db_prior_loss_scale,
+            db_prior_loss_target,
             db_prior_loss_weight,
+            db_prior_loss_weight_min,
             db_resolution,
             db_revision,
             db_sample_batch_size,
@@ -557,21 +595,23 @@ def on_ui_tabs():
             db_save_lora_cancel,
             db_save_lora_during,
             db_save_preview_every,
+            db_save_safetensors,
             db_save_state_after,
             db_save_state_cancel,
             db_save_state_during,
             db_scheduler,
             db_src,
             db_shuffle_tags,
+            db_snapshot,
             db_train_batch_size,
             db_train_imagic_only,
+            db_train_unet,            
             db_stop_text_encoder,
             db_use_8bit_adam,
             db_use_concepts,
             db_use_ema,
             db_use_lora,
             db_use_subdir,
-            db_v2,
             c1_class_data_dir,
             c1_class_guidance_scale,
             c1_class_infer_steps,
@@ -625,8 +665,46 @@ def on_ui_tabs():
             c3_save_infer_steps,
             c3_save_sample_negative_prompt,
             c3_save_sample_prompt,
-            c3_save_sample_template
+            c3_save_sample_template,
+            c4_class_data_dir,
+            c4_class_guidance_scale,
+            c4_class_infer_steps,
+            c4_class_negative_prompt,
+            c4_class_prompt,
+            c4_class_token,
+            c4_instance_data_dir,
+            c4_instance_prompt,
+            c4_instance_token,
+            c4_n_save_sample,
+            c4_num_class_images,
+            c4_num_class_images_per,
+            c4_sample_seed,
+            c4_save_guidance_scale,
+            c4_save_infer_steps,
+            c4_save_sample_negative_prompt,
+            c4_save_sample_prompt,
+            c4_save_sample_template
         ]
+        # Do not load these values when 'load settings' is clicked
+        params_to_exclude = [db_model_name,db_epochs,db_model_path,db_revision,db_scheduler,db_src]
+
+        # Populate by the below method and handed out to other elements
+        params_to_load = []
+        save_keys = []
+        ui_keys = []
+
+        for param in params_to_save:
+            var_name = [var_name for var_name, var in locals().items() if var is param]
+            save_keys.append(var_name[0])
+            if param not in params_to_exclude:
+                ui_keys.append(var_name[0])
+                params_to_load.append(param)
+
+        ui_keys.append("db_status")
+        params_to_load.append(db_status)
+        from extensions.sd_dreambooth_extension.dreambooth import db_config
+        db_config.save_keys = save_keys
+        db_config.ui_keys = ui_keys
 
         db_save_params.click(
             _js="check_save",
@@ -635,137 +713,31 @@ def on_ui_tabs():
             outputs=[]
         )
 
-
-
         db_load_params.click(
             _js="db_start_load_params",
             fn=dreambooth.load_params,
             inputs=[
                 db_model_name
             ],
-            outputs=[
-                db_attention,
-                db_cache_latents,
-                db_center_crop,
-                db_clip_skip,
-                db_concepts_path,
-                db_custom_model_name,
-                db_epoch_pause_frequency,
-                db_epoch_pause_time,
-                db_gradient_accumulation_steps,
-                db_gradient_checkpointing,
-                db_gradient_set_to_none,
-                db_graph_smoothing,
-                db_half_model,
-                db_hflip,
-                db_learning_rate,
-                db_learning_rate_min,
-                db_lora_learning_rate,
-                db_lora_model_name,
-                db_lora_txt_learning_rate,
-                db_lora_txt_weight,
-                db_lora_weight,
-                db_lr_cycles,
-                db_lr_factor,
-                db_lr_power,
-                db_lr_scale_pos,
-                db_lr_scheduler,
-                db_lr_warmup_steps,
-                db_max_token_length,
-                db_mixed_precision,
-                db_num_train_epochs,
-                db_pad_tokens,
-                db_pretrained_vae_name_or_path,
-                db_prior_loss_weight,
-                db_resolution,
-                db_sample_batch_size,
-                db_sanity_prompt,
-                db_sanity_seed,
-                db_save_ckpt_after,
-                db_save_ckpt_cancel,
-                db_save_ckpt_during,
-                db_save_embedding_every,
-                db_save_lora_after,
-                db_save_lora_cancel,
-                db_save_lora_during,
-                db_save_preview_every,
-                db_save_state_after,
-                db_save_state_cancel,
-                db_save_state_during,
-                db_shuffle_tags,
-                db_train_batch_size,
-                db_train_imagic_only,
-                db_stop_text_encoder,
-                db_use_8bit_adam,
-                db_use_concepts,
-                db_use_ema,
-                db_use_lora,
-                db_use_subdir,
-                c1_class_data_dir,
-                c1_class_guidance_scale,
-                c1_class_infer_steps,
-                c1_class_negative_prompt,
-                c1_class_prompt,
-                c1_class_token,
-                c1_instance_data_dir,
-                c1_instance_prompt,
-                c1_instance_token,
-                c1_n_save_sample,
-                c1_num_class_images,
-                c1_num_class_images_per,
-                c1_sample_seed,
-                c1_save_guidance_scale,
-                c1_save_infer_steps,
-                c1_save_sample_negative_prompt,
-                c1_save_sample_prompt,
-                c1_save_sample_template,
-                c2_class_data_dir,
-                c2_class_guidance_scale,
-                c2_class_infer_steps,
-                c2_class_negative_prompt,
-                c2_class_prompt,
-                c2_class_token,
-                c2_instance_data_dir,
-                c2_instance_prompt,
-                c2_instance_token,
-                c2_n_save_sample,
-                c2_num_class_images,
-                c2_num_class_images_per,
-                c2_sample_seed,
-                c2_save_guidance_scale,
-                c2_save_infer_steps,
-                c2_save_sample_negative_prompt,
-                c2_save_sample_prompt,
-                c2_save_sample_template,
-                c3_class_data_dir,
-                c3_class_guidance_scale,
-                c3_class_infer_steps,
-                c3_class_negative_prompt,
-                c3_class_prompt,
-                c3_class_token,
-                c3_instance_data_dir,
-                c3_instance_prompt,
-                c3_instance_token,
-                c3_n_save_sample,
-                c3_num_class_images,
-                c3_num_class_images_per,
-                c3_sample_seed,
-                c3_save_guidance_scale,
-                c3_save_infer_steps,
-                c3_save_sample_negative_prompt,
-                c3_save_sample_prompt,
-                c3_save_sample_template,
-                db_status
-            ]
+            outputs=params_to_load
         )
 
         def toggle_new_rows(create_from):
             return gr.update(visible=create_from), gr.update(visible=not create_from)
 
+        def toggle_loss_items(scale):
+            return gr.update(visible=scale), gr.update(visible=scale)
+
         db_create_from_hub.change(
             fn=toggle_new_rows,
             inputs=[db_create_from_hub],
             outputs=[hub_row, local_row],
+        )
+
+        db_prior_loss_scale.change(
+            fn=toggle_loss_items,
+            inputs=[db_prior_loss_scale],
+            outputs=[db_prior_loss_weight_min, db_prior_loss_target]
         )
 
         def disable_ema(x):
@@ -814,7 +786,7 @@ def on_ui_tabs():
             _js="clear_loaded",
             fn=load_model_params,
             inputs=[db_model_name],
-            outputs=[db_model_path, db_revision, db_epochs, db_v2, db_has_ema, db_src, db_scheduler, db_status]
+            outputs=[db_model_path, db_revision, db_epochs, db_v2, db_has_ema, db_src, db_scheduler, db_snapshot, db_status]
         )
 
         db_use_concepts.change(
@@ -843,8 +815,8 @@ def on_ui_tabs():
         db_debug_buckets.click(
             _js="db_start_buckets",
             fn=debug_buckets,
-            inputs=[db_model_name],
-            outputs=[db_gallery, db_prompt_list, db_status]
+            inputs=[db_model_name, db_bucket_epochs, db_bucket_batch],
+            outputs=[db_status, db_status]
         )
 
         db_performance_wizard.click(
@@ -863,6 +835,8 @@ def on_ui_tabs():
                 db_use_8bit_adam,
                 db_use_lora,
                 db_use_ema,
+                db_save_preview_every,
+                db_save_embedding_every,
                 db_status
             ]
         )
@@ -878,6 +852,7 @@ def on_ui_tabs():
                 c1_num_class_images_per,
                 c2_num_class_images_per,
                 c3_num_class_images_per,
+                c4_num_class_images_per,
                 db_status
             ]
         )
@@ -893,6 +868,7 @@ def on_ui_tabs():
                 c1_num_class_images_per,
                 c2_num_class_images_per,
                 c3_num_class_images_per,
+                c4_num_class_images_per,
                 db_status
             ]
         )
@@ -905,6 +881,7 @@ def on_ui_tabs():
                     db_num_samples,
                     db_sample_batch_size,
                     db_lora_model_name,
+                    db_lora_rank,
                     db_lora_weight,
                     db_lora_txt_weight,
                     db_sample_negative,
@@ -944,7 +921,7 @@ def on_ui_tabs():
         )
 
         db_create_model.click(
-            fn=wrap_gpu_call(extract_checkpoint),
+            fn=wrap_gpu_call(create_model),
             _js="db_start_create",
             inputs=[
                 db_new_model_name,
@@ -953,7 +930,8 @@ def on_ui_tabs():
                 db_create_from_hub,
                 db_new_model_url,
                 db_new_model_token,
-                db_new_model_extract_ema
+                db_new_model_extract_ema,
+                db_512_model
             ],
             outputs=[
                 db_model_name, db_model_path, db_revision, db_epochs, db_scheduler, db_src, db_has_ema, db_v2, db_resolution,
