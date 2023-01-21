@@ -541,19 +541,22 @@ class ImageBuilder:
 def get_dim(filename, max_res):
     with Image.open(filename) as im:
         width, height = im.size
-        exif = im.getexif()
-        if exif:
-            orientation = exif.get(274)
-            if orientation == 3 or orientation == 6:
-                width, height = height, width
-        if width > max_res or height > max_res:
-            aspect_ratio = width / height
-            if width > height:
-                width = max_res
-                height = int(max_res / aspect_ratio)
-            else:
-                height = max_res
-                width = int(max_res * aspect_ratio)
+        try:
+            exif = im.getexif()
+            if exif:
+                orientation = exif.get(274)
+                if orientation == 3 or orientation == 6:
+                    width, height = height, width
+            if width > max_res or height > max_res:
+                aspect_ratio = width / height
+                if width > height:
+                    width = max_res
+                    height = int(max_res / aspect_ratio)
+                else:
+                    height = max_res
+                    width = int(max_res * aspect_ratio)
+        except:
+            print(f"No exif data for {Path(filename).stem}. Using default orientation.")
         return width, height
 
 
