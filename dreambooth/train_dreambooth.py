@@ -210,6 +210,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             args.pretrained_model_name_or_path,
             subfolder="text_encoder",
             revision=args.revision,
+            torch_dtype=torch.float32
         )
         printm("Created tenc")
         vae = create_vae()
