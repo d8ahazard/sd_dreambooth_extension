@@ -610,6 +610,7 @@ def on_ui_tabs():
             db_stop_text_encoder,
             db_use_8bit_adam,
             db_use_concepts,
+            db_train_unfrozen,
             db_use_ema,
             db_use_lora,
             db_use_subdir,
