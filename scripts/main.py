@@ -214,7 +214,7 @@ def on_ui_tabs():
                                 "choices": sorted(get_sd_models())},
                                                   "refresh_sd_models")
                     db_new_model_extract_ema = gr.Checkbox(label='Extract EMA Weights', value=False)
-                    db_train_conditioning = gr.Checkbox(label='Train Conditioning Stage', value=False)
+                    db_train_unfrozen = gr.Checkbox(label='Unfreeze Model', value=False)
                     db_new_model_scheduler = gr.Dropdown(label='Scheduler', choices=["pndm", "lms", "euler",
                                                                                      "euler-ancestral", "dpm", "ddim"],
                                                          value="ddim")
@@ -932,8 +932,8 @@ def on_ui_tabs():
                 db_new_model_url,
                 db_new_model_token,
                 db_new_model_extract_ema,
+                db_train_unfrozen,
                 db_512_model,
-                db_train_conditioning
             ],
             outputs=[
                 db_model_name, db_model_path, db_revision, db_epochs, db_scheduler, db_src, db_has_ema, db_v2, db_resolution,

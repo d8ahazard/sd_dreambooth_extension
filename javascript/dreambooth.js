@@ -173,7 +173,7 @@ let db_titles = {
     "Discord Webhook": "Send training samples to a Discord channel after generation.",
     "Existing Prompt Contents": "If using [filewords], this tells the string builder how the existing prompts are formatted.",
     "Extract EMA Weights": "If EMA weights are saved in a model, these will be extracted instead of the full Unet. Probably not necessary for training or fine-tuning.",
-    "Train Conditioning Stage": "Trains the conditioning stage of the model. Leads to better editability.",
+    "Unfreeze Model": "Unfreezes model layers and allows for potentially better training, but makes increased VRAM usage more likely.",
     "Generate a .ckpt file when saving during training.": "When enabled, a checkpoint will be generated at the specified epoch intervals while training is active. This also controls manual generation using the 'save weights' button while training is active.",
     "Generate a .ckpt file when training completes.": "When enabled, a checkpoint will be generated when training completes successfully.",
     "Generate a .ckpt file when training is cancelled.": "When enabled, a checkpoint will be generated when training is cancelled by the user.",

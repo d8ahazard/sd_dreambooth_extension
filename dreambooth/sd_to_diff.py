@@ -946,7 +946,7 @@ def get_config_path(
         f"{model_version}-{config_base_name}-{train_type}.yaml"
     )
 
-def get_config_file(train_conditioning=False, v2=False, prediction_type="epsilon"):
+def get_config_file(train_unfrozen=False, v2=False, prediction_type="epsilon"):
 
     config_base_name = "training"
     model_versions = {
@@ -955,7 +955,7 @@ def get_config_file(train_conditioning=False, v2=False, prediction_type="epsilon
     }
     train_types = {
         "default": "default",
-        "cond": "cond",
+        "unfrozen": "unfrozen",
     }
 
     model_train_type = train_types["default"]
@@ -966,8 +966,8 @@ def get_config_file(train_conditioning=False, v2=False, prediction_type="epsilon
 
         model_version_name = f"{model_version["v1"] if not v2 else model_version["v2"]}"
 
-        if train_conditioning:
-            model_train_type = train_types["cond"]
+        if train_unfrozen:
+            model_train_type = train_types["unfrozen"]
         else:
             model_train_type = train_types["default"]
 
@@ -978,7 +978,7 @@ def get_config_file(train_conditioning=False, v2=False, prediction_type="epsilon
         
 
 def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type="ddim", from_hub=False, new_model_url="",
-                       new_model_token="", extract_ema=False, train_conditioning=False, is_512=True):
+                       new_model_token="", extract_ema=False, train_unfrozen=False, is_512=True):
     """
 
     @param new_model_name: The name of the new model

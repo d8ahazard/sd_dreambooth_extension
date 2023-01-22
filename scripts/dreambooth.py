@@ -536,7 +536,7 @@ def ui_classifiers(model_name: str,
     return images, msg
 
 def create_model(new_model_name: str, ckpt_path: str, scheduler_type="ddim", from_hub=False, new_model_url="",
-                       new_model_token="", extract_ema=False, train_conditioning=False, is_512=True):
+                       new_model_token="", extract_ema=False, train_unfrozen=False, is_512=True):
     printm("Extracting model.")
     res = 512 if is_512 else 768
     status.begin()

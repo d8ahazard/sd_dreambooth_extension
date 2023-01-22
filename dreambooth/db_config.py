@@ -36,8 +36,8 @@ class DreamboothConfig(BaseModel):
     gradient_set_to_none: bool = True
     graph_smoothing: int = 50
     half_model: bool = False
+    train_unfrozen: bool = False
     has_ema: bool = False
-    train_conditioning: bool = False
     hflip: bool = False
     initial_revision: int = 0
     learning_rate: float = 5e-6
