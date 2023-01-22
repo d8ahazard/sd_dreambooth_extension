@@ -162,6 +162,7 @@ let db_titles = {
     "Classification Dataset Directory": "The directory containing classification/regularization images.",
     "Classification Image Negative Prompt": "A negative prompt to use when generating class images. Can be empty.",
     "Classification Steps": "The number of steps to use when generating classifier/regularization images.",
+    "Freeze CLIP Normalization Layers": "Keep the normalization layers of CLIP frozen during training. Advanced usage, may increase model performance and editability.",
     "Clip Skip": "Use output of nth layer from back of text encoder (n>=1)",
     "Concepts List": "The path to the concepts JSON file, or a JSON string.",
     "Constant/Linear Starting Factor": "Sets the initial learning rate to the main_lr * this value. If you had a target LR of .000006 and set this to .5, the scheduler would start at .000003 and increase until it reached .000006.",

@@ -809,7 +809,10 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             train_tenc = epoch < text_encoder_epochs
             if stop_text_percentage == 0:
                 train_tenc = False
-            text_encoder.train(train_tenc)
+            if args.freeze_clip_normalization == False:
+                text_encoder.train(train_tenc)
+            else:
+                text_encoder.eval()
             if not args.use_lora:
                 text_encoder.requires_grad_(train_tenc)
             else:

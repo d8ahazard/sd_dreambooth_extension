@@ -324,6 +324,7 @@ def on_ui_tabs():
                                     db_cache_latents = gr.Checkbox(label="Cache Latents", value=True)
                                     db_train_unet = gr.Checkbox(label="Train UNET", value=True)
                                     db_stop_text_encoder = gr.Slider(label="Step Ratio of Text Encoder Training", minimum=0, maximum=1, step=0.01, value=1, visible=True)
+                                    db_freeze_clip_normalization = gr.Checkbox(label="Freeze CLIP Normalization Layers", visible=True, value=False)
                                     db_clip_skip = gr.Slider(label="Clip Skip", value=1, minimum=1, maximum=12, step=1)
                                     db_adamw_weight_decay = gr.Slider(label="AdamW Weight Decay", minimum=0, maximum=1, step=1e-7, value=1e-2, visible=True)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
@@ -546,6 +547,7 @@ def on_ui_tabs():
             db_attention,
             db_cache_latents,
             db_center_crop,
+            db_freeze_clip_normalization,
             db_clip_skip,
             db_concepts_path,
             db_custom_model_name,
@@ -606,7 +608,7 @@ def on_ui_tabs():
             db_snapshot,
             db_train_batch_size,
             db_train_imagic_only,
-            db_train_unet,            
+            db_train_unet,         
             db_stop_text_encoder,
             db_use_8bit_adam,
             db_use_concepts,
