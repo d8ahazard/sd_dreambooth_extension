@@ -260,9 +260,7 @@ def split_dict(state_dict):
                 ok.update(moar_ok)
                 json_dict.update(moar_json)
 
-    print("Converting model...")
-
-
+    
     for k, v in mytqdm(state_dict.items()):
         _hf(k, v)
 
