@@ -946,7 +946,7 @@ def get_config_path(
         f"{model_version}-{config_base_name}-{train_type}.yaml"
     )
 
-def get_config_file(train_conditioning=False, unfreeze_model=False, v2=False, prediction_type="epsilon"):
+def get_config_file(train_conditioning=False, v2=False, prediction_type="epsilon"):
 
     config_base_name = "training"
     model_versions = {
@@ -956,8 +956,6 @@ def get_config_file(train_conditioning=False, unfreeze_model=False, v2=False, pr
     train_types = {
         "default": "default",
         "cond": "cond",
-        "unfrozen": "unfrozen",
-        "all": "all"
     }
 
     model_train_type = train_types["default"]
@@ -970,13 +968,6 @@ def get_config_file(train_conditioning=False, unfreeze_model=False, v2=False, pr
 
         if train_conditioning:
             model_train_type = train_types["cond"]
-
-        elif unfreeze_model:
-            model_train_type = train_types["unfrozen"]
-
-        elif train_conditioning and unfreeze_model:
-            model_train_type = train_types["all"]
-
         else:
             model_train_type = train_types["default"]
 
@@ -987,7 +978,7 @@ def get_config_file(train_conditioning=False, unfreeze_model=False, v2=False, pr
         
 
 def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type="ddim", from_hub=False, new_model_url="",
-                       new_model_token="", extract_ema=False, train_conditioning=False, unfreeze_model=False, is_512=True):
+                       new_model_token="", extract_ema=False, train_conditioning=False, is_512=True):
     """
 
     @param new_model_name: The name of the new model
@@ -1125,7 +1116,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
             prediction_type = "epsilon"
             image_size = 512
 
-        original_config_file = get_config_file(train_conditioning, unfreeze_model, v2. prediction_type)
+        original_config_file = get_config_file(train_conditioning, v2. prediction_type)
 
         print(f"Pred and size are {prediction_type} and {image_size}, using config: {original_config_file}")
         db_config.resolution = image_size
