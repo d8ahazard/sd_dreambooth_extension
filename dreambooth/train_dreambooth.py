@@ -523,9 +523,10 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         print(f"  Gradient Checkpointing: {args.gradient_checkpointing}")
         print(f"  EMA: {args.use_ema}")
         print(f"  UNET: {args.train_unet}")
+        print(f"  Freeze CLIP Normalization Layers: {args.freeze_clip_normalization}")
         print(f"  LR: {args.learning_rate}")
+        if args.use_lora and stop_text_percentage > 0: print(f"  LoRA Text Encoder LR: {args.train_unet}")
         print(f"  V2: {args.v2}")
-
 
         def check_save(pbar: mytqdm, is_epoch_check = False):
             nonlocal last_model_save

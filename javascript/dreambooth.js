@@ -120,7 +120,7 @@ function db_start_load_params() {
 
 // Create new checkpoint
 function db_start_create() {
-    return db_start(8, false, true, arguments);
+    return db_start(9, false, true, arguments);
 }
 
 // Train!

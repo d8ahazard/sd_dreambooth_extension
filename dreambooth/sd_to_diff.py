@@ -58,8 +58,6 @@ from diffusers.pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBe
 from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 from transformers import AutoFeatureExtractor, BertTokenizerFast, CLIPTextModel, CLIPTokenizer, CLIPVisionConfig
 
-def 
-
 def shave_segments(path, n_shave_prefix_segments=1):
     """
     Removes segments. Positive values shave the first segments, negative shave the last segments.
@@ -949,6 +947,7 @@ def get_config_path(
 def get_config_file(train_unfrozen=False, v2=False, prediction_type="epsilon"):
 
     config_base_name = "training"
+
     model_versions = {
         "v1": "v1",
         "v2": "v2"
@@ -959,19 +958,14 @@ def get_config_file(train_unfrozen=False, v2=False, prediction_type="epsilon"):
     }
 
     model_train_type = train_types["default"]
+    model_version_name = f"{model_versions['v1'] if not v2 else model_versions['v2']}"
 
-    model_version_list = [model_versions["v1"], model_versions["v2"]]
+    if train_unfrozen:
+        model_train_type = train_types["unfrozen"]
+    else:
+        model_train_type = train_types["default"]
 
-    for model_version in model_versions_list:
-
-        model_version_name = f"{model_version["v1"] if not v2 else model_version["v2"]}"
-
-        if train_unfrozen:
-            model_train_type = train_types["unfrozen"]
-        else:
-            model_train_type = train_types["default"]
-
-        return get_config_path(model_version_name, model_train_type, config_base_name, prediction_type)
+    return get_config_path(model_version_name, model_train_type, config_base_name, prediction_type)
 
     print("Could not find valid config. Returning default v1 config.")
     return get_config_path(model_versions["v1"], train_types["default"], config_base_name, prediction_type="epsilon")
@@ -1116,7 +1110,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
             prediction_type = "epsilon"
             image_size = 512
 
-        original_config_file = get_config_file(train_conditioning, v2. prediction_type)
+        original_config_file = get_config_file(train_unfrozen, v2, prediction_type)
 
         print(f"Pred and size are {prediction_type} and {image_size}, using config: {original_config_file}")
         db_config.resolution = image_size
