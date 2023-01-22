@@ -470,7 +470,7 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
                 os.path.dirname(os.path.realpath(__file__)), 
                 "..", 
                 "configs", 
-                config_version
+                f"{config_version}.yaml"
             )
 
         if cfg_file is not None:
