@@ -501,7 +501,7 @@ def on_ui_tabs():
 
                 db_train_unet.change(
                     fn=update_stop_tenc,
-                    inputs=[db_train_unet, db_stop_text_encoder],
+                    inputs=[db_train_unet],
                     outputs=[db_stop_text_encoder]
                 )
 
