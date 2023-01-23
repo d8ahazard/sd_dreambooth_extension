@@ -57,7 +57,7 @@ class DbImagesRequest(BaseModel):
 import asyncio
 
 def is_running():
-    if db_shared.status.job_count != 0 and db_shared.status.job_count is not None:
+    if db_shared.status.active:
         print("Something is already running.")
         return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
     return False
