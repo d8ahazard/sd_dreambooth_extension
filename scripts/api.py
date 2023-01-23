@@ -8,11 +8,11 @@ import shutil
 import traceback
 import zipfile
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Any
 
 import gradio as gr
 from PIL import Image
-from fastapi import FastAPI, Response, Query, Body
+from fastapi import FastAPI, Response, Query, Body, Form
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 from pydantic.dataclasses import Union
@@ -235,9 +235,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
 
     @app.post("/dreambooth/classifiers")
     async def generate_classes(
-            model_name: str = Query(description="The model name to generate classifiers for."),
-            use_txt2img: bool = Query("", description="Use Txt2Image to generate classifiers."),
-            api_key: str = Query("", description="If an API key is set, this must be present.")
+            model_name: str = Form(description="The model name to generate classifiers for."),
+            use_txt2img: bool = Form("", description="Use Txt2Image to generate classifiers."),
+            api_key: str = Form("", description="If an API key is set, this must be present.")
     ):
         """
         Generate classification images for a model based on a saved config.
@@ -312,11 +312,11 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
 
     @app.post("/dreambooth/concept")
     async def set_model_concept(
-            model_name: str = Query(None, description="The model name to fetch config for."),
-            instance_dir: str = Query("", description="The directory containing training images."),
-            instance_token: str = Query("", description="The instance token to use."),
-            class_token: str = Query("", description="The class token to use."),
-            api_key: str = Query("", description="If an API key is set, this must be present."),
+            model_name: str = Form(description="The model name to fetch config for."),
+            instance_dir: str = Form("", description="The directory containing training images."),
+            instance_token: str = Form("", description="The instance token to use."),
+            class_token: str = Form("", description="The class token to use."),
+            api_key: str = Form("", description="If an API key is set, this must be present."),
             concept: Union[Concept, None] = Body(None, description="A concept to update or add to the model.")
     ) -> Union[List[Concept], JSONResponse]:
         """
@@ -357,7 +357,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
 
     @app.get("/dreambooth/concepts")
     async def get_model_concepts(
-            model_name: str = Query(None, description="The model name to fetch config for."),
+            model_name: str = Query(description="The model name to fetch config for."),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ) -> Union[List[Concept], JSONResponse]:
         """
@@ -376,8 +376,8 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
 
     @app.post("/dreambooth/concepts")
     async def set_model_concepts(
-            model_name: str = Query(None, description="The model name to fetch config for."),
-            api_key: str = Query("", description="If an API key is set, this must be present."),
+            model_name: str = Form(description="The model name to fetch config for."),
+            api_key: str = Form("", description="If an API key is set, this must be present."),
             concepts: List[Concept] = Body()
     ) -> Union[List[Concept], JSONResponse]:
         """
@@ -400,15 +400,15 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
 
     @app.post("/dreambooth/createModel")
     async def create_db_model(
-            new_model_name: str = Query(None, description="The name of the model to create.", ),
-            new_model_src: str = Query(None, description="The source checkpoint to extract to create this model.", ),
-            new_model_scheduler: str = Query(None, description="The scheduler to use. V2+ models ignore this.", ),
-            create_from_hub: bool = Query(False, description="Create this model from the hub", ),
-            new_model_url: str = Query(None,
+            new_model_name: str = Form(description="The name of the model to create.", ),
+            new_model_src: str = Form(description="The source checkpoint to extract to create this model.", ),
+            new_model_scheduler: str = Form("ddim", description="The scheduler to use. V2+ models ignore this.", ),
+            create_from_hub: bool = Form(False, description="Create this model from the hub", ),
+            new_model_url: str = Form(None,
                                        description="The hub URL to use for this model. Must contain diffusers model.", ),
-            new_model_token: str = Query(None, description="Your huggingface hub token.", ),
-            new_model_extract_ema: bool = Query(False, description="Whether to extract EMA weights if present.", ),
-            api_key: str = Query("", description="If an API key is set, this must be present.", ),
+            new_model_token: str = Form(None, description="Your huggingface hub token.", ),
+            new_model_extract_ema: bool = Form(False, description="Whether to extract EMA weights if present.", ),
+            api_key: str = Form("", description="If an API key is set, this must be present.", ),
     ):
         """
         Create a new Dreambooth model.
@@ -435,8 +435,8 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
 
     @app.delete("/dreambooth/model")
     async def delete_model(
-            model_name: str = Query(None, description="The model to delete."),
-            api_key: str = Query("", description="If an API key is set, this must be present."),
+            model_name: str = Form(description="The model to delete."),
+            api_key: str = Form("", description="If an API key is set, this must be present."),
     ) -> JSONResponse:
         key_check = check_api_key(api_key)
         if key_check is not None:
@@ -452,7 +452,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
 
     @app.get("/dreambooth/model_config")
     async def get_model_config(
-            model_name: str = Query(None, description="The model name to fetch config for."),
+            model_name: str = Query(description="The model name to fetch config for."),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ) -> Union[DreamboothConfig, JSONResponse]:
         """
@@ -466,16 +466,13 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
-        status = is_running()
-        if status:
-            return status
 
         return JSONResponse(content=config.__dict__)
 
     @app.post("/dreambooth/model_config")
     async def set_model_config(
             model_cfg: DreamboothConfig = Body(description="The config to save"),
-            api_key: str = Query("", description="If an API key is set, this must be present.", )
+            api_key: str = Form("", description="If an API key is set, this must be present.", )
     ):
         """
         Save a model config from JSON.
@@ -496,15 +493,16 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             traceback.print_exc()
             return {"Exception saving model": f"{e}"}
 
-    @app.put("dreambooth/model_params")
+    @app.post("/dreambooth/model_params")
     async def set_model_params(
-            model_name: str = Query(None, description="The model name to update params for."),
-            api_key: str = Query("", description="If an API key is set, this must be present."),
-            params: Dict = Body(description="A dictionary of parameters to set.")
+            model_name: str = Form(description="The model name to update params for."),
+            api_key: str = Form("", description="If an API key is set, this must be present."),
+            params: str = Body(description="A json string representing a dictionary of parameters to set.")
     ) -> JSONResponse:
         """
         Update an existing model configuration's parameters from a dictionary of values.
         """
+        params = json.loads(params)
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
@@ -668,10 +666,10 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
 
     @app.post("/dreambooth/start_training")
     async def start_training(
-            model_name: str = Query(None,
+            model_name: str = Form(None,
                                     description="The model name to load params for.", ),
-            use_tx2img: bool = Query(True, description="Use txt2img to generate class images.", ),
-            api_key: str = Query("", description="If an API key is set, this must be present.", ),
+            use_tx2img: bool = Form(True, description="Use txt2img to generate class images."),
+            api_key: str = Form("", description="If an API key is set, this must be present.")
     ):
         """
         Start training dreambooth.
@@ -697,11 +695,11 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
 
     @app.post("/dreambooth/upload")
     async def upload_db_images(
-            model_name: str = Query(description="The model name to upload images for."),
-            instance_name: str = Query(description="The concept/instance name the images are for."),
-            create_concept: bool = Query(True, description="Enable to automatically append the new concept to the model config."),
+            model_name: str = Form(description="The model name to upload images for."),
+            instance_name: str = Form(description="The concept/instance name the images are for."),
+            create_concept: bool = Form(True, description="Enable to automatically append the new concept to the model config."),
             images: DbImagesRequest = Body(description="A dictionary of images, filenames, and prompts to save."),
-            api_key: str = Query("", description="If an API key is set, this must be present.", )
+            api_key: str = Form("", description="If an API key is set, this must be present.", )
     ):
         """
         Upload images for training.
