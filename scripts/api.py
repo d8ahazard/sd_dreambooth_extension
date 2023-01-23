@@ -56,8 +56,10 @@ class DbImagesRequest(BaseModel):
 
 import asyncio
 
+active = False
 def is_running():
-    if db_shared.status.active:
+    global active
+    if active:
         print("Something is already running.")
         return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
     return False
@@ -67,8 +69,11 @@ def run_in_background(func, *args, **kwargs):
     Wrapper function to run a non-asynchronous method as a task in the event loop.
     """
     async def wrapper():
+        global active
         new_func = functools.partial(func, *args, **kwargs)
+        active = True
         await asyncio.get_running_loop().run_in_executor(None, new_func)
+        active = False
     asyncio.create_task(wrapper())
 def zip_files(db_model_name, files, name_part=""):
     zip_buffer = io.BytesIO()
@@ -269,9 +274,6 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
-        status = is_running()
-        if status:
-            return status
 
         return JSONResponse(content=config.__dict__)
 
@@ -347,8 +349,11 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             else:
                 skip_build = False
         if not skip_build:
+            global active
             db_shared.status.begin()
+            active = True
             ckpt_result = compile_checkpoint(model_name, reload_models=False, log=False)
+            active = False
             db_shared.status.end()
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()
@@ -404,7 +409,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if status:
             return status
 
+        global active
         db_shared.status.begin()
+        active = True
         images, msg, status = ui_samples(
             model_dir=model_name,
             save_sample_prompt=sample_prompt,
@@ -419,6 +426,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             steps=steps,
             scale=scale
         )
+        active = False
         db_shared.status.end()
         if len(images) > 1:
             return zip_files(model_name, images, "_sample")
@@ -451,13 +459,15 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         status = is_running()
         if status:
             return status
-
+        global active
+        active = True
         db_shared.status.begin()
         run_in_background(
             generate_classifiers,
             config,
             use_txt2img
         )
+        active = False
         return JSONResponse(content={"message":"Generating classifiers..."})
 
 
@@ -555,7 +565,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
 
     @app.get("/dreambooth/testimg")
     async def generate_test_data():
-        model_dir = "E:\\dev\\sd_db\\mj_5"
+        model_dir = "E:\\dev\\sd_db\\clothes_samples_master\\ghap"
         text_getter = FilenameTextGetter(False)
         instance_images = get_images(model_dir)
         inst_datas = []
