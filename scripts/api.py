@@ -134,6 +134,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             new_model_url: str = Query(None,
                                        description="The hub URL to use for this model. Must contain diffusers model.", ),
             new_model_token: str = Query(None, description="Your huggingface hub token.", ),
+            train_unfrozen: bool = Query(False, description="Unfreeze model layers for training."),
             new_model_extract_ema: bool = Query(False, description="Whether to extract EMA weights if present.", ),
             api_key: str = Query("", description="If an API key is set, this must be present.", ),
     ):
@@ -158,6 +159,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
                                create_from_hub,
                                new_model_url,
                                new_model_token,
+                               train_unfrozen,
                                new_model_extract_ema)
 
     @app.post("/dreambooth/start_training")

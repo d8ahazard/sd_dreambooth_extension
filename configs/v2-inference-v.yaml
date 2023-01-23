@@ -12,7 +12,7 @@ model:
     cond_stage_key: "caption"
     image_size: 64
     channels: 4
-    cond_stage_trainable: true
+    cond_stage_trainable: false
     conditioning_key: crossattn
     monitor: val/loss_simple_ema
     scale_factor: 0.18215

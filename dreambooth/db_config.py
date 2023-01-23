@@ -24,6 +24,7 @@ class DreamboothConfig(BaseModel):
     attention: str = "default"
     cache_latents: bool = True
     center_crop: bool = True
+    freeze_clip_normalization: bool = False
     clip_skip: int = 1
     concepts_list: List[Dict] = []
     concepts_path: str = ""
@@ -36,6 +37,7 @@ class DreamboothConfig(BaseModel):
     gradient_set_to_none: bool = True
     graph_smoothing: int = 50
     half_model: bool = False
+    train_unfrozen: bool = False
     has_ema: bool = False
     hflip: bool = False
     initial_revision: int = 0
