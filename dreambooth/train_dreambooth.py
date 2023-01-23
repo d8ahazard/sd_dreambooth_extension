@@ -711,7 +711,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                             sample_dir = os.path.join(save_dir, "samples")
                             os.makedirs(sample_dir, exist_ok=True)
                             with accelerator.autocast(), torch.inference_mode():
-                                sd = SampleDataset(args.concepts(), args.shuffle_tags)
+                                sd = SampleDataset(args)
                                 prompts = sd.get_prompts()
                                 concepts = args.concepts()
                                 if args.sanity_prompt != "" and args.sanity_prompt is not None:

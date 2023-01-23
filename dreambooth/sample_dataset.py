@@ -2,19 +2,22 @@ import os.path
 import random
 from typing import List
 
-from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
+from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import FilenameTextGetter
 from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_images
 
 
 class SampleDataset:
-    def __init__(self, concepts=List[Concept], shuffle_tags: bool = True):
+    def __init__(self, config: DreamboothConfig):
+        concepts = config.concepts()
+        shuffle_tags = config.shuffle_tags
         valid_concepts = []
         prompts = {}
         c_idx = 0
         for concept in concepts:
             concept_prompts = []
+            concept_seed = concept.sample_concept_seed
             if concept.instance_data_dir == "" or concept.instance_data_dir is None:
                 continue
             if concept.n_save_sample == 0:
@@ -27,9 +30,14 @@ class SampleDataset:
                 with open(sample_file, "r") as samples:
                     lines = samples.readlines()
                     for line in lines:
+                        if concept_seed is None or concept_seed == '' or concept_seed == -1:
+                            seed = int(random.randrange(21474836147))
+                        else:
+                            seed = concept_seed
                         if line.strip() != "":
                             pd = PromptData()
-                            pd.seed = concept.sample_seed
+                            pd.concept_seed = seed
+                            pd.seed = seed
                             pd.prompt = line.strip()
                             pd.negative_prompt = concept.save_sample_negative_prompt
                             concept_prompts.append(pd)
@@ -46,13 +54,23 @@ class SampleDataset:
                                                     False
                                                     )
                         pd = PromptData()
-                        pd.seed = concept.sample_seed
+                        if concept_seed is None or concept_seed == '' or concept_seed == -1:
+                            seed = int(random.randrange(21474836147))
+                        else:
+                            seed = concept_seed
+                        pd.concept_seed = seed
+                        pd.seed = seed
                         pd.prompt = prompt
                         pd.negative_prompt = concept.save_sample_negative_prompt
                         concept_prompts.append(pd)
                 else:
+                    if concept_seed is None or concept_seed == '' or concept_seed == -1:
+                        seed = int(random.randrange(21474836147))
+                    else:
+                        seed = concept_seed
                     pd = PromptData()
-                    pd.seed = concept.sample_seed
+                    pd.concept_seed = seed
+                    pd.seed = seed
                     pd.prompt = sample_base
                     pd.negative_prompt = concept.save_sample_negative_prompt
                     concept_prompts.append(pd)
