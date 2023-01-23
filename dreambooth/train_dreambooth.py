@@ -210,6 +210,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             args.pretrained_model_name_or_path,
             subfolder="text_encoder",
             revision=args.revision,
+            torch_dtype=torch.float32
         )
         printm("Created tenc")
         vae = create_vae()
@@ -523,9 +524,10 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         print(f"  Gradient Checkpointing: {args.gradient_checkpointing}")
         print(f"  EMA: {args.use_ema}")
         print(f"  UNET: {args.train_unet}")
+        print(f"  Freeze CLIP Normalization Layers: {args.freeze_clip_normalization}")
         print(f"  LR: {args.learning_rate}")
+        if args.use_lora and stop_text_percentage > 0: print(f"  LoRA Text Encoder LR: {args.lora_txt_learning_rate}")
         print(f"  V2: {args.v2}")
-
 
         def check_save(pbar: mytqdm, is_epoch_check = False):
             nonlocal last_model_save
@@ -709,7 +711,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                             sample_dir = os.path.join(save_dir, "samples")
                             os.makedirs(sample_dir, exist_ok=True)
                             with accelerator.autocast(), torch.inference_mode():
-                                sd = SampleDataset(args.concepts(), args.shuffle_tags)
+                                sd = SampleDataset(args)
                                 prompts = sd.get_prompts()
                                 concepts = args.concepts()
                                 if args.sanity_prompt != "" and args.sanity_prompt is not None:
@@ -809,7 +811,10 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             train_tenc = epoch < text_encoder_epochs
             if stop_text_percentage == 0:
                 train_tenc = False
-            text_encoder.train(train_tenc)
+            if args.freeze_clip_normalization == False:
+                text_encoder.train(train_tenc)
+            else:
+                text_encoder.eval()
             if not args.use_lora:
                 text_encoder.requires_grad_(train_tenc)
             else:

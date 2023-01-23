@@ -100,7 +100,7 @@ function db_start_twizard() {
 
 // Generate checkpoint
 function db_start_checkpoint() {
-    return db_start(1, false, true, arguments);
+    return db_start(1, true, true, arguments);
 }
 
 // Generate sample prompts
@@ -120,7 +120,7 @@ function db_start_load_params() {
 
 // Create new checkpoint
 function db_start_create() {
-    return db_start(8, false, true, arguments);
+    return db_start(9, false, true, arguments);
 }
 
 // Train!
@@ -162,6 +162,7 @@ let db_titles = {
     "Classification Dataset Directory": "The directory containing classification/regularization images.",
     "Classification Image Negative Prompt": "A negative prompt to use when generating class images. Can be empty.",
     "Classification Steps": "The number of steps to use when generating classifier/regularization images.",
+    "Freeze CLIP Normalization Layers": "Keep the normalization layers of CLIP frozen during training. Advanced usage, may increase model performance and editability.",
     "Clip Skip": "Use output of nth layer from back of text encoder (n>=1)",
     "Concepts List": "The path to the concepts JSON file, or a JSON string.",
     "Constant/Linear Starting Factor": "Sets the initial learning rate to the main_lr * this value. If you had a target LR of .000006 and set this to .5, the scheduler would start at .000003 and increase until it reached .000006.",
@@ -173,6 +174,7 @@ let db_titles = {
     "Discord Webhook": "Send training samples to a Discord channel after generation.",
     "Existing Prompt Contents": "If using [filewords], this tells the string builder how the existing prompts are formatted.",
     "Extract EMA Weights": "If EMA weights are saved in a model, these will be extracted instead of the full Unet. Probably not necessary for training or fine-tuning.",
+    "Unfreeze Model": "Unfreezes model layers and allows for potentially better training, but makes increased VRAM usage more likely.",
     "Generate a .ckpt file when saving during training.": "When enabled, a checkpoint will be generated at the specified epoch intervals while training is active. This also controls manual generation using the 'save weights' button while training is active.",
     "Generate a .ckpt file when training completes.": "When enabled, a checkpoint will be generated when training completes successfully.",
     "Generate a .ckpt file when training is cancelled.": "When enabled, a checkpoint will be generated when training is cancelled by the user.",

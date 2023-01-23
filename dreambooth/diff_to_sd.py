@@ -452,10 +452,24 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
         cfg_file = None
         new_name = os.path.join(config.model_dir, f"{config.model_name}.yaml")
         if os.path.exists(new_name):
-            cfg_file = new_name
 
-        if v2 and cfg_file is None:
-            cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs", "v2-inference-v.yaml")
+            cfg_file = new_name
+            config_version = "v1-inference"
+
+            if config.resolution >= 768 and v2:
+                print(f"Resolution is equal to or above 768 and is a v2 model. Assuming v prediction mode.")
+                config_version = "v2-inference-v"
+
+            if config.resolution < 768 and v2:
+                print(f"Resolution is less than 768 and is a v2 model. Using epsilon mode.")
+                config_version = "v2-inference"
+
+            cfg_file = os.path.join(
+                os.path.dirname(os.path.realpath(__file__)), 
+                "..", 
+                "configs", 
+                f"{config_version}.yaml"
+            )
 
         if cfg_file is not None:
             cfg_dest = checkpoint_path.replace(checkpoint_ext, ".yaml")

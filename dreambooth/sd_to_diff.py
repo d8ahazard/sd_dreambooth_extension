@@ -58,7 +58,6 @@ from diffusers.pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBe
 from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 from transformers import AutoFeatureExtractor, BertTokenizerFast, CLIPTextModel, CLIPTokenizer, CLIPVisionConfig
 
-
 def shave_segments(path, n_shave_prefix_segments=1):
     """
     Removes segments. Positive values shave the first segments, negative shave the last segments.
@@ -930,9 +929,50 @@ def download_model(db_config: DreamboothConfig, token):
 
     return out_model, config_file
 
+def get_config_path(
+        model_version: str = "v1", 
+        train_type: str = "default", 
+        config_base_name: str = "training",
+        prediction_type: str = "epsilon"
+    ):
+    train_type = f"{train_type}" if not prediction_type == "v_prediction" else f"{train_type}-v"
+
+    return os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), 
+        "..", 
+        "configs", 
+        f"{model_version}-{config_base_name}-{train_type}.yaml"
+    )
+
+def get_config_file(train_unfrozen=False, v2=False, prediction_type="epsilon"):
+
+    config_base_name = "training"
+
+    model_versions = {
+        "v1": "v1",
+        "v2": "v2"
+    }
+    train_types = {
+        "default": "default",
+        "unfrozen": "unfrozen",
+    }
+
+    model_train_type = train_types["default"]
+    model_version_name = f"{model_versions['v1'] if not v2 else model_versions['v2']}"
+
+    if train_unfrozen:
+        model_train_type = train_types["unfrozen"]
+    else:
+        model_train_type = train_types["default"]
+
+    return get_config_path(model_version_name, model_train_type, config_base_name, prediction_type)
+
+    print("Could not find valid config. Returning default v1 config.")
+    return get_config_path(model_versions["v1"], train_types["default"], config_base_name, prediction_type="epsilon")
+        
 
 def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type="ddim", from_hub=False, new_model_url="",
-                       new_model_token="", extract_ema=False, is_512=True):
+                       new_model_token="", extract_ema=False, train_unfrozen=False, is_512=True):
     """
 
     @param new_model_name: The name of the new model
@@ -957,12 +997,11 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
 
         status
     """
-    db_config = None
     has_ema = False
     v2 = False
     revision = 0
     epoch = 0
-
+    image_size = 512 if is_512 else 768
     # Needed for V2 models so we can create the right text encoder.
     upcast_attention = False
     msg = None
@@ -970,7 +1009,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
     if from_hub and (new_model_url == "" or new_model_url is None) and (new_model_token is None or new_model_token == ""):
         msg = "Please provide a URL and token for huggingface models."
     if msg is not None:
-        return "", "", 0, 0, "", "", "", "", 512, "", msg
+        return "", "", 0, 0, "", "", "", "", image_size, "", msg
 
     # Create empty config
     db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type,
@@ -993,7 +1032,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
         else:
             msg = "Unable to fetch model from hub."
             print(msg)
-            return "", "", 0, 0, "", "", "", "", 512, "", msg
+            return "", "", 0, 0, "", "", "", "", image_size, "", msg
 
     reset_safe = False
     db_shared.status.job_count = 11
@@ -1008,7 +1047,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
                 map_location = torch.device('cpu')
         except:
             print("UPDATE YOUR WEBUI!!!!")
-            return "", "", 0, 0, "", "", "", "", 512, "", "Update your web UI."
+            return "", "", 0, 0, "", "", "", "", image_size, "", "Update your web UI."
 
         # Try to determine if v1 or v2 model if we have a ckpt
         if not from_hub:
@@ -1065,18 +1104,10 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
 
         if v2 and not is_512:
             prediction_type = "v_prediction"
-            image_size = 768
-            original_config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs",
-                                                "v2-inference-v.yaml")
         else:
             prediction_type = "epsilon"
-            image_size = 512
-            if v2:
-                original_config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs",
-                                                    "v2-inference.yaml")
-            else:
-                original_config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "configs",
-                                                    "v1-inference.yaml")
+
+        original_config_file = get_config_file(train_unfrozen, v2, prediction_type)
 
         print(f"Pred and size are {prediction_type} and {image_size}, using config: {original_config_file}")
         db_config.resolution = image_size
@@ -1107,7 +1138,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
 
         if original_config_file is None or not os.path.exists(original_config_file):
             print("Unable to select a config file.")
-            return "", "", 0, 0, "", "", "", "", 512, "", "Unable to find a config file."
+            return "", "", 0, 0, "", "", "", "", image_size, "", "Unable to find a config file."
 
         print(f"Trying to load: {original_config_file}")
         original_config = OmegaConf.load(original_config_file)
@@ -1223,7 +1254,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
     if pipe is None or db_config is None:
         msg = "Pipeline or config is not set, unable to continue."
         print(msg)
-        return "", "", 0, 0, "", "", "", "", 512, "", msg
+        return "", "", 0, 0, "", "", "", "", image_size, "", msg
     else:
         resolution = db_config.resolution
         printi("Saving diffusion model...")

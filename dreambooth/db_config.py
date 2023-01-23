@@ -24,6 +24,7 @@ class DreamboothConfig(BaseModel):
     attention: str = "default"
     cache_latents: bool = True
     center_crop: bool = True
+    freeze_clip_normalization: bool = False
     clip_skip: int = 1
     concepts_list: List[Dict] = []
     concepts_path: str = ""
@@ -36,6 +37,7 @@ class DreamboothConfig(BaseModel):
     gradient_set_to_none: bool = True
     graph_smoothing: int = 50
     half_model: bool = False
+    train_unfrozen: bool = False
     has_ema: bool = False
     hflip: bool = False
     initial_revision: int = 0
@@ -147,9 +149,17 @@ class DreamboothConfig(BaseModel):
     def concepts(self, required: int = -1):
         concepts = []
         c_idx = 0
+        # If using a file for concepts and not requesting from UI, load from file
+        if self.use_concepts and self.concepts_path and required == -1:
+            concepts_list = concepts_from_file(self.concepts_path)
+
+        # Otherwise, use 'stored' list
+        else:
+            concepts_list = self.concepts_list
         if required == -1:
-            required = len(self.concepts_list)
-        for concept_dict in self.concepts_list:
+            required = len(concepts_list)
+
+        for concept_dict in concepts_list:
             concept = Concept(input_dict=concept_dict)
             if concept.is_valid:
                 if concept.class_data_dir == "" or concept.class_data_dir is None:
@@ -181,6 +191,28 @@ class DreamboothConfig(BaseModel):
             self.pretrained_model_name_or_path = working_dir
 
 
+def concepts_from_file(concepts_path: str):
+    concepts = []
+    if os.path.exists(concepts_path) and os.path.isfile(str):
+        try:
+            with open(concepts_path,"r") as concepts_file:
+                concepts_str = concepts_file.read()
+        except Exception as e:
+            print(f"Exception opening concepts file: {e}")
+    else:
+        concepts_str = concepts_path
+
+    try:
+        concepts_data = json.loads(concepts_str)
+        for concept_data in concepts_data:
+            concept = Concept(input_dict=concept_data)
+            if concept.is_valid:
+                concepts.append(concept.__dict__)
+    except Exception as e:
+        print(f"Exception parsing concepts: {e}")
+    return concepts
+
+
 def save_config(*args):
     params = list(args)
     concept_keys = ["c1_", "c2_", "c3_", "c4_"]
@@ -193,17 +225,22 @@ def save_config(*args):
         config = DreamboothConfig(model_name)
     params_dict = dict(zip(save_keys, params))
     concepts_list = []
-    for concept_key in concept_keys:
-        concept_dict = {}
-        for key, param in params_dict.items():
-            if concept_key in key and param is not None:
-                concept_dict[key.replace(concept_key, "")] = param
-        concept_test = Concept(concept_dict)
-        if concept_test.is_valid:
-            concepts_list.append(concept_test.__dict__)
-    existing_concepts = params_dict["concepts_list"] if "concepts_list" in params_dict else []
-    if len(concepts_list) and not len(existing_concepts):
+    # If using a concepts file/string, keep concepts_list empty.
+    if params_dict["db_use_concepts"] and params_dict["db_concepts_path"]:
+        concepts_list = []
         params_dict["concepts_list"] = concepts_list
+    else:
+        for concept_key in concept_keys:
+            concept_dict = {}
+            for key, param in params_dict.items():
+                if concept_key in key and param is not None:
+                    concept_dict[key.replace(concept_key, "")] = param
+            concept_test = Concept(concept_dict)
+            if concept_test.is_valid:
+                concepts_list.append(concept_test.__dict__)
+        existing_concepts = params_dict["concepts_list"] if "concepts_list" in params_dict else []
+        if len(concepts_list) and not len(existing_concepts):
+            params_dict["concepts_list"] = concepts_list
 
     config.load_params(params_dict)
     config.save()

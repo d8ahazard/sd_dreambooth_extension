@@ -536,7 +536,7 @@ def ui_classifiers(model_name: str,
     return images, msg
 
 def create_model(new_model_name: str, ckpt_path: str, scheduler_type="ddim", from_hub=False, new_model_url="",
-                       new_model_token="", extract_ema=False, is_512=True):
+                       new_model_token="", extract_ema=False, train_unfrozen=False, is_512=True):
     printm("Extracting model.")
     res = 512 if is_512 else 768
     status.begin()
@@ -557,7 +557,7 @@ def create_model(new_model_name: str, ckpt_path: str, scheduler_type="ddim", fro
 
     unload_system_models()
     result = extract_checkpoint(new_model_name, ckpt_path, scheduler_type, from_hub, new_model_url, new_model_token,
-                              extract_ema, is_512)
+                              extract_ema, train_unfrozen, is_512)
     cleanup()
     reload_system_models()
     printm("Extraction complete.")
