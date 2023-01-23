@@ -673,6 +673,18 @@
             "in": "query"
           },
           {
+            "description": "The resolution used when generating samples",
+            "required": false,
+            "schema": {
+              "title": "Resolution",
+              "type": "integer",
+              "description": "The resolution used when generating samples, it will be converted to (resolution, resolution)",
+              "default": 512
+            },
+            "name": "resolution",
+            "in": "query"
+          },
+          {
             "description": "The seed to use when generating samples",
             "required": false,
             "schema": {

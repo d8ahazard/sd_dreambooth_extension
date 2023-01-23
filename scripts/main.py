@@ -885,6 +885,7 @@ def on_ui_tabs():
                     db_lora_weight,
                     db_lora_txt_weight,
                     db_sample_negative,
+                    db_resolution,
                     db_sample_seed,
                     db_sample_steps,
                     db_sample_scale],

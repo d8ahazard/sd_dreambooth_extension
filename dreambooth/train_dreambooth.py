@@ -964,7 +964,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             if args.epoch_pause_frequency > 0 and args.epoch_pause_time > 0:
                 if not session_epoch % args.epoch_pause_frequency:
                     print(f"Giving the GPU a break for {args.epoch_pause_time} seconds.")
-                    for i in range(args.epoch_pause_time):
+                    for i in range(int(args.epoch_pause_time)):
                         if status.interrupted:
                             training_complete = True
                             print("Training complete, interrupted.")

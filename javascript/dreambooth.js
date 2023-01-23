@@ -85,7 +85,7 @@ function db_start(numArgs, save, startProgress, args) {
 }
 
 function db_start_sample() {
-    return db_start(12, false, true, arguments);
+    return db_start(13, false, true, arguments);
 }
 
 // Performance wizard

@@ -299,6 +299,8 @@ tell if things are going to work right.
 
 *Generate Sample Image* - Generate a sample using the specified seed and prompt below.
 
+Resolution is set under Image Processing > Resolution to create samples relevant to training
+
 *Sample Prompt* - What the sample should be.
 
 *Sample Seed* - The seed to use for your sample. Leave at -1 to use a random seed.

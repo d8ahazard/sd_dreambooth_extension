@@ -388,10 +388,11 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             lora_txt_weight: float = Query(1.0,
                                            description="The weight of the lora text encoder when merging with the base model"),
             negative_prompt: str = Query("", description="An optional negative prompt to use when generating images."),
-            seed: int = Query(-1, description="The seed to use when generating samples"),
+            resolution: int = Query(512, description="The resolution used to generate samples."),
+            seed: int = Query(-1, description="The seed to use when generating samples"),            
             steps: int = Query(60, description="Number of sampling steps to use when generating images."),
             scale: float = Query(7.5, description="CFG scale to use when generating images."),
-            api_key: str = Query("", description="If an API key is set, this must be present.", )
+            api_key: str = Query("", description="If an API key is set, this must be present.")
     ):
         """
         Generate sample images for a specified model.
@@ -415,7 +416,8 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             lora_weight=lora_weight,
             lora_txt_weight=lora_txt_weight,
             negative_prompt=negative_prompt,
-            seed=seed,
+            resolution=resolution,
+            seed=seed,            
             steps=steps,
             scale=scale
         )

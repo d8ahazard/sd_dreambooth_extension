@@ -264,9 +264,10 @@ def ui_samples(model_dir: str,
                lora_weight: float = 1,
                lora_txt_weight: float = 1,
                negative_prompt: str = "",
+               resolution: int = 512,
                seed: int = -1,
                steps: int = 60,
-               scale: float = 7.5
+               scale: float = 7.5               
                ):
 
     if sample_batch_size > num_samples:
@@ -299,6 +300,7 @@ def ui_samples(model_dir: str,
             pd.negative_prompt = negative_prompt
             pd.scale = scale
             pd.seed = seed
+            pd.resolution = (resolution, resolution)
             prompts = [pd] * batch_size
             pbar = mytqdm("Generating samples")
             while len(images) < num_samples:
