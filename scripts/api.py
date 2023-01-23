@@ -425,13 +425,15 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             return status
 
         print("Creating new Checkpoint: " + new_model_name)
-        _ = create_model(new_model_name,
+        res = create_model(new_model_name,
                          new_model_src,
                          new_model_scheduler,
                          create_from_hub,
                          new_model_url,
                          new_model_token,
                          new_model_extract_ema)
+
+        return JSONResponse(res[-1])
 
     @app.delete("/dreambooth/model")
     async def delete_model(
@@ -695,11 +697,11 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
 
     @app.post("/dreambooth/upload")
     async def upload_db_images(
-            model_name: str = Form(description="The model name to upload images for."),
-            instance_name: str = Form(description="The concept/instance name the images are for."),
-            create_concept: bool = Form(True, description="Enable to automatically append the new concept to the model config."),
+            model_name: str = Query(description="The model name to upload images for."),
+            instance_name: str = Query(description="The concept/instance name the images are for."),
+            create_concept: bool = Query(True, description="Enable to automatically append the new concept to the model config."),
             images: DbImagesRequest = Body(description="A dictionary of images, filenames, and prompts to save."),
-            api_key: str = Form("", description="If an API key is set, this must be present.", )
+            api_key: str = Query("", description="If an API key is set, this must be present.", )
     ):
         """
         Upload images for training.
