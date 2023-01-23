@@ -17,7 +17,7 @@ class SampleDataset:
         c_idx = 0
         for concept in concepts:
             concept_prompts = []
-            concept_seed = concept.sample_concept_seed
+            concept_seed = concept.sample_seed
             if concept.instance_data_dir == "" or concept.instance_data_dir is None:
                 continue
             if concept.n_save_sample == 0:
