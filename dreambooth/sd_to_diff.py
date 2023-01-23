@@ -997,12 +997,11 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
 
         status
     """
-    db_config = None
     has_ema = False
     v2 = False
     revision = 0
     epoch = 0
-
+    image_size = 512 if is_512 else 768
     # Needed for V2 models so we can create the right text encoder.
     upcast_attention = False
     msg = None
@@ -1010,7 +1009,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
     if from_hub and (new_model_url == "" or new_model_url is None) and (new_model_token is None or new_model_token == ""):
         msg = "Please provide a URL and token for huggingface models."
     if msg is not None:
-        return "", "", 0, 0, "", "", "", "", 512, "", msg
+        return "", "", 0, 0, "", "", "", "", image_size, "", msg
 
     # Create empty config
     db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type,
@@ -1033,7 +1032,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
         else:
             msg = "Unable to fetch model from hub."
             print(msg)
-            return "", "", 0, 0, "", "", "", "", 512, "", msg
+            return "", "", 0, 0, "", "", "", "", image_size, "", msg
 
     reset_safe = False
     db_shared.status.job_count = 11
@@ -1048,7 +1047,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
                 map_location = torch.device('cpu')
         except:
             print("UPDATE YOUR WEBUI!!!!")
-            return "", "", 0, 0, "", "", "", "", 512, "", "Update your web UI."
+            return "", "", 0, 0, "", "", "", "", image_size, "", "Update your web UI."
 
         # Try to determine if v1 or v2 model if we have a ckpt
         if not from_hub:
@@ -1105,10 +1104,8 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
 
         if v2 and not is_512:
             prediction_type = "v_prediction"
-            image_size = 768
         else:
             prediction_type = "epsilon"
-            image_size = 512
 
         original_config_file = get_config_file(train_unfrozen, v2, prediction_type)
 
@@ -1141,7 +1138,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
 
         if original_config_file is None or not os.path.exists(original_config_file):
             print("Unable to select a config file.")
-            return "", "", 0, 0, "", "", "", "", 512, "", "Unable to find a config file."
+            return "", "", 0, 0, "", "", "", "", image_size, "", "Unable to find a config file."
 
         print(f"Trying to load: {original_config_file}")
         original_config = OmegaConf.load(original_config_file)
@@ -1257,7 +1254,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
     if pipe is None or db_config is None:
         msg = "Pipeline or config is not set, unable to continue."
         print(msg)
-        return "", "", 0, 0, "", "", "", "", 512, "", msg
+        return "", "", 0, 0, "", "", "", "", image_size, "", msg
     else:
         resolution = db_config.resolution
         printi("Saving diffusion model...")

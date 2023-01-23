@@ -557,7 +557,7 @@ def create_model(new_model_name: str, ckpt_path: str, scheduler_type="ddim", fro
 
     unload_system_models()
     result = extract_checkpoint(new_model_name, ckpt_path, scheduler_type, from_hub, new_model_url, new_model_token,
-                              extract_ema, is_512)
+                              extract_ema, train_unfrozen, is_512)
     cleanup()
     reload_system_models()
     printm("Extraction complete.")

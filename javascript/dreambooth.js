@@ -100,7 +100,7 @@ function db_start_twizard() {
 
 // Generate checkpoint
 function db_start_checkpoint() {
-    return db_start(1, false, true, arguments);
+    return db_start(1, true, true, arguments);
 }
 
 // Generate sample prompts
