@@ -8,6 +8,7 @@ import shutil
 import traceback
 import zipfile
 from pathlib import Path
+from typing import Dict
 
 import gradio as gr
 from PIL import Image
@@ -22,7 +23,7 @@ from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import DreamState
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generate_classifiers
+from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generate_classifiers, PromptDataset
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, get_lora_models
 from extensions.sd_dreambooth_extension.scripts import dreambooth
@@ -495,6 +496,29 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             traceback.print_exc()
             return {"Exception saving model": f"{e}"}
 
+    @app.put("dreambooth/model_params")
+    async def set_model_params(
+            model_name: str = Query(None, description="The model name to update params for."),
+            api_key: str = Query("", description="If an API key is set, this must be present."),
+            params: Dict = Body(description="A dictionary of parameters to set.")
+    ) -> JSONResponse:
+        """
+        Update an existing model configuration's parameters from a dictionary of values.
+        """
+        key_check = check_api_key(api_key)
+        if key_check is not None:
+            return key_check
+        if model_name is None or model_name == "":
+            return JSONResponse(status_code=422, content={"message": "Invalid model name."})
+        config = from_file(model_name)
+        if config is None:
+            return JSONResponse(status_code=422, content={"message": "Invalid config."})
+        print(f"Loading new params: {params}")
+        config.load_params(params)
+        config.save()
+        return JSONResponse(content=config.__dict__)
+
+
     @app.get("/dreambooth/models")
     async def get_models(
             api_key: str = Query("", description="If an API key is set, this must be present."),
@@ -535,16 +559,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
     @app.get("/dreambooth/samples")
     async def generate_samples(
             model_name: str = Query(description="The model name to use for generating samples."),
-            sample_prompt: str = Query(description="The prompt to use to generate sample images."),
+            sample_prompt: str = Query("", description="The prompt to use to generate sample images."),
             num_images: int = Query(1, description="The number of sample images to generate."),
             batch_size: int = Query(1, description="How many images to generate at once."),
-            lora_model_path: str = Query("", description="The path to a lora model to use when generating images."),
-            lora_rank: int = Query(1,
-                                   description="The rank of LoRA models (the amount of data to retain in the LoRA file after training)"),
-            lora_weight: float = Query(1.0,
-                                       description="The weight of the lora unet when merging with the base model."),
-            lora_txt_weight: float = Query(1.0,
-                                           description="The weight of the lora text encoder when merging with the base model"),
             negative_prompt: str = Query("", description="An optional negative prompt to use when generating images."),
             seed: int = Query(-1, description="The seed to use when generating samples"),
             steps: int = Query(60, description="Number of sampling steps to use when generating images."),
@@ -563,20 +580,34 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             return status
 
         db_shared.status.begin()
-        images, msg, status = ui_samples(
-            model_dir=model_name,
-            save_sample_prompt=sample_prompt,
-            num_samples=num_images,
-            sample_batch_size=batch_size,
-            lora_model_path=lora_model_path,
-            lora_rank=lora_rank,
-            lora_weight=lora_weight,
-            lora_txt_weight=lora_txt_weight,
-            negative_prompt=negative_prompt,
-            seed=seed,
-            steps=steps,
-            scale=scale
-        )
+        config = from_file(model_name)
+        if config is None:
+            return JSONResponse("Config not found")
+
+        prompts = []
+        if sample_prompt == "":
+            pd = PromptDataset(config.concepts(),config.model_dir, config.resolution)
+            for p, prompt_list in pd.new_prompts.items:
+                prompts.extend(pdi.prompt for pdi in prompt_list)
+        else:
+            prompts = [sample_prompt]
+        images = []
+        for prompt in prompts:
+            new_images, msg, status = ui_samples(
+                model_dir=model_name,
+                save_sample_prompt=sample_prompt,
+                num_samples=1,
+                sample_batch_size=1,
+                lora_model_path=config.lora_model_name,
+                lora_rank=config.lora_rank,
+                lora_weight=config.lora_rank,
+                lora_txt_weight=config.lora_txt_weight,
+                negative_prompt=negative_prompt,
+                seed=seed,
+                steps=steps,
+                scale=scale
+            )
+            images.extend(new_images)
         db_shared.status.end()
         if len(images) > 1:
             return zip_files(model_name, images, "_sample")
