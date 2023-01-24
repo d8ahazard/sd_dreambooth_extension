@@ -62,7 +62,7 @@ active = False
 
 
 def is_running():
-    if db_shared.status.job_count != 0 and db_shared.status.job_count is not None:
+    if active:
         print("Something is already running.")
         return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
     return False
@@ -74,6 +74,7 @@ def run_in_background(func, *args, **kwargs):
     """
 
     async def wrapper():
+        global active
         new_func = functools.partial(func, *args, **kwargs)
         await asyncio.get_running_loop().run_in_executor(None, new_func)
         active = False
