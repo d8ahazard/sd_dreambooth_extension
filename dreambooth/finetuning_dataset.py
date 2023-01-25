@@ -139,7 +139,7 @@ class DbDataset(torch.utils.data.Dataset):
 
     def cache_caption(self, image_path, caption):
         input_ids = None
-        auto_add_special_tokens = False if args.strict_tokens else True
+        auto_add_special_tokens = False if self.strict_tokens else True
 
         if self.tokenizer is not None and image_path not in self.caption_cache:
             if strict_tokens:
