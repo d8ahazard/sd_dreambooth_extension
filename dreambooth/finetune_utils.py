@@ -877,6 +877,9 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
     from extensions.sd_dreambooth_extension.dreambooth.finetuning_dataset import DbDataset
 
     print("Preparing dataset...")
+    
+    if args.strict_tokens: print("Building prompts with strict tokens enabled.")
+
     train_dataset = DbDataset(
         batch_size=batch_size,
         instance_prompts=instance_prompts,
@@ -889,6 +892,7 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
         random_crop=args.center_crop,
         shuffle_tokens=args.shuffle_tags,
         not_pad_tokens=not args.pad_tokens,
+        strict_tokens=args.strict_tokens,
         debug_dataset=debug
     )
     train_dataset.make_buckets_with_caching(vae, min_bucket_reso)
@@ -1042,3 +1046,26 @@ class TrainResult:
     config: DreamboothConfig = None
     msg: str = ""
     samples: [Image] = []
+
+def build_strict_tokens(
+        caption: str = '', 
+        tenc_start_token: str = '', 
+        tenc_end_token: str = ''
+    ):
+
+    caption_list = []
+    caption_split = re.split(r'\s+|[,;.!?]\s*', caption)
+
+    for cap in caption_split:
+        words_with_special_token = []
+        split_cap = cap.split(" ")
+        
+        for sc in split_cap:
+            words_with_special_token.append(f"{sc}</w>")
+            
+        new_cap = ' '.join(words_with_special_token)
+        caption_list.append(f"{tenc_start_token}{new_cap}{tenc_start_token}")
+        
+    special_caption = ', '.join(caption_list)
+
+    return special_caption

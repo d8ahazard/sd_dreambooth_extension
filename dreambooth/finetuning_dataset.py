@@ -12,13 +12,13 @@ from torchvision.transforms import transforms
 from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import closest_resolution, make_bucket_resolutions, \
-    mytqdm
+    mytqdm, build_strict_tokens
 from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 
 
 class DbDataset(torch.utils.data.Dataset):
     def __init__(self, batch_size, instance_prompts, class_prompts, tokens, tokenizer,
-                 resolution, prior_loss_weight, hflip, random_crop, shuffle_tokens, not_pad_tokens, debug_dataset) -> None:
+                 resolution, prior_loss_weight, hflip, random_crop, shuffle_tokens, not_pad_tokens, strict_tokens, debug_dataset) -> None:
         super().__init__()
         self.batch_indices = []
         self.batch_samples = []
@@ -59,10 +59,12 @@ class DbDataset(torch.utils.data.Dataset):
         self.debug_dataset = debug_dataset
         self.shuffle_tokens = shuffle_tokens
         self.not_pad_tokens = not_pad_tokens
+        self.strict_tokens = strict_tokens
         self.tokens = tokens
         self.vae = None
         self.cache_latents = False
         flip_p = 0.5 if hflip else 0.0
+
         if hflip:
             self.image_transforms = transforms.Compose(
                 [
@@ -138,6 +140,8 @@ class DbDataset(torch.utils.data.Dataset):
     def cache_caption(self, image_path, caption):
         input_ids = None
         if self.tokenizer is not None and image_path not in self.caption_cache:
+            if strict_tokens:
+                caption = strict_tokens(caption, self.tokenizer.bos_token, self.tokenizer.eos_token)
             if self.not_pad_tokens:
                 input_ids = self.tokenizer(caption, padding=True, truncation=True,
                                            return_tensors="pt").input_ids

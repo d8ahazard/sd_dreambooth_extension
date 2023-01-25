@@ -218,6 +218,7 @@ let db_titles = {
     "Number of Hard Resets": "Number of hard resets of the lr in cosine_with_restarts scheduler.",
     "Number of Samples to Generate": "How many samples to generate per subject.",
     "Pad Tokens": "Pad the input images token length to this amount. You probably want to do this.",
+    "Strict Tokens": "Parses instance prompts separated by the following characters [,;.!?], and prevents breaking up tokens when using the tokenizer. Useful if you have prompts separated by a lot of tags."
     "Pause After N Epochs": "Number of epochs after which training will be paused for the specified time. Useful if you want to give your GPU a rest.",
     "Performance Wizard (WIP)": "Attempt to automatically set training parameters based on total VRAM. Still under development.",
     "Polynomial Power": "Power factor of the polynomial scheduler.",

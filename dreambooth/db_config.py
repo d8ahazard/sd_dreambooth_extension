@@ -63,6 +63,7 @@ class DreamboothConfig(BaseModel):
     model_path: str = ""
     num_train_epochs: int = 100
     pad_tokens: bool = True
+    strict_tokens: bool = False
     pretrained_model_name_or_path: str = ""
     pretrained_vae_name_or_path: str = ""
     prior_loss_scale: bool = False
