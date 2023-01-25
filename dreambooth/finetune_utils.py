@@ -1054,7 +1054,7 @@ def build_strict_tokens(
     ):
 
     caption_list = []
-    caption_split = re.split(r'[,;.!?]', caption)
+    caption_split = re.split(r'[,;.!?]\s', caption)
 
     for cap in caption_split:
         words_with_special_token = []
@@ -1064,7 +1064,7 @@ def build_strict_tokens(
             if sc: words_with_special_token.append(f"{sc}</w>")
             
         new_cap = ' '.join(words_with_special_token)
-        caption_list.append(f"{tenc_start_token}{new_cap}{tenc_start_token}")
+        caption_list.append(f"{tenc_start_token}{new_cap}{tenc_end_token}")
         
     special_caption = ', '.join(caption_list)
 
