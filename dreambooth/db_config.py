@@ -46,7 +46,8 @@ class DreamboothConfig(BaseModel):
     lifetime_revision: int = 0
     lora_learning_rate: float = 1e-4
     lora_model_name: str = ""
-    lora_rank: int = 4
+    lora_unet_rank: int = 4
+    lora_text_rank: int = 4
     lora_txt_learning_rate: float = 5e-5
     lora_txt_weight: float = 1.0
     lora_weight: float = 1.0

@@ -609,7 +609,8 @@ def patch_pipe(
     pipe,
     unet_path,
     token: str,
-    r: int = 4,
+    r_unet: int = 4,
+    r_text: int = 4,
     patch_unet=True,
     patch_text=False,
     patch_ti=False,
@@ -633,7 +634,7 @@ def patch_pipe(
         monkeypatch_or_replace_lora(
             pipe.unet,
             torch.load(unet_path),
-            r=r,
+            r=r_unet,
             target_replace_module=unet_target_replace_module,
         )
 
@@ -643,7 +644,7 @@ def patch_pipe(
             pipe.text_encoder,
             torch.load(text_path),
             target_replace_module=text_target_replace_module,
-            r=r,
+            r=r_text,
         )
     if patch_ti:
         print("LoRA : Patching token input")
