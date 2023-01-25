@@ -273,7 +273,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 text_encoder_lora_params, _ = inject_trainable_lora(
                     text_encoder,
                     target_replace_module=["CLIPAttention"],
-                    r=args.lora_unet_rank,
+                    r=args.lora_text_rank,
                     loras=lora_txt
                 )
             printm("Lora loaded")
