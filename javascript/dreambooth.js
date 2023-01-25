@@ -203,7 +203,7 @@ let db_titles = {
     "Log Memory": "Log the current GPU memory usage.",
     "Lora Model": "The Lora model to load for continued fine-tuning or checkpoint generation.",
     "Lora UNET Rank": "The rank for the Lora UNET (Default 4). Higher values = better quality with large file size. Lower values = sacrifice quality with lower file size. Learning rates work differently at different ranks. Saved loras at high precision (fp32) will lead to larger lora files.",
-    "Lora Text Encoder Rank (Default 4)": "The rank for the Lora Text Encoder. Higher values = better quality with large file size. Lower values = sacrifice quality with lower file size. Learning rates work differently at different ranks. Saved loras at high precision (fp32) will lead to larger lora files.",
+    "Lora Text Encoder Rank": "The rank for the Lora Text Encoder (Default 4). Higher values = better quality with large file size. Lower values = sacrifice quality with lower file size. Learning rates work differently at different ranks. Saved loras at high precision (fp32) will lead to larger lora files.",
     "Lora UNET Learning Rate": "The learning rate at which to train lora unet. Regular learning rate is ignored.",
     "Lora Text Learning Rate": "The learning rate at which to train lora text encoder. Regular learning rate is ignored.",
     "Lora Text Weight": "What percentage of the lora weights should be applied to the text encoder when creating a checkpoint.",
