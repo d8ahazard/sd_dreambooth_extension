@@ -19,6 +19,7 @@ from transformers import PretrainedConfig
 
 from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
+from modules.sd_models import CheckpointInfo
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow
@@ -251,7 +252,7 @@ def is_image(path: Path, feats=None):
     return is_img
 
 
-def get_checkpoint_match(search_string):
+def get_checkpoint_match(search_string) -> Union[CheckpointInfo, None]:
     try:
         from modules import sd_models
         for info in sd_models.checkpoints_list.values():

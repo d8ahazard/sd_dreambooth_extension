@@ -20,7 +20,7 @@ def get_root_dir():
 
 script_path = get_root_dir()
 print(f"Script path is {script_path}")
-models_path = os.path.join(script_path)
+models_path = os.path.join(script_path, "models")
 embeddings_dir = os.path.join(script_path, "embeddings")
 dreambooth_models_path = os.path.join(models_path, "dreambooth")
 ckpt_dir = os.path.join(models_path, "Stable-diffusion")
@@ -104,13 +104,11 @@ def load_auto_settings():
         config = ws.cmd_opts.config
         device = ws.device
         try:
-            dreambooth_models_path = ws.cmd_opts.dreambooth_models_path
-            lora_models_path = ws.cmd_opts.lora_models_path
-            embeddings_dir = ws.cmd_opts.embeddings_dir
+            dreambooth_models_path = ws.cmd_opts.dreambooth_models_path if ws.cmd_opts.dreambooth_models_path is not None else dreambooth_models_path
+            lora_models_path = ws.cmd_opts.lora_models_path if ws.cmd_opts.lora_models_path is not None else lora_models_path
+            embeddings_dir = ws.cmd_opts.embeddings_dir if ws.cmd_opts.embeddings_dir is not None else embeddings_dir
         except:
             pass
-        if dreambooth_models_path == "" or dreambooth_models_path is None:
-            dreambooth_models_path = os.path.join(models_path, "dreambooth")
 
         try:
             force_cpu = ws.cmd_opts.force_cpu

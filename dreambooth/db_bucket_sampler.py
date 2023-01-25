@@ -6,7 +6,7 @@ from extensions.sd_dreambooth_extension.dreambooth.utils import printm
 
 
 class BucketSampler:
-    def __init__(self, dataset: DbDataset, batch_size):
+    def __init__(self, dataset: DbDataset, batch_size, debug=False):
         self.dataset = dataset
         self.batch_size = batch_size
         self.resolutions = dataset.resolutions
@@ -17,6 +17,7 @@ class BucketSampler:
         self.current_index = 0
         self.total_samples = 0
         self.prior_loss_weight = 1.0
+        self.debug = debug
         self.set_buckets()
 
     def __iter__(self):
@@ -67,7 +68,8 @@ class BucketSampler:
                         pop_index = 0
         else:
             resos_to_use = all_resos.copy()
-        random.shuffle(resos_to_use)
+        if not self.debug:
+            random.shuffle(resos_to_use)
         self.active_resos = resos_to_use
         self.current_bucket = 0
 

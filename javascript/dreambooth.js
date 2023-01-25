@@ -253,6 +253,7 @@ let db_titles = {
     "Shuffle After Epoch": "When enabled, will shuffle the dataset after the first epoch. Will enable text encoder training and latent caching (More VRAM).",
     "Source Checkpoint": "The source checkpoint to extract for training.",
     "Step Ratio of Text Encoder Training": "The number of steps per image (Epoch) to train the text encoder for. Set 0.5 for 50% of the epochs",
+    "Strict Tokens": "Parses instance prompts separated by the following characters [,;.!?], and prevents breaking up tokens when using the tokenizer. Useful if you have prompts separated by a lot of tags.",
     "Total Number of Class/Reg Images": "Total number of classification/regularization images to use. If no images exist, they will be generated. Set to 0 to disable prior preservation.",
     "Train Text Encoder": "Enabling this will provide better results and editability, but cost more VRAM.",
     "Train": "Start training.",

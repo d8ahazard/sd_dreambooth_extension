@@ -269,11 +269,11 @@ class FilenameTextGetter:
         # We already replaced [filewords] up there ^^
         output = filename_text
         # Remove underscores, double-spaces, and other characters that will cause issues.
-        output.replace("_", " ")
-        output.replace("  ", " ")
+        output = output.replace("_", " ")
+        output =output.replace("  ", " ")
         strip_chars = ["(", ")", "/", "\\", ":", "[", "]"]
         for s_char in strip_chars:
-            output.replace(s_char, "")
+            output = output.replace(s_char, "")
 
         tags = output.split(',')
                 
@@ -484,12 +484,6 @@ class ImageBuilder:
             if new_model_info is not None and current_model is not None:
 
                 if isinstance(new_model_info, sd_models.CheckpointInfo) and new_model_info.sha256 != current_model.sha256:
-                    self.last_model = current_model
-                    print(f"Loading model: {new_model_info.model_name}")
-                    sd_models.load_model(new_model_info)
-                # named tuple fallback for older CheckpointInfo data structure
-                elif isinstance(new_model_info, tuple) and new_model_info[0] != current_model[0]:
-
                     self.last_model = current_model
                     print(f"Loading model: {new_model_info.model_name}")
                     sd_models.load_model(new_model_info)
@@ -856,6 +850,7 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
                      batch_size = None, tokenizer=None, vae=None, debug=True):
     if debug:
         print("Generating dataset.")
+
     db_gallery = gradio.update(value=None)
     db_prompt_list = gradio.update(value=None)
     db_status = gradio.update(value=None)
@@ -869,6 +864,15 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
         print("No CONFIG!")
         return db_gallery, db_prompt_list, db_status
 
+    if debug and tokenizer is None:
+        print("Definitely made a tokenizer.")
+        tokenizer = AutoTokenizer.from_pretrained(
+            os.path.join(args.pretrained_model_name_or_path, "tokenizer"),
+            revision=args.revision,
+            use_fast=False,
+        )
+
+
     tokens = []
 
     print(f"Found {len(class_prompts)} reg images.")
@@ -877,6 +881,9 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
     from extensions.sd_dreambooth_extension.dreambooth.finetuning_dataset import DbDataset
 
     print("Preparing dataset...")
+
+    if args.strict_tokens: print("Building prompts with strict tokens enabled.")
+
     train_dataset = DbDataset(
         batch_size=batch_size,
         instance_prompts=instance_prompts,
@@ -888,10 +895,12 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
         hflip=args.hflip,
         random_crop=args.center_crop,
         shuffle_tokens=args.shuffle_tags,
+        strict_tokens=args.strict_tokens,
         not_pad_tokens=not args.pad_tokens,
         debug_dataset=debug
     )
     train_dataset.make_buckets_with_caching(vae, min_bucket_reso)
+
     #train_dataset = train_dataset.pin_memory()
     print(f"Total dataset length (steps): {len(train_dataset)}")
     return train_dataset
@@ -1042,3 +1051,26 @@ class TrainResult:
     config: DreamboothConfig = None
     msg: str = ""
     samples: [Image] = []
+
+def build_strict_tokens(
+        caption: str = '',
+        tenc_start_token: str = '',
+        tenc_end_token: str = ''
+    ):
+
+    caption_list = []
+    caption_split = re.split(r'[,;.!?]', caption)
+
+    for cap in caption_split:
+        words_with_special_token = []
+        split_cap = cap.split(" ")
+
+        for sc in split_cap:
+            if sc: words_with_special_token.append(f"{sc}</w>")
+
+        new_cap = ' '.join(words_with_special_token)
+        caption_list.append(f"{tenc_start_token}{new_cap}{tenc_start_token}")
+
+    special_caption = ', '.join(caption_list)
+
+    return special_caption

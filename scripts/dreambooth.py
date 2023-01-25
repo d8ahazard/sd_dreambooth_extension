@@ -669,7 +669,7 @@ def debug_buckets(model_name, num_epochs, batch_size):
         min_lr=args.learning_rate_min
     )
 
-    sampler = BucketSampler(dataset, args.train_batch_size)
+    sampler = BucketSampler(dataset, args.train_batch_size, True)
     n_workers = 0
 
     dataloader = torch.utils.data.DataLoader(
@@ -710,4 +710,13 @@ def debug_buckets(model_name, num_epochs, batch_size):
     with open(bucket_file, "w") as outfile:
         json.dump(lines, outfile, indent=4)
     status.end()
+    try:
+        del dataloader
+        del dataset.tokenizer
+        del dataset
+        del lr_scheduler
+        del optimizer
+        cleanup()
+    except:
+        pass
     return "", f"Debug output saved to {bucket_file}"

@@ -1,24 +1,39 @@
 import os.path
 import random
 import traceback
-from typing import List
+from typing import List, Tuple, Union
 
 import cv2
 import numpy as np
 import torch.utils.data
 from PIL import Image
 from torchvision.transforms import transforms
+from transformers import CLIPTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import closest_resolution, make_bucket_resolutions, \
-    mytqdm
+    mytqdm, build_strict_tokens
 from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 
 
 class DbDataset(torch.utils.data.Dataset):
-    def __init__(self, batch_size, instance_prompts, class_prompts, tokens, tokenizer,
-                 resolution, prior_loss_weight, hflip, random_crop, shuffle_tokens, not_pad_tokens, debug_dataset) -> None:
+    def __init__(
+            self,
+            batch_size: int,
+            instance_prompts: List[PromptData],
+            class_prompts: List[PromptData],
+            tokens: List[Tuple[str, str]],
+            tokenizer: Union[CLIPTokenizer, None],
+            resolution: int,
+            prior_loss_weight: float,
+            hflip: bool,
+            random_crop: bool,
+            shuffle_tokens: bool,
+            strict_tokens: bool,
+            not_pad_tokens: bool,
+            debug_dataset: bool
+    ) -> None:
         super().__init__()
         self.batch_indices = []
         self.batch_samples = []
@@ -59,6 +74,7 @@ class DbDataset(torch.utils.data.Dataset):
         self.debug_dataset = debug_dataset
         self.shuffle_tokens = shuffle_tokens
         self.not_pad_tokens = not_pad_tokens
+        self.strict_tokens = strict_tokens
         self.tokens = tokens
         self.vae = None
         self.cache_latents = False
@@ -137,14 +153,20 @@ class DbDataset(torch.utils.data.Dataset):
 
     def cache_caption(self, image_path, caption):
         input_ids = None
-        if self.tokenizer is not None and image_path not in self.caption_cache:
+        auto_add_special_tokens = False if self.strict_tokens else True
+        if self.tokenizer is not None and (image_path not in self.caption_cache or self.debug_dataset):
+            if self.strict_tokens:
+                caption = build_strict_tokens(caption, self.tokenizer.bos_token, self.tokenizer.eos_token)
             if self.not_pad_tokens:
                 input_ids = self.tokenizer(caption, padding=True, truncation=True,
+                                           add_special_tokens=auto_add_special_tokens,
                                            return_tensors="pt").input_ids
             else:
                 input_ids = self.tokenizer(caption, padding='max_length', truncation=True,
+                                           add_special_tokens=auto_add_special_tokens,
                                            return_tensors='pt').input_ids
         self.caption_cache[image_path] = input_ids
+        return caption, input_ids
 
     def make_buckets_with_caching(self, vae, min_size):
         self.vae = vae
@@ -251,10 +273,12 @@ class DbDataset(torch.utils.data.Dataset):
         batch_indices = []
         batch_samples = []
         keys = list(self.train_dict.keys())
-        random.shuffle(keys)
+        if not self.debug_dataset:
+            random.shuffle(keys)
         for key in keys:
             sample_list = []
-            random.shuffle(self.train_dict[key])
+            if not self.debug_dataset:
+                random.shuffle(self.train_dict[key])
             for entry in self.train_dict[key]:
                 sample_list.append(entry)
                 batch_indices.append(entry[0])
@@ -271,7 +295,7 @@ class DbDataset(torch.utils.data.Dataset):
         self.batch_samples = batch_samples
 
     def check_shuffle_tokens(self, caption):
-        if self.shuffle_tokens:
+        if self.shuffle_tokens and not self.debug_dataset:
             tags = caption.split(',')
             if len(tags) > 2:
                 first_tag = tags.pop(0)
@@ -317,7 +341,10 @@ class DbDataset(torch.utils.data.Dataset):
             image_data, input_id = self.load_image(image_path, caption, self.active_resolution)
         else:
             image_data = image_path
-            input_id = caption
+            print(f"Recoding: {caption}")
+            caption, cap_tokens = self.cache_caption(image_path, caption)
+            rebuilt = self.tokenizer.decode(cap_tokens.tolist()[0])
+            input_id = (caption, rebuilt)
         loss_weight = self.prior_loss_weight if is_class_image else 1.0
         # If we have reached the end of our bucket, increment to the next, update the count, reset image index.
         example = {"image": image_data, "input_id": input_id, "loss_weight": loss_weight, "res": self.active_resolution}

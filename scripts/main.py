@@ -328,6 +328,7 @@ def on_ui_tabs():
                                     db_clip_skip = gr.Slider(label="Clip Skip", value=1, minimum=1, maximum=12, step=1)
                                     db_adamw_weight_decay = gr.Slider(label="AdamW Weight Decay", minimum=0, maximum=1, step=1e-7, value=1e-2, visible=True)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
+                                    db_strict_tokens = gr.Checkbox(label="Strict Tokens", value=False)
                                     db_shuffle_tags = gr.Checkbox(label="Shuffle Tags", value=True)
                                     db_max_token_length = gr.Slider(label="Max Token Length", minimum=75, maximum=300,
                                                                     step=75)
@@ -609,9 +610,10 @@ def on_ui_tabs():
             db_save_state_cancel,
             db_save_state_during,
             db_scheduler,
-            db_src,
+            db_strict_tokens,
             db_shuffle_tags,
             db_snapshot,
+            db_src,
             db_train_batch_size,
             db_train_imagic_only,
             db_train_unet,         
