@@ -1,5 +1,6 @@
 # One wrapper we're going to use to not depend so much on the main app.
 import datetime
+import inspect
 import math
 import os
 import pathlib
@@ -11,11 +12,20 @@ import torch
 from PIL import Image
 from packaging import version
 
-dreambooth_models_path = ""
-models_path = ""
-script_path = os.path.dirname(os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
-ckpt_dir = ""
-lora_models_path = ""
+def get_root_dir():
+    frame = inspect.stack()[-1]
+    module = inspect.getmodule(frame[0])
+    file_path = module.__file__
+    return os.path.dirname(os.path.abspath(file_path))
+
+script_path = get_root_dir()
+print(f"Script path is {script_path}")
+models_path = os.path.join(script_path)
+embeddings_dir = os.path.join(script_path, "embeddings")
+dreambooth_models_path = os.path.join(models_path, "dreambooth")
+ckpt_dir = os.path.join(models_path, "Stable-diffusion")
+lora_models_path = os.path.join(models_path, "lora")
+
 show_progress_every_n_steps = 10
 parallel_processing_allowed = True
 dataset_filename_word_regex = ""
@@ -69,7 +79,8 @@ def image_grid(imgs, batch_size=1, rows=None):
 def load_auto_settings():
     global models_path, script_path, ckpt_dir, device_id, disable_safe_unpickle, dataset_filename_word_regex, \
         dataset_filename_join_string, show_progress_every_n_steps, parallel_processing_allowed, state, ckptfix, medvram, \
-        lowvram, dreambooth_models_path, lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config, device, force_cpu
+        lowvram, dreambooth_models_path, lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config, device, \
+        force_cpu, embeddings_dir
     try:
         from modules import shared as ws, devices, images
         from modules import paths
@@ -95,6 +106,7 @@ def load_auto_settings():
         try:
             dreambooth_models_path = ws.cmd_opts.dreambooth_models_path
             lora_models_path = ws.cmd_opts.lora_models_path
+            embeddings_dir = ws.cmd_opts.embeddings_dir
         except:
             pass
         if dreambooth_models_path == "" or dreambooth_models_path is None:

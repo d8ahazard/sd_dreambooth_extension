@@ -13,7 +13,7 @@ from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, l
     list_floats, get_lora_models, wrap_gpu_call, parse_logs, printm
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
-    training_wizard, training_wizard_person, load_model_params, ui_classifiers, ui_samples, debug_buckets, create_model
+    training_wizard, training_wizard_person, load_model_params, ui_classifiers, debug_buckets, create_model, generate_samples
 from modules import script_callbacks, sd_models
 from modules.ui import gr_show, create_refresh_button
 
@@ -417,11 +417,17 @@ def on_ui_tabs():
                         db_bucket_batch = gr.Slider(value=1, step=1, minimum=1, maximum=500, label="Batch Size to Simulate")
                         db_generate_sample = gr.Button(value="Generate Sample Images")
                         db_sample_prompt = gr.Textbox(label="Sample Prompt")
+                        db_sample_prompt_file = gr.Textbox(label="Sample Prompt File")
                         db_sample_negative = gr.Textbox(label="Sample Negative Prompt")
+                        db_sample_width = gr.Slider(label="Sample Width", value=512, step=64,minimum=128, maximum=2048)
+                        db_sample_height = gr.Slider(label="Sample Height", value=512, step=64, minimum=128, maximum=2048)
                         db_sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
                         db_num_samples = gr.Number(label="Number of Samples to Generate", value=1, precision=0)
+                        db_gen_sample_batch_size = gr.Slider(label="Sample Batch Size", value=1, step=1, minimum=1,
+                                                     maximum=100, interactive=True)
                         db_sample_steps = gr.Number(label="Sample Steps", value=60, precision=0)
                         db_sample_scale = gr.Number(label="Sample CFG Scale", value=7.5, precision=2)
+                        db_sample_txt2img = gr.Checkbox(label="Use txt2img", value=True)
 
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")
@@ -878,20 +884,21 @@ def on_ui_tabs():
         )
 
         db_generate_sample.click(
-            fn=wrap_gpu_call(ui_samples),
+            fn=wrap_gpu_call(generate_samples),
             _js="db_start_sample",
             inputs=[db_model_name,
                     db_sample_prompt,
+                    db_sample_prompt_file,
+                    db_sample_negative,
+                    db_sample_width,
+                    db_sample_height,
                     db_num_samples,
                     db_sample_batch_size,
-                    db_lora_model_name,
-                    db_lora_rank,
-                    db_lora_weight,
-                    db_lora_txt_weight,
-                    db_sample_negative,
                     db_sample_seed,
                     db_sample_steps,
-                    db_sample_scale],
+                    db_sample_scale,
+                    db_sample_txt2img
+                    ],
             outputs=[db_gallery, db_prompt_list, db_status]
         )
 

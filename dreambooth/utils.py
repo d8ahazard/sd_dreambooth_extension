@@ -17,6 +17,7 @@ from pandas.plotting._matplotlib.style import get_standard_colors
 from tqdm.auto import tqdm
 from transformers import PretrainedConfig
 
+from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -28,17 +29,6 @@ from pandas import DataFrame
 from tensorboard.compat.proto import event_pb2
 
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from modules import shared, paths, sd_models
-
-try:
-    cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
-except:
-    cmd_dreambooth_models_path = None
-
-try:
-    cmd_lora_models_path = shared.cmd_opts.lora_models_path
-except:
-    cmd_lora_models_path = None
 
 
 def printi(msg, params=None, log=True):
@@ -53,7 +43,7 @@ def printi(msg, params=None, log=True):
 
 
 def get_db_models():
-    model_dir = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
+    model_dir = db_shared.models_path
     out_dir = os.path.join(model_dir, "dreambooth")
     output = []
     if os.path.exists(out_dir):
@@ -65,7 +55,7 @@ def get_db_models():
 
 
 def get_lora_models():
-    model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else paths.models_path
+    model_dir = db_shared.lora_models_path
     out_dir = os.path.join(model_dir, "lora")
     output = [""]
     if os.path.exists(out_dir):
@@ -147,14 +137,18 @@ def cleanup(do_print: bool = False):
 
 
 def unload_system_models():
-    if shared.sd_model is not None:
-        shared.sd_model.to("cpu")
-    for former in shared.face_restorers:
-        try:
-            former.send_model_to("cpu")
-        except:
-            pass
-    cleanup()
+    try:
+        import modules.shared
+        if modules.shared.sd_model is not None:
+            modules.shared.sd_model.to("cpu")
+        for former in modules.shared.face_restorers:
+            try:
+                former.send_model_to("cpu")
+            except:
+                pass
+        cleanup()
+    except:
+        pass
 
 
 def list_attention():
@@ -188,9 +182,13 @@ def list_floats():
 
 
 def reload_system_models():
-    if shared.sd_model is not None:
-        shared.sd_model.to(shared.device)
-    print("Restored system models.")
+    try:
+        import modules.shared
+        if modules.shared.sd_model is not None:
+            modules.shared.sd_model.to(db_shared.device)
+        print("Restored system models.")
+    except:
+        pass
 
 
 def wrap_gpu_call(func, extra_outputs=None):
@@ -254,9 +252,13 @@ def is_image(path: Path, feats=None):
 
 
 def get_checkpoint_match(search_string):
-    for info in sd_models.checkpoints_list.values():
-        if search_string in info.title or search_string in info.model_name or search_string in info.filename:
-            return info
+    try:
+        from modules import sd_models
+        for info in sd_models.checkpoints_list.values():
+            if search_string in info.title or search_string in info.model_name or search_string in info.filename:
+                return info
+    except:
+        pass
     return None
 
 

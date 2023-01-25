@@ -37,12 +37,7 @@ from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_
     import_model_class_from_model_name_or_path, db_save_image
 from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, inject_trainable_lora
-from modules import shared, paths
 
-try:
-    cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
-except Exception:
-    cmd_dreambooth_models_path = None
 
 
 logger = logging.getLogger(__name__)
@@ -492,13 +487,16 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         if os.path.exists(new_hotness):
             accelerator.print(f"Resuming from checkpoint {new_hotness}")
             try:
-                no_safe = shared.cmd_opts.disable_safe_unpickle
+                import modules.shared
+                no_safe = modules.shared.cmd_opts.disable_safe_unpickle
+                modules.shared.cmd_opts.disable_safe_unpickle = True
+
             except:
                 no_safe = False
             try:
-                shared.cmd_opts.disable_safe_unpickle = True
+                import modules.shared
                 accelerator.load_state(new_hotness)
-                shared.cmd_opts.disable_safe_unpickle = no_safe
+                modules.shared.cmd_opts.disable_safe_unpickle = no_safe
                 global_step = resume_step = args.revision
                 resume_from_checkpoint = True
                 first_epoch = args.epoch
@@ -664,17 +662,10 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                             elif save_lora:
                                 pbar.set_description("Saving Lora Weights...")
                                 lora_model_name = args.model_name if args.custom_model_name == "" else args.custom_model_name
-                                try:
-                                    cmd_lora_models_path = shared.cmd_opts.lora_models_path
-                                except:
-                                    cmd_lora_models_path = None
-                                model_dir = os.path.dirname(
-                                    cmd_lora_models_path) if cmd_lora_models_path else paths.models_path
+                                model_dir = os.path.dirname(db_shared.lora_models_path)
                                 out_file = os.path.join(model_dir, "lora")
                                 os.makedirs(out_file, exist_ok=True)
                                 out_file = os.path.join(out_file, f"{lora_model_name}_{args.revision}.pt")
-                                # print(f"\nSaving lora weights at step {args.revision}")
-                                # Save a pt file
                                 save_lora_weight(s_pipeline.unet, out_file)
                                 if stop_text_percentage != 0:
                                     out_txt = out_file.replace(".pt", "_txt.pt")

@@ -26,7 +26,7 @@ from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generat
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
 from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, get_lora_models
 from extensions.sd_dreambooth_extension.scripts import dreambooth
-from extensions.sd_dreambooth_extension.scripts.dreambooth import ui_samples, create_model
+from extensions.sd_dreambooth_extension.scripts.dreambooth import create_model, generate_samples
 from modules import sd_models
 
 
@@ -533,22 +533,32 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         return JSONResponse(models)
 
     @app.get("/dreambooth/samples")
-    async def generate_samples(
+    #
+    # db_model_name,
+    # db_sample_prompt,
+    # db_sample_prompt_file,
+    # db_sample_negative,
+    # db_sample_width,
+    # db_sample_height,
+    # db_num_samples,
+    # db_sample_batch_size,
+    # db_sample_seed,
+    # db_sample_steps,
+    # db_sample_scale,
+    # db_sample_txt2img
+    async def api_generate_samples(
             model_name: str = Query(description="The model name to use for generating samples."),
-            sample_prompt: str = Query(description="The prompt to use to generate sample images."),
+            sample_prompt: str = Query("", description="The prompt to use to generate sample images."),
+            sample_prompt_file: str = Query("", description="A file of pre-generated sample prompts."),
+            negative_prompt: str = Query("", description="An optional negative prompt to use when generating images."),
+            width: int = Query(512, description="Sample width"),
+            height: int = Query(512, description="Sample height"),
             num_images: int = Query(1, description="The number of sample images to generate."),
             batch_size: int = Query(1, description="How many images to generate at once."),
-            lora_model_path: str = Query("", description="The path to a lora model to use when generating images."),
-            lora_rank: int = Query(1,
-                                   description="The rank of LoRA models (the amount of data to retain in the LoRA file after training)"),
-            lora_weight: float = Query(1.0,
-                                       description="The weight of the lora unet when merging with the base model."),
-            lora_txt_weight: float = Query(1.0,
-                                           description="The weight of the lora text encoder when merging with the base model"),
-            negative_prompt: str = Query("", description="An optional negative prompt to use when generating images."),
             seed: int = Query(-1, description="The seed to use when generating samples"),
             steps: int = Query(60, description="Number of sampling steps to use when generating images."),
             scale: float = Query(7.5, description="CFG scale to use when generating images."),
+            use_txt2img: bool = Query(True, description="Use txt2img to generate samples"),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ):
         """
@@ -563,20 +573,25 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             return status
 
         db_shared.status.begin()
-        images, msg, status = ui_samples(
-            model_dir=model_name,
-            save_sample_prompt=sample_prompt,
-            num_samples=num_images,
-            sample_batch_size=batch_size,
-            lora_model_path=lora_model_path,
-            lora_rank=lora_rank,
-            lora_weight=lora_weight,
-            lora_txt_weight=lora_txt_weight,
+        config = from_file(model_name)
+        if config is None:
+            return JSONResponse("Config not found")
+
+        prompts, images = generate_samples(
+            model_name,
+            prompt=sample_prompt,
+            prompt_file=sample_prompt_file,
             negative_prompt=negative_prompt,
+            width=width,
+            height=height,
+            num_samples=num_images,
+            batch_size=batch_size,
             seed=seed,
+            scale=scale,
             steps=steps,
-            scale=scale
+            use_txt2img=use_txt2img
         )
+
         db_shared.status.end()
         if len(images) > 1:
             return zip_files(model_name, images, "_sample")

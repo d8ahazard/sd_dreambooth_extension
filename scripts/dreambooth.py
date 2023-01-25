@@ -3,6 +3,7 @@ import json
 import logging
 import math
 import os
+import random
 import traceback
 
 import gradio
@@ -12,9 +13,8 @@ import torch.utils.data.dataloader
 from accelerate import find_executable_batch_size
 from diffusers.utils import logging as dl
 
-from extensions.sd_dreambooth_extension.dreambooth import db_config
+from extensions.sd_dreambooth_extension.dreambooth import db_config, db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_bucket_sampler import BucketSampler
-from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, DreamboothConfig, sanitize_name
 from extensions.sd_dreambooth_extension.dreambooth.db_optimization import UniversalScheduler
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
@@ -23,13 +23,8 @@ from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBu
 from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, get_images, \
-    get_lora_models, cleanup, get_checkpoint_match, printm
-from modules import shared
+    get_lora_models, cleanup, get_checkpoint_match, printm, db_save_image
 
-try:
-    cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
-except:
-    cmd_dreambooth_models_path = None
 
 logger = logging.getLogger(__name__)
 console = logging.StreamHandler()
@@ -49,6 +44,7 @@ def get_model_snapshot(config: DreamboothConfig):
                 if rev_parts[0] == "checkpoint" and len(rev_parts) == 2:
                     snaps.append(rev_parts[1])
     return snaps
+
 
 def training_wizard_person(model_dir):
     return training_wizard(
@@ -70,7 +66,6 @@ def training_wizard(model_dir, is_person=False):
         return 100, 0, 0, 0, 0, "Please select a model."
     step_mult = 150 if is_person else 100
 
-
     if is_person:
         class_count = 5
     else:
@@ -83,6 +78,7 @@ def training_wizard(model_dir, is_person=False):
     print(w_status)
 
     return int(step_mult), class_count, class_count, class_count, class_count, w_status
+
 
 def largest_prime_factor(n):
     # Special case for n = 2
@@ -109,6 +105,7 @@ def largest_prime_factor(n):
 
     return largest_factor
 
+
 def closest_factors_to_sqrt(n):
     # Find the square root of n
     sqrt_n = int(n ** 0.5)
@@ -130,7 +127,7 @@ def closest_factors_to_sqrt(n):
     closest_factors = (f1, f2)
 
     # Check the pairs of factors below the square root
-    for i in range(sqrt_n-1, 1, -1):
+    for i in range(sqrt_n - 1, 1, -1):
         if n % i == 0:
             # Calculate the difference between the square root and the factors
             diff = min(abs(sqrt_n - i), abs(sqrt_n - (n // i)))
@@ -202,8 +199,6 @@ def performance_wizard(model_name):
                 train_batch_size = largest_factor
                 gradient_accumulation_steps = smallest_factor
 
-
-
     has_xformers = False
     try:
         import xformers
@@ -250,64 +245,121 @@ def performance_wizard(model_name):
     for key in log_dict:
         msg += f"<br>{key}: {log_dict[key]}"
     return attention, gradient_checkpointing, gradient_accumulation_steps, mixed_precision, cache_latents, \
-        sample_batch_size, train_batch_size, stop_text_encoder, use_8bit_adam, use_lora, use_ema, save_samples_every,\
+        sample_batch_size, train_batch_size, stop_text_encoder, use_8bit_adam, use_lora, use_ema, save_samples_every, \
         save_weights_every, msg
 
 
 
-def ui_samples(model_dir: str,
-               save_sample_prompt: str,
-               num_samples: int = 1,
-               sample_batch_size: int = 1,
-               lora_model_path: str = "",
-               lora_rank: float = 1,
-               lora_weight: float = 1,
-               lora_txt_weight: float = 1,
-               negative_prompt: str = "",
-               seed: int = -1,
-               steps: int = 60,
-               scale: float = 7.5
-               ):
+def generate_samples(model_name: str,
+                     prompt: str,
+                     prompt_file: str,
+                     negative_prompt: str,
+                     width: int,
+                     height: int,
+                     num_samples: int,
+                     batch_size: int,
+                     seed: int,
+                     steps: int,
+                     scale: float,
+                     use_txt2img: bool
+                     ):
+    if batch_size > num_samples:
+        batch_size = num_samples
 
-    if sample_batch_size > num_samples:
-        sample_batch_size = num_samples
-    @find_executable_batch_size(starting_batch_size=sample_batch_size)
-    def sample_loop(batch_size):
-        if model_dir is None or model_dir == "":
+    @find_executable_batch_size(starting_batch_size=batch_size)
+    def sample_loop(train_batch_size):
+        if model_name is None or model_name == "":
             return "Please select a model."
-        config = from_file(model_dir)
-        msg = f"Generated {num_samples} sample(s)."
+        config = from_file(model_name)
+        if use_txt2img:
+            tgt_name = model_name if not config.custom_model_name else config.custom_model_name
+            tgt_ext = ".safetensors" if config.save_safetensors else ".ckpt"
+            if config.use_subdir:
+                tgt_file = os.path.join(tgt_name, f"{tgt_name}_{config.revision}{tgt_ext}")
+            else:
+                tgt_file = f"{tgt_name}{config.revision}{tgt_ext}"
+            model_file = os.path.join(db_shared.models_path, "Stable-diffusion", tgt_file)
+            print(f"Looking for: {model_file}")
+            if not os.path.exists(model_file):
+                msg = "No checkpoint found, can't use txt2img."
+                print(msg)
+                return None, None, msg
+            config.src = model_file
+
         images = []
         prompts_out = []
-        if save_sample_prompt is None:
-            msg = "Please provide a sample prompt."
+        unload_system_models()
+        if prompt == "" and prompt_file == "":
+            msg = "Please provide a sample prompt or prompt file."
             print(msg)
-            return None, msg
+            return None, None, msg
+
+        if prompt_file == "":
+            if ";" in prompt:
+                prompts = prompt.split(";")
+            else:
+                prompts = [prompt]
+        else:
+            if not os.path.exists(prompt_file):
+                msg = "Invalid prompt file."
+                print(msg)
+                return None, None, msg
+            with open(prompt_file, "r") as prompt_data:
+                prompts = prompt_data.readlines()
+                for i in range(len(prompts)):
+                    file_prompt = prompts[i]
+                    if "[filewords]" in file_prompt:
+                        prompts[i] = file_prompt.replace("[filewords]", prompt)
+
         try:
-            unload_system_models()
-            print(f"Loading model from {config.model_dir}.")
             status.textinfo = "Loading diffusion model..."
+
             img_builder = ImageBuilder(
                 config,
-                False,
-                lora_model_path,
-                batch_size)
+                use_txt2img,
+                config.lora_model_name,
+                batch_size
+            )
+
+            prompt_data = []
+            for i in range(num_samples):
+                sample_prompt = random.choice(prompts)
+                pd = PromptData(
+                    prompt=sample_prompt,
+                    prompt_tokens=None,
+                    negative_prompt=negative_prompt,
+                    steps=steps,
+                    scale=scale,
+                    out_dir=os.path.join(config.model_dir, "samples"),
+                    seed=seed,
+                    resolution=(width, height)
+                )
+                prompt_data.append(pd)
+
             status.textinfo = f"Generating sample image for model {config.model_name}..."
-            pd = PromptData()
-            pd.steps = steps
-            pd.prompt = save_sample_prompt
-            pd.negative_prompt = negative_prompt
-            pd.scale = scale
-            pd.seed = seed
-            prompts = [pd] * batch_size
+
             pbar = mytqdm("Generating samples")
+            sample_index = 0
             while len(images) < num_samples:
-                prompts_out.append(save_sample_prompt)
-                out_images = img_builder.generate_images(prompts, pbar)
-                for img in out_images:
-                    if len(images) < num_samples:
-                        pbar.update()
-                        images.append(img)
+                samples_needed = num_samples - len(images)
+                to_gen = min(samples_needed, train_batch_size)
+                to_generate = []
+                batch_images = []
+                batch_prompts = []
+                for i in range(to_gen):
+                    sel = prompt_data[sample_index]
+                    to_generate.append(sel)
+                    batch_prompts.append(sel.prompt)
+                    sample_index += 1
+                out_images = img_builder.generate_images(to_generate, pbar)
+                for img, pd in zip(out_images, to_generate):
+                    pbar.update()
+                    image_name = db_save_image(img, pd, seed)
+                    batch_images.append(image_name)
+                images.extend(batch_prompts)
+                prompts_out.extend(batch_prompts)
+                db_shared.status.current_image = images
+                db_shared.status.sample_prompts = batch_prompts
             img_builder.unload(True)
             reload_system_models()
         except Exception as e:
@@ -319,10 +371,12 @@ def ui_samples(model_dir: str,
                 print(msg)
                 traceback.print_exc()
         reload_system_models()
-        print(f"Returning {len(images)} samples.")
-        prompt_str = "<br>".join(prompts_out)
-        return images, prompt_str, msg
+        msg = f"Generated {len(images)} samples."
+        print()
+        return images, prompts_out, msg
+
     return sample_loop()
+
 
 def load_params(model_dir):
     data = from_file(model_dir)
@@ -535,8 +589,9 @@ def ui_classifiers(model_name: str,
         status.textinfo = msg
     return images, msg
 
+
 def create_model(new_model_name: str, ckpt_path: str, scheduler_type="ddim", from_hub=False, new_model_url="",
-                       new_model_token="", extract_ema=False, train_unfrozen=False, is_512=True):
+                 new_model_token="", extract_ema=False, train_unfrozen=False, is_512=True):
     printm("Extracting model.")
     res = 512 if is_512 else 768
     status.begin()
@@ -557,12 +612,13 @@ def create_model(new_model_name: str, ckpt_path: str, scheduler_type="ddim", fro
 
     unload_system_models()
     result = extract_checkpoint(new_model_name, ckpt_path, scheduler_type, from_hub, new_model_url, new_model_token,
-                              extract_ema, train_unfrozen, is_512)
+                                extract_ema, train_unfrozen, is_512)
     cleanup()
     reload_system_models()
     printm("Extraction complete.")
     status.end()
     return result
+
 
 def debug_collate_fn(examples):
     input_ids = [example["input_id"] for example in examples]
@@ -574,6 +630,7 @@ def debug_collate_fn(examples):
         "loss_weights": loss_weights
     }
     return batch
+
 
 def debug_buckets(model_name, num_epochs, batch_size):
     print("Debug click?")
@@ -625,7 +682,6 @@ def debug_buckets(model_name, num_epochs, batch_size):
         pin_memory=True,
         num_workers=n_workers)
 
-
     lines = []
     test_epochs = num_epochs
     sim_train_steps = test_epochs * (dataloader.__len__() // batch_size)
@@ -655,5 +711,3 @@ def debug_buckets(model_name, num_epochs, batch_size):
         json.dump(lines, outfile, indent=4)
     status.end()
     return "", f"Debug output saved to {bucket_file}"
-
-

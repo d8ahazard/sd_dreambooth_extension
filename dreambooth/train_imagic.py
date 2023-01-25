@@ -14,10 +14,10 @@ from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
+from extensions.sd_dreambooth_extension.dreambooth import db_shared
 from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils import list_features, is_image
-from modules import shared
 
 logger = get_logger(__name__)
 
@@ -315,7 +315,7 @@ def train_imagic(args: DreamboothConfig):
     if accelerator.is_main_process:
         status.textinfo = "Saving embedding(s)."
         print(status.textinfo)
-        emb_dir = shared.cmd_opts.embeddings_dir
+        emb_dir = db_shared.embeddings_dir
         torch.save(target_embeddings.cpu(), os.path.join(emb_dir, f"{args.model_name}.pt"))
         torch.save(optimized_embeddings.cpu(), os.path.join(emb_dir, f"{args.model_name}_optimized.pt"))
 
