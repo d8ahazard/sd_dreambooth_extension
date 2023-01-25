@@ -12,7 +12,7 @@ from typing import Dict, Any
 
 import gradio as gr
 from PIL import Image
-from fastapi import FastAPI, Response, Query, Body, Form
+from fastapi import FastAPI, Response, Query, Body, Form, Header
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 from pydantic.dataclasses import Union
@@ -475,7 +475,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
     @app.post("/dreambooth/model_config")
     async def set_model_config(
             model_cfg: DreamboothConfig = Body(description="The config to save"),
-            api_key: str = Form("", description="If an API key is set, this must be present.", )
+            api_key: str = Header(description="If an API key is set, this must be present.", default="")
     ):
         """
         Save a model config from JSON.
