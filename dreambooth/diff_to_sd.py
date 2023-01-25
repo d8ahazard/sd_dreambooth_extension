@@ -380,7 +380,8 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
 
     try:
         printi("Converting unet...", log=log)
-
+        if isinstance(lora_path, list) and len(lora_path) == 0:
+            lora_path = ""
         if lora_path is not None and lora_path != "":
             loaded_pipeline = DiffusionPipeline.from_pretrained(model_path).to("cpu")
             lora_diffusers = config.pretrained_model_name_or_path + "_lora"
