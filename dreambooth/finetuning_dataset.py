@@ -144,7 +144,7 @@ class DbDataset(torch.utils.data.Dataset):
             else:
                 input_ids = self.tokenizer(caption, padding='max_length', truncation=True,
                                            return_tensors='pt').input_ids
-        self.caption_cache[image_path] = input_ids
+            self.caption_cache[image_path] = input_ids
 
     def make_buckets_with_caching(self, vae, min_size):
         self.vae = vae
