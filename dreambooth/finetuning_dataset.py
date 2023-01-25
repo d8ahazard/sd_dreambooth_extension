@@ -139,15 +139,19 @@ class DbDataset(torch.utils.data.Dataset):
 
     def cache_caption(self, image_path, caption):
         input_ids = None
+        auto_add_special_tokens = False if args.strict_tokens else True
+
         if self.tokenizer is not None and image_path not in self.caption_cache:
             if strict_tokens:
                 caption = strict_tokens(caption, self.tokenizer.bos_token, self.tokenizer.eos_token)
             if self.not_pad_tokens:
                 input_ids = self.tokenizer(caption, padding=True, truncation=True,
-                                           return_tensors="pt").input_ids
+                                            add_special_tokens=auto_add_special_tokens,
+                                            return_tensors="pt").input_ids
             else:
                 input_ids = self.tokenizer(caption, padding='max_length', truncation=True,
-                                           return_tensors='pt').input_ids
+                                            add_special_tokens=auto_add_special_tokens,
+                                            return_tensors='pt').input_ids
         self.caption_cache[image_path] = input_ids
 
     def make_buckets_with_caching(self, vae, min_size):
