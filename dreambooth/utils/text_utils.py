@@ -11,11 +11,10 @@ from modules import shared
 
 # Implementation from https://github.com/bmaltais/kohya_ss
 def encode_hidden_state(text_encoder: CLIPTextModel, input_ids, pad_tokens, b_size, max_token_length,
-                        tokenizer_max_length):
+                        tokenizer_max_length, clip_skip):
     if pad_tokens:
         input_ids = input_ids.reshape((-1, tokenizer_max_length))  # batch_size*3, 77
 
-    clip_skip = shared.CLIP_stop_at_last_layers
     if clip_skip <= 1:
         encoder_hidden_states = text_encoder(input_ids)[0]
     else:

@@ -829,7 +829,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
                     pad_tokens = args.pad_tokens if train_tenc else False
                     encoder_hidden_states = encode_hidden_state(text_encoder, batch["input_ids"], pad_tokens,
-                                                                b_size, args.max_token_length, tokenizer.model_max_length)
+                                                                b_size, args.max_token_length, tokenizer.model_max_length, args.clip_skip)
 
                     # Predict the noise residual
                     noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
