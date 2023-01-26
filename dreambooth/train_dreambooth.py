@@ -697,17 +697,17 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                 ci = 0
                                 for c in prompts:
                                     c.out_dir = os.path.join(args.model_dir, "samples")
-                                    printm(f"Sample seed is {c.seed}")
-                                    g_cuda = torch.Generator(device=accelerator.device).manual_seed(c.seed)
+                                    g_cuda = torch.Generator(device=accelerator.device).manual_seed(int(c.seed))
                                     s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
                                                          guidance_scale=c.scale,
                                                          negative_prompt=c.negative_prompt,
                                                          height=args.resolution,
                                                          width=args.resolution,
                                                          generator=g_cuda).images[0]
-
                                     sample_prompts.append(c.prompt)
                                     image_name = db_save_image(s_image, c, custom_name=f"sample_{args.revision}-{ci}")
+                                    shared.status.current_image = image_name
+                                    shared.status.sample_prompts = [c.prompt]
                                     samples.append(image_name)
                                     pbar.update()
                                     ci += 1

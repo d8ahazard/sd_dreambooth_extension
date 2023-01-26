@@ -50,14 +50,16 @@ class SampleDataset:
                         res = img.size
                         prompts.append((prompt, res))
             for i in range(required):
+                pi = random.choice(prompts)
                 pd = PromptData(
-                    prompt=random.choice(prompts),
+                    prompt=pi[0],
                     negative_prompt=neg,
                     steps=concept.save_infer_steps,
                     scale=concept.save_guidance_scale,
                     seed=seed,
                     out_dir=out_dir,
-                    concept_index=c_idx
+                    concept_index=c_idx,
+                    resolution=pi[1]
                 )
                 self.prompts.append(pd)
             c_idx += 1
