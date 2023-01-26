@@ -404,6 +404,10 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             create_from_hub: bool = Query(False, description="Create this model from the hub", ),
             new_model_url: str = Query(None,
                                        description="The hub URL to use for this model. Must contain diffusers model.", ),
+            is_512: bool = Query(False,
+                                       description="Whether or not the model is 512x resolution.", ),
+            train_unfrozen: bool = Query(True,
+                             description="Un-freeze the model.", ),
             new_model_token: str = Query(None, description="Your huggingface hub token.", ),
             new_model_extract_ema: bool = Query(False, description="Whether to extract EMA weights if present.", ),
             api_key: str = Query("", description="If an API key is set, this must be present.", ),
@@ -429,7 +433,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
                          create_from_hub,
                          new_model_url,
                          new_model_token,
-                         new_model_extract_ema)
+                         new_model_extract_ema,
+                         train_unfrozen,
+                         is_512)
 
     @app.delete("/dreambooth/model")
     async def delete_model(
