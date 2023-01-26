@@ -103,3 +103,26 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
         return RobertaSeriesModelWithTransformation
     else:
         raise ValueError(f"{model_class} is not supported.")
+
+has_safe = False
+def disable_safe_unpickle():
+    global has_safe
+    try:
+        from modules import shared as auto_shared
+        has_safe = not auto_shared.cmd_opts.disable_safe_unpickle
+        if has_safe:
+            auto_shared.cmd_opts.disable_safe_unpickle = True
+    except:
+        pass
+
+
+def enable_safe_unpickle():
+    global has_safe
+    try:
+        from modules import shared as auto_shared
+        if has_safe:
+            auto_shared.cmd_opts.disable_safe_unpickle = False
+    except:
+        pass
+    has_safe = False
+

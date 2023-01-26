@@ -28,7 +28,7 @@ from extensions.sd_dreambooth_extension.dreambooth.shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
-    import_model_class_from_model_name_or_path
+    import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle
 from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import encode_hidden_state
 from extensions.sd_dreambooth_extension.dreambooth.webhook import send_training_update
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
@@ -158,15 +158,17 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         def create_vae():
             vae_path = args.pretrained_vae_name_or_path if args.pretrained_vae_name_or_path else \
                 args.pretrained_model_name_or_path
+            disable_safe_unpickle()
             new_vae = AutoencoderKL.from_pretrained(
                 vae_path,
                 subfolder=None if args.pretrained_vae_name_or_path else "vae",
                 revision=args.revision
             )
+            enable_safe_unpickle()
             new_vae.requires_grad_(False)
             new_vae.to(accelerator.device, dtype=weight_dtype)
             return new_vae
-
+        disable_safe_unpickle()
         # Load the tokenizer
         tokenizer = AutoTokenizer.from_pretrained(
             os.path.join(args.pretrained_model_name_or_path, "tokenizer"),
@@ -195,6 +197,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             torch_dtype=torch.float32
         )
 
+        enable_safe_unpickle()
         if args.attention == "xformers" and not shared.force_cpu:
             xattention.replace_unet_cross_attn_to_xformers()
             xattention.set_diffusers_xformers_flag(unet, True)

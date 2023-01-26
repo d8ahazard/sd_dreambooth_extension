@@ -251,24 +251,6 @@ class DreamState:
             self.current_image = real_images if len(real_images) > 2 else real_images[0] if len (real_images) == 1 else None
 
 
-def stop_safe_unpickle():
-    enabled = False
-    try:
-        from modules import shared as ws
-        enabled = not ws.cmd_opts.disable_safe_unpickle
-        if enabled:
-            ws.cmd_opts.disable_safe_unpickle = True
-    except:
-        pass
-    return enabled
-
-
-def start_safe_unpickle():
-    try:
-        from modules import shared as ws
-        ws.cmd_opts.disable_safe_unpickle = False
-    except:
-        pass
 
 orig_tensor_to = torch.Tensor.to
 def tensor_to_fix(self, *args, **kwargs):

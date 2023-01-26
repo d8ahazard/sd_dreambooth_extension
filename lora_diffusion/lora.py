@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple, Union
 import torch
 import torch.nn as nn
 
-from extensions.sd_dreambooth_extension.dreambooth.shared import start_safe_unpickle, stop_safe_unpickle
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import disable_safe_unpickle, enable_safe_unpickle
 
 
 class LoraInjectedLinear(nn.Module):
@@ -132,7 +132,7 @@ def inject_trainable_lora(
     """
     inject lora into model, and returns lora parameter groups.
     """
-    stop_safe_unpickle()
+    disable_safe_unpickle()
     if target_replace_module is None:
         target_replace_module = DEFAULT_TARGET_REPLACE
     require_grad_params = []
@@ -172,7 +172,7 @@ def inject_trainable_lora(
         _module._modules[name].lora_up.weight.requires_grad = True
         _module._modules[name].lora_down.weight.requires_grad = True
         names.append(name)
-    start_safe_unpickle()
+    enable_safe_unpickle()
     return require_grad_params, names
 
 def extract_lora_ups_down(model, target_replace_module=None):
@@ -278,8 +278,9 @@ def convert_loras_to_safeloras(
 
     for name, (path, target_replace_module, r) in modelmap.items():
         metadata[name] = json.dumps(list(target_replace_module))
-
+        disable_safe_unpickle()
         lora = torch.load(path)
+        enable_safe_unpickle()
         for i, weight in enumerate(lora):
             is_up = i % 2 == 0
             i = i // 2
@@ -573,8 +574,9 @@ def _ti_lora_path(path: str) -> str:
 def load_learned_embed_in_clip(
     learned_embeds_path, text_encoder, tokenizer, token=None, idempotent=False
 ):
+    disable_safe_unpickle()
     loaded_learned_embeds = torch.load(learned_embeds_path, map_location="cpu")
-
+    enable_safe_unpickle()
     # separate token and the embeds
     trained_token = list(loaded_learned_embeds.keys())[0]
     embeds = loaded_learned_embeds[trained_token]
@@ -625,7 +627,7 @@ def patch_pipe(
 
     ti_path = _ti_lora_path(unet_path)
     text_path = _text_lora_path_ui(unet_path)
-
+    disable_safe_unpickle()
     if patch_unet:
         print("LoRA : Patching Unet")
         monkeypatch_or_replace_lora(
@@ -643,6 +645,7 @@ def patch_pipe(
             target_replace_module=text_target_replace_module,
             r=r,
         )
+    enable_safe_unpickle()
     if patch_ti:
         print("LoRA : Patching token input")
         token = load_learned_embed_in_clip(

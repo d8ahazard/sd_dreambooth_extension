@@ -8,11 +8,13 @@ from accelerate import Accelerator
 from diffusers import DiffusionPipeline, AutoencoderKL
 
 from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.shared import disable_safe_unpickle
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import process_txt2img
 from modules import shared as auto_shared
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_checkpoint_match, reload_system_models
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_checkpoint_match, reload_system_models, \
+    enable_safe_unpickle
 from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale
 from modules import sd_models
@@ -76,10 +78,9 @@ class ImageBuilder:
             new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
             if os.path.exists(new_hotness):
                 accelerator.print(f"Resuming from checkpoint {new_hotness}")
-                no_safe = shared.stop_safe_unpickle()
+                disable_safe_unpickle()
                 accelerator.load_state(new_hotness)
-                if no_safe:
-                    shared.start_safe_unpickle()
+                enable_safe_unpickle()
             if config.use_lora and lora_model is not None and lora_model != "":
 
                 lora_model_path = os.path.join(shared.models_path, "lora", lora_model)

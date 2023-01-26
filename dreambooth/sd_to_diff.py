@@ -27,10 +27,10 @@ from huggingface_hub import HfApi, hf_hub_download
 
 from extensions.sd_dreambooth_extension.dreambooth import shared
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.shared import stop_safe_unpickle
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, disable_safe_unpickle, \
+    enable_safe_unpickle
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
+from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 from modules import shared
 
 try:
@@ -1056,7 +1056,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
                 except Exception as e:
                     checkpoint = torch.jit.load(checkpoint_file)
             else:
-                reset_safe = stop_safe_unpickle()
+                disable_safe_unpickle()
                 print("Loading ckpt...")
                 checkpoint = torch.load(checkpoint_file, map_location=map_location or shared.weight_load_location)
                 checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
@@ -1284,8 +1284,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
                     os.makedirs(rem_dir)
 
 
-    if reset_safe:
-        shared.start_safe_unpickle()
+    enable_safe_unpickle()
     printi(result_status)
 
     return gr.Dropdown.update(choices=sorted(get_db_models()), value=new_model_name), \
