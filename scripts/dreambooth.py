@@ -623,7 +623,7 @@ def create_model(new_model_name: str, ckpt_path: str, scheduler_type="ddim", fro
 
 
 def debug_collate_fn(examples):
-    input_ids = [example["input_id"] for example in examples]
+    input_ids = [example["input_ids"] for example in examples]
     pixel_values = [example["image"] for example in examples]
     loss_weights = torch.tensor([example["loss_weight"] for example in examples], dtype=torch.float32)
     batch = {
