@@ -79,7 +79,6 @@ class BucketSampler:
         batch = []
         repeats = 0
         self.dataset.prior_loss_weight = self.prior_loss_weight
-        printm(f"Prior loss: {self.dataset.prior_loss_weight}")
         while len(batch) < self.batch_size:
             self.dataset.active_resolution = current_res
             img_index, img_repeats = self.dataset.get_example(current_res)

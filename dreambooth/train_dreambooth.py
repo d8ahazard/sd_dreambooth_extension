@@ -636,6 +636,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 )
                 s_pipeline = s_pipeline.to(accelerator.device)
                 s_pipeline.enable_attention_slicing()
+                if args.attention == "xformers":
+                    s_pipeline.enable_xformers_memory_efficient_attention()
                 with accelerator.autocast(), torch.inference_mode():
                     if save_model:
                         # We are saving weights, we need to ensure revision is saved
@@ -720,10 +722,10 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                     c.out_dir = os.path.join(args.model_dir, "samples")
                                     c.resolution = (args.resolution, args.resolution)
                                     seed = int(c.seed)
-                                    if seed is None or seed == '' or seed == -1:
+                                    if c.seed is None or c.seed == '' or c.seed == -1:
                                         seed = int(random.randrange(21474836147))
                                     c.seed = seed
-                                    g_cuda = torch.Generator(device=accelerator.device).manual_seed(seed)
+                                    g_cuda = torch.Generator(device=accelerator.device).manual_seed(c.seed)
                                     s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
                                                          guidance_scale=c.scale,
                                                          negative_prompt=c.negative_prompt,
@@ -761,13 +763,18 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                             last_samples.append(log_image)
                         for log_name in log_names:
                             last_prompts.append(log_name)
-                        status.sample_prompts = last_prompts
-                        status.current_image = last_samples
                         send_training_update(last_samples, args.model_name, last_prompts, global_step, args.revision)
-                        pbar.update()
+
                         del log_images
-                    except:
+                        del log_names
+                    except Exception as l:
+                        traceback.print_exc()
+                        print(f"Exception parsing logz: {l}")
                         pass
+                    status.sample_prompts = last_prompts
+                    status.current_image = last_samples
+                    pbar.update()
+
                 if args.cache_latents:
                     printm("Unloading vae.")
                     del vae
