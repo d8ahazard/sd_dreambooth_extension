@@ -31,7 +31,6 @@ from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_
     enable_safe_unpickle
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
 from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-from modules import shared
 
 try:
     from omegaconf import OmegaConf
@@ -1058,7 +1057,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
             else:
                 disable_safe_unpickle()
                 print("Loading ckpt...")
-                checkpoint = torch.load(checkpoint_file, map_location=map_location or shared.weight_load_location)
+                checkpoint = torch.load(checkpoint_file, map_location=map_location)
                 checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
 
             rev_keys = ["db_global_step", "global_step"]
