@@ -15,12 +15,12 @@ from tqdm.auto import tqdm
 import torch
 from diffusers import DiffusionPipeline
 
-from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared
-from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import mytqdm
-from extensions.sd_dreambooth_extension.dreambooth.utils import printi, unload_system_models, \
-    reload_system_models
+from extensions.sd_dreambooth_extension.dreambooth import shared as shared
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models
+from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
 
 unet_conversion_map = [

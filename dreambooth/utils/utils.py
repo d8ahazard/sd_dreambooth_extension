@@ -1,35 +1,26 @@
 from __future__ import annotations
 
 import gc
-import hashlib
 import html
 import os
 import sys
 import traceback
-from io import StringIO
-from pathlib import Path
 from typing import Optional, Union, Tuple, List
 
-import gradio
 import matplotlib
 import pandas as pd
 from pandas.plotting._matplotlib.style import get_standard_colors
 from tqdm.auto import tqdm
-from transformers import PretrainedConfig
-
-from extensions.sd_dreambooth_extension.dreambooth import db_shared
-from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
-from modules.sd_models import CheckpointInfo
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow
 import torch
-from PIL import features, Image, PngImagePlugin
+from PIL import Image
 from huggingface_hub import HfFolder, whoami
 from pandas import DataFrame
 from tensorboard.compat.proto import event_pb2
 
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
 
 
 def printi(msg, params=None, log=True):
@@ -41,63 +32,6 @@ def printi(msg, params=None, log=True):
             tqdm.write(msg, params)
         else:
             tqdm.write(msg)
-
-
-def get_db_models():
-    model_dir = db_shared.models_path
-    out_dir = os.path.join(model_dir, "dreambooth")
-    output = []
-    if os.path.exists(out_dir):
-        dirs = os.listdir(out_dir)
-        for found in dirs:
-            if os.path.isdir(os.path.join(out_dir, found)):
-                output.append(found)
-    return output
-
-
-def get_lora_models():
-    model_dir = db_shared.lora_models_path
-    out_dir = os.path.join(model_dir, "lora")
-    output = [""]
-    if os.path.exists(out_dir):
-        dirs = os.listdir(out_dir)
-        for found in dirs:
-            if os.path.isfile(os.path.join(out_dir, found)):
-                if "_txt.pt" not in found and ".pt" in found:
-                    output.append(found)
-    return output
-
-
-def get_model_snapshots(model_name: str):
-    from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
-    result = gradio.update(visible=True)
-    if model_name == "" or model_name is None:
-        return result
-    config = from_file(model_name)
-    snaps_path = os.path.join(config.model_dir, "snapshots")
-    snaps = []
-    if os.path.exists(snaps_path):
-        for dir in os.listdir(snaps_path):
-            if "checkpoint_" in dir:
-                fullpath = os.path.join(snaps_path, dir)
-                snaps.append(fullpath)
-    return snaps
-
-
-def get_images(image_path):
-    pil_features = list_features()
-    output = []
-    if isinstance(image_path, str):
-        image_path = Path(image_path)
-    if image_path.exists():
-        for file in image_path.iterdir():
-            if is_image(file, pil_features):
-                output.append(file)
-            if file.is_dir():
-                sub_images = get_images(file)
-                for image in sub_images:
-                    output.append(image)
-    return output
 
 
 def sanitize_tags(name):
@@ -114,12 +48,9 @@ def sanitize_name(name):
     return "".join(x for x in name if (x.isalnum() or x in "._-"))
 
 
-mem_record = {}
-
-
 def printm(msg=""):
-    from extensions.sd_dreambooth_extension.dreambooth import db_shared
-    if db_shared.debug:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    if shared.debug:
         allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
         cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
         print(f"{msg}({allocated}/{cached})")
@@ -137,21 +68,6 @@ def cleanup(do_print: bool = False):
         print("Cleanup completed.")
 
 
-def unload_system_models():
-    try:
-        import modules.shared
-        if modules.shared.sd_model is not None:
-            modules.shared.sd_model.to("cpu")
-        for former in modules.shared.face_restorers:
-            try:
-                former.send_model_to("cpu")
-            except:
-                pass
-        cleanup()
-    except:
-        pass
-
-
 def list_attention():
     has_xformers = False
     try:
@@ -163,10 +79,8 @@ def list_attention():
     pass
 
     if has_xformers:
-        # return ["default", "xformers", "sub_quad", "flash_attention"]
         return ["default", "xformers", "flash_attention"]
     else:
-        # return ["default", "sub_quad", "flash_attention"]
         return ["default", "flash_attention"]
 
 
@@ -180,16 +94,6 @@ def list_floats():
         return ["no", "fp16", "bf16"]
     else:
         return ["no", "fp16"]
-
-
-def reload_system_models():
-    try:
-        import modules.shared
-        if modules.shared.sd_model is not None:
-            modules.shared.sd_model.to(db_shared.device)
-        print("Restored system models.")
-    except:
-        pass
 
 
 def wrap_gpu_call(func, extra_outputs=None):
@@ -222,45 +126,6 @@ def wrap_gpu_call(func, extra_outputs=None):
         return res
 
     return f
-
-
-def isset(val: Union[str | None]):
-    return val is not None and val != "" and val != "*"
-
-
-def list_features():
-    # Create buffer for pilinfo() to write into rather than stdout
-    buffer = StringIO()
-    features.pilinfo(out=buffer)
-    pil_features = []
-    # Parse and analyse lines
-    for line in buffer.getvalue().splitlines():
-        if "Extensions:" in line:
-            ext_list = line.split(": ")[1]
-            extensions = ext_list.split(", ")
-            for extension in extensions:
-                if extension not in pil_features:
-                    pil_features.append(extension)
-    return pil_features
-
-def is_image(path: Path, feats=None):
-    if feats is None:
-        feats = []
-    if not len(feats):
-        feats = list_features()
-    is_img = path.is_file() and path.suffix.lower() in feats
-    return is_img
-
-
-def get_checkpoint_match(search_string) -> Union[CheckpointInfo, None]:
-    try:
-        from modules import sd_models
-        for info in sd_models.checkpoints_list.values():
-            if search_string in info.title or search_string in info.model_name or search_string in info.filename:
-                return info
-    except:
-        pass
-    return None
 
 
 def get_full_repo_name(model_id: str, organization: Optional[str] = None, token: Optional[str] = None):
@@ -359,6 +224,7 @@ def parse_logs(model_name: str, for_ui: bool = False):
 
     """
     matplotlib.use("Agg")
+
     def convert_tfevent(filepath) -> Tuple[DataFrame, DataFrame, DataFrame, bool]:
         loss_events = []
         lr_events = []
@@ -399,7 +265,7 @@ def parse_logs(model_name: str, for_ui: bool = False):
             "Value": float(tfevent.summary.value[0].simple_value),
         }
 
-    from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
     model_config = from_file(model_name)
     if model_config is None:
         print("Unable to load model config!")
@@ -475,65 +341,9 @@ def parse_logs(model_name: str, for_ui: bool = False):
             out_names = "<br>".join(out_names)
     except:
         pass
-    
+
     del out_loss
     del out_lr
     del out_ram
     printm("Cleanup log parse.")
     return out_images, out_names
-
-
-def db_save_image(image: Image, prompt_data: PromptData=None, seed=None, save_txt: bool = True, custom_name: str = None):
-    image_base = hashlib.sha1(image.tobytes()).hexdigest()
-    image_filename = os.path.join(prompt_data.out_dir, f"{image_base}.tmp")
-    if custom_name is not None:
-        image_filename = os.path.join(prompt_data.out_dir, f"{custom_name}.tmp")
-
-    pnginfo_data = PngImagePlugin.PngInfo()
-    if prompt_data is not None:
-        size = prompt_data.resolution
-        generation_params = {
-            "Steps": prompt_data.steps,
-            "CFG scale": prompt_data.scale,
-            "Seed": prompt_data.seed,
-            "Size": f"{size[0]}x{size[1]}"
-        }
-
-        generation_params_text = ", ".join(
-            [k if k == v else f'{k}: {f"{k}" if "," in str(k) else k}' for k, v in generation_params.items()
-             if v is not None])
-
-
-        prompt_string = f"{prompt_data.prompt}\nNegative prompt: {prompt_data.negative_prompt}\n{generation_params_text}".strip()
-        pnginfo_data.add_text("parameters", prompt_string)
-
-    image_format = Image.registered_extensions()[".png"]
-
-    image.save(image_filename, format=image_format, pnginfo=pnginfo_data)
-
-    if save_txt and prompt_data is not None:
-        os.replace(image_filename, image_filename)
-        txt_filename = image_filename.replace(".tmp", ".txt")
-        with open(txt_filename, "w", encoding="utf8") as file:
-            file.write(prompt_data.prompt)
-    os.replace(image_filename, image_filename.replace(".tmp", ".png"))
-    return image_filename.replace(".tmp", ".png")
-
-def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision):
-    text_encoder_config = PretrainedConfig.from_pretrained(
-        pretrained_model_name_or_path,
-        subfolder="text_encoder",
-        revision=revision,
-    )
-    model_class = text_encoder_config.architectures[0]
-
-    if model_class == "CLIPTextModel":
-        from transformers import CLIPTextModel
-
-        return CLIPTextModel
-    elif model_class == "RobertaSeriesModelWithTransformation":
-        from diffusers.pipelines.alt_diffusion.modeling_roberta_series import RobertaSeriesModelWithTransformation
-
-        return RobertaSeriesModelWithTransformation
-    else:
-        raise ValueError(f"{model_class} is not supported.")

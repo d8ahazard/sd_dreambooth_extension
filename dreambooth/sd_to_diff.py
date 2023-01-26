@@ -17,20 +17,20 @@ import os
 import re
 import shutil
 import traceback
-import zipfile
 
 import gradio as gr
 import huggingface_hub.utils.tqdm
 import safetensors.torch
 import torch
 from diffusers.pipelines.paint_by_example import PaintByExampleImageEncoder
-from huggingface_hub import snapshot_download, HfApi, hf_hub_download
+from huggingface_hub import HfApi, hf_hub_download
 
-from extensions.sd_dreambooth_extension.dreambooth import db_shared
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import stop_safe_unpickle
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import mytqdm
-from extensions.sd_dreambooth_extension.dreambooth.utils import printi, get_db_models
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.shared import stop_safe_unpickle
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models
+from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
 from modules import shared
 
 try:
@@ -43,7 +43,6 @@ except ImportError:
 from diffusers import (
     AutoencoderKL,
     DDIMScheduler,
-    DiffusionPipeline,
     DPMSolverMultistepScheduler,
     EulerAncestralDiscreteScheduler,
     EulerDiscreteScheduler,
@@ -962,14 +961,9 @@ def get_config_file(train_unfrozen=False, v2=False, prediction_type="epsilon"):
 
     if train_unfrozen:
         model_train_type = train_types["unfrozen"]
-    else:
-        model_train_type = train_types["default"]
 
     return get_config_path(model_version_name, model_train_type, config_base_name, prediction_type)
 
-    print("Could not find valid config. Returning default v1 config.")
-    return get_config_path(model_versions["v1"], train_types["default"], config_base_name, prediction_type="epsilon")
-        
 
 def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type="ddim", from_hub=False, new_model_url="",
                        new_model_token="", extract_ema=False, train_unfrozen=False, is_512=True):
@@ -982,6 +976,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
     @param new_model_url: The URL to pull. Should be formatted like compviz/stable-diffusion-2, not a full URL.
     @param new_model_token: Your huggingface.co token.
     @param extract_ema: Whether to extract EMA weights if present.
+    @param train_unfrozen: Set the model to unfrozen
     @param is_512: Is it a 512 model?
     @return:
         db_new_model_name: Gr.dropdown populated with our model name, if applicable.
@@ -1035,14 +1030,14 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
             return "", "", 0, 0, "", "", "", "", image_size, "", msg
 
     reset_safe = False
-    db_shared.status.job_count = 11
+    shared.status.job_count = 11
 
     try:
-        db_shared.status.job_no = 0
+        shared.status.job_no = 0
         checkpoint = None
         map_location = shared.device
         try:
-            if db_shared.ckptfix or db_shared.medvram or db_shared.lowvram:
+            if shared.ckptfix or shared.medvram or shared.lowvram:
                 print(f"Using CPU for extraction.")
                 map_location = torch.device('cpu')
         except:
@@ -1290,7 +1285,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
 
 
     if reset_safe:
-        db_shared.start_safe_unpickle()
+        shared.start_safe_unpickle()
     printi(result_status)
 
     return gr.Dropdown.update(choices=sorted(get_db_models()), value=new_model_name), \

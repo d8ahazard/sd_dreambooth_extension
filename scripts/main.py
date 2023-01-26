@@ -3,14 +3,14 @@ from typing import List
 
 import gradio as gr
 
-from extensions.sd_dreambooth_extension.dreambooth.db_config import save_config, from_file
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from extensions.sd_dreambooth_extension.dreambooth.db_webhook import save_and_test_webhook
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import save_config, from_file
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
+from extensions.sd_dreambooth_extension.dreambooth.webhook import save_and_test_webhook
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generate_prompts
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret, create_secret, clear_secret
-from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, list_attention, \
-    list_floats, get_lora_models, wrap_gpu_call, parse_logs, printm
+from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention, \
+    list_floats, wrap_gpu_call, parse_logs, printm
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
     training_wizard, training_wizard_person, load_model_params, ui_classifiers, debug_buckets, create_model, generate_samples
@@ -410,7 +410,6 @@ def on_ui_tabs():
                 with gr.Tab("Generate"):
                     with gr.Column():
                         db_generate_classes = gr.Button(value="Generate Class Images")
-                        db_generate_prompts = gr.Button(value="Preview Prompts")
                         db_generate_graph = gr.Button(value="Generate Graph")
                         db_graph_smoothing = gr.Number(value=50, label="Graph Smoothing Steps")
                         db_debug_buckets = gr.Button(value="Debug Buckets")
@@ -714,7 +713,7 @@ def on_ui_tabs():
 
         ui_keys.append("db_status")
         params_to_load.append(db_status)
-        from extensions.sd_dreambooth_extension.dreambooth import db_config
+        from extensions.sd_dreambooth_extension.dreambooth.dataclasses import db_config
         db_config.save_keys = save_keys
         db_config.ui_keys = ui_keys
 
@@ -809,13 +808,6 @@ def on_ui_tabs():
             outputs=[
                 concept_tab
             ]
-        )
-
-        db_generate_prompts.click(
-            _js="db_start_prompts",
-            fn=generate_prompts,
-            inputs=[db_model_name],
-            outputs=[db_status]
         )
 
         db_generate_graph.click(

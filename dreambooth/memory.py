@@ -27,8 +27,8 @@ from datetime import datetime
 import torch
 import torch.backends.cudnn
 
-from extensions.sd_dreambooth_extension.dreambooth import db_shared
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup
 
 
 def should_reduce_batch_size(exception: Exception) -> bool:
@@ -69,7 +69,7 @@ def find_executable_batch_size(function: callable = None, starting_batch_size: i
     """
     global profiler
     try:
-        profile_memory = db_shared.profile_db
+        profile_memory = shared.profile_db
     except Exception:
         profile_memory = False
 

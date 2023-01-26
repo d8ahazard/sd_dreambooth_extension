@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import inspect
 import math
-from typing import Any, Dict, List, Union, Optional
+from typing import Any, Dict, Union, Optional
 
 import diffusers
 import torch
@@ -11,8 +10,6 @@ from diffusers.optimization import SchedulerType, TYPE_TO_SCHEDULER_FUNCTION
 from einops import rearrange
 from torch import einsum
 from torch.optim import Optimizer
-
-from extensions.sd_dreambooth_extension.dreambooth.sub_quad_attention import sub_quad_attnblock_forward
 
 
 def replace_unet_cross_attn_to_default():
@@ -73,6 +70,7 @@ def default(val, d):
 
 
 class FlashAttentionFunction(torch.autograd.function.Function):
+
     @staticmethod
     @torch.no_grad()
     def forward(ctx, q, k, v, mask, causal, q_bucket_size, k_bucket_size):
@@ -318,10 +316,6 @@ def replace_unet_cross_attn_to_xformers():
         return out
 
     diffusers.models.attention.CrossAttention.forward = forward_xformers
-
-def replace_unet_cross_attn_to_quad():
-    #ldm.modules.attention.CrossAttention.forward = sd_hijack_optimizations.sub_quad_attention_forward
-    diffusers.models.attention.CrossAttention.forward = sub_quad_attnblock_forward
 
 def _validate_model_kwargs(self, model_kwargs: Dict[str, Any]):
     pass

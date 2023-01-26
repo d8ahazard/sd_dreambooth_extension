@@ -8,23 +8,23 @@ import shutil
 import traceback
 import zipfile
 from pathlib import Path
+from typing import List, Union
 
 import gradio as gr
 from PIL import Image
 from fastapi import FastAPI, Response, Query, Body
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
-from pydantic.dataclasses import Union
-from pydantic.types import List
 
-from extensions.sd_dreambooth_extension.dreambooth import db_shared
-from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
-from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import DreamState
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.shared import DreamState
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generate_classifiers
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
-from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, get_lora_models
+from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import create_model, generate_samples
 from modules import sd_models
@@ -61,9 +61,9 @@ active = False
 
 
 def is_running():
-    if db_shared.status.job_count != 0 and db_shared.status.job_count is not None:
+    if shared.status.job_count != 0 and shared.status.job_count is not None:
         print("Something is already running.")
-        return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
+        return JSONResponse(content={"message": "Job already in progress.", "status": shared.status.dict()})
     return False
 
 
@@ -73,10 +73,10 @@ def run_in_background(func, *args, **kwargs):
     """
 
     async def wrapper():
+        global active
         new_func = functools.partial(func, *args, **kwargs)
         await asyncio.get_running_loop().run_in_executor(None, new_func)
         active = False
-
     asyncio.create_task(wrapper())
 
 
@@ -146,9 +146,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if db_shared.status.job_count == 0:
+        if shared.status.job_count == 0:
             return JSONResponse(content={"message": "Nothing to cancel."})
-        db_shared.status.interrupted = True
+        shared.status.interrupted = True
         return JSONResponse(content={"message": f"Processes cancelled."})
 
     @app.get("/dreambooth/checkpoint")
@@ -178,8 +178,8 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if config.custom_model_name:
             save_model_name = config.custom_model_name
         if skip_build:
-            ckpt_dir = db_shared.ckpt_dir
-            models_path = os.path.join(db_shared.models_path, "Stable-diffusion")
+            ckpt_dir = shared.ckpt_dir
+            models_path = os.path.join(shared.models_path, "Stable-diffusion")
             if ckpt_dir is not None:
                 models_path = ckpt_dir
             use_subdir = False
@@ -200,11 +200,11 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
                 skip_build = False
         if not skip_build:
             global active
-            db_shared.status.begin()
+            shared.status.begin()
             active = True
             ckpt_result = compile_checkpoint(model_name, reload_models=False, log=False)
             active = False
-            db_shared.status.end()
+            shared.status.end()
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()
                 print(f"Checkpoint aved to path: {path}")
@@ -255,7 +255,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             return status
         global active
         active = True
-        db_shared.status.begin()
+        shared.status.begin()
         run_in_background(
             generate_classifiers,
             config,
@@ -295,11 +295,10 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         for concept_key in concept_dict:
             concept = concept_dict[concept_key]
             class_images_dir = concept["class_data_dir"]
-            if class_images_dir == "" or class_images_dir is None or class_images_dir == db_shared.script_path:
+            if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:
                 class_images_dir = os.path.join(config.model_dir, f"classifiers_{concept_key}")
                 print(f"Class image dir is not set, defaulting to {class_images_dir}")
             if os.path.exists(class_images_dir):
-                from extensions.sd_dreambooth_extension.dreambooth.utils import get_images
                 class_images = get_images(class_images_dir)
                 for image in class_images:
                     out_images.append(str(image))
@@ -572,7 +571,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if status:
             return status
 
-        db_shared.status.begin()
+        shared.status.begin()
         config = from_file(model_name)
         if config is None:
             return JSONResponse("Config not found")
@@ -592,7 +591,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             use_txt2img=use_txt2img
         )
 
-        db_shared.status.end()
+        shared.status.end()
         if len(images) > 1:
             return zip_files(model_name, images, "_sample")
         else:
@@ -614,7 +613,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        return JSONResponse(content={"current_state": f"{json.dumps(db_shared.status.dict())}"})
+        return JSONResponse(content={"current_state": f"{json.dumps(shared.status.dict())}"})
     @app.get("/dreambooth/status_images")
     async def check_status_images(
             api_key: str = Query("", description="If an API key is set, this must be present.", )) -> JSONResponse:
@@ -629,8 +628,8 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        db_shared.status.set_current_image()
-        images = db_shared.status.current_image
+        shared.status.set_current_image()
+        images = shared.status.current_image
         if not isinstance(images, List):
             if images is not None:
                 images = [images]
@@ -675,7 +674,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             return status
 
         print("Starting Training")
-        db_shared.status.begin()
+        shared.status.begin()
         run_in_background(dreambooth.start_training, model_name, use_tx2img)
         return {"Status": "Training started."}
 
@@ -701,7 +700,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if key_check is not None:
             return key_check
 
-        root_img_path = os.path.join(db_shared.script_path, "..", "InstanceImages")
+        root_img_path = os.path.join(shared.script_path, "..", "InstanceImages")
         if not os.path.exists(root_img_path):
             print(f"Creating root instance dir: {root_img_path}")
             os.makedirs(root_img_path)

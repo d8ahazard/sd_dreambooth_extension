@@ -5,8 +5,8 @@ from typing import List, Dict
 
 from pydantic import BaseModel
 
-from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared, db_shared
-from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
 
 # Keys to save, replacing our dumb __init__ method
 save_keys = []
@@ -260,9 +260,9 @@ def from_file(model_name):
         return None
 
     model_name = sanitize_name(model_name)
-    models_path = db_shared.dreambooth_models_path
+    models_path = shared.dreambooth_models_path
     if models_path == "" or models_path is None:
-        models_path = os.path.join(db_shared.models_path, "dreambooth")
+        models_path = os.path.join(shared.models_path, "dreambooth")
     config_file = os.path.join(models_path, model_name, "db_config.json")
     try:
         with open(config_file, 'r') as openfile:

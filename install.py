@@ -27,7 +27,6 @@ def check_versions():
         if len(splits) == 2:
             key = splits[0]
             reqs_dict[key] = splits[1].replace("\n", "").strip()
-    # print(f"Reqs dict: {reqs_dict}")
     reqs_dict["diffusers[torch]"] = "0.10.0"
     checks = ["bitsandbytes", "diffusers", "transformers", "xformers", "torch", "torchvision"]
     flat_check = ["xformers", "torch", "torchvision"]

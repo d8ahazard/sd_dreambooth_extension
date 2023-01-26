@@ -10,14 +10,18 @@ from PIL import Image
 from torchvision.transforms import transforms
 from transformers import CLIPTokenizer
 
-from extensions.sd_dreambooth_extension.dreambooth import db_shared
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import closest_resolution, make_bucket_resolutions, \
-    mytqdm, build_strict_tokens
-from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import make_bucket_resolutions, closest_resolution
+from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import build_strict_tokens
+from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
 
 
 class DbDataset(torch.utils.data.Dataset):
+    """
+    Dataset for handling training data
+    """
     def __init__(
             self,
             batch_size: int,
@@ -155,8 +159,9 @@ class DbDataset(torch.utils.data.Dataset):
         input_ids = None
         auto_add_special_tokens = False if self.strict_tokens else True
         if self.tokenizer is not None and (image_path not in self.caption_cache or self.debug_dataset):
+            caption = self.check_shuffle_tokens(caption)
             if self.strict_tokens:
-                caption = build_strict_tokens(caption, self.tokenizer.bos_token, self.tokenizer.eos_token)
+                caption = build_strict_tokens(caption, self.tokenizer.bos_token)
             if self.not_pad_tokens:
                 input_ids = self.tokenizer(caption, padding=True, truncation=True,
                                            add_special_tokens=auto_add_special_tokens,
@@ -188,8 +193,8 @@ class DbDataset(torch.utils.data.Dataset):
                 reso = closest_resolution(image_width, image_height, resos)
                 concept_idx = prompt_data.concept_index
                 # Append the concept index to the resolution, and boom, we got ourselves split concepts.
-                dict_idx = (*reso, concept_idx)
-                target_dict.setdefault(dict_idx, []).append((path, cap, is_class_img))
+                di = (*reso, concept_idx)
+                target_dict.setdefault(di, []).append((path, cap, is_class_img))
 
         sort_images(self.train_img_data, bucket_resos, self.train_dict, False)
         sort_images(self.class_img_data, bucket_resos, self.class_dict, True)
@@ -225,8 +230,8 @@ class DbDataset(torch.utils.data.Dataset):
         nc = self.num_class_images
         ni = self.num_train_images
         ti = nc + ni
-        db_shared.status.job_count = p_len
-        db_shared.status.job_no = 0
+        shared.status.job_count = p_len
+        shared.status.job_no = 0
         total_instances = 0
         total_classes = 0
         pbar = mytqdm(range(p_len), desc="Caching latents..." if self.cache_latents else "Processing images...")

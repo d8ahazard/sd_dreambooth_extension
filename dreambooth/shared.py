@@ -1,7 +1,6 @@
 # One wrapper we're going to use to not depend so much on the main app.
 import datetime
 import inspect
-import math
 import os
 import pathlib
 import time
@@ -11,6 +10,7 @@ import numpy
 import torch
 from PIL import Image
 from packaging import version
+
 
 def get_root_dir():
     frame = inspect.stack()[-1]
@@ -42,6 +42,7 @@ sub_quad_q_chunk_size = 1024
 sub_quad_kv_chunk_size = None
 sub_quad_chunk_threshold = None
 CLIP_stop_at_last_layers = 2
+sd_model = None
 config = os.path.join(script_path, "configs", "v1-inference.yaml")
 force_cpu = False
 
@@ -56,32 +57,14 @@ if getattr(torch, 'has_mps', False):
     except Exception:
         pass
 
-def image_grid(imgs, batch_size=1, rows=None):
-    if rows is None:
-        rows = math.floor(math.sqrt(len(imgs)))
-        while len(imgs) % rows != 0:
-            rows -= 1
-        else:
-            rows = math.sqrt(len(imgs))
-            rows = round(rows)
-
-    cols = math.ceil(len(imgs) / rows)
-
-    w, h = imgs[0].size
-    grid = Image.new('RGB', size=(cols * w, rows * h), color='black')
-
-    for i, img in enumerate(imgs):
-        grid.paste(img, box=(i % cols * w, i // cols * h))
-
-    return grid
-
 
 def load_auto_settings():
     global models_path, script_path, ckpt_dir, device_id, disable_safe_unpickle, dataset_filename_word_regex, \
         dataset_filename_join_string, show_progress_every_n_steps, parallel_processing_allowed, state, ckptfix, medvram, \
         lowvram, dreambooth_models_path, lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config, device, \
-        force_cpu, embeddings_dir
+        force_cpu, embeddings_dir, sd_model
     try:
+        import modules.script_callbacks
         from modules import shared as ws, devices, images
         from modules import paths
         from modules.paths import models_path as mp, script_path as sp, sd_path as sdp
@@ -103,6 +86,15 @@ def load_auto_settings():
         lowvram = ws.cmd_opts.lowvram
         config = ws.cmd_opts.config
         device = ws.device
+        sd_model = ws.sd_model
+
+        def set_model(new_model):
+            global sd_model
+            sd_model = new_model
+
+        # Keep a reference to loaded script
+        modules.script_callbacks.on_model_loaded(set_model)
+
         try:
             dreambooth_models_path = ws.cmd_opts.dreambooth_models_path if ws.cmd_opts.dreambooth_models_path is not None else dreambooth_models_path
             lora_models_path = ws.cmd_opts.lora_models_path if ws.cmd_opts.lora_models_path is not None else lora_models_path
@@ -281,8 +273,8 @@ def start_safe_unpickle():
 orig_tensor_to = torch.Tensor.to
 def tensor_to_fix(self, *args, **kwargs):
     if self.device.type != 'mps' and \
-       ((len(args) > 0 and isinstance(args[0], torch.device) and args[0].type == 'mps') or \
-       (isinstance(kwargs.get('device'), torch.device) and kwargs['device'].type == 'mps')):
+       ((len(args) > 0 and isinstance(args[0], torch.device) and args[0].type == 'mps') or
+        (isinstance(kwargs.get('device'), torch.device) and kwargs['device'].type == 'mps')):
         self = self.contiguous()
     return orig_tensor_to(self, *args, **kwargs)
 

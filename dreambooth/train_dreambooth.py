@@ -5,7 +5,6 @@
 import itertools
 import logging
 import os
-import random
 import time
 import traceback
 from decimal import Decimal
@@ -14,31 +13,34 @@ from pathlib import Path
 import torch
 import torch.backends.cudnn
 import torch.utils.checkpoint
+from accelerate import Accelerator
 from diffusers import AutoencoderKL, DDIMScheduler, DiffusionPipeline, UNet2DConditionModel, DDPMScheduler
 from diffusers.utils import logging as dl
 from torch.cuda.profiler import profile
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
 
-from extensions.sd_dreambooth_extension.dreambooth import xattention, db_shared
-from extensions.sd_dreambooth_extension.dreambooth.SuperDataset import SampleData
-from extensions.sd_dreambooth_extension.dreambooth.db_bucket_sampler import BucketSampler
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.db_optimization import UniversalScheduler
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from extensions.sd_dreambooth_extension.dreambooth.db_webhook import send_training_update
+from extensions.sd_dreambooth_extension.dreambooth import xattention, shared
+from extensions.sd_dreambooth_extension.dreambooth.dataset.bucket_sampler import BucketSampler
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
+from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
+    import_model_class_from_model_name_or_path
+from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import encode_hidden_state
+from extensions.sd_dreambooth_extension.dreambooth.webhook import send_training_update
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import EMAModel, generate_classifiers, \
-    generate_dataset, TrainResult, CustomAccelerator, mytqdm, encode_hidden_state
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.train_result import TrainResult
+from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+from extensions.sd_dreambooth_extension.helpers.ema_model import EMAModel
 from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
-from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
-from extensions.sd_dreambooth_extension.dreambooth.sample_dataset import SampleDataset
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup, unload_system_models, parse_logs, printm, \
-    import_model_class_from_model_name_or_path, db_save_image
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth.dataset.sample_dataset import SampleDataset
+from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup, parse_logs, printm
 from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, inject_trainable_lora
-
-
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
@@ -93,35 +95,11 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
     @find_executable_batch_size(starting_batch_size=args.train_batch_size,
                                 starting_grad_size=args.gradient_accumulation_steps,
                                 logging_dir=logging_dir)
-    def inner_loop(train_batch_size: int, gradient_accumulation_steps: int, profiler: profile, logfile: str):
+    def inner_loop(train_batch_size: int, gradient_accumulation_steps: int, profiler: profile):
+
         text_encoder = None
         global last_samples
         global last_prompts
-
-        if db_shared.debug:
-            method_names = [
-                "from_pretrained",
-                "to",
-                "requires_grad_",
-                "set_diffusers_xformers_flag",
-                "inject_trainable_lora",
-                "eval",
-                "get_scheduler",
-                "init_trackers",
-                "check_save",
-                "save_weights",
-                "encode",
-                "mse_loss",
-                "step",
-                "load",
-                "backward",
-                "compile_checkpoint",
-                "generate_dataset"
-
-            ]
-            #print("Debugging enabled, setting up VRAMMonitor.")
-            #vram_logger = VRAMMonitor(method_names)
-
         stop_text_percentage = args.stop_text_encoder
         if not args.train_unet:
             stop_text_percentage = 1
@@ -130,7 +108,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         if not args.pad_tokens and args.max_token_length > 75:
             print("Cannot raise token length limit above 75 when pad_tokens=False")
 
-        precision = args.mixed_precision if not db_shared.force_cpu else "no"
+        precision = args.mixed_precision if not shared.force_cpu else "no"
 
         weight_dtype = torch.float32
         if precision == "fp16":
@@ -140,13 +118,12 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
 
         try:
-            accelerator = CustomAccelerator(
-                logfile=logfile,
+            accelerator = Accelerator(
                 gradient_accumulation_steps=gradient_accumulation_steps,
                 mixed_precision=precision,
                 log_with="tensorboard",
                 logging_dir=logging_dir,
-                cpu=db_shared.force_cpu
+                cpu=shared.force_cpu
             )
         except Exception as e:
             if "AcceleratorState" in str(e):
@@ -218,7 +195,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             torch_dtype=torch.float32
         )
 
-        if args.attention == "xformers" and not db_shared.force_cpu:
+        if args.attention == "xformers" and not shared.force_cpu:
             xattention.replace_unet_cross_attn_to_xformers()
             xattention.set_diffusers_xformers_flag(unet, True)
             xattention.set_diffusers_xformers_flag(vae, True)
@@ -241,21 +218,18 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
         unet_lora_params = None
         text_encoder_lora_params = None
+
         lora_path = None
         lora_txt = None
         if args.use_lora:
             unet.requires_grad_(False)
             if args.lora_model_name:
-                lora_path = os.path.join(db_shared.models_path, "lora", args.lora_model_name)
+                lora_path = os.path.join(shared.models_path, "lora", args.lora_model_name)
                 lora_txt = lora_path.replace(".pt", "_txt.pt")
 
                 if not os.path.exists(lora_path) or not os.path.isfile(lora_path):
                     lora_path = None
                     lora_txt = None
-
-            else:
-                lora_path = None
-
 
             unet_lora_params, _ = inject_trainable_lora(
                 unet,
@@ -283,7 +257,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         use_adam = False
         optimizer_class = torch.optim.AdamW
 
-        if args.use_8bit_adam and not db_shared.force_cpu:
+        if args.use_8bit_adam and not shared.force_cpu:
             try:
                 import bitsandbytes as bnb
                 optimizer_class = bnb.optim.AdamW8bit
@@ -505,7 +479,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 print(f"Exception loading checkpoint: {lex}")
 
         print("  ***** Running training *****")
-        if db_shared.force_cpu:
+        if shared.force_cpu:
             print(f"  TRAINING WITH CPU ONLY")
         print(f"  Num batches each epoch = {len(train_dataset) // train_batch_size}")
         print(f"  Num Epochs = {max_train_epochs}")
@@ -556,13 +530,13 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             save_snapshot = False
             save_lora = False
             save_checkpoint = False
-            if db_shared.status.do_save_samples and is_epoch_check:
+            if shared.status.do_save_samples and is_epoch_check:
                 save_image = True
-                db_shared.status.do_save_samples = False
+                shared.status.do_save_samples = False
 
-            if db_shared.status.do_save_model and is_epoch_check:
+            if shared.status.do_save_model and is_epoch_check:
                 save_model = True
-                db_shared.status.do_save_model = False
+                shared.status.do_save_model = False
 
             if save_model:
                 if save_canceled:
@@ -664,7 +638,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                             elif save_lora:
                                 pbar.set_description("Saving Lora Weights...")
                                 lora_model_name = args.model_name if args.custom_model_name == "" else args.custom_model_name
-                                model_dir = os.path.dirname(db_shared.lora_models_path)
+                                model_dir = os.path.dirname(shared.lora_models_path)
                                 out_file = os.path.join(model_dir, "lora")
                                 os.makedirs(out_file, exist_ok=True)
                                 out_file = os.path.join(out_file, f"{lora_model_name}_{args.revision}.pt")
@@ -705,26 +679,22 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                             os.makedirs(sample_dir, exist_ok=True)
                             with accelerator.autocast(), torch.inference_mode():
                                 sd = SampleDataset(args)
-                                prompts = sd.get_prompts()
+                                prompts = sd.prompts
                                 concepts = args.concepts()
                                 if args.sanity_prompt != "" and args.sanity_prompt is not None:
-                                    epd = PromptData()
-                                    epd.prompt = args.sanity_prompt
-                                    epd.seed = args.sanity_seed
-                                    epd.negative_prompt = concepts[0].save_sample_negative_prompt
-                                    extra = SampleData(args.sanity_prompt, concept=concepts[0])
-                                    extra.seed = args.sanity_seed
-                                    prompts.append(extra)
+                                    epd = PromptData(
+                                        prompt=args.sanity_prompt,
+                                        seed=args.sanity_seed,
+                                        negative_prompt=concepts[0].save_sample_negative_prompt,
+                                        resolution=(args.resolution, args.resolution)
+                                    )
+                                    prompts.append(epd)
                                 pbar.set_description("Generating Samples")
                                 pbar.reset(len(prompts) + 2)
                                 ci = 0
                                 for c in prompts:
                                     c.out_dir = os.path.join(args.model_dir, "samples")
-                                    c.resolution = (args.resolution, args.resolution)
-                                    seed = int(c.seed)
-                                    if c.seed is None or c.seed == '' or c.seed == -1:
-                                        seed = int(random.randrange(21474836147))
-                                    c.seed = seed
+                                    printm(f"Sample seed is {c.seed}")
                                     g_cuda = torch.Generator(device=accelerator.device).manual_seed(c.seed)
                                     s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
                                                          guidance_scale=c.scale,
@@ -734,7 +704,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                                          generator=g_cuda).images[0]
 
                                     sample_prompts.append(c.prompt)
-                                    image_name = db_save_image(s_image,c, seed, custom_name=f"sample_{args.revision}-{ci}")
+                                    image_name = db_save_image(s_image, c, custom_name=f"sample_{args.revision}-{ci}")
                                     samples.append(image_name)
                                     pbar.update()
                                     ci += 1

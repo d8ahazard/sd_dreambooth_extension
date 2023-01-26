@@ -13,18 +13,22 @@ import torch.utils.data.dataloader
 from accelerate import find_executable_batch_size
 from diffusers.utils import logging as dl
 
-from extensions.sd_dreambooth_extension.dreambooth import db_config, db_shared
-from extensions.sd_dreambooth_extension.dreambooth.db_bucket_sampler import BucketSampler
-from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, DreamboothConfig, sanitize_name
-from extensions.sd_dreambooth_extension.dreambooth.db_optimization import UniversalScheduler
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import ImageBuilder, generate_dataset, \
-    PromptDataset, mytqdm
-from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses import db_config
+from extensions.sd_dreambooth_extension.dreambooth.dataset.bucket_sampler import BucketSampler
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig, sanitize_name
+from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
+from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_dataset, generate_classifiers
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, db_save_image
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
+    get_lora_models, get_checkpoint_match
+from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
+from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import ClassDataset
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.utils import reload_system_models, unload_system_models, get_images, \
-    get_lora_models, cleanup, get_checkpoint_match, printm, db_save_image
-
+from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printm, cleanup
 
 logger = logging.getLogger(__name__)
 console = logging.StreamHandler()
@@ -278,7 +282,7 @@ def generate_samples(model_name: str,
                 tgt_file = os.path.join(tgt_name, f"{tgt_name}_{config.revision}{tgt_ext}")
             else:
                 tgt_file = f"{tgt_name}{config.revision}{tgt_ext}"
-            model_file = os.path.join(db_shared.models_path, "Stable-diffusion", tgt_file)
+            model_file = os.path.join(shared.models_path, "Stable-diffusion", tgt_file)
             print(f"Looking for: {model_file}")
             if not os.path.exists(model_file):
                 msg = "No checkpoint found, can't use txt2img."
@@ -308,8 +312,7 @@ def generate_samples(model_name: str,
                 prompts = prompt_data.readlines()
                 for i in range(len(prompts)):
                     file_prompt = prompts[i]
-                    if "[filewords]" in file_prompt:
-                        prompts[i] = file_prompt.replace("[filewords]", prompt)
+                    prompts[i] = file_prompt.replace("[filewords]", prompt).replace("[name]", prompt)
 
         try:
             status.textinfo = "Loading diffusion model..."
@@ -326,7 +329,6 @@ def generate_samples(model_name: str,
                 sample_prompt = random.choice(prompts)
                 pd = PromptData(
                     prompt=sample_prompt,
-                    prompt_tokens=None,
                     negative_prompt=negative_prompt,
                     steps=steps,
                     scale=scale,
@@ -354,12 +356,12 @@ def generate_samples(model_name: str,
                 out_images = img_builder.generate_images(to_generate, pbar)
                 for img, pd in zip(out_images, to_generate):
                     pbar.update()
-                    image_name = db_save_image(img, pd, seed)
+                    image_name = db_save_image(img, pd)
                     batch_images.append(image_name)
-                images.extend(batch_prompts)
+                images.extend(batch_images)
                 prompts_out.extend(batch_prompts)
-                db_shared.status.current_image = images
-                db_shared.status.sample_prompts = batch_prompts
+                shared.status.current_image = images
+                shared.status.sample_prompts = batch_prompts
             img_builder.unload(True)
             reload_system_models()
         except Exception as e:
@@ -530,10 +532,11 @@ def start_training(model_dir: str, use_txt2img: bool = True):
 
     cleanup()
     reload_system_models()
+    lora_model_name = ""
     if config.lora_model_name != "" and config.lora_model_name is not None:
         lora_model_name = f"{config.model_name}_{total_steps}.pt"
     dirs = get_lora_models()
-    lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=config.lora_model_name)
+    lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
     return lora_model_name, total_steps, config.epoch, images, res
 
 
@@ -576,7 +579,6 @@ def ui_classifiers(model_name: str,
 
     images = []
     try:
-        from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import generate_classifiers
         print("Generating class images...")
         unload_system_models()
         count, images = generate_classifiers(config, use_txt2img=use_txt2img, ui=True)
@@ -642,7 +644,7 @@ def debug_buckets(model_name, num_epochs, batch_size):
         return "Invalid config."
     print("Preparing prompt dataset...")
 
-    prompt_dataset = PromptDataset(args.concepts(), args.model_dir, args.resolution)
+    prompt_dataset = ClassDataset(args.concepts(), args.model_dir, args.resolution)
     inst_paths = prompt_dataset.instance_prompts
     class_paths = prompt_dataset.class_prompts
     print("Generating training dataset...")
