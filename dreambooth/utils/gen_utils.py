@@ -160,7 +160,7 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
                 pd = prompts[i_idx]
                 image_base = hashlib.sha1(image.tobytes()).hexdigest()
                 # Save image and get new filename
-                image_filename = db_save_image(image, pd, custom_name=f"{pd.prompt[0:64]}-{image_base[0:8]}")
+                image_filename = db_save_image(image, pd)
                 # Set filename here for later retrieval
                 pd.src_image = image_filename
                 # NOW STORE IT
