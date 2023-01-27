@@ -504,7 +504,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
     async def set_model_params(
             model_name: str = Query(description="The model name to update params for."),
             api_key: str = Query("", description="If an API key is set, this must be present."),
-            params: str = Body(description="A json string representing a dictionary of parameters to set.")
+            params: str = Query(description="A json string representing a dictionary of parameters to set.")
     ) -> JSONResponse:
         """
         Update an existing model configuration's parameters from a dictionary of values.
@@ -523,7 +523,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         config.save()
         return JSONResponse(content=config.__dict__)
 
-    
+
     @app.get("/dreambooth/models")
     async def get_models(
             api_key: str = Query("", description="If an API key is set, this must be present."),
