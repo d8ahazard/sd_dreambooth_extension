@@ -500,6 +500,30 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             traceback.print_exc()
             return {"Exception saving model": f"{e}"}
 
+    @app.post("/dreambooth/model_params")
+    async def set_model_params(
+            model_name: str = Query(description="The model name to update params for."),
+            api_key: str = Query("", description="If an API key is set, this must be present."),
+            params: str = Body(description="A json string representing a dictionary of parameters to set.")
+    ) -> JSONResponse:
+        """
+        Update an existing model configuration's parameters from a dictionary of values.
+        """
+        params = json.loads(params)
+        key_check = check_api_key(api_key)
+        if key_check is not None:
+            return key_check
+        if model_name is None or model_name == "":
+            return JSONResponse(status_code=422, content={"message": "Invalid model name."})
+        config = from_file(model_name)
+        if config is None:
+            return JSONResponse(status_code=422, content={"message": "Invalid config."})
+        print(f"Loading new params: {params}")
+        config.load_params(params)
+        config.save()
+        return JSONResponse(content=config.__dict__)
+
+    
     @app.get("/dreambooth/models")
     async def get_models(
             api_key: str = Query("", description="If an API key is set, this must be present."),
