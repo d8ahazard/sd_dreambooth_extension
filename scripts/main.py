@@ -231,25 +231,17 @@ def on_ui_tabs():
                                                          value=True)
                         with gr.Column():
                             gr.HTML(value="Intervals")
-                            db_num_train_epochs = gr.Number(label="Training Steps Per Image (Epochs)", precision=0,
-                                                            value=100)
-                            db_epoch_pause_frequency = gr.Number(label='Pause After N Epochs', value=0)
-                            db_epoch_pause_time = gr.Number(label='Amount of time to pause between Epochs (s)',
-                                                            value=60)
-                            db_save_embedding_every = gr.Number(
-                                label='Save Model Frequency (Epochs)', value=25,
-                                precision=0)
-                            db_save_preview_every = gr.Number(
-                                label='Save Preview(s) Frequency (Epochs)', value=5,
-                                precision=0)
+                            db_num_train_epochs = gr.Slider(label="Training Steps Per Image (Epochs)", value=100, maximum=1000, step=1)
+                            db_epoch_pause_frequency = gr.Slider(label='Pause After N Epochs', value=0, maximum=100, step=1)
+                            db_epoch_pause_time = gr.Slider(label='Amount of time to pause between Epochs (s)', value=60, maximum=3600, step=1)
+                            db_save_embedding_every = gr.Slider(label='Save Model Frequency (Epochs)', value=25, maximum=1000, step=1)
+                            db_save_preview_every = gr.Slider(label='Save Preview(s) Frequency (Epochs)', value=5, maximum=1000, step=1)
 
                         with gr.Column():
                             gr.HTML(value="Batching")
-                            db_train_batch_size = gr.Number(label="Batch Size", precision=0, value=1)
-                            db_gradient_accumulation_steps = gr.Number(label="Gradient Accumulation Steps",
-                                                                       precision=0,
-                                                                       value=1)
-                            db_sample_batch_size = gr.Number(label="Class Batch Size", precision=0, value=1)
+                            db_train_batch_size = gr.Slider(label="Batch Size", value=1, minimum=1, maximum=100, step=1)
+                            db_gradient_accumulation_steps = gr.Slider(label="Gradient Accumulation Steps", value=1, minimum=1, maximum=100, step=1)
+                            db_sample_batch_size = gr.Slider(label="Class Batch Size", minimum=1, maximum=100, value=1, step=1)
                             db_gradient_set_to_none = gr.Checkbox(label="Set Gradients to None When Zeroing",
                                                                   value=True)
                             db_gradient_checkpointing = gr.Checkbox(label="Gradient Checkpointing", value=True)
@@ -272,12 +264,12 @@ def on_ui_tabs():
                                 db_lora_learning_rate = gr.Number(label='Lora UNET Learning Rate', value=2e-4)
                                 db_lora_txt_learning_rate = gr.Number(label='Lora Text Encoder Learning Rate',
                                                                       value=2e-4)
-                            db_lr_warmup_steps = gr.Number(label="Learning Rate Warmup Steps", precision=0, value=0)
+                            db_lr_warmup_steps = gr.Slider(label="Learning Rate Warmup Steps", value=0, step=5, maximum=10000)
 
 
                         with gr.Column():
                             gr.HTML(value="Image Processing")
-                            db_resolution = gr.Number(label="Resolution", precision=0, value=512)
+                            db_resolution = gr.Slider(label="Max Resolution", step=64, minimum=128, value=512, maximum=4096)
                             db_center_crop = gr.Checkbox(label="Center Crop", value=False)
                             db_hflip = gr.Checkbox(label="Apply Horizontal Flip", value=False)
                             db_sanity_prompt = gr.Textbox(label="Sanity Sample Prompt", placeholder="A generic prompt "
@@ -330,8 +322,7 @@ def on_ui_tabs():
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
                                     db_strict_tokens = gr.Checkbox(label="Strict Tokens", value=False)
                                     db_shuffle_tags = gr.Checkbox(label="Shuffle Tags", value=True)
-                                    db_max_token_length = gr.Slider(label="Max Token Length", minimum=75, maximum=300,
-                                                                    step=75)
+                                    db_max_token_length = gr.Slider(label="Max Token Length", minimum=75, maximum=300, step=75)
                                 with gr.Column():
                                     gr.HTML(value="Prior Loss")
                                     db_prior_loss_scale = gr.Checkbox(label="Scale Prior Loss", value=False)
@@ -352,28 +343,28 @@ def on_ui_tabs():
                             db_train_wizard_object = gr.Button(value="Training Wizard (Object/Style)")
                         with gr.Tab("Concept 1"):
                             c1_instance_data_dir, c1_class_data_dir, c1_instance_prompt, \
-                            c1_class_prompt, c1_num_class_images, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token, \
+                            c1_class_prompt, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token, \
                             c1_class_token, c1_num_class_images_per, c1_class_negative_prompt, c1_class_guidance_scale, \
                             c1_class_infer_steps, c1_save_sample_negative_prompt, c1_n_save_sample, c1_sample_seed, \
                             c1_save_guidance_scale, c1_save_infer_steps = build_concept_panel()
 
                         with gr.Tab("Concept 2"):
                             c2_instance_data_dir, c2_class_data_dir, c2_instance_prompt, \
-                            c2_class_prompt, c2_num_class_images, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token, \
+                            c2_class_prompt, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token, \
                             c2_class_token, c2_num_class_images_per, c2_class_negative_prompt, c2_class_guidance_scale, \
                             c2_class_infer_steps, c2_save_sample_negative_prompt, c2_n_save_sample, c2_sample_seed, \
                             c2_save_guidance_scale, c2_save_infer_steps = build_concept_panel()
 
                         with gr.Tab("Concept 3"):
                             c3_instance_data_dir, c3_class_data_dir, c3_instance_prompt, \
-                            c3_class_prompt, c3_num_class_images, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token, \
+                            c3_class_prompt, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token, \
                             c3_class_token, c3_num_class_images_per, c3_class_negative_prompt, c3_class_guidance_scale, \
                             c3_class_infer_steps, c3_save_sample_negative_prompt, c3_n_save_sample, c3_sample_seed, \
                             c3_save_guidance_scale, c3_save_infer_steps = build_concept_panel()
                             
                         with gr.Tab("Concept 4"):
                             c4_instance_data_dir, c4_class_data_dir, c4_instance_prompt, \
-                            c4_class_prompt, c4_num_class_images, c4_save_sample_prompt, c4_save_sample_template, c4_instance_token, \
+                            c4_class_prompt, c4_save_sample_prompt, c4_save_sample_template, c4_instance_token, \
                             c4_class_token, c4_num_class_images_per, c4_class_negative_prompt, c4_class_guidance_scale, \
                             c4_class_infer_steps, c4_save_sample_negative_prompt, c4_n_save_sample, c4_sample_seed, \
                             c4_save_guidance_scale, c4_save_infer_steps = build_concept_panel()
@@ -411,7 +402,7 @@ def on_ui_tabs():
                     with gr.Column():
                         db_generate_classes = gr.Button(value="Generate Class Images")
                         db_generate_graph = gr.Button(value="Generate Graph")
-                        db_graph_smoothing = gr.Number(value=50, label="Graph Smoothing Steps")
+                        db_graph_smoothing = gr.Slider(value=50, label="Graph Smoothing Steps", minimum=10, maximum=500)
                         db_debug_buckets = gr.Button(value="Debug Buckets")
                         db_bucket_epochs = gr.Slider(value=10, step=1, minimum=1, maximum=1000, label="Epochs to Simulate")
                         db_bucket_batch = gr.Slider(value=1, step=1, minimum=1, maximum=500, label="Batch Size to Simulate")
@@ -422,11 +413,11 @@ def on_ui_tabs():
                         db_sample_width = gr.Slider(label="Sample Width", value=512, step=64,minimum=128, maximum=2048)
                         db_sample_height = gr.Slider(label="Sample Height", value=512, step=64, minimum=128, maximum=2048)
                         db_sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
-                        db_num_samples = gr.Number(label="Number of Samples to Generate", value=1, precision=0)
+                        db_num_samples = gr.Slider(label="Number of Samples to Generate", value=1, minimum=1, maximum=1000, step=1)
                         db_gen_sample_batch_size = gr.Slider(label="Sample Batch Size", value=1, step=1, minimum=1,
                                                      maximum=100, interactive=True)
-                        db_sample_steps = gr.Number(label="Sample Steps", value=60, precision=0)
-                        db_sample_scale = gr.Number(label="Sample CFG Scale", value=7.5, precision=2)
+                        db_sample_steps = gr.Slider(label="Sample Steps", value=40, minimum=1, maximum=500, step=1)
+                        db_sample_scale = gr.Slider(label="Sample CFG Scale", value=7.5, step=0.1, minimum=1, maximum=20)
                         db_sample_txt2img = gr.Checkbox(label="Use txt2img", value=True)
 
             with gr.Column(variant="panel"):
@@ -633,7 +624,6 @@ def on_ui_tabs():
             c1_instance_prompt,
             c1_instance_token,
             c1_n_save_sample,
-            c1_num_class_images,
             c1_num_class_images_per,
             c1_sample_seed,
             c1_save_guidance_scale,
@@ -651,7 +641,6 @@ def on_ui_tabs():
             c2_instance_prompt,
             c2_instance_token,
             c2_n_save_sample,
-            c2_num_class_images,
             c2_num_class_images_per,
             c2_sample_seed,
             c2_save_guidance_scale,
@@ -669,7 +658,6 @@ def on_ui_tabs():
             c3_instance_prompt,
             c3_instance_token,
             c3_n_save_sample,
-            c3_num_class_images,
             c3_num_class_images_per,
             c3_sample_seed,
             c3_save_guidance_scale,
@@ -687,7 +675,6 @@ def on_ui_tabs():
             c4_instance_prompt,
             c4_instance_token,
             c4_n_save_sample,
-            c4_num_class_images,
             c4_num_class_images_per,
             c4_sample_seed,
             c4_save_guidance_scale,
@@ -1011,19 +998,17 @@ def build_concept_panel():
 
     with gr.Column():
         gr.HTML("Image Generation")
-        num_class_images = gr.Number(label='Total Number of Class/Reg Images', value=0, precision=0, visible=False)
-        num_class_images_per = gr.Number(label='Class Images Per Instance Image', value=0, precision=0)
-        class_guidance_scale = gr.Number(label="Classification CFG Scale", value=7.5, max=12, min=1, precision=2)
-        class_infer_steps = gr.Number(label="Classification Steps", value=40, min=10, max=200, precision=0)
-        n_save_sample = gr.Number(label="Number of Samples to Generate", value=1, precision=0)
+        num_class_images_per = gr.Slider(label='Class Images Per Instance Image', value=0, precision=0)
+        class_guidance_scale = gr.Slider(label="Classification CFG Scale", value=7.5, maximum=12, minimum=1, step=0.1)
+        class_infer_steps = gr.Slider(label="Classification Steps", value=40, minimum=10, maximum=200, step=1)
+        n_save_sample = gr.Slider(label="Number of Samples to Generate", value=1, maximum=100, step=1)
         sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
-        save_guidance_scale = gr.Number(label="Sample CFG Scale", value=7.5, max=12, min=1, precision=2)
-        save_infer_steps = gr.Number(label="Sample Steps", value=40, min=10, max=200, precision=0)
-    return [instance_data_dir, class_data_dir, instance_prompt, class_prompt,
-            num_class_images,
-            save_sample_prompt, sample_template, instance_token, class_token, num_class_images_per, class_negative_prompt,
-            class_guidance_scale, class_infer_steps, save_sample_negative_prompt, n_save_sample, sample_seed,
-            save_guidance_scale, save_infer_steps]
+        save_guidance_scale = gr.Slider(label="Sample CFG Scale", value=7.5, maximum=12, minimum=1, step=0.1)
+        save_infer_steps = gr.Slider(label="Sample Steps", value=40, minimum=10, maximum=200, step=1)
+    return [instance_data_dir, class_data_dir, instance_prompt, class_prompt,save_sample_prompt, sample_template,
+            instance_token, class_token, num_class_images_per, class_negative_prompt, class_guidance_scale,
+            class_infer_steps, save_sample_negative_prompt, n_save_sample, sample_seed,save_guidance_scale,
+            save_infer_steps]
 
 
 script_callbacks.on_ui_tabs(on_ui_tabs)
