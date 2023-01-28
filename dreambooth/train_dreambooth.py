@@ -871,7 +871,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                         # Compute prior loss
                         model_pred_prior = torch.stack(prior_chunks, dim=0)
                         target_prior = torch.stack(prior_pred_chunks, dim=0)
-                        prior_loss = torch.nn.functional.mse_loss(model_pred_prior, target_prior, reduction="mean")
+                        model_pred_prior = model_pred_prior.to(torch.float)
+                        target_prior = target_prior.to(torch.float)
+                        prior_loss = torch.nn.functional.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
                         current_prior = prior_loss.detach().item()
                         prior_loss_total += current_prior
                         avg_prior_loss = prior_loss_total / (step + 1)
@@ -879,6 +881,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
                         # Add the prior loss to the instance loss.
                         loss = loss + args.prior_loss_weight * prior_loss
+
                     else:
                         loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
