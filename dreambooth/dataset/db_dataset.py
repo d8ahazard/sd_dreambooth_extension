@@ -352,7 +352,7 @@ class DbDataset(torch.utils.data.Dataset):
             input_id = (caption, rebuilt)
         loss_weight = self.prior_loss_weight if is_class_image else 1.0
         # If we have reached the end of our bucket, increment to the next, update the count, reset image index.
-        example = {"image": image_data, "input_id": input_id, "loss_weight": loss_weight, "res": self.active_resolution}
+        example = {"image": image_data, "input_id": input_id, "loss_weight": loss_weight, "res": self.active_resolution, "is_class":is_class_image}
         return example
 
 

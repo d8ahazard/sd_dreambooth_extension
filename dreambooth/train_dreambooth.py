@@ -369,7 +369,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             input_ids = [example["input_id"] for example in examples]
             pixel_values = [example["image"] for example in examples]
             loss_weights = torch.tensor([example["loss_weight"] for example in examples], dtype=torch.float32)
-
+            types = [example["is_class"] for example in examples]
             pixel_values = torch.stack(pixel_values)
             if not args.cache_latents:
                 pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
@@ -378,7 +378,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             batch_data = {
                 "input_ids": input_ids,
                 "images": pixel_values,
-                "loss_weights": loss_weights.mean()
+                "loss_weights": loss_weights.mean(),
+                "types": types
             }
             return batch_data
 
@@ -793,6 +794,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     text_encoder.text_model.embeddings.requires_grad_(True)
 
             loss_total = 0
+            prior_loss_total = 0
 
             # Todo: Update prior loss values with args
 
@@ -840,10 +842,45 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     else:
                         target = noise
 
-                    loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="none")
-                    loss = loss.mean([1, 2, 3])
-                    loss = loss * batch["loss_weights"]
-                    loss = loss.mean()
+                    model_pred_chunks = torch.split(noise_pred, 1, dim=0)
+                    target_pred_chunks = torch.split(target, 1, dim=0)
+                    instance_chunks = []
+                    prior_chunks = []
+                    instance_pred_chunks = []
+                    prior_pred_chunks = []
+
+                    # Iterate over the list of boolean values in batch["types"]
+                    for i, is_prior in enumerate(batch["types"]):
+                        # If is_prior is False, append the corresponding chunk to instance_chunks
+                        if not is_prior:
+                            instance_chunks.append(model_pred_chunks[i])
+                            instance_pred_chunks.append(target_pred_chunks[i])
+                        # If is_prior is True, append the corresponding chunk to prior_chunks
+                        else:
+                            prior_chunks.append(model_pred_chunks[i])
+                            prior_pred_chunks.append(target_pred_chunks[i])
+
+                    # Concatenate the chunks in instance_chunks to form the model_pred_instance tensor
+                    model_pred = torch.stack(instance_chunks, dim=0)
+                    target = torch.stack(instance_pred_chunks, dim=0)
+
+                    # Compute instance loss
+                    loss = torch.nn.functional.mse_loss(model_pred, target, reduction="mean")
+
+                    if len(prior_pred_chunks):
+                        # Compute prior loss
+                        model_pred_prior = torch.stack(prior_chunks, dim=0)
+                        target_prior = torch.stack(prior_pred_chunks, dim=0)
+                        prior_loss = torch.nn.functional.mse_loss(model_pred_prior, target_prior, reduction="mean")
+                        current_prior = prior_loss.detach().item()
+                        prior_loss_total += current_prior_loss
+                        avg_prior_loss = prior_loss_total / (step + 1)
+                        #print(f"Current/avg prior: {current_prior}/{avg_prior_loss}")
+
+                        # Add the prior loss to the instance loss.
+                        loss = loss + args.prior_loss_weight * prior_loss
+                    else:
+                        loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
                     accelerator.backward(loss)
                     if accelerator.sync_gradients and not args.use_lora:
