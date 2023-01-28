@@ -863,7 +863,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     # Concatenate the chunks in instance_chunks to form the model_pred_instance tensor
                     model_pred = torch.stack(instance_chunks, dim=0)
                     target = torch.stack(instance_pred_chunks, dim=0)
-
+                    loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
                     if len(prior_pred_chunks):
                         print("Pred calc")
                         # Compute prior loss
@@ -878,8 +878,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                         # Add the prior loss to the instance loss.
                         loss = loss + args.prior_loss_weight * prior_loss
 
-                    else:
-                        loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
                     accelerator.backward(loss)
                     if accelerator.sync_gradients and not args.use_lora:
