@@ -865,7 +865,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     target = torch.stack(instance_pred_chunks, dim=0)
                     loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
                     if len(prior_pred_chunks):
-                        print("Pred calc")
                         # Compute prior loss
                         model_pred_prior = torch.stack(prior_chunks, dim=0)
                         target_prior = torch.stack(prior_pred_chunks, dim=0)
