@@ -873,7 +873,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                         target_prior = torch.stack(prior_pred_chunks, dim=0)
                         prior_loss = torch.nn.functional.mse_loss(model_pred_prior, target_prior, reduction="mean")
                         current_prior = prior_loss.detach().item()
-                        prior_loss_total += current_prior_loss
+                        prior_loss_total += current_prior
                         avg_prior_loss = prior_loss_total / (step + 1)
                         #print(f"Current/avg prior: {current_prior}/{avg_prior_loss}")
 
