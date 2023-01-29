@@ -30,7 +30,6 @@ class DbDataset(torch.utils.data.Dataset):
             tokens: List[Tuple[str, str]],
             tokenizer: Union[CLIPTokenizer, None],
             resolution: int,
-            prior_loss_weight: float,
             hflip: bool,
             random_crop: bool,
             shuffle_tags: bool,
@@ -73,7 +72,6 @@ class DbDataset(torch.utils.data.Dataset):
 
         self.tokenizer = tokenizer
         self.resolution = resolution
-        self.prior_loss_weight = prior_loss_weight
         self.random_crop = random_crop
         self.debug_dataset = debug_dataset
         self.shuffle_tags = shuffle_tags
@@ -350,9 +348,8 @@ class DbDataset(torch.utils.data.Dataset):
             caption, cap_tokens = self.cache_caption(image_path, caption)
             rebuilt = self.tokenizer.decode(cap_tokens.tolist()[0])
             input_ids = (caption, rebuilt)
-        loss_weight = self.prior_loss_weight if is_class_image else 1.0
         # If we have reached the end of our bucket, increment to the next, update the count, reset image index.
-        example = {"image": image_data, "input_ids": input_ids, "loss_weight": loss_weight, "res": self.active_resolution}
+        example = {"image": image_data, "input_ids": input_ids, "res": self.active_resolution, "is_class":is_class_image}
         return example
 
 

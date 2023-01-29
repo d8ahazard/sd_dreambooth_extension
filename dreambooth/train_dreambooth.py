@@ -368,8 +368,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         def collate_fn(examples):
             input_ids = [example["input_ids"] for example in examples]
             pixel_values = [example["image"] for example in examples]
-            loss_weights = torch.tensor([example["loss_weight"] for example in examples], dtype=torch.float32)
-
+            types = [example["is_class"] for example in examples]
             pixel_values = torch.stack(pixel_values)
             if not args.cache_latents:
                 pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
@@ -378,7 +377,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             batch_data = {
                 "input_ids": input_ids,
                 "images": pixel_values,
-                "loss_weights": loss_weights.mean()
+                "types": types
             }
             return batch_data
 
@@ -390,9 +389,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             batch_sampler=sampler,
             collate_fn=collate_fn,
             num_workers=n_workers)
-
-        # Todo: Update prior loss values with args
-        sampler.set_prior_loss(current_prior_loss(args, args.epoch))
 
         max_train_steps = args.num_train_epochs * len(train_dataset)
 
@@ -793,11 +789,12 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     text_encoder.text_model.embeddings.requires_grad_(True)
 
             loss_total = 0
+            instance_loss_total = 0
+            instance_loss_avg = 0
+            prior_loss_total = 0
+            prior_loss_avg = 0
 
-            # Todo: Update prior loss values with args
-
-            sampler.set_prior_loss(current_prior_loss(args, lifetime_epoch))
-
+            current_prior_loss_weight = current_prior_loss(args, current_epoch=global_epoch)
             for step, batch in enumerate(train_dataloader):
                 # Skip steps until we reach the resumed step
                 if resume_from_checkpoint and epoch == first_epoch and step < resume_step:
@@ -840,10 +837,55 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     else:
                         target = noise
 
-                    loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="none")
-                    loss = loss.mean([1, 2, 3])
-                    loss = loss * batch["loss_weights"]
-                    loss = loss.mean()
+                    model_pred_chunks = torch.split(noise_pred, 1, dim=0)
+                    target_pred_chunks = torch.split(target, 1, dim=0)
+                    instance_chunks = []
+                    prior_chunks = []
+                    instance_pred_chunks = []
+                    prior_pred_chunks = []
+
+                    print(batch["types"])
+
+                    # Iterate over the list of boolean values in batch["types"]
+                    for i, is_prior in enumerate(batch["types"]):
+                        # If is_prior is False, append the corresponding chunk to instance_chunks
+                        if not is_prior:
+                            instance_chunks.append(model_pred_chunks[i])
+                            instance_pred_chunks.append(target_pred_chunks[i])
+                        # If is_prior is True, append the corresponding chunk to prior_chunks
+                        else:
+                            prior_chunks.append(model_pred_chunks[i])
+                            prior_pred_chunks.append(target_pred_chunks[i])
+
+                    # initialize with 0 in case we are having batch = 1    
+                    instance_loss = torch.tensor(0)
+                    instance_loss_step = float("nan")
+                    prior_loss = torch.tensor(0)
+                    prior_loss_step = float("nan")
+
+                    # Concatenate the chunks in instance_chunks to form the model_pred_instance tensor
+                    if len(instance_chunks):
+                        model_pred = torch.stack(instance_chunks, dim=0)
+                        target = torch.stack(instance_pred_chunks, dim=0)
+                        instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                        instance_loss_step = instance_loss.detach().item()
+                        instance_loss_total += instance_loss_step
+                        instance_loss_avg = instance_loss_total / (step + 1)
+
+                    if len(prior_pred_chunks):
+                        # Compute prior loss
+                        model_pred_prior = torch.stack(prior_chunks, dim=0)
+                        target_prior = torch.stack(prior_pred_chunks, dim=0)
+                        prior_loss = torch.nn.functional.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
+                        prior_loss_step = prior_loss.detach().item()
+                        prior_loss_total += prior_loss_step
+                        prior_loss_avg = prior_loss_total / (step + 1)
+
+                        # Add the prior loss to the instance loss.
+                        prior_loss *= current_prior_loss_weight
+                    
+                    loss = instance_loss + prior_loss
+
 
                     accelerator.backward(loss)
                     if accelerator.sync_gradients and not args.use_lora:
@@ -863,10 +905,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
                     optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
 
-                current_loss = loss.detach().item()
-                loss_total += current_loss
-                avg_loss = loss_total / (step + 1)
-
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
                 last_lr = lr_scheduler.get_last_lr()[0]
@@ -881,9 +919,20 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 del noisy_latents
                 del target
 
-                logs = {"loss": float(current_loss), "loss_avg": avg_loss, "lr": last_lr, "vram_usage": float(cached)}
-                status.textinfo2 = f"Loss: {'%.2f' % current_loss}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
-                                   f"VRAM: {allocated}/{cached} GB"
+                loss_step = loss.detach().item()
+                loss_avg = (instance_loss_avg + prior_loss_avg) / 2
+                logs = {
+                    "loss": float(loss_step),
+                    "loss_avg": float(loss_avg), 
+                    "lr": float(last_lr), 
+                    "vram_usage": float(cached),
+                    "instance_loss": float(instance_loss_step),
+                    "instance_loss_avg": float(instance_loss_avg),
+                    "prior_loss": float(prior_loss_step),
+                    "prior_loss_avg": float(prior_loss_avg)
+                }
+                status.textinfo2 = f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
+                                    f"VRAM: {allocated}/{cached} GB"
                 progress_bar.update(train_batch_size)
                 progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=args.revision)
