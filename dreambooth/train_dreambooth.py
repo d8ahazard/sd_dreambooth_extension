@@ -859,9 +859,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
                     # initialize with 0 in case we are having batch = 1    
                     instance_loss = torch.tensor(0)
-                    instance_loss_step = None
+                    instance_loss_step = float("nan")
                     prior_loss = torch.tensor(0)
-                    prior_loss_step = None
+                    prior_loss_step = float("nan")
 
                     # Concatenate the chunks in instance_chunks to form the model_pred_instance tensor
                     if len(instance_chunks):
@@ -922,14 +922,14 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 loss_step = loss.detach().item()
                 loss_avg = (instance_loss_avg + prior_loss_avg) / 2
                 logs = {
-                    "loss": loss_step,
-                    "loss_avg": loss_avg, 
-                    "lr": last_lr, 
+                    "loss": float(loss_step),
+                    "loss_avg": float(loss_avg), 
+                    "lr": float(last_lr), 
                     "vram_usage": float(cached),
-                    "instance_loss": instance_loss_step,
-                    "instance_loss_avg": instance_loss_avg,
-                    "prior_loss": prior_loss_step,
-                    "prior_loss_avg": prior_loss_avg
+                    "instance_loss": float(instance_loss_step),
+                    "instance_loss_avg": float(instance_loss_avg),
+                    "prior_loss": float(prior_loss_step),
+                    "prior_loss_avg": float(prior_loss_avg)
                 }
                 status.textinfo2 = f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
                                     f"VRAM: {allocated}/{cached} GB"
