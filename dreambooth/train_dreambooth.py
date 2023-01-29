@@ -789,6 +789,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     text_encoder.text_model.embeddings.requires_grad_(True)
 
             loss_total = 0
+            instance_loss_total = 0
             prior_loss_total = 0
 
             current_prior_loss_weight = current_prior_loss(args, current_epoch=global_epoch)
@@ -841,6 +842,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     instance_pred_chunks = []
                     prior_pred_chunks = []
 
+                    print(batch["types"])
+
                     # Iterate over the list of boolean values in batch["types"]
                     for i, is_prior in enumerate(batch["types"]):
                         # If is_prior is False, append the corresponding chunk to instance_chunks
@@ -856,20 +859,19 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     model_pred = torch.stack(instance_chunks, dim=0)
                     target = torch.stack(instance_pred_chunks, dim=0)
                     loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                    log_current_instance_loss = loss.detach().item()
+                    log_current_prior_loss = None
                     if len(prior_pred_chunks):
                         # Compute prior loss
                         model_pred_prior = torch.stack(prior_chunks, dim=0)
                         target_prior = torch.stack(prior_pred_chunks, dim=0)
                         prior_loss = torch.nn.functional.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
                         log_current_prior_loss = prior_loss.detach().item()
-                        log_current_instance_loss = loss.detach().item()
                         prior_loss_total += current_prior_loss
-                        avg_prior_loss = prior_loss_total / (step + 1)
-                        logs = {"prior_loss": float(avg_prior_loss), "prior_loss_avg": avg_prior_loss}
-                        accelerator.log(logs, step=args.revision)
 
                         # Add the prior loss to the instance loss.
                         loss = loss + current_prior_loss_weight * prior_loss
+                    
 
 
                     accelerator.backward(loss)
@@ -894,6 +896,13 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 loss_total += current_loss
                 avg_loss = loss_total / (step + 1)
 
+                instance_loss_total +=  log_current_instance_loss
+                avg_instance_loss = instance_loss_total / (step + 1)
+
+                if log_current_prior_loss is not None:
+                    prior_loss_total += log_current_prior_loss
+                    avg_prior_loss = prior_loss_total / (step + 1)
+
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
                 last_lr = lr_scheduler.get_last_lr()[0]
@@ -914,7 +923,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     "lr": last_lr, 
                     "vram_usage": float(cached),
                     "instance_loss": float(log_current_instance_loss),
-                    "prior_loss": float(log_current_prior_loss) if log_current_prior_loss is not None else None
+                    "instance_loss_avg": float(avg_instance_loss),
+                    "prior_loss": float(log_current_prior_loss) if log_current_prior_loss is not None else None,
+                    "prior_loss_avg": float(avg_prior_loss) if log_current_prior_loss is not None else None
                 }
                 status.textinfo2 = f"Loss: {'%.2f' % current_loss}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
                                    f"VRAM: {allocated}/{cached} GB"
