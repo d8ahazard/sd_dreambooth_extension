@@ -8,6 +8,7 @@ import traceback
 from typing import Optional, Union, Tuple, List
 
 import matplotlib
+import matplotlib.pyplot as plt
 import pandas as pd
 from pandas.plotting._matplotlib.style import get_standard_colors
 from tqdm.auto import tqdm
@@ -137,6 +138,63 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
     else:
         return f"{organization}/{model_id}"
 
+from dataclasses import dataclass
+
+@dataclass
+class YAxis:
+    name: str
+    columns: List[str]
+
+@dataclass
+class PlotDefinition:
+    title: str
+    x_axis: str
+    y_axis: List[YAxis]
+
+def plot_multi_alt(
+    data: pd.DataFrame,
+    plot_definition: PlotDefinition,
+    spacing: float = 0.1,
+):
+    styles = ["-", ":", "--", "-."]
+    colors = get_standard_colors(num_colors=5)
+    
+    for i, yi in enumerate(plot_definition.y_axis):
+        if len(yi.columns) > len(styles):
+            raise ValueError(f"Maximum {len(styles)} traces per yaxis allowed. If we want to allow this we need to add some logic.")
+        if i > len(colors):
+            raise ValueError(f"Maximum {len(colors)} yaxis axis allowed. If we want to allow this we need to add some logic.")
+
+        if i == 0:
+            ax = data.plot(
+                x=plot_definition.x_axis, 
+                y=yi.columns, 
+                title=plot_definition.title,
+                style=styles[:len(yi.columns)],
+                color=[colors[i] for _ in range(len(yi.columns))]
+                
+            )
+            ax.set_ylabel(ylabel=yi.name)
+
+        else:
+            # Multiple y-axes
+            ax_new = ax.twinx()
+            ax_new.spines["right"].set_position(("axes", 1 + spacing * (i - 1)))
+            data.plot(
+                ax=ax_new, 
+                x=plot_definition.x_axis, 
+                y=yi.columns,
+                style=styles[:len(yi.columns)],
+                color=[colors[i] for _ in range(len(yi.columns))]
+            )
+            ax_new.set_ylabel(ylabel=yi.name)
+
+
+    ax.legend(loc=0)
+
+    return ax
+
+
 
 def plot_multi(
         data: pd.DataFrame,
@@ -229,6 +287,8 @@ def parse_logs(model_name: str, for_ui: bool = False):
         loss_events = []
         lr_events = []
         ram_events = []
+        instance_loss_events = []
+        prior_loss_events = []
         serialized_examples = tensorflow.data.TFRecordDataset(filepath)
         for serialized_example in serialized_examples:
             e = event_pb2.Event.FromString(serialized_example.numpy())
@@ -240,15 +300,23 @@ def parse_logs(model_name: str, for_ui: bool = False):
                     loss_events.append(parsed)
                 elif parsed["Name"] == "vram_usage":
                     ram_events.append(parsed)
+                elif parsed["Name"] == "instance_loss":
+                    instance_loss_events.append(parsed)
+                elif parsed["Name"] == "prior_loss":
+                    prior_loss_events.append(parsed)
 
         merged_events = []
 
         has_all = True
         for le in loss_events:
             lr = next((item for item in lr_events if item["Step"] == le["Step"]), None)
-            if lr is not None:
+            instance_loss = next((item for item in instance_loss_events if item["Step"] == le["Step"]), None)
+            prior_loss = next((item for item in prior_loss_events if item["Step"] == le["Step"]), None)
+            if lr is not None and instance_loss is not None and prior_loss is not None:
                 le["LR"] = lr["Value"]
                 le["Loss"] = le["Value"]
+                le["Instance_Loss"] = instance_loss["Value"]
+                le["Prior_Loss"] = prior_loss["Value"]
                 merged_events.append(le)
             else:
                 has_all = False
@@ -292,17 +360,29 @@ def parse_logs(model_name: str, for_ui: bool = False):
 
     loss_columns = columns_order
     if has_all_lr:
-        loss_columns = ['Wall_time', 'Name', 'Step', 'Loss', "LR"]
+        loss_columns = ['Wall_time', 'Name', 'Step', 'Loss', "LR", "Instance_Loss", "Prior_Loss"]
     # Concatenate (and sort) all partial individual dataframes
     all_df_loss = pd.concat(out_loss)[loss_columns]
+    all_df_loss = all_df_loss.fillna(method="ffill") # since we do not use the standard dreambooth algorithm it's possible to have NaN for instance or prior loss -> forward fill
     all_df_loss = all_df_loss.sort_values("Wall_time")
     all_df_loss = all_df_loss.reset_index(drop=True)
-    all_df_loss = all_df_loss.rolling(smoothing_window).mean(numeric_only=True)
+    sw = smoothing_window if smoothing_window < len(all_df_loss)/3 else len(all_df_loss)/3
+    all_df_loss = all_df_loss.rolling(5).mean(numeric_only=True)
+
     out_images = []
     out_names = []
     if has_all_lr:
-        plotted_loss = plot_multi(all_df_loss, "Step", ["Loss", "LR"],
-                                  title=f"Loss Average/Learning Rate ({model_config.lr_scheduler})")
+        plotted_loss = plot_multi_alt(
+            all_df_loss,
+            plot_definition = PlotDefinition(
+                title=f"Loss Average/Learning Rate ({model_config.lr_scheduler})",
+                x_axis="Step",
+                y_axis=[
+                    YAxis(name="Loss", columns=["Loss", "Instance_Loss", "Prior_Loss"]),
+                    YAxis(name="LR", columns=["LR"])
+                ]
+            )
+        )
         loss_name = "Loss Average/Learning Rate"
     else:
         plotted_loss = all_df_loss.plot(x="Step", y="Value", title="Loss Averages")
