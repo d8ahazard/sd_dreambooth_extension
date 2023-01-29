@@ -368,7 +368,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         def collate_fn(examples):
             input_ids = [example["input_id"] for example in examples]
             pixel_values = [example["image"] for example in examples]
-            loss_weights = torch.tensor([example["loss_weight"] for example in examples], dtype=torch.float32)
             types = [example["is_class"] for example in examples]
             pixel_values = torch.stack(pixel_values)
             if not args.cache_latents:
@@ -378,7 +377,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             batch_data = {
                 "input_ids": input_ids,
                 "images": pixel_values,
-                "loss_weights": loss_weights.mean(),
                 "types": types
             }
             return batch_data
@@ -391,9 +389,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             batch_sampler=sampler,
             collate_fn=collate_fn,
             num_workers=n_workers)
-
-        # Todo: Update prior loss values with args
-        sampler.set_prior_loss(current_prior_loss(args, args.epoch))
 
         max_train_steps = args.num_train_epochs * len(train_dataset)
 
@@ -796,10 +791,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             loss_total = 0
             prior_loss_total = 0
 
-            # Todo: Update prior loss values with args
-
-            sampler.set_prior_loss(current_prior_loss(args, lifetime_epoch))
-
+            current_prior_loss_weight = current_prior_loss(args, current_epoch=global_epoch)
             for step, batch in enumerate(train_dataloader):
                 # Skip steps until we reach the resumed step
                 if resume_from_checkpoint and epoch == first_epoch and step < resume_step:
@@ -863,24 +855,21 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     # Concatenate the chunks in instance_chunks to form the model_pred_instance tensor
                     model_pred = torch.stack(instance_chunks, dim=0)
                     target = torch.stack(instance_pred_chunks, dim=0)
-
-                    # Compute instance loss
-                    loss = torch.nn.functional.mse_loss(model_pred, target, reduction="mean")
-
+                    loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
                     if len(prior_pred_chunks):
                         # Compute prior loss
                         model_pred_prior = torch.stack(prior_chunks, dim=0)
                         target_prior = torch.stack(prior_pred_chunks, dim=0)
-                        prior_loss = torch.nn.functional.mse_loss(model_pred_prior, target_prior, reduction="mean")
+                        prior_loss = torch.nn.functional.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
                         current_prior = prior_loss.detach().item()
                         prior_loss_total += current_prior
                         avg_prior_loss = prior_loss_total / (step + 1)
-                        #print(f"Current/avg prior: {current_prior}/{avg_prior_loss}")
+                        logs = {"prior_loss": float(avg_prior_loss), "prior_loss_avg": avg_prior_loss}
+                        accelerator.log(logs, step=args.revision)
 
                         # Add the prior loss to the instance loss.
-                        loss = loss + args.prior_loss_weight * prior_loss
-                    else:
-                        loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                        loss = loss + current_prior_loss_weight * prior_loss
+
 
                     accelerator.backward(loss)
                     if accelerator.sync_gradients and not args.use_lora:
