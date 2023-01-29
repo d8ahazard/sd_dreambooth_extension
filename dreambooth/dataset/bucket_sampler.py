@@ -15,7 +15,6 @@ class BucketSampler:
         self.current_bucket = 0
         self.current_index = 0
         self.total_samples = 0
-        self.prior_loss_weight = 1.0
         self.debug = debug
         self.set_buckets()
 
@@ -38,9 +37,6 @@ class BucketSampler:
     def __len__(self):
         return len(self.dataset.active_resolution) * self.batch_size
 
-
-    def set_prior_loss(self, loss):
-        self.prior_loss_weight = loss
 
     def set_buckets(self):
         # Initialize list of bucket counts if not set
@@ -77,7 +73,6 @@ class BucketSampler:
         self.dataset.shuffle_buckets()
         batch = []
         repeats = 0
-        self.dataset.prior_loss_weight = self.prior_loss_weight
         while len(batch) < self.batch_size:
             self.dataset.active_resolution = current_res
             img_index, img_repeats = self.dataset.get_example(current_res)
