@@ -872,8 +872,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                         model_pred_prior = torch.stack(prior_chunks, dim=0)
                         target_prior = torch.stack(prior_pred_chunks, dim=0)
                         prior_loss = torch.nn.functional.mse_loss(model_pred_prior, target_prior, reduction="mean")
-                        current_prior = prior_loss.detach().item()
-                        prior_loss_total += current_prior
+                        log_current_prior_loss = prior_loss.detach().item()
+                        log_current_instance_loss = loss.detach().item()
+                        prior_loss_total += current_prior_loss
                         avg_prior_loss = prior_loss_total / (step + 1)
                         #print(f"Current/avg prior: {current_prior}/{avg_prior_loss}")
 
@@ -881,6 +882,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                         loss = loss + args.prior_loss_weight * prior_loss
                     else:
                         loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                        log_current_instance_loss = loss.detach().item()
+                        log_current_prior_loss = None
 
                     accelerator.backward(loss)
                     if accelerator.sync_gradients and not args.use_lora:
@@ -918,7 +921,14 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 del noisy_latents
                 del target
 
-                logs = {"loss": float(current_loss), "loss_avg": avg_loss, "lr": last_lr, "vram_usage": float(cached)}
+                logs = {
+                    "loss": float(current_loss), 
+                    "loss_avg": avg_loss, 
+                    "lr": last_lr, 
+                    "vram_usage": float(cached),
+                    "instance_loss": float(log_current_instance_loss),
+                    "prior_loss": float(log_current_prior_loss) if log_current_prior_loss is not None else None
+                }
                 status.textinfo2 = f"Loss: {'%.2f' % current_loss}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
                                    f"VRAM: {allocated}/{cached} GB"
                 progress_bar.update(train_batch_size)
