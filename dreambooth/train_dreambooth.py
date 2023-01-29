@@ -751,7 +751,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                         for prompt in sample_prompts:
                                             last_prompts.append(prompt)
                                         del samples
-                                        del prompts
+                                        del prompt
                             else:
                                 with accelerator.autocast(), torch.inference_mode():
                                     sd = SampleDataset(args)
