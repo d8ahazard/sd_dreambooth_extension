@@ -100,7 +100,7 @@ class DreamboothConfig(BaseModel):
     use_concepts: bool = False
     use_ema: bool = True
     use_lora: bool = False
-    db_use_lora_extended: bool = True
+    db_use_lora_extended: bool = False
     use_subdir: bool = False
     v2: bool = False
 
