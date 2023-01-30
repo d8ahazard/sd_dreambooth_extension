@@ -502,6 +502,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         print(f"  UNET: {args.train_unet}")
         print(f"  Freeze CLIP Normalization Layers: {args.freeze_clip_normalization}")
         print(f"  LR: {args.learning_rate}")
+        if args.use_lora_extended: print(f"  LoRA Extended: {args.use_lora_extended}")
         if args.use_lora and stop_text_percentage > 0: print(f"  LoRA Text Encoder LR: {args.lora_txt_learning_rate}")
         print(f"  V2: {args.v2}")
 
