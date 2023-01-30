@@ -566,7 +566,7 @@ def on_ui_tabs():
             db_lora_model_name,
             db_lora_unet_rank,
             db_lora_txt_rank,
-            db_lora_use_extended,
+            db_use_lora_extended,
             db_lora_txt_learning_rate,
             db_lora_txt_weight,
             db_lora_weight,
