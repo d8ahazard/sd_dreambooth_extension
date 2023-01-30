@@ -224,7 +224,7 @@ def on_ui_tabs():
                         with gr.Column():
                             gr.HTML(value="General")
                             db_use_lora = gr.Checkbox(label="Use LORA", value=False)
-                            db_use_lora_extended = db_use_lora = gr.Checkbox(label="Use Lora Extended", value=False)
+                            db_use_lora_extended = gr.Checkbox(label="Use Lora Extended", value=False)
                             db_train_imagic_only = gr.Checkbox(label="Train Imagic Only", value=False)
                             db_train_inpainting = gr.Checkbox(label="Train Inpainting Model", value=False,
                                                               visible=False)
