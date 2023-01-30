@@ -890,6 +890,7 @@ def patch_pipe(
     maybe_unet_path,
     token: Optional[str] = None,
     r: int = 4,
+    txt_r: int = 4,
     patch_unet=True,
     patch_text=True,
     patch_ti=True,
@@ -925,7 +926,7 @@ def patch_pipe(
                 pipe.text_encoder,
                 torch.load(text_path),
                 target_replace_module=text_target_replace_module,
-                r=r,
+                r=txt_r,
             )
         if patch_ti:
             print("LoRA : Patching token input")
