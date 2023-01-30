@@ -901,7 +901,7 @@ def patch_pipe(
     txt_r: int = 4,
     patch_unet=True,
     patch_text=True,
-    patch_ti=True,
+    patch_ti=False,
     idempotent_token=True,
     unet_target_replace_module=DEFAULT_TARGET_REPLACE,
     text_target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
