@@ -40,7 +40,7 @@ from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data impor
 from extensions.sd_dreambooth_extension.dreambooth.dataset.sample_dataset import SampleDataset
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup, parse_logs, printm
 from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, inject_trainable_lora, merge_loras_to_pipe  \
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, merge_loras_to_pipe  \
 TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
 
 logger = logging.getLogger(__name__)
@@ -238,7 +238,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             injectable_lora = get_target_module("injection", args.use_lora_extended)
             target_module = get_target_module("module", args.use_lora_extended)
 
-            unet_lora_params, _ = inject_trainable_lora(
+            unet_lora_params, _ = injectable_lora(
                 unet,
                 r=args.lora_unet_rank,
                 loras=lora_path,
@@ -247,7 +247,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
             if stop_text_percentage != 0:
                 text_encoder.requires_grad_(False)
-                text_encoder_lora_params, _ = inject_trainable_lora(
+                inject_trainable_txt_lora = get_target_module("injection", False)
+                text_encoder_lora_params, _ = inject_trainable_txt_lora(
                     text_encoder,
                     target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
                     r=args.lora_txt_rank,
