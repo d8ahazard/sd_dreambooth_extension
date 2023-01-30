@@ -1045,13 +1045,13 @@ def merge_loras_to_pipe(pipline, lora_path=None, lora_alpha: float = 1, lora_txt
             f"Merging UNET/CLIP with LoRA from {lora_path}. Merging ratio : UNET: {lora_alpha}, CLIP: {lora_txt_alpha}."
         )
 
-        patch_pipe(pipline, lora_path)
+    patch_pipe(pipline, lora_path)
 
-        collapse_lora(pipline.unet, lora_alpha)
-        collapse_lora(pipline.text_encoder, lora_txt_alpha)
+    collapse_lora(pipline.unet, lora_alpha)
+    collapse_lora(pipline.text_encoder, lora_txt_alpha)
 
-        monkeypatch_remove_lora(pipline.unet)
-        monkeypatch_remove_lora(pipline.text_encoder)
+    monkeypatch_remove_lora(pipline.unet)
+    monkeypatch_remove_lora(pipline.text_encoder)
 
 # TODO Add lora saving for webui.
 def save_loras_for_webui(
