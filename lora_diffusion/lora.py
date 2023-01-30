@@ -1,6 +1,7 @@
 import json
 import math
 from itertools import groupby
+import shutil
 from typing import Callable, Dict, List, Optional, Set, Tuple, Type, Union
 
 import numpy as np
@@ -815,6 +816,10 @@ def _text_lora_path(path: str) -> str:
     assert path.endswith(".pt"), "Only .pt files are supported"
     return ".".join(path.split(".")[:-1] + ["text_encoder", "pt"])
 
+def _text_lora_path_ui(path: str) -> str:
+    assert path.endswith(".pt"), "Only .pt files are supported"
+    return path.replace(".pt", "_txt.pt")
+
 
 def _ti_lora_path(path: str) -> str:
     assert path.endswith(".pt"), "Only .pt files are supported"
@@ -899,9 +904,11 @@ def patch_pipe(
             unet_path = maybe_unet_path[:-6] + ".pt"
         elif maybe_unet_path.endswith(".text_encoder.pt"):
             unet_path = maybe_unet_path[:-16] + ".pt"
+        else:
+            unet_path = maybe_unet_path
 
         ti_path = _ti_lora_path(unet_path)
-        text_path = _text_lora_path(unet_path)
+        text_path = _text_lora_path_ui(unet_path)
 
         if patch_unet:
             print("LoRA : Patching Unet")
@@ -1031,3 +1038,43 @@ def save_all(
                 embeds[tok] = learned_embeds.detach().cpu()
 
         save_safeloras_with_embeds(loras, embeds, save_path)
+
+def merge_loras_to_pipe(pipline, lora_path=None, lora_alpha: float = 1, lora_txt_alpha: float = 1):
+    print(
+            f"Merging UNET/CLIP with LoRA from {lora_path}. Merging ratio : UNET: {lora_alpha}, CLIP: {lora_txt_alpha}."
+        )
+
+        patch_pipe(pipline, lora_path)
+
+        collapse_lora(pipline.unet, lora_alpha)
+        collapse_lora(pipline.text_encoder, lora_txt_alpha)
+
+        monkeypatch_remove_lora(pipline.unet)
+        monkeypatch_remove_lora(pipline.text_encoder)
+
+# TODO Add lora saving for webui.
+def save_loras_for_webui(
+        pipeline, 
+        lora_path: str = "", 
+        lora_name: str = "lora_name", 
+        lora_alpha: float = 1, 
+        lora_txt_alpha: float = 1,
+        lora_token_path: str = ""
+    ):
+    print(
+            f"You will be using {lora_name} as the token in A1111 webui. Make sure {lora_name} is unique enough token (example: my_lora_cat)."
+        )
+    merge_loras_to_pipe(pipeline, lora_path, lora_alpha, lora_txt_alpha)
+
+    keys = sorted(tok_dict.keys())
+    tok_catted = torch.stack([tok_dict[k] for k in keys])
+    ret = {
+            "string_to_token": {"*": torch.tensor(265)},
+            "string_to_param": {"*": tok_catted},
+            "name": lora_name,
+        }
+
+    # Must end in .pt
+    torch.save(ret, lora_token_path) 
+
+
