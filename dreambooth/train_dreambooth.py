@@ -366,7 +366,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             return result
 
         def collate_fn(examples):
-            input_ids = [example["input_id"] for example in examples]
+            input_ids = [example["input_ids"] for example in examples]
             pixel_values = [example["image"] for example in examples]
             types = [example["is_class"] for example in examples]
             pixel_values = torch.stack(pixel_values)
