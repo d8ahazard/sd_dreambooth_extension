@@ -21,7 +21,7 @@ from extensions.sd_dreambooth_extension.dreambooth.shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models
 from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import merge_loras_to_pipe
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -393,21 +393,25 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
                 model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else shared.models_path
                 lora_path = os.path.join(model_dir, "lora", lora_path)
             printi(f"Loading lora from {lora_path}", log=log)
+
             if os.path.exists(lora_path):
+                lora_txt = lora_path.replace(".pt", "_txt.pt")
                 checkpoint_path = checkpoint_path.replace(checkpoint_ext, f"_lora{checkpoint_ext}")
-                printi(f"Applying lora weight of alpha: {config.lora_weight} to unet...", log=log)
-                weight_apply_lora(loaded_pipeline.unet, torch.load(lora_path), alpha=config.lora_weight)
-                printi("Saving lora unet...", log=log)
+
+                printi(f"Saving UNET Lora and applying lora alpha of {config.lora_weight}", log=log)
+                if os.path.exists(lora_txt): printi(f"Saving Text Lora and applying lora alpha of {config.lora_txt_weight}", log=log)
+                merge_loras_to_pipe(loaded_pipeline, lora_path, lora_alpha=config.lora_weight, lora_txt_alpha=config.lora_txt_weight)
+
+
                 loaded_pipeline.unet.save_pretrained(os.path.join(config.pretrained_model_name_or_path, "unet_lora"))
                 unet_path = osp.join(config.pretrained_model_name_or_path, "unet_lora", "diffusion_pytorch_model.bin")
-            lora_txt = lora_path.replace(".pt", "_txt.pt")
-            if os.path.exists(lora_txt):
-                printi(f"Applying lora weight of alpha: {config.lora_txt_weight} to text encoder...", log=log)
-                weight_apply_lora(loaded_pipeline.text_encoder, torch.load(lora_txt), target_replace_module=["CLIPAttention"], alpha=config.lora_weight)
-                printi("Saving lora text encoder...", log=log)
-                loaded_pipeline.text_encoder.save_pretrained(
-                    os.path.join(config.pretrained_model_name_or_path, "text_encoder_lora"))
-                text_enc_path = osp.join(config.pretrained_model_name_or_path, "text_encoder_lora", "pytorch_model.bin")
+
+                if os.path.exists(lora_txt):
+                    loaded_pipeline.text_encoder.save_pretrained(
+                        os.path.join(config.pretrained_model_name_or_path, "text_encoder_lora")
+                    )
+                    text_enc_path = osp.join(config.pretrained_model_name_or_path, "text_encoder_lora", "pytorch_model.bin")
+
             del loaded_pipeline
 
         # Convert the UNet model

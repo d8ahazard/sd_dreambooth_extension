@@ -1040,7 +1040,7 @@ def save_all(
 
         save_safeloras_with_embeds(loras, embeds, save_path)
 
-def merge_loras_to_pipe(pipline, lora_path=None, lora_alpha: float = 1, lora_txt_alpha: float = 1, merge_text: bool = True):
+def merge_loras_to_pipe(pipline, lora_path=None, lora_alpha: float = 1, lora_txt_alpha: float = 1):
     print(
             f"Merging UNET/CLIP with LoRA from {lora_path}. Merging ratio : UNET: {lora_alpha}, CLIP: {lora_txt_alpha}."
         )

@@ -40,8 +40,7 @@ from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data impor
 from extensions.sd_dreambooth_extension.dreambooth.dataset.sample_dataset import SampleDataset
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup, parse_logs, printm
 from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, merge_loras_to_pipe  \
-TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
