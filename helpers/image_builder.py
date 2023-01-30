@@ -98,7 +98,7 @@ class ImageBuilder:
                 patch_pipe(
                     pipe=self.image_pipe,
                     unet_path=lora_model_path,
-                    unet_target_replace_module=get_target_module("module", config.use_lora_extended)
+                    unet_target_replace_module=get_target_module("module", config.use_lora_extended),
                     token="None",
                     r=config.lora_unet_rank,
                     txt_r=config.lora_txt_rank
