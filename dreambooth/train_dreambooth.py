@@ -240,7 +240,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
             unet_lora_params, _ = inject_trainable_lora(
                 unet,
-                r=args.lora_rank,
+                r=args.lora_unet_rank,
                 loras=lora_path,
                 target_replace_module=target_module
             )

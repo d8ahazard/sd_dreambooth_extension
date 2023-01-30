@@ -23,7 +23,15 @@ from modules.processing import StableDiffusionProcessingTxt2Img
 
 
 class ImageBuilder:
-    def __init__(self, config: DreamboothConfig, use_txt2img: bool, lora_model: str = None, batch_size: int = 1, accelerator: Accelerator = None):
+    def __init__(
+            self, config: DreamboothConfig, 
+            use_txt2img: bool, 
+            lora_model: str = None, 
+            batch_size: int = 1, 
+            accelerator: Accelerator = None,
+            lora_unet_rank: int = 4,
+            lora_txt_rank: int = 4
+        ):
         self.image_pipe = None
         self.txt_pipe = None
         self.resolution = config.resolution
@@ -92,7 +100,7 @@ class ImageBuilder:
                     unet_path=lora_model_path,
                     unet_target_replace_module=get_target_module("module", config.use_lora_extended)
                     token="None",
-                    r=config.lora_rank,
+                    r=config.lora_unet_rank,
                     txt_r=config.lora_txt_rank
                 )
 
