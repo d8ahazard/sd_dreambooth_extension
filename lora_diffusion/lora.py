@@ -359,8 +359,8 @@ def save_lora_weight(
     for _up, _down in extract_lora_ups_down(
         model, target_replace_module=target_replace_module
     ):
-        weights.append(_up.weight.to("cpu").to(torch.float16))
-        weights.append(_down.weight.to("cpu").to(torch.float16))
+        weights.append(_up.weight.to("cpu").to(torch.float32))
+        weights.append(_down.weight.to("cpu").to(torch.float32))
 
     torch.save(weights, path)
 
@@ -1039,7 +1039,7 @@ def save_all(
 
         save_safeloras_with_embeds(loras, embeds, save_path)
 
-def merge_loras_to_pipe(pipline, lora_path=None, lora_alpha: float = 1, lora_txt_alpha: float = 1):
+def merge_loras_to_pipe(pipline, lora_path=None, lora_alpha: float = 1, lora_txt_alpha: float = 1, merge_text: bool = True):
     print(
             f"Merging UNET/CLIP with LoRA from {lora_path}. Merging ratio : UNET: {lora_alpha}, CLIP: {lora_txt_alpha}."
         )
@@ -1076,5 +1076,11 @@ def save_loras_for_webui(
 
     # Must end in .pt
     torch.save(ret, lora_token_path) 
+
+def get_target_module(target_type: str = "injection", use_extended: bool = False):
+    if target_type == "injection":
+        return inject_trainable_lora if not use_extended else inject_trainable_lora_extended
+    if target_type == "module":
+        return UNET_DEFAULT_TARGET_REPLACE if not use_extended else UNET_EXTENDED_TARGET_REPLACE
 
 

@@ -40,7 +40,8 @@ from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data impor
 from extensions.sd_dreambooth_extension.dreambooth.dataset.sample_dataset import SampleDataset
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup, parse_logs, printm
 from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, inject_trainable_lora
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, inject_trainable_lora, merge_loras_to_pipe  \
+TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
@@ -234,18 +235,22 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     lora_path = None
                     lora_txt = None
 
+            injectable_lora = get_target_module("injection", args.use_lora_extended)
+            target_module = get_target_module("module", args.use_lora_extended)
+
             unet_lora_params, _ = inject_trainable_lora(
                 unet,
                 r=args.lora_rank,
-                loras=lora_path
+                loras=lora_path,
+                target_replace_module=target_module
             )
 
             if stop_text_percentage != 0:
                 text_encoder.requires_grad_(False)
                 text_encoder_lora_params, _ = inject_trainable_lora(
                     text_encoder,
-                    target_replace_module=["CLIPAttention"],
-                    r=args.lora_rank,
+                    target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
+                    r=args.lora_txt_rank,
                     loras=lora_txt
                 )
             printm("Lora loaded")
@@ -641,12 +646,14 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                 out_file = os.path.join(model_dir, "lora")
                                 os.makedirs(out_file, exist_ok=True)
                                 out_file = os.path.join(out_file, f"{lora_model_name}_{args.revision}.pt")
-                                save_lora_weight(s_pipeline.unet, out_file)
+
+                                target_module = get_target_module("module", args.use_lora_extended)
+                                save_lora_weight(s_pipeline.unet, out_file, target_module)
                                 if stop_text_percentage != 0:
                                     out_txt = out_file.replace(".pt", "_txt.pt")
                                     save_lora_weight(s_pipeline.text_encoder,
                                                      out_txt,
-                                                     target_replace_module=["CLIPAttention"],
+                                                     target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
                                                      )
                                     pbar.update()
 
