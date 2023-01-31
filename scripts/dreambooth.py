@@ -318,10 +318,12 @@ def generate_samples(model_name: str,
             status.textinfo = "Loading diffusion model..."
 
             img_builder = ImageBuilder(
-                config,
-                use_txt2img,
-                config.lora_model_name,
-                batch_size
+                config=config,
+                use_txt2img=use_txt2img,
+                lora_model=config.lora_model_name,
+                batch_size=batch_size,
+                lora_unet_rank=config.lora_unet_rank,
+                lora_txt_rank=config.lora_txt_rank
             )
 
             prompt_data = []

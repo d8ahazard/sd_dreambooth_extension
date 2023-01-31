@@ -16,13 +16,22 @@ from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data impor
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_checkpoint_match, reload_system_models, \
     enable_safe_unpickle
 from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, \
+get_target_module
 from modules import sd_models
 from modules.processing import StableDiffusionProcessingTxt2Img
 
 
 class ImageBuilder:
-    def __init__(self, config: DreamboothConfig, use_txt2img: bool, lora_model: str = None, batch_size: int = 1, accelerator: Accelerator = None):
+    def __init__(
+            self, config: DreamboothConfig, 
+            use_txt2img: bool, 
+            lora_model: str = None, 
+            batch_size: int = 1, 
+            accelerator: Accelerator = None,
+            lora_unet_rank: int = 4,
+            lora_txt_rank: int = 4
+        ):
         self.image_pipe = None
         self.txt_pipe = None
         self.resolution = config.resolution
@@ -89,8 +98,10 @@ class ImageBuilder:
                 patch_pipe(
                     pipe=self.image_pipe,
                     unet_path=lora_model_path,
+                    unet_target_replace_module=get_target_module("module", config.use_lora_extended),
                     token="None",
-                    r=config.lora_rank
+                    r=config.lora_unet_rank,
+                    r_txt=config.lora_txt_rank
                 )
 
                 tune_lora_scale(self.image_pipe.unet, config.lora_weight)

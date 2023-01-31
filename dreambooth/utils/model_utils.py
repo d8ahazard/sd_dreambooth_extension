@@ -26,7 +26,7 @@ def get_db_models():
 
 def get_lora_models():
     model_dir = shared.lora_models_path
-    out_dir = os.path.join(model_dir, "lora")
+    out_dir = model_dir
     output = [""]
     if os.path.exists(out_dir):
         dirs = os.listdir(out_dir)

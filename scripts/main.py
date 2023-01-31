@@ -224,6 +224,7 @@ def on_ui_tabs():
                         with gr.Column():
                             gr.HTML(value="General")
                             db_use_lora = gr.Checkbox(label="Use LORA", value=False)
+                            db_use_lora_extended = gr.Checkbox(label="Use Lora Extended", value=False)
                             db_train_imagic_only = gr.Checkbox(label="Train Imagic Only", value=False)
                             db_train_inpainting = gr.Checkbox(label="Train Inpainting Model", value=False,
                                                               visible=False)
@@ -383,7 +384,8 @@ def on_ui_tabs():
                         db_save_ckpt_cancel = gr.Checkbox(label="Generate a .ckpt file when training is canceled.")
                     with gr.Column(visible=False) as lora_save_col:
                         gr.HTML("Lora")
-                        db_lora_rank = gr.Slider(label="Lora Rank", value=4, minimum=1, maximum=100, step=1)
+                        db_lora_unet_rank = gr.Slider(label="Lora UNET Rank", value=4, minimum=2, maximum=128, step=2)
+                        db_lora_txt_rank = gr.Slider(label="Lora Text Encoder Rank", value=4, minimum=2, maximum=768, step=2)
                         db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1)
                         db_lora_txt_weight = gr.Slider(label="Lora Text Weight", value=1, minimum=0.1, maximum=1,
                                                        step=0.1)
@@ -561,7 +563,8 @@ def on_ui_tabs():
             db_learning_rate_min,
             db_lora_learning_rate,
             db_lora_model_name,
-            db_lora_rank,
+            db_lora_unet_rank,
+            db_lora_txt_rank,
             db_lora_txt_learning_rate,
             db_lora_txt_weight,
             db_lora_weight,
@@ -613,6 +616,7 @@ def on_ui_tabs():
             db_train_unfrozen,
             db_use_ema,
             db_use_lora,
+            db_use_lora_extended,
             db_use_subdir,
             c1_class_data_dir,
             c1_class_guidance_scale,
