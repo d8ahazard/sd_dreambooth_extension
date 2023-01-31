@@ -21,7 +21,7 @@ from extensions.sd_dreambooth_extension.dreambooth.shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models
 from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import merge_loras_to_pipe
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import merge_loras_to_pipe, get_target_module
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -400,7 +400,15 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
 
                 printi(f"Saving UNET Lora and applying lora alpha of {config.lora_weight}", log=log)
                 if os.path.exists(lora_txt): printi(f"Saving Text Lora and applying lora alpha of {config.lora_txt_weight}", log=log)
-                merge_loras_to_pipe(loaded_pipeline, lora_path, lora_alpha=config.lora_weight, lora_txt_alpha=config.lora_txt_weight)
+                merge_loras_to_pipe(
+                    loaded_pipeline, 
+                    lora_path, 
+                    lora_alpha=config.lora_weight, 
+                    lora_txt_alpha=config.lora_txt_weight,
+                    r=config.lora_unet_rank,
+                    r_txt=config.lora_txt_rank,
+                    unet_target_module=get_target_module("module", config.use_lora_extended)
+                )
 
 
                 loaded_pipeline.unet.save_pretrained(os.path.join(config.pretrained_model_name_or_path, "unet_lora"))

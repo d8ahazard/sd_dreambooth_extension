@@ -898,7 +898,7 @@ def patch_pipe(
     maybe_unet_path,
     token: Optional[str] = None,
     r: int = 4,
-    txt_r: int = 4,
+    r_txt: int = 4,
     patch_unet=True,
     patch_text=True,
     patch_ti=False,
@@ -922,7 +922,12 @@ def patch_pipe(
         disable_safe_unpickle()
         if patch_unet:
             print("LoRA : Patching Unet")
-            monkeypatch_or_replace_lora(
+            lora_patch = get_target_module(
+                "patch",
+                bool(unet_target_replace_module == UNET_EXTENDED_TARGET_REPLACE)
+                )
+
+            lora_patch(
                 pipe.unet,
                 torch.load(unet_path),
                 r=r,
@@ -935,7 +940,7 @@ def patch_pipe(
                 pipe.text_encoder,
                 torch.load(text_path),
                 target_replace_module=text_target_replace_module,
-                r=txt_r,
+                r=r_txt,
             )
         enable_safe_unpickle()
         if patch_ti:
@@ -1050,12 +1055,26 @@ def save_all(
 
         save_safeloras_with_embeds(loras, embeds, save_path)
 
-def merge_loras_to_pipe(pipline, lora_path=None, lora_alpha: float = 1, lora_txt_alpha: float = 1):
+def merge_loras_to_pipe(
+        pipline, 
+        lora_path=None, 
+        lora_alpha: float = 1, 
+        lora_txt_alpha: float = 1, 
+        r: int = 4, 
+        r_txt: int = 4,
+        unet_target_module=UNET_DEFAULT_TARGET_REPLACE
+    ):
     print(
             f"Merging UNET/CLIP with LoRA from {lora_path}. Merging ratio : UNET: {lora_alpha}, CLIP: {lora_txt_alpha}."
         )
 
-    patch_pipe(pipline, lora_path)
+    patch_pipe(
+        pipline, 
+        lora_path, 
+        r=r, 
+        r_txt=r_txt,
+        unet_target_replace_module=unet_target_module
+        )
 
     collapse_lora(pipline.unet, lora_alpha)
     collapse_lora(pipline.text_encoder, lora_txt_alpha)
@@ -1093,5 +1112,7 @@ def get_target_module(target_type: str = "injection", use_extended: bool = False
         return inject_trainable_lora if not use_extended else inject_trainable_lora_extended
     if target_type == "module":
         return UNET_DEFAULT_TARGET_REPLACE if not use_extended else UNET_EXTENDED_TARGET_REPLACE
+    if target_type == "patch":
+        return monkeypatch_or_replace_lora_extended if use_extended else monkeypatch_or_replace_lora
 
 

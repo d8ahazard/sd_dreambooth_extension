@@ -101,7 +101,7 @@ class ImageBuilder:
                     unet_target_replace_module=get_target_module("module", config.use_lora_extended),
                     token="None",
                     r=config.lora_unet_rank,
-                    txt_r=config.lora_txt_rank
+                    r_txt=config.lora_txt_rank
                 )
 
                 tune_lora_scale(self.image_pipe.unet, config.lora_weight)
