@@ -44,6 +44,13 @@ This is ideal for "offline mode", where you don't want the script to constantly 
 After installing via the WebUI, it is recommended to set the above flags and re-launch the entire
 Stable-diffusion-webui, not just reload it.
 
+## Several Tutorial Videos For Dreambooth
+
+[![Zero To Hero Stable Diffusion DreamBooth Tutorial By Using Automatic1111 Web UI - Ultra Detailed](https://i.imgur.com/zzavDGW.png)](https://youtu.be/Bdl-jWR3Ukc)
+[![DreamBooth Got Buffed - 22 January Update - Much Better Success Train Stable Diffusion Models Web UI](https://i.imgur.com/TtJKKOn.png)](https://youtu.be/KwxNcGhHuLY)
+[![How to Inject Your Trained Subject e.g. Your Face Into Any Custom Stable Diffusion Model By Web UI](https://i.imgur.com/gPGWr3S.png)](https://youtu.be/s25hcW4zq4M)
+[![8 GB LoRA Training - Fix CUDA Version For DreamBooth and Textual Inversion Training By Automatic1111](https://i.imgur.com/leOwdWy.png)](https://youtu.be/O01BrQwOd-Q)
+
 ## Usage
 
 ### Create a Model
