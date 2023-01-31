@@ -374,6 +374,8 @@ def on_ui_tabs():
                         db_custom_model_name = gr.Textbox(label="Custom Model Name", value="",
                                                           placeholder="Enter a model name for saving checkpoints and lora models.")
                         db_save_safetensors = gr.Checkbox(label="Save in .safetensors format", value=True, visible=False)
+                        db_save_ema = gr.Checkbox(label="Save EMA Weights to Generated Models", value=True)
+                        db_save_ema_infer = gr.Checkbox(label="Use EMA Weights for Inference", value=False)
                     with gr.Column():
                         gr.HTML("Checkpoints")
                         db_half_model = gr.Checkbox(label="Half Model", value=False)
