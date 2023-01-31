@@ -638,7 +638,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 )
                 s_pipeline = s_pipeline.to(accelerator.device)
                 s_pipeline.enable_attention_slicing()
-                with accelerator.autocast(), torch.inference_mode():
+                with accelerator.autocast(), torch.inference_mode(mode: accelerator.device != torch.device('mps')):
                     if save_model:
                         # We are saving weights, we need to ensure revision is saved
                         args.save()
@@ -710,90 +710,50 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                             s_pipeline.set_progress_bar_config(disable=True)
                             sample_dir = os.path.join(save_dir, "samples")
                             os.makedirs(sample_dir, exist_ok=True)
-                            if accelerator.device == torch.device('mps'):
-                                with accelerator.autocast():
-                                        sd = SampleDataset(args)
-                                        prompts = sd.get_prompts()
-                                        concepts = args.concepts()
-                                        if args.sanity_prompt != "" and args.sanity_prompt is not None:
-                                            epd = PromptData()
-                                            epd.prompt = args.sanity_prompt
-                                            epd.seed = args.sanity_seed
-                                            epd.negative_prompt = concepts[0].save_sample_negative_prompt
-                                            extra = SampleData(args.sanity_prompt, concept=concepts[0])
-                                            extra.seed = args.sanity_seed
-                                            prompts.append(extra)
-                                        pbar.set_description("Generating Samples")
-                                        pbar.reset(len(prompts) + 2)
-                                        ci = 0
-                                        for c in prompts:
-                                            c.out_dir = os.path.join(args.model_dir, "samples")
-                                            c.resolution = (args.resolution, args.resolution)
-                                            seed = int(c.seed)
-                                            if seed is None or seed == '' or seed == -1:
-                                                seed = int(random.randrange(21474836147))
-                                            c.seed = seed
-                                            g_cuda = torch.Generator(device='cpu').manual_seed(seed)
-                                            s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
-                                                                 guidance_scale=c.scale,
-                                                                 negative_prompt=c.negative_prompt,
-                                                                 height=args.resolution,
-                                                                 width=args.resolution,
-                                                                 generator=g_cuda).images[0]
-
-                                            sample_prompts.append(c.prompt)
-                                            image_name = db_save_image(s_image,c, seed, custom_name=f"sample_{args.revision}-{ci}")
-                                            samples.append(image_name)
-                                            pbar.update()
-                                            ci += 1
-                                        for sample in samples:
-                                            last_samples.append(sample)
-                                        for prompt in sample_prompts:
-                                            last_prompts.append(prompt)
-                                        del samples
-                                        del prompt
-                            else:
-                                with accelerator.autocast(), torch.inference_mode():
-                                    sd = SampleDataset(args)
-                                    prompts = sd.get_prompts()
-                                    concepts = args.concepts()
-                                    if args.sanity_prompt != "" and args.sanity_prompt is not None:
-                                        epd = PromptData()
-                                        epd.prompt = args.sanity_prompt
-                                        epd.seed = args.sanity_seed
-                                        epd.negative_prompt = concepts[0].save_sample_negative_prompt
-                                        extra = SampleData(args.sanity_prompt, concept=concepts[0])
-                                        extra.seed = args.sanity_seed
-                                        prompts.append(extra)
-                                    pbar.set_description("Generating Samples")
-                                    pbar.reset(len(prompts) + 2)
-                                    ci = 0
-                                    for c in prompts:
-                                        c.out_dir = os.path.join(args.model_dir, "samples")
-                                        c.resolution = (args.resolution, args.resolution)
-                                        seed = int(c.seed)
-                                        if seed is None or seed == '' or seed == -1:
-                                            seed = int(random.randrange(21474836147))
-                                        c.seed = seed
+                            with accelerator.autocast(), torch.inference_mode(mode=accelerator.device != torch.device('mps')):
+                                sd = SampleDataset(args)
+                                prompts = sd.get_prompts()
+                                concepts = args.concepts()
+                                if args.sanity_prompt != "" and args.sanity_prompt is not None:
+                                    epd = PromptData()
+                                    epd.prompt = args.sanity_prompt
+                                    epd.seed = args.sanity_seed
+                                    epd.negative_prompt = concepts[0].save_sample_negative_prompt
+                                    extra = SampleData(args.sanity_prompt, concept=concepts[0])
+                                    extra.seed = args.sanity_seed
+                                    prompts.append(extra)
+                                pbar.set_description("Generating Samples")
+                                pbar.reset(len(prompts) + 2)
+                                ci = 0
+                                for c in prompts:
+                                    c.out_dir = os.path.join(args.model_dir, "samples")
+                                    c.resolution = (args.resolution, args.resolution)
+                                    seed = int(c.seed)
+                                    if seed is None or seed == '' or seed == -1:
+                                        seed = int(random.randrange(21474836147))
+                                    c.seed = seed
+                                    if accelerator.device == torch.device('mps'):
+                                        g_cuda = torch.Generator(device='cpu').manual_seed(seed)
+                                    else:
                                         g_cuda = torch.Generator(device=accelerator.device).manual_seed(seed)
-                                        s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
-                                                             guidance_scale=c.scale,
-                                                             negative_prompt=c.negative_prompt,
-                                                             height=args.resolution,
-                                                             width=args.resolution,
-                                                             generator=g_cuda).images[0]
+                                    s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
+                                                         guidance_scale=c.scale,
+                                                         negative_prompt=c.negative_prompt,
+                                                         height=args.resolution,
+                                                         width=args.resolution,
+                                                         generator=g_cuda).images[0]
 
-                                        sample_prompts.append(c.prompt)
-                                        image_name = db_save_image(s_image,c, seed, custom_name=f"sample_{args.revision}-{ci}")
-                                        samples.append(image_name)
-                                        pbar.update()
-                                        ci += 1
-                                    for sample in samples:
-                                        last_samples.append(sample)
-                                    for prompt in sample_prompts:
-                                        last_prompts.append(prompt)
-                                    del samples
-                                    del prompts
+                                    sample_prompts.append(c.prompt)
+                                    image_name = db_save_image(s_image,c, seed, custom_name=f"sample_{args.revision}-{ci}")
+                                    samples.append(image_name)
+                                    pbar.update()
+                                    ci += 1
+                                for sample in samples:
+                                    last_samples.append(sample)
+                                for prompt in sample_prompts:
+                                    last_prompts.append(prompt)
+                                del samples
+                                del prompts
 
                         except Exception as em:
                             print(f"Exception saving sample: {em}")
