@@ -73,7 +73,7 @@ class ImageBuilder:
                 safety_checker=None,
                 revision=config.revision
             )
-
+            self.image_pipe.enable_xformers_memory_efficient_attention()
             self.image_pipe.to(accelerator.device)
             new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
             if os.path.exists(new_hotness):
