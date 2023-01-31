@@ -1275,7 +1275,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
             "requires_safety_checker": None,
             "safety_checker": [None, None],
             "scheduler": ["diffusers", scheduler_type],
-            "text_encoder": ["transformers", text_model_type],
+            "text_encoder": ["transformers", "CLIPTextModel"],
             "tokenizer": ["transformers", tokenizer_type],
             "unet": ["diffusers", "UNet2DConditionModel"],
             "vae": ["diffusers","AutoencoderKL"]
