@@ -33,7 +33,7 @@ from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import encod
 from extensions.sd_dreambooth_extension.dreambooth.webhook import send_training_update
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.train_result import TrainResult
-from extensions.sd_dreambooth_extension.helpers.ema_model2 import EMAModel
+from extensions.sd_dreambooth_extension.helpers.ema_model import EMAModel
 from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
@@ -198,39 +198,38 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             torch_dtype=torch.float32
         )
 
-        ema_unet = None
-        if args.use_ema:
-            ema_net_path = os.path.join(args.pretrained_model_name_or_path, "ema_unet")
-            if os.path.exists(ema_net_path):
-                print("\nLoading existing EMA Unet.")
-                ema_unet = EMAModel.from_pretrained(ema_net_path, torch_dtype=torch.float32)
-            else:
-                print("\nCreating unet from current.")
-                ema_unet = EMAModel(unet)
-
-            ema_unet.to(accelerator.device)
-
         if args.attention == "xformers" and not shared.force_cpu:
             xattention.replace_unet_cross_attn_to_xformers()
             xattention.set_diffusers_xformers_flag(unet, True)
             xattention.set_diffusers_xformers_flag(vae, True)
             xattention.set_diffusers_xformers_flag(text_encoder, True)
-            if args.use_ema:
-                print("Setting ema xattentions...")
-                xattention.set_diffusers_xformers_flag(ema_unet.unet, True)
-
 
         elif args.attention == "flash_attention":
             xattention.replace_unet_cross_attn_to_flash_attention()
         else:
             xattention.replace_unet_cross_attn_to_default()
 
+        ema_model = None
+        if args.use_ema:
+            if os.path.exists(os.path.join(args.pretrained_model_name_or_path, "ema_unet")):
+                ema_unet = UNet2DConditionModel.from_pretrained(
+                    args.pretrained_model_name_or_path,
+                    subfolder="ema_unet",
+                    revision=args.revision,
+                    torch_dtype=torch.float32
+                )
+                if args.attention == "xformers" and not shared.force_cpu:
+                    xattention.replace_unet_cross_attn_to_xformers()
+                    xattention.set_diffusers_xformers_flag(ema_unet.model, True)
+
+                ema_model = EMAModel(ema_unet, device=accelerator.device)
+                del ema_unet
+            else:
+                ema_model = EMAModel(unet, device=accelerator.device)
 
         if args.gradient_checkpointing:
             if args.train_unet:
                 unet.enable_gradient_checkpointing()
-                if ema_unet is not None:
-                    ema_unet.enable_gradient_checkpointing()
             if stop_text_percentage != 0:
                 text_encoder.gradient_checkpointing_enable()
                 if args.use_lora:
@@ -304,6 +303,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 itertools.chain(unet.parameters(), text_encoder.parameters()) if stop_text_percentage != 0 else
                 unet.parameters()                
             )
+
         optimizer = optimizer_class(
             params_to_optimize,
             lr=args.learning_rate,
@@ -329,8 +329,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     del lr_scheduler
                 if vae:
                     del vae
-                if ema_unet:
-                    del ema_unet
                 if unet_lora_params:
                     del unet_lora_params
             except:
@@ -431,15 +429,14 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         # create ema, fix OOM
         if args.use_ema:
             if stop_text_percentage != 0:
-                unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-                    unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler
+                ema_model.model, unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                    ema_model.model, unet, text_encoder, optimizer, train_dataloader, lr_scheduler
                 )
             else:
-                unet, ema_unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-                    unet, ema_unet, optimizer, train_dataloader, lr_scheduler
+                ema_model.model, unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                    ema_model.model, unet, optimizer, train_dataloader, lr_scheduler
                 )
         else:
-            ema_unet = None
             if stop_text_percentage != 0:
                 unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
                     unet, text_encoder, optimizer, train_dataloader, lr_scheduler
@@ -517,6 +514,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         if args.use_lora and stop_text_percentage > 0: print(f"  LoRA Text Encoder LR: {args.lora_txt_learning_rate}")
         print(f"  V2: {args.v2}")
 
+        os.environ.__setattr__("CUDA_LAUNCH_BLOCKING",1)
         def check_save(pbar: mytqdm, is_epoch_check = False):
             nonlocal last_model_save
             nonlocal last_image_save
@@ -646,9 +644,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                 status.textinfo = f"Saving diffusion model at step {args.revision}..."
                                 pbar.set_description("Saving diffusion model")
                                 s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"))
-                                if ema_unet is not None:
-                                    ema_path = os.path.join(args.pretrained_model_name_or_path, "ema_unet")
-                                    ema_unet.save_pretrained(ema_path)
+                                if ema_model is not None:
+                                    ema_model.save_pretrained(os.path.join(args.pretrained_model_name_or_path, "ema_unet"))
                                 pbar.update()
 
                             elif save_lora:
@@ -782,9 +779,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         training_complete = False
         msg = ""
 
-        print("TYPES:")
-        print(f"Unet: {unet.dtype} on {unet.device}")
-        print(f"EmaU: {ema_unet.dtype} on {ema_unet.device}")
 
         for epoch in range(first_epoch, max_train_epochs):
             if training_complete:
@@ -848,8 +842,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                                                 b_size, args.max_token_length, tokenizer.model_max_length, args.clip_skip)
 
                     # Predict the noise residual
-                    if ema_unet is not None:
-                        noise_pred = ema_unet(noisy_latents, timesteps, encoder_hidden_states).sample
+                    if args.use_ema:
+                        noise_pred = ema_model(noisy_latents, timesteps, encoder_hidden_states).sample
                     else:
                         noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
@@ -865,8 +859,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     prior_chunks = []
                     instance_pred_chunks = []
                     prior_pred_chunks = []
-
-                    print(batch["types"])
 
                     # Iterate over the list of boolean values in batch["types"]
                     for i, is_prior in enumerate(batch["types"]):
@@ -908,7 +900,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     
                     loss = instance_loss + prior_loss
 
-
                     accelerator.backward(loss)
                     if accelerator.sync_gradients and not args.use_lora:
                         params_to_clip = (
@@ -920,8 +911,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
                     optimizer.step()
                     lr_scheduler.step(train_batch_size)
-                    if args.use_ema and ema_unet is not None:
-                        ema_unet.step(unet)
+                    if args.use_ema and ema_model is not None:
+                        ema_model.step(unet)
                     if profiler is not None:
                         profiler.step()
 

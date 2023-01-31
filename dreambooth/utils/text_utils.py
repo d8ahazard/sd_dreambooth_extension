@@ -9,7 +9,6 @@ from transformers import CLIPTextModel
 from extensions.sd_dreambooth_extension.dreambooth import shared
 from modules import shared
 
-foo = EMAModel
 # Implementation from https://github.com/bmaltais/kohya_ss
 def encode_hidden_state(text_encoder: CLIPTextModel, input_ids, pad_tokens, b_size, max_token_length,
                         tokenizer_max_length, clip_skip):
