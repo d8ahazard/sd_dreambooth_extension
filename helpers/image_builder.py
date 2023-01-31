@@ -28,6 +28,7 @@ class ImageBuilder:
         self.resolution = config.resolution
         self.last_model = None
         self.batch_size = batch_size
+        self.exception_count = 0
         config_src = config.src
         if not os.path.exists(config_src):
             alt_src = os.path.join(shared.dreambooth_models_path, config_src)
@@ -156,14 +157,23 @@ class ImageBuilder:
                 if seed is None or seed == '' or seed == -1:
                     seed = int(random.randrange(21474836147))
                 g_cuda = torch.Generator(device=self.accelerator.device).manual_seed(seed)
-                output = self.image_pipe(
-                    positive_prompts,
-                    num_inference_steps=steps,
-                    guidance_scale=scale,
-                    height=height,
-                    width=width,
-                    generator=g_cuda,
-                    negative_prompt=negative_prompts).images
+                try:
+                    output = self.image_pipe(
+                        positive_prompts,
+                        num_inference_steps=steps,
+                        guidance_scale=scale,
+                        height=height,
+                        width=width,
+                        generator=g_cuda,
+                        negative_prompt=negative_prompts).images
+                    self.exception_count = 0
+                except Exception as e:
+                    print(f"Exception generating images: {e}")
+                    self.exception_count += 1
+                    if self.exception_count > 10:
+                        raise
+                    output = []
+                    pass
 
         return output
 
