@@ -33,8 +33,8 @@ from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import encod
 from extensions.sd_dreambooth_extension.dreambooth.webhook import send_training_update
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.train_result import TrainResult
+from extensions.sd_dreambooth_extension.helpers.ema_model2 import EMAModel
 from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-from extensions.sd_dreambooth_extension.helpers.ema_model import EMAModel
 from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.dataset.sample_dataset import SampleDataset
@@ -168,6 +168,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             new_vae.requires_grad_(False)
             new_vae.to(accelerator.device, dtype=weight_dtype)
             return new_vae
+
         disable_safe_unpickle()
         # Load the tokenizer
         tokenizer = AutoTokenizer.from_pretrained(
@@ -197,12 +198,28 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             torch_dtype=torch.float32
         )
 
-        enable_safe_unpickle()
+        ema_unet = None
+        if args.use_ema:
+            ema_net_path = os.path.join(args.pretrained_model_name_or_path, "ema_unet")
+            if os.path.exists(ema_net_path):
+                print("\nLoading existing EMA Unet.")
+                ema_unet = EMAModel.from_pretrained(ema_net_path, torch_dtype=torch.float32)
+            else:
+                print("\nCreating unet from current.")
+                ema_unet = EMAModel(unet)
+
+            ema_unet.to(accelerator.device)
+
         if args.attention == "xformers" and not shared.force_cpu:
             xattention.replace_unet_cross_attn_to_xformers()
             xattention.set_diffusers_xformers_flag(unet, True)
             xattention.set_diffusers_xformers_flag(vae, True)
             xattention.set_diffusers_xformers_flag(text_encoder, True)
+            if args.use_ema:
+                print("Setting ema xattentions...")
+                xattention.set_diffusers_xformers_flag(ema_unet.unet, True)
+
+
         elif args.attention == "flash_attention":
             xattention.replace_unet_cross_attn_to_flash_attention()
         else:
@@ -212,6 +229,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         if args.gradient_checkpointing:
             if args.train_unet:
                 unet.enable_gradient_checkpointing()
+                if ema_unet is not None:
+                    ema_unet.enable_gradient_checkpointing()
             if stop_text_percentage != 0:
                 text_encoder.gradient_checkpointing_enable()
                 if args.use_lora:
@@ -411,8 +430,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
         # create ema, fix OOM
         if args.use_ema:
-            ema_unet = EMAModel(unet.parameters())
-            ema_unet.to(accelerator.device, dtype=weight_dtype)
             if stop_text_percentage != 0:
                 unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
                     unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler
@@ -581,14 +598,11 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     cleanup()
                 g_cuda = None
                 pred_type = "epsilon"
-                if args.v2:
+                if args.v2 and args.resolution > 512:
                     pred_type = "v_prediction"
                 scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
                                           steps_offset=1, clip_sample=False, set_alpha_to_one=False,
                                           prediction_type=pred_type)
-                if args.use_ema:
-                    ema_unet.store(unet.parameters())
-                    ema_unet.copy_to(unet.parameters())
 
                 if vae is None:
                     printm("Loading vae.")
@@ -632,6 +646,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                 status.textinfo = f"Saving diffusion model at step {args.revision}..."
                                 pbar.set_description("Saving diffusion model")
                                 s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"))
+                                if ema_unet is not None:
+                                    ema_path = os.path.join(args.pretrained_model_name_or_path, "ema_unet")
+                                    ema_unet.save_pretrained(ema_path)
                                 pbar.update()
 
                             elif save_lora:
@@ -656,9 +673,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                 compile_checkpoint(args.model_name, reload_models=False, lora_path=out_file, log=False,
                                                    snap_rev=snap_rev)
                                 pbar.update()
-                            if args.use_ema:
-                                ema_unet.restore(unet.parameters())
-                                ema_unet.to(accelerator.device, dtype=weight_dtype)
                                 printm("Restored, moved to acc.device.")
                         except Exception as ex:
                             print(f"Exception saving checkpoint/model: {ex}")
@@ -767,6 +781,11 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         status.job_no = global_step
         training_complete = False
         msg = ""
+
+        print("TYPES:")
+        print(f"Unet: {unet.dtype} on {unet.device}")
+        print(f"EmaU: {ema_unet.dtype} on {ema_unet.device}")
+
         for epoch in range(first_epoch, max_train_epochs):
             if training_complete:
                 print("Training complete, breaking epoch.")
@@ -829,7 +848,10 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                                                 b_size, args.max_token_length, tokenizer.model_max_length, args.clip_skip)
 
                     # Predict the noise residual
-                    noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+                    if ema_unet is not None:
+                        noise_pred = ema_unet(noisy_latents, timesteps, encoder_hidden_states).sample
+                    else:
+                        noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
                     # Get the target for loss depending on the prediction type
                     if noise_scheduler.config.prediction_type == "v_prediction":
@@ -899,7 +921,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     optimizer.step()
                     lr_scheduler.step(train_batch_size)
                     if args.use_ema and ema_unet is not None:
-                        ema_unet.step(unet.parameters())
+                        ema_unet.step(unet)
                     if profiler is not None:
                         profiler.step()
 

@@ -191,6 +191,25 @@ class DreamboothConfig(BaseModel):
             self.model_dir = model_dir
             self.pretrained_model_name_or_path = working_dir
 
+    def refresh(self):
+        """
+        Reload self from file
+
+        """
+        models_path = shared.dreambooth_models_path
+        if models_path == "" or models_path is None:
+            models_path = os.path.join(shared.models_path, "dreambooth")
+        config_file = os.path.join(models_path, self.model_name, "db_config.json")
+        try:
+            with open(config_file, 'r') as openfile:
+                config_dict = json.load(openfile)
+
+            self.load_params(config_dict)
+        except Exception as e:
+            print(f"Exception loading config: {e}")
+            traceback.print_exc()
+            return None
+
 
 def concepts_from_file(concepts_path: str):
     concepts = []
@@ -275,3 +294,6 @@ def from_file(model_name):
         print(f"Exception loading config: {e}")
         traceback.print_exc()
         return None
+
+
+

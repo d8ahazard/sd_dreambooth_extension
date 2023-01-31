@@ -3,12 +3,13 @@ from typing import List
 
 import torch
 import torch.utils.checkpoint
+from diffusers import EMAModel
 from transformers import CLIPTextModel
 
 from extensions.sd_dreambooth_extension.dreambooth import shared
 from modules import shared
 
-
+foo = EMAModel
 # Implementation from https://github.com/bmaltais/kohya_ss
 def encode_hidden_state(text_encoder: CLIPTextModel, input_ids, pad_tokens, b_size, max_token_length,
                         tokenizer_max_length, clip_skip):
@@ -52,11 +53,11 @@ def prompt_to_tags(src_prompt: str, instance_token: str = None, class_token: str
 
 def build_strict_tokens(
         caption: str = '',
-        tenc_start_token: str = ''
-    ):
-
+        tenc_start_token: str = '',
+        tenc_end_token: str = ''
+):
     caption_list = []
-    caption_split = re.split(r'[,;.!?]', caption)
+    caption_split = re.split(r'[,;.!?]\s', caption)
 
     for cap in caption_split:
         words_with_special_token = []
@@ -66,7 +67,7 @@ def build_strict_tokens(
             if sc: words_with_special_token.append(f"{sc}</w>")
 
         new_cap = ' '.join(words_with_special_token)
-        caption_list.append(f"{tenc_start_token}{new_cap}{tenc_start_token}")
+        caption_list.append(f"{tenc_start_token}{new_cap}{tenc_end_token}")
 
     special_caption = ', '.join(caption_list)
 

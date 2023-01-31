@@ -111,3 +111,10 @@ if os.name == "nt":
 check_versions()
 print("")
 print("#######################################################################################################")
+try:
+    from modules import safe
+    safe.load = safe.unsafe_torch_load
+    import torch
+    torch.load = safe.unsafe_torch_load
+except:
+    pass

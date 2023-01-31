@@ -127,19 +127,26 @@ def inject_trainable_lora(
         target_replace_module=None,
     r: int = 4,
     loras=None,
-    device = None# path to lora .pt
+    device = None
 ):
     """
     inject lora into model, and returns lora parameter groups.
     """
-    disable_safe_unpickle()
     if target_replace_module is None:
         target_replace_module = DEFAULT_TARGET_REPLACE
     require_grad_params = []
     names = []
 
+    if device is None:
+        device = "cpu"
+
     if loras is not None and os.path.exists(loras) and os.path.isfile(loras):
-        loras = torch.load(loras)
+        if ".pt" in loras:
+            disable_safe_unpickle()
+            loras = torch.load(loras, device)
+            enable_safe_unpickle()
+        else:
+            loras = load_safeloras(loras, device)
     else:
         loras = None
 
@@ -172,7 +179,7 @@ def inject_trainable_lora(
         _module._modules[name].lora_up.weight.requires_grad = True
         _module._modules[name].lora_down.weight.requires_grad = True
         names.append(name)
-    enable_safe_unpickle()
+
     return require_grad_params, names
 
 def extract_lora_ups_down(model, target_replace_module=None):
@@ -194,19 +201,29 @@ def extract_lora_ups_down(model, target_replace_module=None):
 
 def save_lora_weight(
     model,
-    path="./lora.pt",
-        target_replace_module=None,
+    path,
+    target_replace_module=None,
+    save_safetensors=False
 ):
+
+    if ".pt" not in path:
+        path += ".pt"
+
     if target_replace_module is None:
         target_replace_module = DEFAULT_TARGET_REPLACE
     weights = []
+
     for _up, _down in extract_lora_ups_down(
         model, target_replace_module=target_replace_module
     ):
         weights.append(_up.weight)
         weights.append(_down.weight)
 
-    torch.save(weights, path)
+    if save_safetensors:
+        path = path.replace(".pt", ".safetensors")
+        save_safeloras(weights, path)
+    else:
+        torch.save(weights, path)
 
 
 def save_lora_as_json(model, path="./lora.json"):
@@ -222,7 +239,7 @@ def save_lora_as_json(model, path="./lora.json"):
 
 
 def save_safeloras(
-        modelmap=None,
+    modelmap=None,
     outpath="./lora.safetensors",
 ):
     """
@@ -361,6 +378,8 @@ def weight_apply_lora(
 
     if target_replace_module is None:
         target_replace_module = DEFAULT_TARGET_REPLACE
+    if target_replace_module == "tenc":
+        target_replace_module = TEXT_ENCODER_DEFAULT_TARGET_REPLACE
     for _m, _n, _child_module in _find_modules(
         model, target_replace_module, search_class=[nn.Linear]
     ):
@@ -676,6 +695,36 @@ def inspect_lora(model):
 
     return moved
 
+# Save loras from a diffusionpipeline
+def save_pipe(
+    pipeline,
+    model_base,
+    save_safetensors=False,
+    target_replace_module_text=None,
+    target_replace_module_unet=None
+):
+
+    if target_replace_module_unet is None:
+        target_replace_module_unet = DEFAULT_TARGET_REPLACE
+    if target_replace_module_text is None:
+        target_replace_module_text = TEXT_ENCODER_DEFAULT_TARGET_REPLACE
+
+    save_unet_path = f"{model_base}"
+    save_lora_weight(
+        pipeline.unet, save_unet_path, target_replace_module=target_replace_module_unet,save_safetensors=save_safetensors
+    )
+    print("Unet saved to ", save_unet_path)
+
+    save_txt_path = _text_lora_path(save_unet_path),
+    save_lora_weight(
+        pipeline.text_encoder,
+        save_txt_path,
+        target_replace_module=target_replace_module_text,
+        save_safetensors=save_safetensors
+    )
+    print("Text Encoder saved to ", _text_lora_path(save_txt_path))
+    return save_unet_path, save_txt_path
+
 
 def save_all(
     unet,
@@ -684,8 +733,8 @@ def save_all(
     placeholder_token,
     save_path,
     save_lora=True,
-        target_replace_module_text=None,
-        target_replace_module_unet=None,
+    target_replace_module_text=None,
+    target_replace_module_unet=None
 ):
 
     # save ti
