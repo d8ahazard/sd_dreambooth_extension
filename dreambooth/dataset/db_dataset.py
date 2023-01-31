@@ -151,7 +151,7 @@ class DbDataset(torch.utils.data.Dataset):
             img_tensor = self.image_transforms(image)
             img_tensor = img_tensor.unsqueeze(0).to(device=self.vae.device, dtype=self.vae.dtype)
             latents = self.vae.encode(img_tensor).latent_dist.sample().squeeze(0).to("cpu")
-        self.latents_cache[image_path] = latents
+            self.latents_cache[image_path] = latents
 
     def cache_caption(self, image_path, caption):
         input_ids = None
@@ -168,7 +168,7 @@ class DbDataset(torch.utils.data.Dataset):
                 input_ids = self.tokenizer(caption, padding='max_length', truncation=True,
                                            add_special_tokens=auto_add_special_tokens,
                                            return_tensors='pt').input_ids
-        self.caption_cache[image_path] = input_ids
+            self.caption_cache[image_path] = input_ids
         return caption, input_ids
 
     def make_buckets_with_caching(self, vae, min_size):
