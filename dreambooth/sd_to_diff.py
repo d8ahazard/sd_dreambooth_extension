@@ -53,8 +53,7 @@ from diffusers import (
     UNet2DConditionModel)
 
 from diffusers.pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBertConfig, LDMBertModel
-from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
-from transformers import AutoFeatureExtractor, BertTokenizerFast, CLIPTextModel, CLIPTokenizer, CLIPVisionConfig
+from transformers import BertTokenizerFast, CLIPTextModel, CLIPTokenizer, CLIPVisionConfig
 
 def shave_segments(path, n_shave_prefix_segments=1):
     """
@@ -314,7 +313,6 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None):
     keys = list(checkpoint.keys())
     has_ema = False
     unet_key = "model.diffusion_model."
-    ema_keys = {}
     # at least a 100 parameters have to start with `model_ema` in order for the checkpoint to be EMA
     if sum(k.startswith("model_ema") for k in keys) > 100:
         print(f"Checkpoint {path} has both EMA and non-EMA weights.")
@@ -322,7 +320,6 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None):
         for key in keys:
             if key.startswith("model.diffusion_model"):
                 flat_ema_key = "model_ema." + "".join(key.split(".")[1:])
-                ema_keys[key.replace(unet_key, "")] = flat_ema_key
                 ema_state_dict[key.replace(unet_key, "")] = checkpoint.pop(flat_ema_key)
     ema_checkpoint = None
     for key in keys:
@@ -334,7 +331,7 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None):
     if has_ema:
         ema_checkpoint = unet_dict_to_checkpoint(ema_state_dict, config)
     new_checkpoint = unet_dict_to_checkpoint(unet_state_dict, config)
-    return new_checkpoint, ema_checkpoint, ema_keys
+    return new_checkpoint, ema_checkpoint
 
 
 def unet_dict_to_checkpoint(unet_state_dict, config):
@@ -809,7 +806,7 @@ def replace_symlinks(path, base):
         for subpath in os.listdir(path):
             replace_symlinks(os.path.join(path, subpath), base)
 
-def download_model(db_config: DreamboothConfig, token):
+def download_model(db_config: DreamboothConfig, token, extract_ema: bool = False):
     tmp_dir = os.path.join(db_config.model_dir, "src")
     working_dir = db_config.pretrained_model_name_or_path
 
@@ -865,12 +862,18 @@ def download_model(db_config: DreamboothConfig, token):
             diffusion_files.remove(bin_model)
 
     model_file = next((x for x in model_files if ".safetensors" in x and "nonema" in x), next((x for x in model_files if "nonema" in x), next((x for x in model_files if ".safetensors" in x), model_files[0] if model_files else None)))
-
+    model_file_alt = None
+    if "nonema" in model_file:
+        ema_file = model_file.replace("nonema", "ema")
+        if ema_file in model_file and extract_ema:
+            model_file_alt = ema_file
     files_to_fetch = None
 
     cache_dir = tmp_dir
     if model_file is not None:
         files_to_fetch = [model_file]
+        if model_file_alt is not None:
+            files_to_fetch.append(model_file_alt)
     elif len(diffusion_files):
         files_to_fetch = diffusion_files
         if model_index is not None:
@@ -911,8 +914,12 @@ def download_model(db_config: DreamboothConfig, token):
                     dest = os.path.join(db_config.pretrained_model_name_or_path,diffusion_dir)
         if not dest:
             if ".ckpt" in out or ".safetensors" in out:
-                dest = os.path.join(db_config.model_dir, "src")
-                out_model = dest
+                if model_file_alt is not None and "nonema" in out:
+                    dest = os.path.join(db_config.model_dir, "src")
+                    out_model = dest
+                else:
+                    dest = os.path.join(db_config.model_dir, "src")
+                    out_model = dest
 
         if dest is not None:
             if not os.path.exists(dest):
@@ -960,6 +967,23 @@ def get_config_file(train_unfrozen=False, v2=False, prediction_type="epsilon"):
 
     return get_config_path(model_version_name, model_train_type, config_base_name, prediction_type)
 
+
+def load_checkpoint(checkpoint_file: str, map_location: str):
+    _, extension = os.path.splitext(checkpoint_file)
+    if extension.lower() == ".safetensors":
+        os.environ["SAFETENSORS_FAST_GPU"] = "1"
+        try:
+            print("Loading safetensors...")
+            checkpoint = safetensors.torch.load_file(checkpoint_file, device="cpu")
+        except Exception as e:
+            checkpoint = torch.jit.load(checkpoint_file)
+    else:
+        disable_safe_unpickle()
+        print("Loading ckpt...")
+        checkpoint = torch.load(checkpoint_file, map_location=map_location)
+        checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
+        enable_safe_unpickle()
+    return checkpoint
 
 def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type="ddim", from_hub=False, new_model_url="",
                        new_model_token="", extract_ema=False, train_unfrozen=False, is_512=True):
@@ -1010,7 +1034,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
 
     # Okay then. So, if it's from the hub, try to download it
     if from_hub:
-        model_info, config = download_model(db_config, new_model_token)
+        model_info, config = download_model(db_config, new_model_token, extract_ema)
         if db_config is not None:
             original_config_file = config
         if model_info is not None:
@@ -1043,19 +1067,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
         # Try to determine if v1 or v2 model if we have a ckpt
         if not from_hub:
             printi("Loading model from checkpoint.")
-            _, extension = os.path.splitext(checkpoint_file)
-            if extension.lower() == ".safetensors":
-                os.environ["SAFETENSORS_FAST_GPU"] = "1"
-                try:
-                    print("Loading safetensors...")
-                    checkpoint = safetensors.torch.load_file(checkpoint_file, device="cpu")
-                except Exception as e:
-                    checkpoint = torch.jit.load(checkpoint_file)
-            else:
-                disable_safe_unpickle()
-                print("Loading ckpt...")
-                checkpoint = torch.load(checkpoint_file, map_location=map_location)
-                checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
+            checkpoint = load_checkpoint(checkpoint_file, map_location)
 
             rev_keys = ["db_global_step", "global_step"]
             epoch_keys = ["db_epoch", "epoch"]
@@ -1178,7 +1190,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
         unet_config["upcast_attention"] = upcast_attention
         unet = UNet2DConditionModel(**unet_config)
 
-        converted_unet_checkpoint, converted_ema_checkpoint, ema_keys = convert_ldm_unet_checkpoint(
+        converted_unet_checkpoint, converted_ema_checkpoint = convert_ldm_unet_checkpoint(
             checkpoint, unet_config, path=checkpoint_file
         )
         unet.load_state_dict(converted_unet_checkpoint)
@@ -1190,9 +1202,6 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
             ema_unet = UNet2DConditionModel(**unet_config)
             ema_unet.load_state_dict(converted_ema_checkpoint)
             ema_unet.save_pretrained(os.path.join(db_config.pretrained_model_name_or_path, "ema_unet"), safe_serialization=True)
-            ema_key_file = os.path.join(db_config.pretrained_model_name_or_path, "ema_unet", "keys.json")
-            with open(ema_key_file, "w") as ema_io:
-                json.dump(ema_keys, ema_io, indent=4)
 
             del ema_unet
             db_config.has_ema = has_ema
@@ -1210,9 +1219,6 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
 
         printi("Converting text encoder...")
         # Convert the text model.
-        feature_extractor = None
-        safety_checker = None
-
         text_model_type = original_config.model.params.cond_stage_config.target.split(".")[-1]
         tokenizer_type = "CLIPTokenizer"
         if text_model_type == "FrozenOpenCLIPEmbedder":
@@ -1235,6 +1241,26 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
             print(f"Saving {name}")
             model.save_pretrained(os.path.join(db_config.pretrained_model_name_or_path, name), safe_serialization=True)
             del model
+
+        del checkpoint
+
+        if "nonema" in checkpoint_file and extract_ema:
+            ema_checkpoint_file = checkpoint_file.replace("nonema", "ema")
+            if os.path.exists(ema_checkpoint_file):
+                printi("Extracting secondary checkpoint for EMA weights.")
+                checkpoint = load_checkpoint(ema_checkpoint_file, map_location)
+                unet = UNet2DConditionModel(**unet_config)
+
+                converted_unet_checkpoint, _ = convert_ldm_unet_checkpoint(
+                    checkpoint, unet_config, path=checkpoint_file
+                )
+
+                unet.load_state_dict(converted_unet_checkpoint)
+                unet.save_pretrained(os.path.join(db_config.pretrained_model_name_or_path, "ema_unet"), safe_serialization=True)
+                del unet
+                db_config.has_ema = has_ema
+
+                db_config.save()
 
         try:
             diff_ver = importlib_metadata.version("diffusers")

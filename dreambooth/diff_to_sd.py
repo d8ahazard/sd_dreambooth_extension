@@ -383,27 +383,14 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
     ema_unet_path = get_model_path(model_path, "ema_unet")
     vae_path = get_model_path(model_path, "vae")
 
-    ema_dict = {}
+    ema_state_dict = {}
     try:
         if ema_unet_path is not None:
             printi("Converting ema unet...", log=log)
             try:
-                ema_keys_path = osp.join(model_path, "ema_unet", "keys.json")
-                print(f"EKP: {ema_keys_path}")
-                ema_keys = {}
-                with open(ema_keys_path, "r") as ek:
-                    ema_keys = json.load(ek)
-
-                # Load ema model
                 ema_unet_state_dict = load_model(ema_unet_path, map_location="cpu")
                 ema_state_dict = convert_unet_state_dict(ema_unet_state_dict)
-                for key, replacement in ema_keys.items():
-                    if key in ema_state_dict.keys():
-                        ema_dict[replacement] = ema_state_dict.pop(key)
-                if len(ema_dict.keys()) == 0:
-                    for key in ema_state_dict.keys():
-                        print(f"FUCK: {key}")
-                print(f"We have {len(ema_dict.keys())} ema keys out of {len(ema_unet_state_dict.keys())} unet keys.")
+                ema_state_dict = {"model_ema." + "".join(k.split(".")): v for k, v in ema_state_dict.items()}
                 del ema_unet_state_dict
             except Exception as e:
                 print(f"Exception: {e}")
@@ -419,15 +406,14 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
 
         # Convert
         unet_state_dict = convert_unet_state_dict(unet_state_dict)
-
         unet_state_dict = {"model.diffusion_model." + k: v for k, v in unet_state_dict.items()}
 
         # Append EMA values
-        if len(ema_dict.items()):
+        if len(ema_state_dict.items()):
             print("Appending EMA keys to state dict.")
             checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}_ema{checkpoint_ext}")
 
-        for key, value in ema_dict.items():
+        for key, value in ema_state_dict.items():
             unet_state_dict[key] = value
 
 
@@ -476,8 +462,6 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
         cfg_file = None
         new_name = os.path.join(config.model_dir, f"{config.model_name}.yaml")
         if os.path.exists(new_name):
-
-            cfg_file = new_name
             config_version = "v1-inference"
 
             if config.resolution >= 768 and v2:
