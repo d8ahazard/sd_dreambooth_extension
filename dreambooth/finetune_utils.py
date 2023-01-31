@@ -538,32 +538,21 @@ class ImageBuilder:
             shared.total_tqdm = auto_tqdm
             output = processed
         else:
-            if self.accelerator.device == torch.device('mps'):
-                with self.accelerator.autocast():
-                    if seed is None or seed == '' or seed == -1:
-                        seed = int(random.randrange(21474836147))
+            with self.accelerator.autocast(), torch.inference_mode(mode=self.accelerator.device != torch.device('mps')):
+                if seed is None or seed == '' or seed == -1:
+                    seed = int(random.randrange(21474836147))
+                if self.accelerator.device == torch.device('mps'):
                     g_cuda = torch.Generator(device='cpu').manual_seed(seed)
-                    output = self.image_pipe(
-                        positive_prompts,
-                        num_inference_steps=steps,
-                        guidance_scale=scale,
-                        height=height,
-                        width=width,
-                        generator=g_cuda,
-                        negative_prompt=negative_prompts).images
-            else:
-                with self.accelerator.autocast(), torch.inference_mode():
-                    if seed is None or seed == '' or seed == -1:
-                        seed = int(random.randrange(21474836147))
+                else:
                     g_cuda = torch.Generator(device=self.accelerator.device).manual_seed(seed)
-                    output = self.image_pipe(
-                        positive_prompts,
-                        num_inference_steps=steps,
-                        guidance_scale=scale,
-                        height=height,
-                        width=width,
-                        generator=g_cuda,
-                        negative_prompt=negative_prompts).images
+                output = self.image_pipe(
+                    positive_prompts,
+                    num_inference_steps=steps,
+                    guidance_scale=scale,
+                    height=height,
+                    width=width,
+                    generator=g_cuda,
+                    negative_prompt=negative_prompts).images
 
         return output
 
