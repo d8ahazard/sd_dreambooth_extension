@@ -21,10 +21,10 @@ def sanitize_name(name):
 
 class DreamboothConfig(BaseModel):
     adamw_weight_decay: float = 0.01
-    attention: str = "default"
+    attention: str = "xformers"
     cache_latents: bool = True
-    center_crop: bool = True
-    freeze_clip_normalization: bool = False
+    center_crop: bool = False
+    freeze_clip_normalization: bool = True
     clip_skip: int = 1
     concepts_list: List[Dict] = []
     concepts_path: str = ""
@@ -37,7 +37,7 @@ class DreamboothConfig(BaseModel):
     gradient_set_to_none: bool = True
     graph_smoothing: int = 50
     half_model: bool = False
-    train_unfrozen: bool = False
+    train_unfrozen: bool = True
     has_ema: bool = False
     hflip: bool = False
     initial_revision: int = 0
@@ -67,7 +67,7 @@ class DreamboothConfig(BaseModel):
     pretrained_vae_name_or_path: str = ""
     prior_loss_scale: bool = False
     prior_loss_target: int = 100
-    prior_loss_weight: float = 1.0
+    prior_loss_weight: float = 0.75
     prior_loss_weight_min: float = 0.1
     resolution: int = 512
     revision: int = 0
@@ -87,7 +87,7 @@ class DreamboothConfig(BaseModel):
     save_state_cancel: bool = False
     save_state_during: bool = False
     scheduler: str = "ddim"
-    shuffle_tags: bool = False
+    shuffle_tags: bool = True
     snapshot: str = ""
     src: str = ""
     stop_text_encoder: float = 1.0
