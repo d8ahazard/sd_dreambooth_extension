@@ -346,28 +346,28 @@ def on_ui_tabs():
                             c1_class_prompt, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token, \
                             c1_class_token, c1_num_class_images_per, c1_class_negative_prompt, c1_class_guidance_scale, \
                             c1_class_infer_steps, c1_save_sample_negative_prompt, c1_n_save_sample, c1_sample_seed, \
-                            c1_save_guidance_scale, c1_save_infer_steps = build_concept_panel()
+                            c1_save_guidance_scale, c1_save_infer_steps = build_concept_panel(1)
 
                         with gr.Tab("Concept 2"):
                             c2_instance_data_dir, c2_class_data_dir, c2_instance_prompt, \
                             c2_class_prompt, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token, \
                             c2_class_token, c2_num_class_images_per, c2_class_negative_prompt, c2_class_guidance_scale, \
                             c2_class_infer_steps, c2_save_sample_negative_prompt, c2_n_save_sample, c2_sample_seed, \
-                            c2_save_guidance_scale, c2_save_infer_steps = build_concept_panel()
+                            c2_save_guidance_scale, c2_save_infer_steps = build_concept_panel(2)
 
                         with gr.Tab("Concept 3"):
                             c3_instance_data_dir, c3_class_data_dir, c3_instance_prompt, \
                             c3_class_prompt, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token, \
                             c3_class_token, c3_num_class_images_per, c3_class_negative_prompt, c3_class_guidance_scale, \
                             c3_class_infer_steps, c3_save_sample_negative_prompt, c3_n_save_sample, c3_sample_seed, \
-                            c3_save_guidance_scale, c3_save_infer_steps = build_concept_panel()
+                            c3_save_guidance_scale, c3_save_infer_steps = build_concept_panel(3)
                             
                         with gr.Tab("Concept 4"):
                             c4_instance_data_dir, c4_class_data_dir, c4_instance_prompt, \
                             c4_class_prompt, c4_save_sample_prompt, c4_save_sample_template, c4_instance_token, \
                             c4_class_token, c4_num_class_images_per, c4_class_negative_prompt, c4_class_guidance_scale, \
                             c4_class_infer_steps, c4_save_sample_negative_prompt, c4_n_save_sample, c4_sample_seed, \
-                            c4_save_guidance_scale, c4_save_infer_steps = build_concept_panel()
+                            c4_save_guidance_scale, c4_save_infer_steps = build_concept_panel(4)
                 with gr.Tab("Saving"):
                     with gr.Column():
                         gr.HTML("General")
@@ -966,14 +966,14 @@ def on_ui_tabs():
     return (dreambooth_interface, "Dreambooth", "dreambooth_interface"),
 
 
-def build_concept_panel():
+def build_concept_panel(concept: int):
     with gr.Column():
         gr.HTML(value="Directories")
         instance_data_dir = gr.Textbox(label='Dataset Directory',
-                                       placeholder="Path to directory with input images")
+                                       placeholder="Path to directory with input images", elem_id=f"idd{concept}")
         class_data_dir = gr.Textbox(label='Classification Dataset Directory',
                                     placeholder="(Optional) Path to directory with "
-                                                "classification/regularization images")
+                                                "classification/regularization images", elem_id=f"cdd{concept}")
     with gr.Column():
         gr.HTML(value="Filewords")
         instance_token = gr.Textbox(label='Instance Token',

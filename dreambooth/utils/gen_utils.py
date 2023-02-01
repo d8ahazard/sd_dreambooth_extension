@@ -138,6 +138,8 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
         for b in range(batch_size):
             # Get the new prompt data
             pd = prompt_dataset.__getitem__(actual_idx)
+            if pd is None:
+                break
             # Ensure that our image batches have the right resolutions
             if first_res is None:
                 first_res = pd.resolution
