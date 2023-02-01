@@ -779,7 +779,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         training_complete = False
         msg = ""
 
-
+        last_tenc = 0 < text_encoder_epochs
+        if stop_text_percentage == 0:
+            last_tenc = False
         for epoch in range(first_epoch, max_train_epochs):
             if training_complete:
                 print("Training complete, breaking epoch.")
@@ -800,7 +802,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             else:
                 if train_tenc:
                     text_encoder.text_model.embeddings.requires_grad_(True)
-
+            if last_tenc != train_tenc:
+                last_tenc = train_tenc
+                cleanup()
             loss_total = 0
             instance_loss_total = 0
             instance_loss_avg = 0
