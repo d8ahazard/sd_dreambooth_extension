@@ -902,7 +902,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                         # Add the prior loss to the instance loss.
                         prior_loss *= current_prior_loss_weight
                     
-                    loss = instance_loss + prior_loss
+                    loss = (instance_loss + prior_loss) / 2
 
                     accelerator.backward(loss)
                     if accelerator.sync_gradients and not args.use_lora:
@@ -944,9 +944,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     "lr": float(last_lr), 
                     "vram_usage": float(cached),
                     "instance_loss": float(instance_loss_step),
-                    "instance_loss_avg": float(instance_loss_avg),
                     "prior_loss": float(prior_loss_step),
-                    "prior_loss_avg": float(prior_loss_avg)
                 }
                 status.textinfo2 = f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
                                     f"VRAM: {allocated}/{cached} GB"
