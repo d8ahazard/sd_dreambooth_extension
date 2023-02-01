@@ -220,7 +220,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 )
                 if args.attention == "xformers" and not shared.force_cpu:
                     xattention.replace_unet_cross_attn_to_xformers()
-                    xattention.set_diffusers_xformers_flag(ema_unet.model, True)
+                    xattention.set_diffusers_xformers_flag(ema_unet, True)
 
                 ema_model = EMAModel(ema_unet, device=accelerator.device)
                 del ema_unet
