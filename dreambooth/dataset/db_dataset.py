@@ -159,7 +159,7 @@ class DbDataset(torch.utils.data.Dataset):
         if self.tokenizer is not None and (image_path not in self.caption_cache or self.debug_dataset):
             caption = self.check_shuffle_tags(caption)
             if self.strict_tokens:
-                caption = build_strict_tokens(caption, self.tokenizer.bos_token)
+                caption = build_strict_tokens(caption, self.tokenizer.bos_token, self.tokenizer.eos_token)
             if self.not_pad_tokens:
                 input_ids = self.tokenizer(caption, padding=True, truncation=True,
                                            add_special_tokens=auto_add_special_tokens,
