@@ -126,8 +126,8 @@ class EMAModel(object):
         model.load_state_dict(self.model.state_dict(), strict=False)
         return model
 
-    def save_pretrained(self, model_path, save_safetensors=False):
-        self.model.save_pretrained(model_path, save_safetensors)
+    def save_pretrained(self, model_path, safe_serialization=False):
+        self.model.save_pretrained(model_path, safe_serialization)
         model_config_path = os.path.join(model_path, "config.json")
         if not os.path.exists(model_config_path):
             unet_config_path = model_config_path.replace("ema_", "")

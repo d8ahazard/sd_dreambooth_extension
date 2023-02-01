@@ -643,9 +643,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                 # We should save this regardless, because it's our fallback if no snapshot exists.
                                 status.textinfo = f"Saving diffusion model at step {args.revision}..."
                                 pbar.set_description("Saving diffusion model")
-                                s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"))
+                                s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"),safe_serialization=True)
                                 if ema_model is not None:
-                                    ema_model.save_pretrained(os.path.join(args.pretrained_model_name_or_path, "ema_unet"))
+                                    ema_model.save_pretrained(os.path.join(args.pretrained_model_name_or_path, "ema_unet"), safe_serialization=True)
                                 pbar.update()
 
                             elif save_lora:
