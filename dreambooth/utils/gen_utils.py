@@ -169,7 +169,7 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
                 i_idx += 1
                 generated += 1
                 pbar.reset(set_len)
-                pbar.update()
+                pbar.update(generated)
                 pbar.set_description(f"Generating class images {generated}/{set_len}:", True)
                 shared.status.job_count = set_len
                 preview_images.append(image_filename)

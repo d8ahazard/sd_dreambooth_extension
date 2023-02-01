@@ -579,7 +579,6 @@ def ui_classifiers(model_name: str,
 
     images = []
     try:
-        print("Generating class images...")
         unload_system_models()
         count, images = generate_classifiers(config, use_txt2img=use_txt2img, ui=True)
         reload_system_models()
