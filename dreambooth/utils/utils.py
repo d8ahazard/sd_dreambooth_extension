@@ -157,8 +157,7 @@ def plot_multi_alt(
     spacing: float = 0.1,
 ):
     styles = ["-", ":", "--", "-."]
-    colors = get_standard_colors(num_colors=5)
-    
+    colors = get_standard_colors(num_colors=7)
     for i, yi in enumerate(plot_definition.y_axis):
         if len(yi.columns) > len(styles):
             raise ValueError(f"Maximum {len(styles)} traces per yaxis allowed. If we want to allow this we need to add some logic.")
@@ -185,10 +184,9 @@ def plot_multi_alt(
                 x=plot_definition.x_axis, 
                 y=yi.columns,
                 style=styles[:len(yi.columns)],
-                color=[colors[i] for _ in range(len(yi.columns))]
+                color=[colors[i + yl] for yl in range(len(yi.columns))]
             )
             ax_new.set_ylabel(ylabel=yi.name)
-
 
     ax.legend(loc=0)
 
