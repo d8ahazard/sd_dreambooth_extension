@@ -1,7 +1,6 @@
 # Script for converting Diffusers saved pipeline to a Stable Diffusion checkpoint.
 # *Only* converts the UNet, VAE, and Text Encoder.
 # Does not convert optimizer state or any other thing.
-import json
 import os
 import os.path as osp
 import re

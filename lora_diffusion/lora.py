@@ -10,25 +10,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import disable_safe_unpickle, enable_safe_unpickle
-
-try:
-    from safetensors.torch import safe_open
-    from safetensors.torch import save_file as safe_save
-
-    safetensors_available = True
-except ImportError:
-    from .safe_open import safe_open
-
-    def safe_save(
-        tensors: Dict[str, torch.Tensor],
-        filename: str,
-        metadata: Optional[Dict[str, str]] = None,
-    ) -> None:
-        raise EnvironmentError(
-            "Saving safetensors requires the safetensors library. Please install with pip or similar."
-        )
-
-    safetensors_available = False
+from safetensors.torch import safe_open
+from safetensors.torch import save_file as safe_save
 
 
 class LoraInjectedLinear(nn.Module):
@@ -358,6 +341,7 @@ def save_lora_weight(
     model,
     path="./lora.pt",
     target_replace_module=DEFAULT_TARGET_REPLACE,
+    save_safetensors: bool = False
 ):
     weights = []
 
@@ -611,6 +595,26 @@ def collapse_lora(model, alpha=1.0):
                 .to(_child_module.conv.weight.device)
             )
 
+
+def weight_apply_lora(
+    model, loras, target_replace_module=None, alpha=1.0
+):
+
+    if target_replace_module is None:
+        target_replace_module = DEFAULT_TARGET_REPLACE
+    if target_replace_module == "tenc":
+        target_replace_module = TEXT_ENCODER_DEFAULT_TARGET_REPLACE
+    for _m, _n, _child_module in _find_modules(
+        model, target_replace_module, search_class=[nn.Linear]
+    ):
+        weight = _child_module.weight
+
+        up_weight = loras.pop(0).detach().to(weight.device)
+        down_weight = loras.pop(0).detach().to(weight.device)
+
+        # W <- W + U * D
+        weight = weight + alpha * (up_weight @ down_weight).type(weight.dtype)
+        _child_module.weight = nn.Parameter(weight)
 
 def monkeypatch_or_replace_lora(
     model,
@@ -1118,29 +1122,29 @@ def merge_loras_to_pipe(
     monkeypatch_remove_lora(pipline.text_encoder)
 
 # TODO Add lora saving for webui.
-def save_loras_for_webui(
-        pipeline, 
-        lora_path: str = "", 
-        lora_name: str = "lora_name", 
-        lora_alpha: float = 1, 
-        lora_txt_alpha: float = 1,
-        lora_token_path: str = ""
-    ):
-    print(
-            f"You will be using {lora_name} as the token in A1111 webui. Make sure {lora_name} is unique enough token (example: my_lora_cat)."
-        )
-    merge_loras_to_pipe(pipeline, lora_path, lora_alpha, lora_txt_alpha)
-
-    keys = sorted(tok_dict.keys())
-    tok_catted = torch.stack([tok_dict[k] for k in keys])
-    ret = {
-            "string_to_token": {"*": torch.tensor(265)},
-            "string_to_param": {"*": tok_catted},
-            "name": lora_name,
-        }
-
-    # Must end in .pt
-    torch.save(ret, lora_token_path) 
+# def save_loras_for_webui(
+#         pipeline,
+#         lora_path: str = "",
+#         lora_name: str = "lora_name",
+#         lora_alpha: float = 1,
+#         lora_txt_alpha: float = 1,
+#         lora_token_path: str = ""
+#     ):
+#     print(
+#             f"You will be using {lora_name} as the token in A1111 webui. Make sure {lora_name} is unique enough token (example: my_lora_cat)."
+#         )
+#     merge_loras_to_pipe(pipeline, lora_path, lora_alpha, lora_txt_alpha)
+#
+#     keys = sorted(tok_dict.keys())
+#     tok_catted = torch.stack([tok_dict[k] for k in keys])
+#     ret = {
+#             "string_to_token": {"*": torch.tensor(265)},
+#             "string_to_param": {"*": tok_catted},
+#             "name": lora_name,
+#         }
+#
+#     # Must end in .pt
+#     torch.save(ret, lora_token_path)
 
 def get_target_module(target_type: str = "injection", use_extended: bool = False):
     if target_type == "injection":
