@@ -937,14 +937,14 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 del target
 
                 loss_step = loss.detach().item()
-                loss_avg = (instance_loss_avg + prior_loss_avg) / 2
+
                 logs = {
+                    "lr": float(last_lr),
                     "loss": float(loss_step),
-                    "loss_avg": float(loss_avg), 
-                    "lr": float(last_lr), 
-                    "vram_usage": float(cached),
-                    "instance_loss": float(instance_loss_step),
+                    "inst_loss": float(instance_loss_step),
                     "prior_loss": float(prior_loss_step),
+                    "vram": float(cached),
+
                 }
                 status.textinfo2 = f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
                                     f"VRAM: {allocated}/{cached} GB"

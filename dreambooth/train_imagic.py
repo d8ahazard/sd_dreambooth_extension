@@ -343,7 +343,7 @@ def train_imagic(args: DreamboothConfig):
             unet=accelerator.unwrap_model(unet),
             use_auth_token=True
         )
-        pipeline.save_pretrained(args.pretrained_model_name_or_path, )
+        pipeline.save_pretrained(args.pretrained_model_name_or_path, safe_serialization=True)
 
     accelerator.end_training()
     print("Training complete")

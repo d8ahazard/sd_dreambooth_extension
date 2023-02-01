@@ -170,7 +170,7 @@ def plot_multi_alt(
                 y=yi.columns, 
                 title=plot_definition.title,
                 style=styles[:len(yi.columns)],
-                color=[colors[i] for _ in range(len(yi.columns))]
+                color=[colors[i + yic] for yic in range(len(yi.columns))]
                 
             )
             ax.set_ylabel(ylabel=yi.name)
@@ -296,9 +296,9 @@ def parse_logs(model_name: str, for_ui: bool = False):
                     lr_events.append(parsed)
                 elif parsed["Name"] == "loss":
                     loss_events.append(parsed)
-                elif parsed["Name"] == "vram_usage":
+                elif parsed["Name"] == "vram_usage" or parsed["Name"] == "vram":
                     ram_events.append(parsed)
-                elif parsed["Name"] == "instance_loss":
+                elif parsed["Name"] == "instance_loss" or parsed["Name"] == "inst_loss":
                     instance_loss_events.append(parsed)
                 elif parsed["Name"] == "prior_loss":
                     prior_loss_events.append(parsed)
