@@ -67,7 +67,7 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
         resolution=args.resolution,
         hflip=args.hflip,
         random_crop=args.center_crop,
-        shuffle_tokens=args.shuffle_tags,
+        shuffle_tags=args.shuffle_tags,
         strict_tokens=args.strict_tokens,
         not_pad_tokens=not args.pad_tokens,
         debug_dataset=debug
@@ -96,7 +96,7 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     class_prompts = []
     try:
         status.textinfo = "Preparing dataset..."
-        prompt_dataset = ClassDataset(args.concepts(), args.model_dir, args.resolution, args.shuffle_tags)
+        prompt_dataset = ClassDataset(args.concepts(), args.model_dir, args.resolution, False)
         instance_prompts = prompt_dataset.instance_prompts
         class_prompts = prompt_dataset.class_prompts
     except Exception as p:

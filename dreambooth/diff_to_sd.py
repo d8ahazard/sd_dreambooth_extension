@@ -404,7 +404,6 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
             apply_lora(unet_state_dict, lora_path, config.lora_weight, "cpu", True)
             checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}_lora{checkpoint_ext}")
 
-        # Convert
         unet_state_dict = convert_unet_state_dict(unet_state_dict)
         unet_state_dict = {"model.diffusion_model." + k: v for k, v in unet_state_dict.items()}
 

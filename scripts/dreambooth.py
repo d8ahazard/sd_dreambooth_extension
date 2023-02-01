@@ -318,10 +318,12 @@ def generate_samples(model_name: str,
             status.textinfo = "Loading diffusion model..."
 
             img_builder = ImageBuilder(
-                config,
-                use_txt2img,
-                config.lora_model_name,
-                batch_size
+                config=config,
+                use_txt2img=use_txt2img,
+                lora_model=config.lora_model_name,
+                batch_size=batch_size,
+                lora_unet_rank=config.lora_unet_rank,
+                lora_txt_rank=config.lora_txt_rank
             )
 
             prompt_data = []
@@ -622,7 +624,7 @@ def create_model(new_model_name: str, ckpt_path: str, scheduler_type="ddim", fro
 
 
 def debug_collate_fn(examples):
-    input_ids = [example["input_id"] for example in examples]
+    input_ids = [example["input_ids"] for example in examples]
     pixel_values = [example["image"] for example in examples]
     loss_weights = torch.tensor([example["loss_weight"] for example in examples], dtype=torch.float32)
     batch = {

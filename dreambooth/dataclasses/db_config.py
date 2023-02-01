@@ -46,7 +46,8 @@ class DreamboothConfig(BaseModel):
     lifetime_revision: int = 0
     lora_learning_rate: float = 1e-4
     lora_model_name: str = ""
-    lora_rank: int = 4
+    lora_unet_rank: int = 4
+    lora_txt_rank: int = 4
     lora_txt_learning_rate: float = 5e-5
     lora_txt_weight: float = 1.0
     lora_weight: float = 1.0
@@ -99,6 +100,7 @@ class DreamboothConfig(BaseModel):
     use_concepts: bool = False
     use_ema: bool = True
     use_lora: bool = False
+    use_lora_extended: bool = False
     use_subdir: bool = False
     v2: bool = False
 
@@ -213,9 +215,9 @@ class DreamboothConfig(BaseModel):
 
 def concepts_from_file(concepts_path: str):
     concepts = []
-    if os.path.exists(concepts_path) and os.path.isfile(str):
+    if os.path.exists(concepts_path) and os.path.isfile(concepts_path):
         try:
-            with open(concepts_path,"r") as concepts_file:
+            with open(concepts_path, "r") as concepts_file:
                 concepts_str = concepts_file.read()
         except Exception as e:
             print(f"Exception opening concepts file: {e}")

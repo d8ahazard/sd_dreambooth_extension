@@ -12,13 +12,7 @@ from PIL import Image
 from packaging import version
 
 
-def get_root_dir():
-    frame = inspect.stack()[-1]
-    module = inspect.getmodule(frame[0])
-    file_path = module.__file__
-    return os.path.dirname(os.path.abspath(file_path))
-
-script_path = get_root_dir()
+script_path = '\\'.join(__file__.split('\\')[0:-4])
 print(f"Script path is {script_path}")
 models_path = os.path.join(script_path, "models")
 embeddings_dir = os.path.join(script_path, "embeddings")

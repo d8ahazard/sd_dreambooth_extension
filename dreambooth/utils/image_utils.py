@@ -160,28 +160,28 @@ class FilenameTextGetter:
         # If we are creating text for a class image and it has our instance token in it, remove/replace it
         class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
         if instance_token != "" and class_token != "":
-            if is_class and re.search(f'\\b{instance_token}\\b', filename_text):
-                if re.search(f'\\b{class_token}\\b', filename_text):
+            if is_class and re.search(f'(^|\\W){instance_token}($|\\W)', filename_text):
+                if re.search(f'(^|\\W){class_token}($|\\W)', filename_text):
                     filename_text = filename_text.replace(instance_token, "")
                     filename_text = filename_text.replace("  ", " ")
                 else:
                     filename_text = filename_text.replace(instance_token, class_token)
 
             if not is_class:
-                if re.search(f'\\b{class_token}\\b', filename_text):
+                if re.search(f'(^|\\W){class_token}($|\\W)', filename_text):
                     # Do nothing if we already have class and instance in string
-                    if re.search(f'\\b{instance_token}\\b', filename_text):
+                    if re.search(f'(^|\\W){instance_token}($|\\W)', filename_text):
                         pass
                     # Otherwise, substitute class tokens for the base token
                     else:
                         for token in class_tokens:
-                            if re.search(f'\\b{token}\\b', filename_text):
+                            if re.search(f'(^|\\W){token}($|\\W)', filename_text):
                                 filename_text = filename_text.replace(token, f"{class_token}")
                     # Now, replace class with instance + class tokens
                     filename_text = filename_text.replace(class_token, f"{instance_token} {class_token}")
                 else:
                     # If class is not in the string, check if instance is
-                    if re.search(f'\\b{instance_token}\\b', filename_text):
+                    if re.search(f'(^|\\W){instance_token}($|\\W)', filename_text):
                         filename_text = filename_text.replace(instance_token, f"{instance_token} {class_token}")
                     else:
                         # Description only, insert both at the front?
