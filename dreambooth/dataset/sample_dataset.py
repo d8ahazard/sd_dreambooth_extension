@@ -40,12 +40,16 @@ class SampleDataset:
                     getter = FilenameTextGetter(shuffle_tags)
                     for image in images:
                         base = getter.read_text(image)
-                        prompt = getter.create_text(sample_prompt,
-                                                    base,
-                                                    concept.instance_token,
-                                                    concept.class_token,
-                                                    False
-                                                    )
+                        prompt = getter.create_text(
+                            sample_prompt,
+                            base,
+                            concept.instance_token,
+                            concept.class_token,
+                            False
+                        )
+                        if prompt == "[filewords]":
+                            print(f"Invalid prompt generation: {image}/{base}")
+                            continue
                         img = Image.open(image)
                         res = img.size
                         prompts.append((prompt, res))
