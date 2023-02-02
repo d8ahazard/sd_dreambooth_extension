@@ -1,6 +1,7 @@
 # Script for converting Diffusers saved pipeline to a Stable Diffusion checkpoint.
 # *Only* converts the UNet, VAE, and Text Encoder.
 # Does not convert optimizer state or any other thing.
+import copy
 import os
 import os.path as osp
 import re
@@ -10,14 +11,15 @@ from typing import Dict
 
 import safetensors.torch
 import torch
-from torch import Tensor
+from diffusers import UNet2DConditionModel
+from torch import Tensor, nn
 from tqdm.auto import tqdm
 
 from extensions.sd_dreambooth_extension.dreambooth import shared as shared
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
-    disable_safe_unpickle, enable_safe_unpickle
+    disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
 from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
@@ -396,12 +398,17 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
                 traceback.print_exc()
                 pass
 
-        unet_state_dict = load_model(unet_path, map_location="cpu")
-
         # Apply LoRA to the unet
         if lora_path is not None and lora_path != "":
-            apply_lora(unet_state_dict, lora_path, config.lora_weight, "cpu", True)
+            unet_model = UNet2DConditionModel().from_pretrained(
+                os.path.join(config.pretrained_model_name_or_path, "unet"))
+
+            apply_lora(unet_model, lora_path, config.lora_weight, "cpu", True)
+            unet_state_dict = copy.deepcopy(unet_model.state_dict)
+            del unet_model
             checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}_lora{checkpoint_ext}")
+        else:
+            unet_state_dict = load_model(unet_path, map_location="cpu")
 
         unet_state_dict = convert_unet_state_dict(unet_state_dict)
         unet_state_dict = {"model.diffusion_model." + k: v for k, v in unet_state_dict.items()}
@@ -423,13 +430,25 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
 
         printi("Converting text encoder...", log=log)
 
-        text_enc_dict = load_model(text_enc_path, map_location="cpu")
-
         # Apply lora weights to the tenc
         if lora_path is not None and lora_path != "":
             lora_paths = lora_path.split(".")
             lora_txt_path = f"{lora_paths[0]}_txt.{lora_paths[1]}"
-            apply_lora(text_enc_dict, lora_txt_path, config.lora_txt_weight, "cpu", True)
+            text_encoder_cls = import_model_class_from_model_name_or_path(config.pretrained_model_name_or_path,
+                                                                          config.revision)
+
+            text_encoder = text_encoder_cls.from_pretrained(
+                config.pretrained_model_name_or_path,
+                subfolder="text_encoder",
+                revision=config.revision,
+                torch_dtype=torch.float32
+            )
+
+            apply_lora(text_encoder, lora_txt_path, config.lora_txt_weight, "cpu", True)
+            text_enc_dict = copy.deepcopy(text_encoder.state_dict())
+            del text_encoder
+        else:
+            text_enc_dict = load_model(text_enc_path, map_location="cpu")
 
         # Convert the text encoder model
         if v2:
@@ -514,7 +533,7 @@ def load_model(model_path: str, map_location: str):
         enable_safe_unpickle()
         return loaded
 
-def apply_lora(model, loras, weight, device, is_tenc):
+def apply_lora(model:nn.Module, loras: str, weight: float, device:str, is_tenc: bool):
     if loras is not None and loras != "":
         if not os.path.exists(loras):
             try:
