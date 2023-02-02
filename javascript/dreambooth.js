@@ -277,7 +277,7 @@ onUiUpdate(function () {
     let cm = getRealElement("change_modal");
     let cl = getRealElement("change_log");
     if (cm && cl) {
-        if (cl.innerHTML !== "" && !modalShown) {
+        if (cl.innerHTML !== "" && modalShown !== true) {
             modalShown = true;
             cm.classList.add("active");
         }
