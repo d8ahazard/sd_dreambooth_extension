@@ -15,7 +15,22 @@ else:
     import importlib.metadata as importlib_metadata
 
 req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
+torch_cmd = "pip install --no-deps https://download.pytorch.org/whl/nightly/cu118/torch-2.0.0.dev20230202%2Bcu118-cp310-cp310-win_amd64.whl https://download.pytorch.org/whl/nightly/cu118/torchvision-0.15.0.dev20230202%2Bcu118-cp310-cp310-win_amd64.whl"
 
+xformers_cmd = "pip install https://github.com/ArrowM/xformers/releases/download/xformers-0.0.17-cu118-feb-02-23/xformers-0.0.17+48a77cc.d20230202-cp310-cp310-win_amd64.whl"
+
+def fix_torch():
+    try:
+        run(f'"{python}" -m {torch_cmd}', "Installing torch2 and torchvision.", "Couldn't install torch.")
+        has_torch = importlib.util.find_spec("torch") is not None
+        has_torch_vision = importlib.util.find_spec("torchvision") is not None
+
+        torch_check = str(importlib_metadata.version("torch")) if has_torch else None
+        torch_vision_check = str(importlib_metadata.version("torchvision")) if has_torch_vision else None
+        return torch_check, torch_vision_check
+    except Exception as e:
+        print(f"Exception upgrading torch/torchvision: {e}")
+        return None, None
 
 def check_versions():
     global req_file
@@ -28,8 +43,38 @@ def check_versions():
             key = splits[0]
             reqs_dict[key] = splits[1].replace("\n", "").strip()
     reqs_dict["diffusers[torch]"] = "0.10.0"
-    checks = ["bitsandbytes", "diffusers", "transformers", "xformers", "torch", "torchvision"]
-    flat_check = ["xformers", "torch", "torchvision"]
+    checks = ["bitsandbytes", "diffusers", "transformers"]
+
+    xformers_ver = "0.0.17+48a77"
+    torch_ver = "2.0.0.dev20230202+cu118"
+    torch_vis_ver = "0.15.0.dev20230202+cu118"
+
+    has_xformers = importlib.util.find_spec("xformers") is not None
+    xformers_check = str(importlib_metadata.version("xformers")) if has_xformers else None
+    if xformers_check != xformers_ver:
+        run(f'"{python}" -m {xformers_cmd}', f"Installing xformers {xformers_ver}.", "Couldn't install torch.")
+
+    # torch check
+    has_torch = importlib.util.find_spec("torch") is not None
+    has_torch_vision = importlib.util.find_spec("torchvision") is not None
+
+    torch_check = str(importlib_metadata.version("torch")) if has_torch else None
+    torch_vision_check = str(importlib_metadata.version("torchvision")) if has_torch_vision else None
+
+    if torch_check != torch_ver or torch_vision_check != torch_vis_ver:
+        torch_check, torch_vision_check = fix_torch()
+
+    for check, ver, module in [(torch_check, torch_ver, "torch"),
+                               (torch_vision_check, torch_vis_ver, "torchvision"),
+                               (xformers_check, xformers_ver, "xformers")]:
+        if check != ver:
+            if not check:
+                print(f"[!] {module} NOT installed.")
+            else:
+                print(f"[!] {module} version {check} installed.")
+        else:
+            print(f"[+] {module} version {check} installed.")
+        
     for check in checks:
         check_ver = "N/A"
         status = "[ ]"
@@ -43,8 +88,7 @@ def check_versions():
                         status = "[+]"
                     else:
                         status = "[!]"
-                if check in flat_check:
-                    status = "[+]"
+
         except importlib_metadata.PackageNotFoundError:
             check_available = False
         if not check_available and check != "xformers":
@@ -52,6 +96,7 @@ def check_versions():
             print(f"{status} {check} NOT installed.")
         else:
             print(f"{status} {check} version {check_ver} installed.")
+
 
 
 base_dir = os.path.dirname(os.path.realpath(__file__))
