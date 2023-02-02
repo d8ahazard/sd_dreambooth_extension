@@ -8,7 +8,6 @@ import traceback
 from typing import Optional, Union, Tuple, List
 
 import matplotlib
-import matplotlib.pyplot as plt
 import pandas as pd
 from pandas.plotting._matplotlib.style import get_standard_colors
 from tqdm.auto import tqdm
@@ -158,6 +157,8 @@ def plot_multi_alt(
 ):
     styles = ["-", ":", "--", "-."]
     colors = get_standard_colors(num_colors=7)
+    loss_color = colors[0]
+    avg_colors = colors[1:]
     for i, yi in enumerate(plot_definition.y_axis):
         if len(yi.columns) > len(styles):
             raise ValueError(f"Maximum {len(styles)} traces per yaxis allowed. If we want to allow this we need to add some logic.")
@@ -169,9 +170,7 @@ def plot_multi_alt(
                 x=plot_definition.x_axis, 
                 y=yi.columns, 
                 title=plot_definition.title,
-                style=styles[:len(yi.columns)],
-                color=[colors[i + yic] for yic in range(len(yi.columns))]
-                
+                color=[loss_color] * len(yi.columns)
             )
             ax.set_ylabel(ylabel=yi.name)
 
@@ -183,8 +182,7 @@ def plot_multi_alt(
                 ax=ax_new, 
                 x=plot_definition.x_axis, 
                 y=yi.columns,
-                style=styles[:len(yi.columns)],
-                color=[colors[i + yl] for yl in range(len(yi.columns))]
+                color=[avg_colors[yl] for yl in range(len(yi.columns))]
             )
             ax_new.set_ylabel(ylabel=yi.name)
 
@@ -376,8 +374,9 @@ def parse_logs(model_name: str, for_ui: bool = False):
                 title=f"Loss Average/Learning Rate ({model_config.lr_scheduler})",
                 x_axis="Step",
                 y_axis=[
-                    YAxis(name="Loss", columns=["Loss", "Instance_Loss", "Prior_Loss"]),
-                    YAxis(name="LR", columns=["LR"])
+                    YAxis(name="LR", columns=["LR"]),
+                    YAxis(name="Loss", columns=["Instance_Loss", "Prior_Loss", "Loss"]),
+
                 ]
             )
         )

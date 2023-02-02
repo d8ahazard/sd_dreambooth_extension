@@ -1,3 +1,4 @@
+import copy
 import os.path
 import random
 import traceback
@@ -5,6 +6,7 @@ from typing import List, Tuple, Union
 
 import cv2
 import numpy as np
+import safetensors.torch
 import torch.utils.data
 from PIL import Image
 from torchvision.transforms import transforms
@@ -35,11 +37,15 @@ class DbDataset(torch.utils.data.Dataset):
             shuffle_tags: bool,
             strict_tokens: bool,
             not_pad_tokens: bool,
-            debug_dataset: bool
+            debug_dataset: bool,
+            model_dir: str
     ) -> None:
         super().__init__()
         self.batch_indices = []
         self.batch_samples = []
+        self.cache_dir = os.path.join(model_dir, "cache")
+        if not os.path.exists(self.cache_dir):
+            os.makedirs(self.cache_dir)
         print("Init dataset!")
         # A dictionary of string/latent pairs matching image paths
         self.latents_cache = {}
@@ -145,8 +151,7 @@ class DbDataset(torch.utils.data.Dataset):
         return image, input_ids
 
     def cache_latent(self, image_path, res):
-        latents = None
-        if self.vae is not None and image_path not in self.latents_cache:
+        if self.vae is not None:
             image = self.open_and_trim(image_path, res)
             img_tensor = self.image_transforms(image)
             img_tensor = img_tensor.unsqueeze(0).to(device=self.vae.device, dtype=self.vae.dtype)
@@ -197,12 +202,16 @@ class DbDataset(torch.utils.data.Dataset):
         sort_images(self.train_img_data, bucket_resos, self.train_dict, False)
         sort_images(self.class_img_data, bucket_resos, self.class_dict, True)
 
-        # Enumerate by resolution, cache as needed
         def cache_images(images, reso, p_bar):
             for img_path, cap, is_prior in images:
                 try:
-                    if self.cache_latents and not self.debug_dataset:
-                        self.cache_latent(img_path, reso)
+                    # If the image is not in the "precache",cache it
+                    if img_path not in latents_cache:
+                        if self.cache_latents and not self.debug_dataset:
+                            self.cache_latent(img_path, reso)
+                    # Otherwise, load it from existing cache
+                    else:
+                        self.latents_cache[img_path] = latents_cache[img_path]
                     self.cache_caption(img_path, cap)
                     self.sample_indices.append(img_path)
                     self.sample_cache.append((img_path, cap, is_prior))
@@ -218,7 +227,7 @@ class DbDataset(torch.utils.data.Dataset):
                         del self.sample_indices[img_path]
                     if img_path in self.latents_cache:
                         del self.latents_cache[img_path]
-
+            self.latents_cache.update(latents_cache)
 
         bucket_idx = 0
         total_len = 0
@@ -233,6 +242,11 @@ class DbDataset(torch.utils.data.Dataset):
         total_instances = 0
         total_classes = 0
         pbar = mytqdm(range(p_len), desc="Caching latents..." if self.cache_latents else "Processing images...")
+        image_cache_file = os.path.join(self.cache_dir, "image_cache.safetensors")
+        latents_cache = {}
+        if os.path.exists(image_cache_file):
+            print("Loading cached latents...")
+            latents_cache = safetensors.torch.load_file(image_cache_file)
         for dict_idx, train_images in self.train_dict.items():
             if not train_images:
                 continue
@@ -263,6 +277,12 @@ class DbDataset(torch.utils.data.Dataset):
             # Log both here
             pbar.write(f"Bucket {bucket_str} {dict_idx} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {ex_str}")
             bucket_idx += 1
+        if set(self.latents_cache.keys()) != set(latents_cache.keys()):
+            print("Saving cache!")
+            del latents_cache
+            if os.path.exists(image_cache_file):
+                os.remove(image_cache_file)
+            safetensors.torch.save_file(copy.deepcopy(self.latents_cache), image_cache_file)
         bucket_str = str(bucket_idx).rjust(max_idx_chars, " ")
         inst_str = str(total_instances).rjust(len(str(ni)), " ")
         class_str = str(total_classes).rjust(len(str(nc)), " ")

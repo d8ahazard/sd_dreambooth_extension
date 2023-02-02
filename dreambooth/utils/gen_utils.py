@@ -21,7 +21,7 @@ from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 
 
 def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None, class_prompts: List[PromptData] = None,
-                     batch_size = None, tokenizer=None, vae=None, debug=True):
+                     batch_size = None, tokenizer=None, vae=None, debug=True, model_dir=""):
     if debug:
         print("Generating dataset.")
 
@@ -70,7 +70,8 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
         shuffle_tags=args.shuffle_tags,
         strict_tokens=args.strict_tokens,
         not_pad_tokens=not args.pad_tokens,
-        debug_dataset=debug
+        debug_dataset=debug,
+        model_dir=model_dir
     )
     train_dataset.make_buckets_with_caching(vae, min_bucket_reso)
 

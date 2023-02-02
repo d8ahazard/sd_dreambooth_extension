@@ -1,6 +1,5 @@
 import argparse
 import os
-from pathlib import Path
 from typing import List
 
 import torch
@@ -210,7 +209,9 @@ def train_imagic(args: DreamboothConfig):
     instance_dir = concept.instance_data_dir
     input_image = None
 
-    for check in Path(instance_dir).iterdir():
+    instance_dir = os.path.abspath(instance_dir)
+    for file in os.listdir(instance_dir):
+        check = os.path.join(instance_dir, file)
         if is_image(check, pil_features):
             input_image = Image.open(check).convert("RGB")
             break

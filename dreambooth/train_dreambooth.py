@@ -91,7 +91,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
     result.config = args
 
 
-
     @find_executable_batch_size(starting_batch_size=args.train_batch_size,
                                 starting_grad_size=args.gradient_accumulation_steps,
                                 logging_dir=logging_dir)
@@ -277,7 +276,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         else:
             if not args.train_unet:
                 unet.requires_grad_(False)
-        
+
 
         # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
         use_adam = False
@@ -294,7 +293,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
         if args.use_lora:
             args.learning_rate = args.lora_learning_rate
-        
+
             params_to_optimize = ([
                     {"params": itertools.chain(*unet_lora_params), "lr": args.lora_learning_rate},
                     {"params": itertools.chain(*text_encoder_lora_params), "lr": args.lora_txt_learning_rate},
@@ -306,7 +305,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             params_to_optimize = (
                 itertools.chain(text_encoder.parameters()) if stop_text_percentage != 0 and not args.train_unet else
                 itertools.chain(unet.parameters(), text_encoder.parameters()) if stop_text_percentage != 0 else
-                unet.parameters()                
+                unet.parameters()
             )
 
         optimizer = optimizer_class(
@@ -361,7 +360,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             batch_size=train_batch_size,
             tokenizer=tokenizer,
             vae=vae if args.cache_latents else None,
-            debug=False
+            debug=False,
+            model_dir = args.model_dir
         )
 
         printm("Dataset loaded.")
@@ -386,6 +386,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             result.config = args
             stop_profiler(profiler)
             return result
+
 
         def collate_fn(examples):
             input_ids = [example["input_ids"] for example in examples]
@@ -716,8 +717,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                     s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
                                                          guidance_scale=c.scale,
                                                          negative_prompt=c.negative_prompt,
-                                                         height=args.resolution,
-                                                         width=args.resolution,
+                                                         height=c.resolution[0],
+                                                         width=c.resolution[1],
                                                          generator=g_cuda).images[0]
                                     sample_prompts.append(c.prompt)
                                     image_name = db_save_image(s_image, c, custom_name=f"sample_{args.revision}-{ci}")
