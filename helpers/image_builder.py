@@ -94,10 +94,6 @@ class ImageBuilder:
 
             lora_model_path = os.path.join(shared.models_path, "lora", lora_model)
             if config.use_lora and os.path.exists(lora_model_path) and lora_model != "":
-
-                lora_model_path = os.path.join(shared.models_path, "lora", lora_model)
-                lora_txt_path = _text_lora_path_ui(lora_model)
-
                 patch_pipe(
                     pipe=self.image_pipe,
                     maybe_unet_path=lora_model_path,
@@ -106,8 +102,9 @@ class ImageBuilder:
                     r=config.lora_unet_rank,
                     r_txt=config.lora_txt_rank
                 )
-
                 tune_lora_scale(self.image_pipe.unet, config.lora_weight)
+                
+                lora_txt_path = _text_lora_path_ui(lora_model_path)
                 if os.path.exists(lora_txt_path):
                     tune_lora_scale(self.image_pipe.text_encoder, config.lora_txt_weight)
 
