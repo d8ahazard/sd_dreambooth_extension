@@ -66,9 +66,6 @@ def default(val, d):
     return val if exists(val) else d
 
 
-# flash attention forwards and backwards
-# https://arxiv.org/abs/2205.14135
-
 
 class FlashAttentionFunction(torch.autograd.function.Function):
 
@@ -276,47 +273,6 @@ def replace_unet_cross_attn_to_flash_attention():
     diffusers.models.attention.CrossAttention.forward = forward_flash_attn
 
 
-def replace_unet_cross_attn_to_xformers():
-    print("Replace CrossAttention.forward to use xformers")
-    try:
-        import xformers.ops
-    except ImportError:
-        raise ImportError(
-            "xformers not installed. Re-launch webui with --xformers.")
-
-    def forward_xformers(self, x, encoder_hidden_states=None, context=None, attention_mask=None, mask=None):
-
-        h = self.heads
-        q_in = self.to_q(x)
-
-        context_k = default(context, x)
-        context_v = context_k.to(x.dtype)
-
-        k_in = self.to_k(context_k)
-        v_in = self.to_v(context_v)
-
-        q, k, v = map(lambda t: rearrange(
-            t, 'b n (h d) -> b n h d', h=h), (q_in, k_in, v_in))
-        del q_in, k_in, v_in
-
-        q = q.contiguous()
-        k = k.contiguous()
-        v = v.contiguous()
-        out = xformers.ops.memory_efficient_attention(
-            q, k, v, attn_bias=None)
-
-        out = rearrange(out, 'b n h d -> b n (h d)', h=h)
-
-        # diffusers 0.6.0
-        if type(self.to_out) is torch.nn.Sequential:
-            return self.to_out(out)
-
-        # diffusers 0.7.0~
-        out = self.to_out[0](out)
-        out = self.to_out[1](out)
-        return out
-
-    diffusers.models.attention.CrossAttention.forward = forward_xformers
 
 def _validate_model_kwargs(self, model_kwargs: Dict[str, Any]):
     pass

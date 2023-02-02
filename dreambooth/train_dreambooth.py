@@ -198,7 +198,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         )
 
         if args.attention == "xformers" and not shared.force_cpu:
-            xattention.replace_unet_cross_attn_to_xformers()
             xattention.set_diffusers_xformers_flag(unet, True)
             xattention.set_diffusers_xformers_flag(vae, True)
             xattention.set_diffusers_xformers_flag(text_encoder, True)
@@ -218,7 +217,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     torch_dtype=torch.float32
                 )
                 if args.attention == "xformers" and not shared.force_cpu:
-                    xattention.replace_unet_cross_attn_to_xformers()
                     xattention.set_diffusers_xformers_flag(ema_unet, True)
 
                 ema_model = EMAModel(ema_unet, device=accelerator.device)
