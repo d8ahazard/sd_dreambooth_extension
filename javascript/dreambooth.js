@@ -2,6 +2,7 @@
 let params_loaded = false;
 let training_started = false;
 let closeBtn;
+let modalShown = false;
 
 // Click a button. Whee.
 function save_config() {
@@ -276,7 +277,8 @@ onUiUpdate(function () {
     let cm = getRealElement("change_modal");
     let cl = getRealElement("change_log");
     if (cm && cl) {
-        if (cl.innerHTML !== "") {
+        if (cl.innerHTML !== "" && !modalShown) {
+            modalShown = true;
             cm.classList.add("active");
         }
     }
