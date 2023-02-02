@@ -549,15 +549,14 @@ def on_ui_tabs():
                         title = value[0]
                         author = value[1]
                         date = value[2]
-                        url = date[3]
-                        title = f"<h3>{title}</h3><br>"
-                        sub_title = f"<span>{author} - {date} - <a href='{url}'>{rev}</a><br>"
+                        url = value[3]
+                        title = f"<div class='commitDiv'><h3>{title}</h3><span>{author} - {date} - <a href='{url}'>{rev}</a><br></div>"
                         strings.append(title)
-                        strings.append(sub_title)
                 return "\n".join(strings)
 
             with gr.Row(variant="panel", elem_id="change_modal"):
                 with gr.Row():
+                    modal_title = gr.HTML("<h2>Changelog</h2>", elem_id="modal_title")
                     close_modal = gr.Button(value="X", elem_id="close_modal")
                 with gr.Column():
                     change_log = gr.HTML(format_updates(), elem_id="change_log")

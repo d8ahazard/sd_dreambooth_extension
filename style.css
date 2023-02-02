@@ -11,6 +11,17 @@
     display: none;
 }
 
+#modal_title {
+    height: 20px;
+    min-height: 36px;
+    font-size: 1.5rem;
+    text-align: center;
+}
+
+.commitDiv {
+    border: 1px grey solid;
+}
+
 #change_modal.active {
     display: block;
     position: fixed;

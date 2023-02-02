@@ -12,11 +12,8 @@ function save_config() {
         do_save = confirm("Warning: Current UI Params have not been saved. Press 'OK' to save them now, or 'Cancel' to continue without saving.");
     }
     if (do_save === true) {
-        console.log("Saving config...");
         btn.click();
         params_loaded = true;
-    } else {
-        console.log("Saving canceled.")
     }
 }
 
@@ -26,11 +23,8 @@ function check_save() {
         do_save = confirm("Warning: You are about to save model parameters that may be empty or from another model. This may erase or overwrite existing settings. If you still wish to continue, click 'OK'.");
     }
     if (do_save === true) {
-        console.log("Saving config...");
         let filtered = filterArgs(arguments.length, arguments);
-        console.log("Filtered args: ", filtered, filtered.length);
         let status = getRealElement("db_status");
-        status.innerHTML = "Config saved.";
         params_loaded = true;
         return filtered;
     } else {
@@ -143,7 +137,6 @@ function filterArgs(argsCount, arguments) {
             args_out.push(arguments[i]);
         }
     }
-    console.log("Returning: ", args_out);
     return args_out;
 }
 
@@ -278,8 +271,7 @@ let db_titles = {
 onUiUpdate(function () {
     let db_active = document.getElementById("db_active");
     if (db_active) {
-        db_active.parentElement.style.display = "none";
-    }
+        db_active.parentElement.style.display = "none";    }
 
     let cm = getRealElement("change_modal");
     let cl = getRealElement("change_log");
@@ -288,9 +280,10 @@ onUiUpdate(function () {
             cm.classList.add("active");
         }
     }
+
     if (closeBtn === null || closeBtn === undefined) {
         let cb = getRealElement("close_modal");
-
+        closeBtn = cb;
         if (cb && cm) {
             cb.addEventListener("click", function() {
                 cm.classList.remove("active");
