@@ -21,7 +21,7 @@ from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 
 
 def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None, class_prompts: List[PromptData] = None,
-                     batch_size = None, tokenizer=None, vae=None, debug=True):
+                     batch_size = None, tokenizer=None, vae=None, debug=True, model_dir=""):
     if debug:
         print("Generating dataset.")
 
@@ -70,7 +70,8 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
         shuffle_tags=args.shuffle_tags,
         strict_tokens=args.strict_tokens,
         not_pad_tokens=not args.pad_tokens,
-        debug_dataset=debug
+        debug_dataset=debug,
+        model_dir=model_dir
     )
     train_dataset.make_buckets_with_caching(vae, min_bucket_reso)
 
@@ -121,8 +122,16 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     pbar = mytqdm(total=set_len, desc=f"Generating class images 0/{set_len}:")
     shared.status.job_count = set_len
     shared.status.job_no = 0
-    builder = ImageBuilder(args, use_txt2img=use_txt2img, lora_model=args.lora_model_name,
-                           batch_size=args.sample_batch_size, accelerator=accelerator)
+    builder = ImageBuilder(
+        args, 
+        use_txt2img=use_txt2img, 
+        lora_model=args.lora_model_name,
+        batch_size=args.sample_batch_size,
+        accelerator=accelerator,
+        lora_unet_rank=args.lora_unet_rank,
+        lora_txt_rank=args.lora_txt_rank
+        )
+    
     generated = 0
     actual_idx = 0
     for i in range(set_len):
@@ -138,6 +147,8 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
         for b in range(batch_size):
             # Get the new prompt data
             pd = prompt_dataset.__getitem__(actual_idx)
+            if pd is None:
+                break
             # Ensure that our image batches have the right resolutions
             if first_res is None:
                 first_res = pd.resolution
@@ -169,7 +180,7 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
                 i_idx += 1
                 generated += 1
                 pbar.reset(set_len)
-                pbar.update()
+                pbar.update(generated)
                 pbar.set_description(f"Generating class images {generated}/{set_len}:", True)
                 shared.status.job_count = set_len
                 preview_images.append(image_filename)

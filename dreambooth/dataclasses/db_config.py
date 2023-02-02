@@ -21,10 +21,10 @@ def sanitize_name(name):
 
 class DreamboothConfig(BaseModel):
     adamw_weight_decay: float = 0.01
-    attention: str = "default"
+    attention: str = "xformers"
     cache_latents: bool = True
-    center_crop: bool = True
-    freeze_clip_normalization: bool = False
+    center_crop: bool = False
+    freeze_clip_normalization: bool = True
     clip_skip: int = 1
     concepts_list: List[Dict] = []
     concepts_path: str = ""
@@ -37,7 +37,7 @@ class DreamboothConfig(BaseModel):
     gradient_set_to_none: bool = True
     graph_smoothing: int = 50
     half_model: bool = False
-    train_unfrozen: bool = False
+    train_unfrozen: bool = True
     has_ema: bool = False
     hflip: bool = False
     initial_revision: int = 0
@@ -68,7 +68,7 @@ class DreamboothConfig(BaseModel):
     pretrained_vae_name_or_path: str = ""
     prior_loss_scale: bool = False
     prior_loss_target: int = 100
-    prior_loss_weight: float = 1.0
+    prior_loss_weight: float = 0.75
     prior_loss_weight_min: float = 0.1
     resolution: int = 512
     revision: int = 0
@@ -83,12 +83,12 @@ class DreamboothConfig(BaseModel):
     save_lora_cancel: bool = False
     save_lora_during: bool = True
     save_preview_every: int = 5
-    save_safetensors: bool = False
+    save_safetensors: bool = True
     save_state_after: bool = False
     save_state_cancel: bool = False
     save_state_during: bool = False
     scheduler: str = "ddim"
-    shuffle_tags: bool = False
+    shuffle_tags: bool = True
     snapshot: str = ""
     src: str = ""
     stop_text_encoder: float = 1.0
@@ -193,6 +193,25 @@ class DreamboothConfig(BaseModel):
             self.model_dir = model_dir
             self.pretrained_model_name_or_path = working_dir
 
+    def refresh(self):
+        """
+        Reload self from file
+
+        """
+        models_path = shared.dreambooth_models_path
+        if models_path == "" or models_path is None:
+            models_path = os.path.join(shared.models_path, "dreambooth")
+        config_file = os.path.join(models_path, self.model_name, "db_config.json")
+        try:
+            with open(config_file, 'r') as openfile:
+                config_dict = json.load(openfile)
+
+            self.load_params(config_dict)
+        except Exception as e:
+            print(f"Exception loading config: {e}")
+            traceback.print_exc()
+            return None
+
 
 def concepts_from_file(concepts_path: str):
     concepts = []
@@ -277,3 +296,6 @@ def from_file(model_name):
         print(f"Exception loading config: {e}")
         traceback.print_exc()
         return None
+
+
+

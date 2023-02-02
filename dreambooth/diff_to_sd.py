@@ -1,7 +1,6 @@
 # Script for converting Diffusers saved pipeline to a Stable Diffusion checkpoint.
 # *Only* converts the UNet, VAE, and Text Encoder.
 # Does not convert optimizer state or any other thing.
-
 import os
 import os.path as osp
 import re
@@ -10,18 +9,18 @@ import traceback
 from typing import Dict
 
 import safetensors.torch
+import torch
 from torch import Tensor
 from tqdm.auto import tqdm
-import torch
-from diffusers import DiffusionPipeline
 
 from extensions.sd_dreambooth_extension.dreambooth import shared as shared
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.shared import status
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
+    disable_safe_unpickle, enable_safe_unpickle
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import merge_loras_to_pipe, get_target_module
+from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -311,6 +310,19 @@ def convert_text_enc_state_dict_v20(text_enc_dict: Dict[str, torch.Tensor]):
 def convert_text_enc_state_dict(text_enc_dict: Dict[str, torch.Tensor]):
     return text_enc_dict
 
+def get_model_path(working_dir: str, model_name: str = "", file_extra: str = ""):
+
+    model_base = osp.join(working_dir, model_name) if model_name != "" else working_dir
+    if os.path.exists(model_base) and os.path.isdir(model_base):
+        for f in os.listdir(model_base):
+            if f"{file_extra}.safetensors" in f:
+                print(f"Returning: {f}")
+                return os.path.join(model_base, f)
+            if f"{file_extra}.ckpt" in f:
+                print(f"Returning: {f}")
+                return os.path.join(model_base, f)
+    print(f"Got nufin: {model_base}")
+    return None
 
 def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool = True, log:bool =True, snap_rev: str=""):
     """
@@ -357,85 +369,69 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
     checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}{checkpoint_ext}")
 
     model_path = config.pretrained_model_name_or_path
-    unet_path = None
-    text_enc_path = None
-    if snap_rev != "":
-        new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{snap_rev}")
-        if os.path.exists(new_hotness):
+
+    new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{snap_rev}")
+    if snap_rev != "" and os.path.exists(new_hotness) and os.path.isdir(new_hotness):
             tqdm.write(f"Loading snapshot paths from {new_hotness}")
-            u_path = osp.join(new_hotness, "pytorch_model.bin")
-            text_path = osp.join(new_hotness, "pytorch_model_1.bin")
-            if os.path.exists(u_path):
-                unet_path = u_path
-            if os.path.exists(text_path):
-                text_enc_path = text_path
+            unet_path = get_model_path(new_hotness)
+            text_enc_path = get_model_path(new_hotness, file_extra="1")
+    else:
+        unet_path = get_model_path(model_path, "unet")
+        text_enc_path = get_model_path(model_path, "text_encoder")
 
-    if unet_path is None:
-        unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")
+    ema_unet_path = get_model_path(model_path, "ema_unet")
+    vae_path = get_model_path(model_path, "vae")
 
-    if text_enc_path is None:
-        text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
-
-    vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.bin")
-
+    ema_state_dict = {}
     try:
-        printi("Converting unet...", log=log)
+        if ema_unet_path is not None:
+            printi("Converting ema unet...", log=log)
+            try:
+                ema_unet_state_dict = load_model(ema_unet_path, map_location="cpu")
+                ema_state_dict = convert_unet_state_dict(ema_unet_state_dict)
+                ema_state_dict = {"model_ema." + "".join(k.split(".")): v for k, v in ema_state_dict.items()}
+                del ema_unet_state_dict
+            except Exception as e:
+                print(f"Exception: {e}")
+                traceback.print_exc()
+                pass
 
+        unet_state_dict = load_model(unet_path, map_location="cpu")
+
+        # Apply LoRA to the unet
         if lora_path is not None and lora_path != "":
-            loaded_pipeline = DiffusionPipeline.from_pretrained(model_path).to("cpu")
-            lora_diffusers = config.pretrained_model_name_or_path + "_lora"
-            os.makedirs(lora_diffusers, exist_ok=True)
-            if not os.path.exists(lora_path):
-                try:
-                    cmd_lora_models_path = shared.lora_models_path
-                except:
-                    cmd_lora_models_path = None
-                model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else shared.models_path
-                lora_path = os.path.join(model_dir, "lora", lora_path)
-            printi(f"Loading lora from {lora_path}", log=log)
+            apply_lora(unet_state_dict, lora_path, config.lora_weight, "cpu", True)
+            checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}_lora{checkpoint_ext}")
 
-            if os.path.exists(lora_path):
-                lora_txt = lora_path.replace(".pt", "_txt.pt")
-                checkpoint_path = checkpoint_path.replace(checkpoint_ext, f"_lora{checkpoint_ext}")
-
-                printi(f"Saving UNET Lora and applying lora alpha of {config.lora_weight}", log=log)
-                if os.path.exists(lora_txt): printi(f"Saving Text Lora and applying lora alpha of {config.lora_txt_weight}", log=log)
-                merge_loras_to_pipe(
-                    loaded_pipeline, 
-                    lora_path, 
-                    lora_alpha=config.lora_weight, 
-                    lora_txt_alpha=config.lora_txt_weight,
-                    r=config.lora_unet_rank,
-                    r_txt=config.lora_txt_rank,
-                    unet_target_module=get_target_module("module", config.use_lora_extended)
-                )
-
-
-                loaded_pipeline.unet.save_pretrained(os.path.join(config.pretrained_model_name_or_path, "unet_lora"))
-                unet_path = osp.join(config.pretrained_model_name_or_path, "unet_lora", "diffusion_pytorch_model.bin")
-
-                if os.path.exists(lora_txt):
-                    loaded_pipeline.text_encoder.save_pretrained(
-                        os.path.join(config.pretrained_model_name_or_path, "text_encoder_lora")
-                    )
-                    text_enc_path = osp.join(config.pretrained_model_name_or_path, "text_encoder_lora", "pytorch_model.bin")
-
-            del loaded_pipeline
-
-        # Convert the UNet model
-        unet_state_dict = torch.load(unet_path, map_location="cpu")
         unet_state_dict = convert_unet_state_dict(unet_state_dict)
-        # unet_state_dict = convert_unet_state_dict_to_sd(v2, unet_state_dict)
         unet_state_dict = {"model.diffusion_model." + k: v for k, v in unet_state_dict.items()}
+
+        # Append EMA values
+        if len(ema_state_dict.items()):
+            print("Appending EMA keys to state dict.")
+            checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}_ema{checkpoint_ext}")
+
+        for key, value in ema_state_dict.items():
+            unet_state_dict[key] = value
+
+
         printi("Converting vae...", log=log)
         # Convert the VAE model
-        vae_state_dict = torch.load(vae_path, map_location="cpu")
+        vae_state_dict = load_model(vae_path, map_location="cpu")
         vae_state_dict = convert_vae_state_dict(vae_state_dict)
         vae_state_dict = {"first_stage_model." + k: v for k, v in vae_state_dict.items()}
-        printi("Converting text encoder...", log=log)
-        # Convert the text encoder model
-        text_enc_dict = torch.load(text_enc_path, map_location="cpu")
 
+        printi("Converting text encoder...", log=log)
+
+        text_enc_dict = load_model(text_enc_path, map_location="cpu")
+
+        # Apply lora weights to the tenc
+        if lora_path is not None and lora_path != "":
+            lora_paths = lora_path.split(".")
+            lora_txt_path = f"{lora_paths[0]}_txt.{lora_paths[1]}"
+            apply_lora(text_enc_dict, lora_txt_path, config.lora_txt_weight, "cpu", True)
+
+        # Convert the text encoder model
         if v2:
             printi("Converting text enc dict for V2 model.", log=log)
             # Need to add the tag 'transformer' in advance, so we can knock it out from the final layer-norm
@@ -464,8 +460,6 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
         cfg_file = None
         new_name = os.path.join(config.model_dir, f"{config.model_name}.yaml")
         if os.path.exists(new_name):
-
-            cfg_file = new_name
             config_version = "v1-inference"
 
             if config.resolution >= 768 and v2:
@@ -509,3 +503,29 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
     msg = f"Checkpoint compiled successfully: {checkpoint_path}"
     printi(msg, log=log)
     return msg
+
+
+def load_model(model_path: str, map_location: str):
+    if ".safetensors" in model_path:
+        return safetensors.torch.load_file(model_path,device=map_location)
+    else:
+        disable_safe_unpickle()
+        loaded = torch.load(model_path, map_location=map_location)
+        enable_safe_unpickle()
+        return loaded
+
+def apply_lora(model, loras, weight, device, is_tenc):
+    if loras is not None and loras != "":
+        if not os.path.exists(loras):
+            try:
+                cmd_lora_models_path = shared.lora_models_path
+            except:
+                cmd_lora_models_path = None
+            model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else shared.models_path
+            loras = os.path.join(model_dir, "lora", loras)
+
+        if os.path.exists(loras):
+            printi(f"Loading lora from {loras}", log=True)
+            printi(f"Applying lora weight of alpha: {weight} to unet...", log=True)
+            tenc_val = "tenc" if is_tenc else None
+            weight_apply_lora(model, load_model(loras, device),target_replace_module=tenc_val, alpha=weight)

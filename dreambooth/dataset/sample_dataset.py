@@ -5,7 +5,8 @@ from PIL import Image
 
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, FilenameTextGetter
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, FilenameTextGetter, \
+    closest_resolution, make_bucket_resolutions
 
 
 class SampleDataset:
@@ -17,6 +18,7 @@ class SampleDataset:
         shuffle_tags = config.shuffle_tags
         self.prompts = []
         c_idx = 0
+        bucket_resos = make_bucket_resolutions(config.resolution)
         out_dir = os.path.join(config.model_dir, "samples")
         for concept in concepts:
             required = concept.n_save_sample
@@ -40,15 +42,20 @@ class SampleDataset:
                     getter = FilenameTextGetter(shuffle_tags)
                     for image in images:
                         base = getter.read_text(image)
-                        prompt = getter.create_text(sample_prompt,
-                                                    base,
-                                                    concept.instance_token,
-                                                    concept.class_token,
-                                                    False
-                                                    )
+                        prompt = getter.create_text(
+                            sample_prompt,
+                            base,
+                            concept.instance_token,
+                            concept.class_token,
+                            False
+                        )
+                        if prompt == "[filewords]":
+                            print(f"Invalid prompt generation: {image}/{base}")
+                            continue
                         img = Image.open(image)
                         res = img.size
-                        prompts.append((prompt, res))
+                        closest = closest_resolution(res[0], res[1], bucket_resos)
+                        prompts.append((prompt, closest))
             for i in range(required):
                 pi = random.choice(prompts)
                 pd = PromptData(

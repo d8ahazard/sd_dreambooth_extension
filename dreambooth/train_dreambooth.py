@@ -33,8 +33,8 @@ from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import encod
 from extensions.sd_dreambooth_extension.dreambooth.webhook import send_training_update
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.train_result import TrainResult
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 from extensions.sd_dreambooth_extension.helpers.ema_model import EMAModel
+from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.dataset.sample_dataset import SampleDataset
@@ -89,7 +89,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
     result = TrainResult
     result.config = args
-
 
 
     @find_executable_batch_size(starting_batch_size=args.train_batch_size,
@@ -168,6 +167,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             new_vae.requires_grad_(False)
             new_vae.to(accelerator.device, dtype=weight_dtype)
             return new_vae
+
         disable_safe_unpickle()
         # Load the tokenizer
         tokenizer = AutoTokenizer.from_pretrained(
@@ -197,17 +197,34 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             torch_dtype=torch.float32
         )
 
-        enable_safe_unpickle()
         if args.attention == "xformers" and not shared.force_cpu:
             xattention.replace_unet_cross_attn_to_xformers()
             xattention.set_diffusers_xformers_flag(unet, True)
             xattention.set_diffusers_xformers_flag(vae, True)
             xattention.set_diffusers_xformers_flag(text_encoder, True)
+
         elif args.attention == "flash_attention":
             xattention.replace_unet_cross_attn_to_flash_attention()
         else:
             xattention.replace_unet_cross_attn_to_default()
 
+        ema_model = None
+        if args.use_ema:
+            if os.path.exists(os.path.join(args.pretrained_model_name_or_path, "ema_unet")):
+                ema_unet = UNet2DConditionModel.from_pretrained(
+                    args.pretrained_model_name_or_path,
+                    subfolder="ema_unet",
+                    revision=args.revision,
+                    torch_dtype=torch.float32
+                )
+                if args.attention == "xformers" and not shared.force_cpu:
+                    xattention.replace_unet_cross_attn_to_xformers()
+                    xattention.set_diffusers_xformers_flag(ema_unet, True)
+
+                ema_model = EMAModel(ema_unet, device=accelerator.device)
+                del ema_unet
+            else:
+                ema_model = EMAModel(unet, device=accelerator.device)
 
         if args.gradient_checkpointing:
             if args.train_unet:
@@ -259,7 +276,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         else:
             if not args.train_unet:
                 unet.requires_grad_(False)
-        
+
 
         # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
         use_adam = False
@@ -276,7 +293,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
         if args.use_lora:
             args.learning_rate = args.lora_learning_rate
-        
+
             params_to_optimize = ([
                     {"params": itertools.chain(*unet_lora_params), "lr": args.lora_learning_rate},
                     {"params": itertools.chain(*text_encoder_lora_params), "lr": args.lora_txt_learning_rate},
@@ -288,8 +305,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             params_to_optimize = (
                 itertools.chain(text_encoder.parameters()) if stop_text_percentage != 0 and not args.train_unet else
                 itertools.chain(unet.parameters(), text_encoder.parameters()) if stop_text_percentage != 0 else
-                unet.parameters()                
+                unet.parameters()
             )
+
         optimizer = optimizer_class(
             params_to_optimize,
             lr=args.learning_rate,
@@ -315,8 +333,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     del lr_scheduler
                 if vae:
                     del vae
-                if ema_unet:
-                    del ema_unet
                 if unet_lora_params:
                     del unet_lora_params
             except:
@@ -344,7 +360,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             batch_size=train_batch_size,
             tokenizer=tokenizer,
             vae=vae if args.cache_latents else None,
-            debug=False
+            debug=False,
+            model_dir = args.model_dir
         )
 
         printm("Dataset loaded.")
@@ -369,6 +386,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             result.config = args
             stop_profiler(profiler)
             return result
+
 
         def collate_fn(examples):
             input_ids = [example["input_ids"] for example in examples]
@@ -416,18 +434,15 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
         # create ema, fix OOM
         if args.use_ema:
-            ema_unet = EMAModel(unet.parameters())
-            ema_unet.to(accelerator.device, dtype=weight_dtype)
             if stop_text_percentage != 0:
-                unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-                    unet, ema_unet, text_encoder, optimizer, train_dataloader, lr_scheduler
+                ema_model.model, unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                    ema_model.model, unet, text_encoder, optimizer, train_dataloader, lr_scheduler
                 )
             else:
-                unet, ema_unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-                    unet, ema_unet, optimizer, train_dataloader, lr_scheduler
+                ema_model.model, unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                    ema_model.model, unet, optimizer, train_dataloader, lr_scheduler
                 )
         else:
-            ema_unet = None
             if stop_text_percentage != 0:
                 unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
                     unet, text_encoder, optimizer, train_dataloader, lr_scheduler
@@ -506,6 +521,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         if args.use_lora and stop_text_percentage > 0: print(f"  LoRA Text Encoder LR: {args.lora_txt_learning_rate}")
         print(f"  V2: {args.v2}")
 
+        os.environ.__setattr__("CUDA_LAUNCH_BLOCKING",1)
         def check_save(pbar: mytqdm, is_epoch_check = False):
             nonlocal last_model_save
             nonlocal last_image_save
@@ -587,14 +603,11 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     cleanup()
                 g_cuda = None
                 pred_type = "epsilon"
-                if args.v2:
+                if args.v2 and args.resolution > 512:
                     pred_type = "v_prediction"
                 scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
                                           steps_offset=1, clip_sample=False, set_alpha_to_one=False,
                                           prediction_type=pred_type)
-                if args.use_ema:
-                    ema_unet.store(unet.parameters())
-                    ema_unet.copy_to(unet.parameters())
 
                 if vae is None:
                     printm("Loading vae.")
@@ -637,7 +650,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                 # We should save this regardless, because it's our fallback if no snapshot exists.
                                 status.textinfo = f"Saving diffusion model at step {args.revision}..."
                                 pbar.set_description("Saving diffusion model")
-                                s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"))
+                                s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"),safe_serialization=True)
+                                if ema_model is not None:
+                                    ema_model.save_pretrained(os.path.join(args.pretrained_model_name_or_path, "ema_unet"), safe_serialization=True)
                                 pbar.update()
 
                             elif save_lora:
@@ -664,9 +679,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                 compile_checkpoint(args.model_name, reload_models=False, lora_path=out_file, log=False,
                                                    snap_rev=snap_rev)
                                 pbar.update()
-                            if args.use_ema:
-                                ema_unet.restore(unet.parameters())
-                                ema_unet.to(accelerator.device, dtype=weight_dtype)
                                 printm("Restored, moved to acc.device.")
                         except Exception as ex:
                             print(f"Exception saving checkpoint/model: {ex}")
@@ -705,8 +717,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                     s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
                                                          guidance_scale=c.scale,
                                                          negative_prompt=c.negative_prompt,
-                                                         height=args.resolution,
-                                                         width=args.resolution,
+                                                         height=c.resolution[0],
+                                                         width=c.resolution[1],
                                                          generator=g_cuda).images[0]
                                     sample_prompts.append(c.prompt)
                                     image_name = db_save_image(s_image, c, custom_name=f"sample_{args.revision}-{ci}")
@@ -775,6 +787,10 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         status.job_no = global_step
         training_complete = False
         msg = ""
+
+        last_tenc = 0 < text_encoder_epochs
+        if stop_text_percentage == 0:
+            last_tenc = False
         for epoch in range(first_epoch, max_train_epochs):
             if training_complete:
                 print("Training complete, breaking epoch.")
@@ -795,7 +811,9 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             else:
                 if train_tenc:
                     text_encoder.text_model.embeddings.requires_grad_(True)
-
+            if last_tenc != train_tenc:
+                last_tenc = train_tenc
+                cleanup()
             loss_total = 0
             instance_loss_total = 0
             instance_loss_avg = 0
@@ -837,7 +855,10 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                                                 b_size, args.max_token_length, tokenizer.model_max_length, args.clip_skip)
 
                     # Predict the noise residual
-                    noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+                    if args.use_ema:
+                        noise_pred = ema_model(noisy_latents, timesteps, encoder_hidden_states).sample
+                    else:
+                        noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
                     # Get the target for loss depending on the prediction type
                     if noise_scheduler.config.prediction_type == "v_prediction":
@@ -851,8 +872,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     prior_chunks = []
                     instance_pred_chunks = []
                     prior_pred_chunks = []
-
-                    print(batch["types"])
 
                     # Iterate over the list of boolean values in batch["types"]
                     for i, is_prior in enumerate(batch["types"]):
@@ -892,8 +911,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                         # Add the prior loss to the instance loss.
                         prior_loss *= current_prior_loss_weight
                     
-                    loss = instance_loss + prior_loss
-
+                    loss = (instance_loss + prior_loss) / 2
 
                     accelerator.backward(loss)
                     if accelerator.sync_gradients and not args.use_lora:
@@ -906,8 +924,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
                     optimizer.step()
                     lr_scheduler.step(train_batch_size)
-                    if args.use_ema and ema_unet is not None:
-                        ema_unet.step(unet.parameters())
+                    if args.use_ema and ema_model is not None:
+                        ema_model.step(unet)
                     if profiler is not None:
                         profiler.step()
 
@@ -928,16 +946,14 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 del target
 
                 loss_step = loss.detach().item()
-                loss_avg = (instance_loss_avg + prior_loss_avg) / 2
+
                 logs = {
+                    "lr": float(last_lr),
                     "loss": float(loss_step),
-                    "loss_avg": float(loss_avg), 
-                    "lr": float(last_lr), 
-                    "vram_usage": float(cached),
-                    "instance_loss": float(instance_loss_step),
-                    "instance_loss_avg": float(instance_loss_avg),
+                    "inst_loss": float(instance_loss_step),
                     "prior_loss": float(prior_loss_step),
-                    "prior_loss_avg": float(prior_loss_avg)
+                    "vram": float(cached),
+
                 }
                 status.textinfo2 = f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
                                     f"VRAM: {allocated}/{cached} GB"

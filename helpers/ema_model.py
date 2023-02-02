@@ -1,93 +1,137 @@
-import gc
-from typing import Iterable
+#!/usr/bin/env python3
 
-import torch.nn
+"""
+This module has the EMA class used to store a copy of the exponentially decayed
+model params.
 
-from extensions.sd_dreambooth_extension.dreambooth import shared
+Typical usage of EMA class involves initializing an object using an existing
+model (random or from a seed model) and setting the config like ema_decay,
+ema_start_update which determine how the EMA model is updated. After every
+update of the model i.e. at the end of the train_step, the EMA should be updated
+by passing the new model to the EMA.step function. The EMA model state dict
+can be stored in the extra state under the key of "ema" and dumped
+into a checkpoint and loaded. The EMA object can be passed to tasks
+by setting task.uses_ema property.
+EMA is a smoothed/ensemble model which might have better performance
+when used for inference or further fine-tuning. EMA class has a
+reverse function to load the EMA params into a model and use it
+like a regular model.
+"""
+
+import copy
+import logging
+import os
+import shutil
+
+import torch
 
 
-class EMAModel:
-    """
-    Exponential Moving Average of models weights
-    """
+class EMAModel(object):
 
-    def __init__(self, parameters: Iterable[torch.nn.Parameter], decay=0.9999):
-        parameters = list(parameters)
-        self.shadow_params = [p.clone().detach() for p in parameters]
+    def __init__(self, model, decay=0.9999, device=None):
+        """
+        @param model: model to initialize the EMA with
+        @param decay: Decay rate to use
+        @param device: If provided, copy EMA to this device (e.g. gpu), else EMA is in the same device as the model.
+        """
 
         self.decay = decay
-        self.optimization_step = 0
-        self.collected_params = []
+        self.model = copy.deepcopy(model)
+        self.model.requires_grad_(False)
+        self.fp32_params = {}
 
-    def get_decay(self, optimization_step):
-        """
-        Compute the decay factor for the exponential moving average.
-        """
-        value = (1 + optimization_step) / (10 + optimization_step)
-        return 1 - min(self.decay, value)
+        if device is not None:
+            logging.info(f"Copying EMA model to device {device}")
+            self.model = self.model.to(device=device)
 
-    @torch.no_grad()
-    def step(self, parameters):
-        parameters = list(parameters)
-        self.optimization_step += 1
-        self.decay = self.get_decay(self.optimization_step)
-        for s_param, param in zip(self.shadow_params, parameters):
-            if param.requires_grad:
-                tmp = self.decay * (s_param - param)
-                s_param.sub_(tmp)
+        self.build_fp32_params()
+
+        self.update_freq_counter = 0
+
+
+    def __call__(self, *args, **kwargs):
+        return self.model(*args, **kwargs)
+    def get_model(self):
+        return self.model
+
+    def build_fp32_params(self, state_dict=None):
+        """
+        Store a copy of the EMA params in fp32.
+        If state dict is passed, the EMA params is copied from
+        the provided state dict. Otherwise, it is copied from the
+        current EMA model parameters.
+        """
+        if state_dict is None:
+            state_dict = self.model.state_dict()
+
+        def _to_float(t):
+            return t.float() if torch.is_floating_point(t) else t
+
+        # for non-float params (like registered symbols), they are copied into this dict and covered in each update
+        for param_key in state_dict:
+            if param_key in self.fp32_params:
+                self.fp32_params[param_key].copy_(state_dict[param_key])
             else:
-                s_param.copy_(param)
+                self.fp32_params[param_key] = _to_float(state_dict[param_key])
 
-        shared.torch_gc()
+    def load(self, state_dict, build_fp32_params=False):
+        """ Load data from a state_dict """
+        self.model.load_state_dict(state_dict, strict=False)
+        if build_fp32_params:
+            self.build_fp32_params(state_dict)
 
-    def copy_to(self, parameters: Iterable[torch.nn.Parameter]) -> None:
-        """
-        Copy current averaged parameters into given collection of parameters.
-        Args:
-            parameters: Iterable of `torch.nn.Parameter`; the parameters to be
-                updated with the stored moving averages. If `None`, the
-                parameters with which this `ExponentialMovingAverage` was
-                initialized will be used.
-        """
-        parameters = list(parameters)
-        for s_param, param in zip(self.shadow_params, parameters):
-            param.data.copy_(s_param.data)
+    def get_decay(self):
+        return self.decay
 
-    # From CompVis LitEMA implementation
-    def store(self, parameters):
-        """
-        Save the current parameters for restoring later.
-        Args:
-          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
-            temporarily stored.
-        """
-        self.collected_params = [param.clone() for param in parameters]
+    def step(self, new_model):
+        """ One update of the EMA model based on new model weights """
+        decay = self.decay
 
-    def restore(self, parameters):
-        """
-        Restore the parameters stored with the `store` method.
-        Useful to validate the model with EMA parameters without affecting the
-        original optimization process. Store the parameters before the
-        `copy_to` method. After validation (or model saving), use this to
-        restore the former parameters.
-        Args:
-          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
-            updated with the stored parameters.
-        """
-        for c_param, param in zip(self.collected_params, parameters):
-            param.data.copy_(c_param.data)
+        ema_state_dict = {}
+        ema_params = self.fp32_params
+        for key, param in new_model.state_dict().items():
+            try:
+                ema_param = ema_params[key]
+            except KeyError:
+                ema_param = param.float().clone() if param.ndim == 1 else copy.deepcopy(param)
 
-        del self.collected_params
-        gc.collect()
+            if param.shape != ema_param.shape:
+                raise ValueError(
+                    "incompatible tensor shapes between model param and ema param"
+                    + "{} vs. {}".format(param.shape, ema_param.shape)
+                )
+            if "version" in key:
+                # Do not decay a model.version pytorch param
+                continue
 
-    def to(self, device=None, dtype=None) -> None:
-        r"""Move internal buffers of the ExponentialMovingAverage to `device`.
-        Args:
-            device: like `device` argument to `torch.Tensor.to`
-            dtype: Floating point-type for the stuff.
+            # for non-float params (like registered symbols), they are covered in each update
+            if not torch.is_floating_point(ema_param):
+                if ema_param.dtype != param.dtype:
+                    raise ValueError(
+                        "incompatible tensor dtypes between model param and ema param"
+                        + "{} vs. {}".format(param.dtype, ema_param.dtype)
+                    )
+                ema_param.copy_(param)
+            else:
+                ema_param.mul_(decay)
+                ema_param.add_(param.to(dtype=ema_param.dtype), alpha=1-decay)
+            ema_state_dict[key] = ema_param
+        self.load(ema_state_dict, build_fp32_params=False)
+
+    def apply(self, model):
         """
-        # .to() on the tensors handles None correctly
-        self.shadow_params = [
-            p.to(device=device, dtype=dtype) if p.is_floating_point() else p.to(device=device)
-            for p in self.shadow_params
-        ]
+        Load the model parameters from EMA model.
+        Useful for inference or fine-tuning from the EMA model.
+        """
+        model.load_state_dict(self.model.state_dict(), strict=False)
+        return model
+
+    def save_pretrained(self, model_path, safe_serialization=True):
+        self.model.save_pretrained(model_path, safe_serialization)
+        model_config_path = os.path.join(model_path, "config.json")
+        if not os.path.exists(model_config_path):
+            unet_config_path = model_config_path.replace("ema_", "")
+            if os.path.exists(unet_config_path):
+                shutil.copyfile(unet_config_path, model_config_path)
+
+

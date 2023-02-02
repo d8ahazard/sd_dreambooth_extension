@@ -42,15 +42,14 @@ class ClassDataset(Dataset):
             # Filter empty class dir and set/create if necessary
             if class_dir == "" or class_dir is None or class_dir == shared.script_path:
                 class_dir = os.path.join(model_dir, f"classifiers_{c_idx}")
-            class_dir = Path(class_dir)
-            class_dir.mkdir(parents=True, exist_ok=True)
+            os.makedirs(class_dir, exist_ok=True)
 
             status.textinfo = "Sorting images..."
             # Sort existing prompts
             class_prompt_datas = {}
             instance_prompt_datas = sort_prompts(concept, text_getter, instance_dir, bucket_resos, c_idx, False)
             if concept.num_class_images_per > 0 and class_dir:
-                class_prompt_datas = sort_prompts(concept, text_getter, str(class_dir), bucket_resos, c_idx, True)
+                class_prompt_datas = sort_prompts(concept, text_getter, class_dir, bucket_resos, c_idx, True)
 
             print(f"Concept requires {concept.num_class_images_per} class images per instance image.")
 

@@ -37,6 +37,7 @@ class ImageBuilder:
         self.resolution = config.resolution
         self.last_model = None
         self.batch_size = batch_size
+        self.exception_count = 0
         config_src = config.src
         if not os.path.exists(config_src):
             alt_src = os.path.join(shared.dreambooth_models_path, config_src)
@@ -82,7 +83,7 @@ class ImageBuilder:
                 safety_checker=None,
                 revision=config.revision
             )
-
+            self.image_pipe.enable_xformers_memory_efficient_attention()
             self.image_pipe.to(accelerator.device)
             new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
             if os.path.exists(new_hotness):
@@ -90,21 +91,20 @@ class ImageBuilder:
                 disable_safe_unpickle()
                 accelerator.load_state(new_hotness)
                 enable_safe_unpickle()
-            if config.use_lora and lora_model is not None and lora_model != "":
 
-                lora_model_path = os.path.join(shared.models_path, "lora", lora_model)
-                lora_txt_path = _text_lora_path_ui(lora_model)
-
+            lora_model_path = os.path.join(shared.models_path, "lora", lora_model)
+            if config.use_lora and os.path.exists(lora_model_path) and lora_model != "":
                 patch_pipe(
                     pipe=self.image_pipe,
-                    unet_path=lora_model_path,
+                    maybe_unet_path=lora_model_path,
                     unet_target_replace_module=get_target_module("module", config.use_lora_extended),
-                    token="None",
+                    token=None,
                     r=config.lora_unet_rank,
                     r_txt=config.lora_txt_rank
                 )
-
                 tune_lora_scale(self.image_pipe.unet, config.lora_weight)
+                
+                lora_txt_path = _text_lora_path_ui(lora_model_path)
                 if os.path.exists(lora_txt_path):
                     tune_lora_scale(self.image_pipe.text_encoder, config.lora_txt_weight)
 
@@ -167,14 +167,23 @@ class ImageBuilder:
                 if seed is None or seed == '' or seed == -1:
                     seed = int(random.randrange(21474836147))
                 g_cuda = torch.Generator(device=self.accelerator.device).manual_seed(seed)
-                output = self.image_pipe(
-                    positive_prompts,
-                    num_inference_steps=steps,
-                    guidance_scale=scale,
-                    height=height,
-                    width=width,
-                    generator=g_cuda,
-                    negative_prompt=negative_prompts).images
+                try:
+                    output = self.image_pipe(
+                        positive_prompts,
+                        num_inference_steps=steps,
+                        guidance_scale=scale,
+                        height=height,
+                        width=width,
+                        generator=g_cuda,
+                        negative_prompt=negative_prompts).images
+                    self.exception_count = 0
+                except Exception as e:
+                    print(f"Exception generating images: {e}")
+                    self.exception_count += 1
+                    if self.exception_count > 10:
+                        raise
+                    output = []
+                    pass
 
         return output
 

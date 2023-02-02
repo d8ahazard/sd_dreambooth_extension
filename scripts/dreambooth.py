@@ -581,7 +581,6 @@ def ui_classifiers(model_name: str,
 
     images = []
     try:
-        print("Generating class images...")
         unload_system_models()
         count, images = generate_classifiers(config, use_txt2img=use_txt2img, ui=True)
         reload_system_models()
@@ -650,7 +649,7 @@ def debug_buckets(model_name, num_epochs, batch_size):
     inst_paths = prompt_dataset.instance_prompts
     class_paths = prompt_dataset.class_prompts
     print("Generating training dataset...")
-    dataset = generate_dataset(model_name, inst_paths, class_paths, batch_size, debug=True)
+    dataset = generate_dataset(model_name, inst_paths, class_paths, batch_size, debug=True, model_dir=args.model_dir)
     optimizer_class = torch.optim.AdamW
     placeholder = [torch.Tensor(10, 20)]
     sched_train_steps = args.num_train_epochs * dataset.__len__()

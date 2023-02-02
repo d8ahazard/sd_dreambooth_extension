@@ -14,7 +14,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from PIL import features, PngImagePlugin, Image
 
 import os
-from pathlib import Path
 from typing import List, Tuple, Dict
 
 import numpy as np
@@ -47,21 +46,20 @@ def get_dim(filename, max_res):
                     height = max_res
                     width = int(max_res * aspect_ratio)
         except:
-            print(f"No exif data for {Path(filename).stem}. Using default orientation.")
+            print(f"No exif data for {filename}. Using default orientation.")
         return width, height
 
 
-def get_images(image_path):
+def get_images(image_path:str):
     pil_features = list_features()
     output = []
-    if isinstance(image_path, str):
-        image_path = Path(image_path)
-    if image_path.exists():
-        for file in image_path.iterdir():
-            if is_image(file, pil_features):
-                output.append(file)
-            if file.is_dir():
-                sub_images = get_images(file)
+    if os.path.exists(image_path):
+        for file in os.listdir(image_path):
+            file_path = os.path.join(image_path, file)
+            if is_image(file_path, pil_features):
+                output.append(file_path)
+            if os.path.isdir(file_path):
+                sub_images = get_images(file_path)
                 for image in sub_images:
                     output.append(image)
     return output
@@ -83,14 +81,13 @@ def list_features():
     return pil_features
 
 
-def is_image(path: Path, feats=None):
+def is_image(path: str, feats=None):
     if feats is None:
         feats = []
     if not len(feats):
         feats = list_features()
-    is_img = path.is_file() and path.suffix.lower() in feats
+    is_img = os.path.isfile(path) and os.path.splitext(path)[1].lower() in feats
     return is_img
-
 
 def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str, bucket_resos: List[Tuple[int, int]],
                  concept_index: int, is_class: bool) -> Dict[Tuple[int, int], PromptData]:
