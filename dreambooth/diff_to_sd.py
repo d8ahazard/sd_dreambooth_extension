@@ -318,7 +318,7 @@ def get_model_path(working_dir: str, model_name: str = "", file_extra: str = "")
             if f"{file_extra}.safetensors" in f:
                 print(f"Returning: {f}")
                 return os.path.join(model_base, f)
-            if f"{file_extra}.ckpt" in f:
+            if f"{file_extra}.bin" in f:
                 print(f"Returning: {f}")
                 return os.path.join(model_base, f)
     print(f"Got nufin: {model_base}")

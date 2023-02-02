@@ -127,7 +127,7 @@ class EMAModel(object):
         return model
 
     def save_pretrained(self, model_path, safe_serialization=True):
-        self.model.save_pretrained(model_path, safe_serialization)
+        self.model.save_pretrained(model_path, safe_serialization=safe_serialization)
         model_config_path = os.path.join(model_path, "config.json")
         if not os.path.exists(model_config_path):
             unet_config_path = model_config_path.replace("ema_", "")
