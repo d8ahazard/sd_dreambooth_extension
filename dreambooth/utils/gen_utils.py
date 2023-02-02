@@ -121,8 +121,16 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     pbar = mytqdm(total=set_len, desc=f"Generating class images 0/{set_len}:")
     shared.status.job_count = set_len
     shared.status.job_no = 0
-    builder = ImageBuilder(args, use_txt2img=use_txt2img, lora_model=args.lora_model_name,
-                           batch_size=args.sample_batch_size, accelerator=accelerator)
+    builder = ImageBuilder(
+        args, 
+        use_txt2img=use_txt2img, 
+        lora_model=args.lora_model_name,
+        batch_size=args.sample_batch_size,
+        accelerator=accelerator,
+        lora_unet_rank=args.lora_unet_rank,
+        lora_txt_rank=args.lora_txt_rank
+        )
+    
     generated = 0
     actual_idx = 0
     for i in range(set_len):

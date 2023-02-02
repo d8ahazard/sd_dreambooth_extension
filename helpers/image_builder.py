@@ -91,16 +91,18 @@ class ImageBuilder:
                 disable_safe_unpickle()
                 accelerator.load_state(new_hotness)
                 enable_safe_unpickle()
-            if config.use_lora and lora_model is not None and lora_model != "":
+
+            lora_model_path = os.path.join(shared.models_path, "lora", lora_model)
+            if config.use_lora and os.path.exists(lora_model_path) and lora_model != "":
 
                 lora_model_path = os.path.join(shared.models_path, "lora", lora_model)
                 lora_txt_path = _text_lora_path_ui(lora_model)
 
                 patch_pipe(
                     pipe=self.image_pipe,
-                    unet_path=lora_model_path,
+                    maybe_unet_path=lora_model_path,
                     unet_target_replace_module=get_target_module("module", config.use_lora_extended),
-                    token="None",
+                    token=None,
                     r=config.lora_unet_rank,
                     r_txt=config.lora_txt_rank
                 )
