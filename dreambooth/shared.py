@@ -272,6 +272,7 @@ def numpy_fix(self, *args, **kwargs):
 
 
 load_auto_settings()
+extension_path = os.path.join(script_path, "extensions", "sd_dreambooth_extension")
 
 orig_cumsum = torch.cumsum
 orig_Tensor_cumsum = torch.Tensor.cumsum

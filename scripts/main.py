@@ -11,6 +11,7 @@ from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_che
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret, create_secret, clear_secret
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention, \
     list_floats, wrap_gpu_call, parse_logs, printm
+from extensions.sd_dreambooth_extension.helpers.version_helper import check_updates
 from extensions.sd_dreambooth_extension.scripts import dreambooth
 from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
     training_wizard, training_wizard_person, load_model_params, ui_classifiers, debug_buckets, create_model, generate_samples
@@ -537,6 +538,24 @@ def on_ui_tabs():
                     inputs=[],
                     outputs=progress_elements,
                 )
+
+
+            def format_updates():
+                updates = check_updates()
+                strings = []
+                if updates is not None:
+                    for key, value in updates.items():
+                        title = f"<h2 class='changeTitle'>{key}:</h2><br>"
+                        description = f"<span class='changeSpan'>{value}</span><br>"
+                        strings.append(title)
+                        strings.append(description)
+                return "\n".join(strings)
+
+            with gr.Row(variant="panel", elem_id="change_modal"):
+                with gr.Row():
+                    close_modal = gr.Button(value="X", elem_id="close_modal")
+                with gr.Column():
+                    change_log = gr.HTML(format_updates(), elem_id="change_log")
 
         global params_to_save
         global params_to_load

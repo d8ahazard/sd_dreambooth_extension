@@ -1,6 +1,7 @@
 // Save our current training params before doing a thing
 let params_loaded = false;
 let training_started = false;
+let closeBtn;
 
 // Click a button. Whee.
 function save_config() {
@@ -279,6 +280,23 @@ onUiUpdate(function () {
     if (db_active) {
         db_active.parentElement.style.display = "none";
     }
+
+    let cm = getRealElement("change_modal");
+    if (cm) {
+        if (cm.innerHTML !== "") {
+            cm.style("display", "block");
+        }
+    }
+    if (closeBtn === null || closeBtn === undefined) {
+        let cb = getRealElement("close_modal");
+
+        if (cb && cm) {
+            cb.addEventListener("click", function() {
+                cm.style("display", "none");
+            });
+        }
+    }
+
     db_progressbar();
 
     gradioApp().querySelectorAll('span, button, select, p').forEach(function (span) {
