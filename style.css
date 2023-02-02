@@ -27,6 +27,16 @@
 }
 
 
+#close_modal {
+    min-width: 10px;
+    max-width: 10px;
+    min-height: 10px;
+    max-height: 35px;
+    position: absolute;
+    right: 11px;
+}
+
+
 #change_log {
 
 }

@@ -282,9 +282,10 @@ onUiUpdate(function () {
     }
 
     let cm = getRealElement("change_modal");
-    if (cm) {
-        if (cm.innerHTML !== "") {
-            cm.style("display", "block");
+    let cl = getRealElement("change_log");
+    if (cm && cl) {
+        if (cl.innerHTML !== "") {
+            cm.classList.add("active");
         }
     }
     if (closeBtn === null || closeBtn === undefined) {
@@ -292,7 +293,7 @@ onUiUpdate(function () {
 
         if (cb && cm) {
             cb.addEventListener("click", function() {
-                cm.style("display", "none");
+                cm.classList.remove("active");
             });
         }
     }

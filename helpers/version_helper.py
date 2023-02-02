@@ -20,7 +20,7 @@ def get_rev() -> Union[str, None]:
     last_rev = None
     if os.path.exists(store_file):
         with open(store_file, "r") as sf:
-            last_rev = sf.readline(1).strip()
+            last_rev = sf.readlines()[0].strip()
     return last_rev
 
 # Store current revision to file
@@ -83,10 +83,16 @@ def get_changes()-> Union[Dict[str, str], None]:
         '\n')
 
     # Parse all commits after the current revision
-    changes = {}
+    changes = []
+    print(f"History: {commit_history}")
     for commit in commit_history:
         parts = commit.split('\t')
-        changes[parts[3]] = parts[4]
+        rev = parts[0]
+        author = parts[1]
+        date = parts[2]
+        title = parts[3]
+        url = f"https://github.com/d8ahazard/sd_dreambooth_extension/commit/{rev}"
+        changes[rev] = [title, author, date, url]
 
     print(f"Changs: {changes}")
     return changes

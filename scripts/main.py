@@ -545,10 +545,15 @@ def on_ui_tabs():
                 strings = []
                 if updates is not None:
                     for key, value in updates.items():
-                        title = f"<h2 class='changeTitle'>{key}:</h2><br>"
-                        description = f"<span class='changeSpan'>{value}</span><br>"
+                        rev = key
+                        title = value[0]
+                        author = value[1]
+                        date = value[2]
+                        url = date[3]
+                        title = f"<h3>{title}</h3><br>"
+                        sub_title = f"<span>{author} - {date} - <a href='{url}'>{rev}</a><br>"
                         strings.append(title)
-                        strings.append(description)
+                        strings.append(sub_title)
                 return "\n".join(strings)
 
             with gr.Row(variant="panel", elem_id="change_modal"):
