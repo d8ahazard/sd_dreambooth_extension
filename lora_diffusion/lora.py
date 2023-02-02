@@ -1162,30 +1162,6 @@ def merge_loras_to_pipe(
     monkeypatch_remove_lora(pipline.unet)
     monkeypatch_remove_lora(pipline.text_encoder)
 
-# TODO Add lora saving for webui.
-# def save_loras_for_webui(
-#         pipeline,
-#         lora_path: str = "",
-#         lora_name: str = "lora_name",
-#         lora_alpha: float = 1,
-#         lora_txt_alpha: float = 1,
-#         lora_token_path: str = ""
-#     ):
-#     print(
-#             f"You will be using {lora_name} as the token in A1111 webui. Make sure {lora_name} is unique enough token (example: my_lora_cat)."
-#         )
-#     merge_loras_to_pipe(pipeline, lora_path, lora_alpha, lora_txt_alpha)
-#
-#     keys = sorted(tok_dict.keys())
-#     tok_catted = torch.stack([tok_dict[k] for k in keys])
-#     ret = {
-#             "string_to_token": {"*": torch.tensor(265)},
-#             "string_to_param": {"*": tok_catted},
-#             "name": lora_name,
-#         }
-#
-#     # Must end in .pt
-#     torch.save(ret, lora_token_path)
 
 def get_target_module(target_type: str = "injection", use_extended: bool = False):
     if target_type == "injection":
