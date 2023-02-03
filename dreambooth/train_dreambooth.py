@@ -894,7 +894,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                         target = torch.stack(instance_pred_chunks, dim=0)
                         model_pred = torch.autograd.Variable(model_pred, requires_grad=True)
                         target = torch.autograd.Variable(target, requires_grad=False)
-                        instance_loss = torch.nn.functional.mse_loss(model_pred, target, reduction="mean")
+                        instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
                         instance_loss_step = instance_loss.detach().item()
                         instance_loss_total += instance_loss_step
                         #instance_loss_avg = instance_loss_total / (step + 1)
@@ -905,7 +905,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                         target_prior = torch.stack(prior_pred_chunks, dim=0)
                         model_pred_prior = torch.autograd.Variable(model_pred_prior, requires_grad=True)
                         target_prior = torch.autograd.Variable(target_prior, requires_grad=False)
-                        prior_loss = torch.nn.functional.mse_loss(model_pred_prior, target_prior, reduction="mean")
+                        prior_loss = torch.nn.functional.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
                         prior_loss_step = prior_loss.detach().item()
                         prior_loss_total += prior_loss_step
                         #prior_loss_avg = prior_loss_total / (step + 1)
