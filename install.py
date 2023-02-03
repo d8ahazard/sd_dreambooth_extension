@@ -42,9 +42,8 @@ def check_versions():
         if len(splits) == 2:
             key = splits[0]
             reqs_dict[key] = splits[1].replace("\n", "").strip()
-    reqs_dict["diffusers[torch]"] = "0.10.0"
-    checks = ["bitsandbytes", "diffusers", "transformers"]
 
+    checks = ["bitsandbytes", "diffusers", "transformers"]
     xformers_ver = "0.0.17+48a77"
     torch_ver = "2.0.0.dev20230202+cu118"
     torch_vis_ver = "0.15.0.dev20230202+cu118"

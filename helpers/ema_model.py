@@ -23,12 +23,14 @@ import logging
 import os
 import shutil
 
+import safetensors.torch
 import torch
+from diffusers import UNet2DConditionModel
 
 
 class EMAModel(object):
 
-    def __init__(self, model, decay=0.9999, device=None):
+    def __init__(self, model: UNet2DConditionModel, decay:float = 0.9999, device:str = None):
         """
         @param model: model to initialize the EMA with
         @param decay: Decay rate to use
@@ -127,7 +129,14 @@ class EMAModel(object):
         return model
 
     def save_pretrained(self, model_path, safe_serialization=True):
+        model_file = os.path.join(model_path, "diffusion_pytorch_model.safetensors")
+        model_bin = model_file.replace("safetensors", "bin")
         self.model.save_pretrained(model_path, safe_serialization=safe_serialization)
+        if not os.path.exists(model_file):
+            print("Yeah, regular save_pretrained is not working.")
+            safetensors.torch.save_file(self.model.state_dict(), model_file)
+        if os.path.exists(model_bin):
+            os.remove(model_bin)
         model_config_path = os.path.join(model_path, "config.json")
         if not os.path.exists(model_config_path):
             unet_config_path = model_config_path.replace("ema_", "")
