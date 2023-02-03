@@ -33,7 +33,6 @@ class DbDataset(torch.utils.data.Dataset):
             tokenizer: Union[CLIPTokenizer, None],
             resolution: int,
             hflip: bool,
-            random_crop: bool,
             shuffle_tags: bool,
             strict_tokens: bool,
             not_pad_tokens: bool,
@@ -78,7 +77,6 @@ class DbDataset(torch.utils.data.Dataset):
 
         self.tokenizer = tokenizer
         self.resolution = resolution
-        self.random_crop = random_crop
         self.debug_dataset = debug_dataset
         self.shuffle_tags = shuffle_tags
         self.not_pad_tokens = not_pad_tokens

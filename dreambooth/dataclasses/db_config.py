@@ -23,7 +23,6 @@ class DreamboothConfig(BaseModel):
     adamw_weight_decay: float = 0.01
     attention: str = "xformers"
     cache_latents: bool = True
-    center_crop: bool = False
     freeze_clip_normalization: bool = True
     clip_skip: int = 1
     concepts_list: List[Dict] = []

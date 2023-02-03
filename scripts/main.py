@@ -272,7 +272,6 @@ def on_ui_tabs():
                         with gr.Column():
                             gr.HTML(value="Image Processing")
                             db_resolution = gr.Slider(label="Max Resolution", step=64, minimum=128, value=512, maximum=4096)
-                            db_center_crop = gr.Checkbox(label="Center Crop", value=False)
                             db_hflip = gr.Checkbox(label="Apply Horizontal Flip", value=False)
                             db_sanity_prompt = gr.Textbox(label="Sanity Sample Prompt", placeholder="A generic prompt "
                                                                                                     "used to generate"
@@ -570,7 +569,6 @@ def on_ui_tabs():
             db_model_name,
             db_attention,
             db_cache_latents,
-            db_center_crop,
             db_freeze_clip_normalization,
             db_clip_skip,
             db_concepts_path,
