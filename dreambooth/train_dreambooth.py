@@ -661,8 +661,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                 os.makedirs(out_file, exist_ok=True)
                                 out_file = os.path.join(out_file, f"{lora_model_name}_{args.revision}.pt")
 
-                                target_module = get_target_module("module", args.use_lora_extended)
-                                save_lora_weight(s_pipeline.unet, out_file, target_module)
+                                tgt_module = get_target_module("module", args.use_lora_extended)
+                                save_lora_weight(s_pipeline.unet, out_file, tgt_module)
                                 if stop_text_percentage != 0:
                                     out_txt = out_file.replace(".pt", "_txt.pt")
                                     save_lora_weight(s_pipeline.text_encoder,
@@ -814,9 +814,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 cleanup()
             loss_total = 0
             instance_loss_total = 0
-            instance_loss_avg = 0
             prior_loss_total = 0
-            prior_loss_avg = 0
 
             current_prior_loss_weight = current_prior_loss(args, current_epoch=global_epoch)
             for step, batch in enumerate(train_dataloader):
