@@ -207,6 +207,16 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         else:
             xattention.replace_unet_cross_attn_to_default()
 
+        if args.gradient_checkpointing:
+            if args.train_unet:
+                unet.enable_gradient_checkpointing()
+            if stop_text_percentage != 0:
+                text_encoder.gradient_checkpointing_enable()
+                if args.use_lora:
+                    text_encoder.text_model.embeddings.requires_grad_(True)
+            else:
+                text_encoder.to(accelerator.device, dtype=weight_dtype)
+
         ema_model = None
         if args.use_ema:
             if os.path.exists(os.path.join(args.pretrained_model_name_or_path, "ema_unet")):
@@ -223,16 +233,6 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 del ema_unet
             else:
                 ema_model = EMAModel(unet, device=accelerator.device)
-
-        if args.gradient_checkpointing:
-            if args.train_unet:
-                unet.enable_gradient_checkpointing()
-            if stop_text_percentage != 0:
-                text_encoder.gradient_checkpointing_enable()
-                if args.use_lora:
-                    text_encoder.text_model.embeddings.requires_grad_(True)
-            else:
-                text_encoder.to(accelerator.device, dtype=weight_dtype)
 
         unet_lora_params = None
         text_encoder_lora_params = None
