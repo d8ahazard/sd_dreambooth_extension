@@ -53,7 +53,7 @@ dl.set_verbosity_error()
 last_samples = []
 last_prompts = []
 
-
+torch.backends.cudnn.deterministic = True
 
 def current_prior_loss(args, current_epoch):
     if not args.prior_loss_scale:
@@ -892,8 +892,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     if len(instance_chunks):
                         model_pred = torch.stack(instance_chunks, dim=0)
                         target = torch.stack(instance_pred_chunks, dim=0)
-                        model_pred = torch.autograd.Variable(model_pred, requires_grad=True)
-                        target = torch.autograd.Variable(target, requires_grad=False)
+                        #model_pred = torch.autograd.Variable(model_pred, requires_grad=True)
+                        #target = torch.autograd.Variable(target, requires_grad=False)
                         instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
                         instance_loss_step = instance_loss.detach().item()
                         instance_loss_total += instance_loss_step
@@ -903,8 +903,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                         # Compute prior loss
                         model_pred_prior = torch.stack(prior_chunks, dim=0)
                         target_prior = torch.stack(prior_pred_chunks, dim=0)
-                        model_pred_prior = torch.autograd.Variable(model_pred_prior, requires_grad=True)
-                        target_prior = torch.autograd.Variable(target_prior, requires_grad=False)
+                        #model_pred_prior = torch.autograd.Variable(model_pred_prior, requires_grad=True)
+                        #target_prior = torch.autograd.Variable(target_prior, requires_grad=False)
                         prior_loss = torch.nn.functional.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
                         prior_loss_step = prior_loss.detach().item()
                         prior_loss_total += prior_loss_step
