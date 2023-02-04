@@ -890,23 +890,14 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     if len(instance_chunks):
                         model_pred = torch.stack(instance_chunks, dim=0)
                         target = torch.stack(instance_pred_chunks, dim=0)
-                        #model_pred = torch.autograd.Variable(model_pred, requires_grad=True)
-                        #target = torch.autograd.Variable(target, requires_grad=False)
                         instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
-                        instance_loss_step = instance_loss.detach().item()
-                        instance_loss_total += instance_loss_step
-                        #instance_loss_avg = instance_loss_total / (step + 1)
+                        instance_loss = instance_loss.detach().item()
 
                     if len(prior_pred_chunks):
-                        # Compute prior loss
                         model_pred_prior = torch.stack(prior_chunks, dim=0)
                         target_prior = torch.stack(prior_pred_chunks, dim=0)
-                        #model_pred_prior = torch.autograd.Variable(model_pred_prior, requires_grad=True)
-                        #target_prior = torch.autograd.Variable(target_prior, requires_grad=False)
                         prior_loss = torch.nn.functional.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
-                        prior_loss_step = prior_loss.detach().item()
-                        prior_loss_total += prior_loss_step
-                        #prior_loss_avg = prior_loss_total / (step + 1)
+                        prior_loss = prior_loss.detach().item()
 
                         # Add the prior loss to the instance loss.
                         prior_loss *= current_prior_loss_weight
