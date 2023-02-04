@@ -43,6 +43,10 @@ def check_versions():
     except:
         pass
 
+    if use_torch2 and os.name != "nt":
+        print(f"Xformers libraries for Torch2 are not available for {os.name} yet, disabling.")
+        use_torch2 = False
+
     global req_file
     reqs = open(req_file, 'r')
     lines = reqs.readlines()
