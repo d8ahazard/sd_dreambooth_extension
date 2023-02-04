@@ -1,6 +1,7 @@
 import filecmp
 import importlib.util
 import os
+import platform
 import shutil
 import sys
 import sysconfig
@@ -17,10 +18,21 @@ def actual_install():
         import importlib.metadata as importlib_metadata
 
     req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
-    torch2_cmd = "pip install --no-deps https://download.pytorch.org/whl/nightly/cu118/torch-2.0.0.dev20230202%2Bcu118-cp310-cp310-win_amd64.whl https://download.pytorch.org/whl/nightly/cu118/torchvision-0.15.0.dev20230202%2Bcu118-cp310-cp310-win_amd64.whl"
+    torch2_url_win = "https://download.pytorch.org/whl/nightly/cu118/torch-2.0.0.dev20230202%2Bcu118-cp310-cp310-win_amd64.whl"
+    torchvision2_url_win = "https://download.pytorch.org/whl/nightly/cu118/torchvision-0.15.0.dev20230202%2Bcu118-cp310-cp310-win_amd64.whl"
+
+    torch2_url_linux = "https://download.pytorch.org/whl/nightly/cu118/torch-2.0.0.dev20230202%2Bcu118-cp310-cp310-linux_x86_64.whl"
+    torchvision2_url_linux = "https://download.pytorch.org/whl/nightly/cu118/torchvision-0.15.0.dev20230202%2Bcu118-cp310-cp310-linux_x86_64.whl"
+    if os.name == "nt":
+        torch2_cmd = f"pip install --no-deps {torch2_url_win} {torchvision2_url_win}"
+    else:
+        torch2_cmd = f"pip install --no-deps {torch2_url_linux} {torchvision2_url_linux}"
+
     torch_cmd = "pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117"
 
-    xformers2_cmd = "pip install https://github.com/ArrowM/xformers/releases/download/xformers-0.0.17-cu118-feb-02-23/xformers-0.0.17+48a77cc.d20230202-cp310-cp310-win_amd64.whl"
+    xformers_win = "https://github.com/ArrowM/xformers/releases/download/xformers-0.0.17-cu118-windows/xformers-0.0.17+48a77cc.d20230202-cp310-cp310-win_amd64.whl"
+    xformers_linux = "https://github.com/ArrowM/xformers/releases/download/xformers-0.0.17-cu118-linux/xformers-0.0.17+7f4fdce.d20230204-cp310-cp310-linux_x86_64.whl"
+    xformers2_cmd = f"pip install {xformers_win if os.name == 'nt' else xformers_linux}"
     xformers_cmd = "pip install xformers==0.0.17.dev442"
 
     def fix_torch(torch_command, use_torch2):
@@ -47,8 +59,8 @@ def actual_install():
         except:
             pass
 
-        if use_torch2 and os.name != "nt":
-            print(f"Xformers libraries for Torch2 are not available for {os.name} yet, disabling.")
+        if use_torch2 and not (platform.system() == "Linux" or platform.system() == "Windows"):
+            print(f"Xformers libraries for Torch2 are not available for {platform.system()} yet, disabling.")
             use_torch2 = False
 
         req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
