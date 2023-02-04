@@ -59,10 +59,10 @@ def check_versions():
 
     checks = ["bitsandbytes", "diffusers", "transformers"]
 
-    xc = xformers_cmd
-    tc = torch_cmd
+
 
     if use_torch2:
+        print("Setting torch2 vars...")
         xformers_ver = "0.0.17+48a77"
         torch_ver = "2.0.0.dev20230202+cu118"
         torch_vis_ver = "0.15.0.dev20230202+cu118"
@@ -72,6 +72,8 @@ def check_versions():
         xformers_ver = "0.0.17.dev442"
         torch_ver = "2.0.0.dev20230202+cu118"
         torch_vis_ver = "0.15.0.dev20230202+cu118"
+        xc = xformers_cmd
+        tc = torch_cmd
 
 
     has_xformers = importlib.util.find_spec("xformers") is not None
