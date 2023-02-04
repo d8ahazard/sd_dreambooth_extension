@@ -882,27 +882,27 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
                     # initialize with 0 in case we are having batch = 1    
                     instance_loss = torch.tensor(0)
-                    instance_loss_step = float("nan")
                     prior_loss = torch.tensor(0)
-                    prior_loss_step = float("nan")
 
                     # Concatenate the chunks in instance_chunks to form the model_pred_instance tensor
                     if len(instance_chunks):
                         model_pred = torch.stack(instance_chunks, dim=0)
                         target = torch.stack(instance_pred_chunks, dim=0)
                         instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
-                        instance_loss = instance_loss.detach().item()
 
                     if len(prior_pred_chunks):
                         model_pred_prior = torch.stack(prior_chunks, dim=0)
                         target_prior = torch.stack(prior_pred_chunks, dim=0)
                         prior_loss = torch.nn.functional.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
-                        prior_loss = prior_loss.detach().item()
 
+                    if len(instance_chunks) and len(prior_chunks):
                         # Add the prior loss to the instance loss.
-                        prior_loss *= current_prior_loss_weight
-                    
-                    loss = (instance_loss + prior_loss) / 2
+                        loss = instance_loss + current_prior_loss_weight * prior_loss
+                        loss /= 2
+                    elif len(instance_chunks):
+                        loss = instance_loss
+                    else:
+                        loss = prior_loss * current_prior_loss_weight
 
                     accelerator.backward(loss)
                     if accelerator.sync_gradients and not args.use_lora:
@@ -941,8 +941,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 logs = {
                     "lr": float(last_lr),
                     "loss": float(loss_step),
-                    "inst_loss": float(instance_loss_step),
-                    "prior_loss": float(prior_loss_step),
+                    "inst_loss": float(instance_loss.detach().item()),
+                    "prior_loss": float(prior_loss.detach().item()),
                     "vram": float(cached),
 
                 }
