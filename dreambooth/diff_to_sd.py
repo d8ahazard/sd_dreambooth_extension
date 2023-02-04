@@ -404,7 +404,7 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
                 os.path.join(config.pretrained_model_name_or_path, "unet"))
 
             apply_lora(unet_model, lora_path, config.lora_weight, "cpu", True)
-            unet_state_dict = copy.deepcopy(unet_model.state_dict)
+            unet_state_dict = copy.deepcopy(unet_model.state_dict())
             del unet_model
             checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}_lora{checkpoint_ext}")
         else:
