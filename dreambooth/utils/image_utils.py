@@ -89,10 +89,9 @@ def is_image(path: str, feats=None):
     is_img = os.path.isfile(path) and os.path.splitext(path)[1].lower() in feats
     return is_img
 
-def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str, bucket_resos: List[Tuple[int, int]],
-                 concept_index: int, is_class: bool) -> Dict[Tuple[int, int], PromptData]:
+def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str, images: List[str], bucket_resos: List[Tuple[int, int]],
+                 concept_index: int, is_class: bool, pbar: mytqdm) -> Dict[Tuple[int, int], PromptData]:
     prompts = {}
-    images = get_images(img_dir)
     max_dim = 0
     for (w, h) in bucket_resos:
         if w > max_dim:
@@ -100,8 +99,9 @@ def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str
         if h > max_dim:
             max_dim = h
     _, dirr = os.path.split(img_dir)
-    for img in mytqdm(images, desc=f"Pre-processing {dirr}"):
+    for img in images:
         # Get prompt
+        pbar.set_description(f"Generating prompts for: {dirr}")
         text = text_getter.read_text(img)
         prompt = text_getter.create_text(
             concept.class_prompt if is_class else concept.instance_prompt,
@@ -119,6 +119,7 @@ def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str
             concept_index=concept_index
         )
         prompt_list.append(pd)
+        pbar.update()
         prompts[reso] = prompt_list
 
     return dict(sorted(prompts.items()))
