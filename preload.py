@@ -1,7 +1,6 @@
 import argparse
 
 
-pre_args = sys.argv
 def preload(parser: argparse.ArgumentParser):
     from extensions.sd_dreambooth_extension.postinstall import actual_install
 
