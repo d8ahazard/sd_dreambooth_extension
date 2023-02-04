@@ -274,6 +274,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
         else:
             if not args.train_unet:
                 unet.requires_grad_(False)
+                if ema_model is not None:
+                    ema_model.model.requires_grad_(False)
 
 
         # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs

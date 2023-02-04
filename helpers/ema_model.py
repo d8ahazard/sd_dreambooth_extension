@@ -39,7 +39,6 @@ class EMAModel(object):
 
         self.decay = decay
         self.model = copy.deepcopy(model)
-        self.model.requires_grad_(False)
         self.fp32_params = {}
 
         if device is not None:
