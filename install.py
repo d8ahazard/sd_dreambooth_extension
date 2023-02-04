@@ -15,13 +15,15 @@ else:
     import importlib.metadata as importlib_metadata
 
 req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
-torch_cmd = "pip install --no-deps https://download.pytorch.org/whl/nightly/cu118/torch-2.0.0.dev20230202%2Bcu118-cp310-cp310-win_amd64.whl https://download.pytorch.org/whl/nightly/cu118/torchvision-0.15.0.dev20230202%2Bcu118-cp310-cp310-win_amd64.whl"
+torch2_cmd = "pip install --no-deps https://download.pytorch.org/whl/nightly/cu118/torch-2.0.0.dev20230202%2Bcu118-cp310-cp310-win_amd64.whl https://download.pytorch.org/whl/nightly/cu118/torchvision-0.15.0.dev20230202%2Bcu118-cp310-cp310-win_amd64.whl"
+torch_cmd = "pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117"
 
-xformers_cmd = "pip install https://github.com/ArrowM/xformers/releases/download/xformers-0.0.17-cu118-feb-02-23/xformers-0.0.17+48a77cc.d20230202-cp310-cp310-win_amd64.whl"
+xformers2_cmd = "pip install https://github.com/ArrowM/xformers/releases/download/xformers-0.0.17-cu118-feb-02-23/xformers-0.0.17+48a77cc.d20230202-cp310-cp310-win_amd64.whl"
+xformers_cmd = "pip install xformers==0.0.17.dev442"
 
-def fix_torch():
+def fix_torch(torch_command):
     try:
-        run(f'"{python}" -m {torch_cmd}', "Installing torch2 and torchvision.", "Couldn't install torch.")
+        run(f'"{python}" -m {torch_command}', "Installing torch2 and torchvision.", "Couldn't install torch.")
         has_torch = importlib.util.find_spec("torch") is not None
         has_torch_vision = importlib.util.find_spec("torchvision") is not None
 
@@ -33,6 +35,14 @@ def fix_torch():
         return None, None
 
 def check_versions():
+    use_torch2 = False
+    try:
+        import modules.shared as auto_shared
+        use_torch2 = auto_shared.cmd_opts.torch2
+        print("Torch2 Selected.")
+    except:
+        pass
+
     global req_file
     reqs = open(req_file, 'r')
     lines = reqs.readlines()
@@ -44,14 +54,26 @@ def check_versions():
             reqs_dict[key] = splits[1].replace("\n", "").strip()
 
     checks = ["bitsandbytes", "diffusers", "transformers"]
-    xformers_ver = "0.0.17+48a77"
-    torch_ver = "2.0.0.dev20230202+cu118"
-    torch_vis_ver = "0.15.0.dev20230202+cu118"
+
+    xc = xformers_cmd
+    tc = torch_cmd
+
+    if use_torch2:
+        xformers_ver = "0.0.17+48a77"
+        torch_ver = "2.0.0.dev20230202+cu118"
+        torch_vis_ver = "0.15.0.dev20230202+cu118"
+        xc = xformers2_cmd
+        tc = torch2_cmd
+    else:
+        xformers_ver = "0.0.17.dev442"
+        torch_ver = "2.0.0.dev20230202+cu118"
+        torch_vis_ver = "0.15.0.dev20230202+cu118"
+
 
     has_xformers = importlib.util.find_spec("xformers") is not None
     xformers_check = str(importlib_metadata.version("xformers")) if has_xformers else None
     if xformers_check != xformers_ver:
-        run(f'"{python}" -m {xformers_cmd}', f"Installing xformers {xformers_ver}.", "Couldn't install torch.")
+        run(f'"{python}" -m {xc}', f"Installing xformers {xformers_ver}.", "Couldn't install torch.")
 
     # torch check
     has_torch = importlib.util.find_spec("torch") is not None
@@ -61,7 +83,7 @@ def check_versions():
     torch_vision_check = str(importlib_metadata.version("torchvision")) if has_torch_vision else None
 
     if torch_check != torch_ver or torch_vision_check != torch_vis_ver:
-        torch_check, torch_vision_check = fix_torch()
+        torch_check, torch_vision_check = fix_torch(tc)
 
     for check, ver, module in [(torch_check, torch_ver, "torch"),
                                (torch_vision_check, torch_vis_ver, "torchvision"),

@@ -18,6 +18,34 @@ function save_config() {
     }
 }
 
+function toggleComponents(enable) {
+    const elements = ['DbTopRow', 'SettingsPanel'];
+    elements.forEach(element => {
+        let elem = getRealElement(element);
+        if (elem === null || elem === undefined) {
+            console.log("Can't find element: ", element);
+        } else {
+            const labels = elem.getElementsByTagName('label');
+            const inputs = elem.querySelectorAll("input, textarea, button");
+
+            Array.from(labels).forEach(label => {
+                if (enable) {
+                    label.classList.remove('!cursor-not-allowed');
+                } else {
+                    label.classList.add('!cursor-not-allowed');
+                }
+            });
+
+            Array.from(inputs).forEach(input => {
+                if (input.id.indexOf("secret") === -1) {
+                    input.disabled = !enable;
+                }
+            });
+        }
+    });
+}
+
+
 function check_save() {
     let do_save = true;
     if (params_loaded === false) {
@@ -35,6 +63,12 @@ function check_save() {
 }
 
 function clear_loaded() {
+    if (arguments[0] !== "") {
+        toggleComponents(true);
+        let hintRow = getRealElement("hint_row");
+        hintRow.style.display = "none";
+    }
+
     params_loaded = false;
     return filterArgs(1, arguments);
 }
@@ -149,7 +183,7 @@ let db_titles = {
     "Batch Size": "How many images to process at once per training step?",
     "Cache Latents": "When this box is checked latents will be cached. Caching latents will use more VRAM, but improve training speed.",
     "Cancel": "Cancel training.",
-     "Class Batch Size": "How many classifier/regularization images to generate at once.",
+    "Class Batch Size": "How many classifier/regularization images to generate at once.",
     "Class Images Per Instance Image": "How many classification images to use per instance image.",
     "Class Prompt": "A prompt for generating classification/regularization images. See the readme for more info.",
     "Class Token": "When using [filewords], this is the class identifier to use/find in existing prompts. Should be a single word.",
@@ -271,7 +305,8 @@ let db_titles = {
 onUiUpdate(function () {
     let db_active = document.getElementById("db_active");
     if (db_active) {
-        db_active.parentElement.style.display = "none";    }
+        db_active.parentElement.style.display = "none";
+    }
 
     let cm = getRealElement("change_modal");
     let cl = getRealElement("change_log");
@@ -286,7 +321,8 @@ onUiUpdate(function () {
         let cb = getRealElement("close_modal");
         closeBtn = cb;
         if (cb && cm) {
-            cb.addEventListener("click", function() {
+            toggleComponents(false);
+            cb.addEventListener("click", function () {
                 cm.classList.remove("active");
             });
         }
@@ -296,6 +332,10 @@ onUiUpdate(function () {
 
     gradioApp().querySelectorAll('span, button, select, p').forEach(function (span) {
         let tooltip = db_titles[span.textContent];
+        if (span.disabled || span.classList.contains(".\\!cursor-not-allowed")) {
+            tooltip = "Select or Create a Model."
+        }
+
         if (!tooltip) {
             tooltip = db_titles[span.value];
         }
