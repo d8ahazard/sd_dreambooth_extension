@@ -28,6 +28,7 @@ class DreamboothConfig(BaseModel):
     concepts_list: List[Dict] = []
     concepts_path: str = ""
     custom_model_name: str = ""
+    ema_predict: bool = False
     epoch: int = 0
     epoch_pause_frequency: int = 0
     epoch_pause_time: int = 0
@@ -89,6 +90,7 @@ class DreamboothConfig(BaseModel):
     scheduler: str = "ddim"
     shuffle_tags: bool = True
     snapshot: str = ""
+    split_loss: bool = True
     src: str = ""
     stop_text_encoder: float = 1.0
     strict_tokens: bool = False
@@ -206,6 +208,7 @@ class DreamboothConfig(BaseModel):
                 config_dict = json.load(openfile)
 
             self.load_params(config_dict)
+            shared.db_model_config = self
         except Exception as e:
             print(f"Exception loading config: {e}")
             traceback.print_exc()
@@ -264,6 +267,7 @@ def save_config(*args):
             params_dict["concepts_list"] = concepts_list
 
     config.load_params(params_dict)
+    shared.db_model_config = config
     config.save()
 
 
@@ -290,6 +294,7 @@ def from_file(model_name):
 
         config = DreamboothConfig(model_name)
         config.load_params(config_dict)
+        shared.db_model_config = config
         return config
     except Exception as e:
         print(f"Exception loading config: {e}")

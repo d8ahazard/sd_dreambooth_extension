@@ -19,7 +19,7 @@ embeddings_dir = os.path.join(script_path, "embeddings")
 dreambooth_models_path = os.path.join(models_path, "dreambooth")
 ckpt_dir = os.path.join(models_path, "Stable-diffusion")
 lora_models_path = os.path.join(models_path, "lora")
-
+db_model_config = None
 show_progress_every_n_steps = 10
 parallel_processing_allowed = True
 dataset_filename_word_regex = ""

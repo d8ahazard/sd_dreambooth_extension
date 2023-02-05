@@ -54,6 +54,7 @@ function check_save() {
     if (do_save === true) {
         let filtered = filterArgs(arguments.length, arguments);
         let status = getRealElement("db_status");
+        status.innerHTML = "Config saved."
         params_loaded = true;
         return filtered;
     } else {

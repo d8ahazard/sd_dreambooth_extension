@@ -21,8 +21,12 @@ from torch.utils.data import Dataset
 from transformers import AutoTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth import xattention, shared
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.train_result import TrainResult
 from extensions.sd_dreambooth_extension.dreambooth.dataset.bucket_sampler import BucketSampler
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.dataset.sample_dataset import SampleDataset
+from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
+from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
 from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler
 from extensions.sd_dreambooth_extension.dreambooth.shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
@@ -30,17 +34,13 @@ from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_s
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
     import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle
 from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import encode_hidden_state
+from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup, parse_logs, printm
 from extensions.sd_dreambooth_extension.dreambooth.webhook import send_training_update
-from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.train_result import TrainResult
+from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
 from extensions.sd_dreambooth_extension.helpers.ema_model import EMAModel
 from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-from extensions.sd_dreambooth_extension.dreambooth.dataset.sample_dataset import SampleDataset
-from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup, parse_logs, printm
-from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
+from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, \
+    TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
@@ -78,13 +78,12 @@ def stop_profiler(profiler):
         except:
             pass
 
-def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
+def main(use_txt2img: bool = True) -> TrainResult:
     """
-
-    @param args: The model config to use.
     @param use_txt2img: Use txt2img when generating class images.
     @return: TrainResult
     """
+    args = shared.db_model_config
     logging_dir = Path(args.model_dir, "logging")
 
     result = TrainResult
@@ -392,6 +391,11 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             input_ids = [example["input_ids"] for example in examples]
             pixel_values = [example["image"] for example in examples]
             types = [example["is_class"] for example in examples]
+            weights = [current_prior_loss_weight if example["is_class"] else 1.0 for example in examples]
+            loss_avg = 0
+            for weight in weights:
+                loss_avg += weight
+            loss_avg /= len(weights)
             pixel_values = torch.stack(pixel_values)
             if not args.cache_latents:
                 pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
@@ -400,7 +404,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             batch_data = {
                 "input_ids": input_ids,
                 "images": pixel_values,
-                "types": types
+                "types": types,
+                "loss_avg": loss_avg
             }
             return batch_data
 
@@ -798,7 +803,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
 
             if args.train_unet:
                 unet.train()
-                
+
             train_tenc = epoch < text_encoder_epochs
             if stop_text_percentage == 0:
                 train_tenc = False
@@ -814,9 +819,8 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             if last_tenc != train_tenc:
                 last_tenc = train_tenc
                 cleanup()
+
             loss_total = 0
-            instance_loss_total = 0
-            prior_loss_total = 0
 
             current_prior_loss_weight = current_prior_loss(args, current_epoch=global_epoch)
             for step, batch in enumerate(train_dataloader):
@@ -853,7 +857,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                                                 b_size, args.max_token_length, tokenizer.model_max_length, args.clip_skip)
 
                     # Predict the noise residual
-                    if args.use_ema:
+                    if args.use_ema and args.ema_predict:
                         noise_pred = ema_model(noisy_latents, timesteps, encoder_hidden_states).sample
                     else:
                         noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
@@ -864,47 +868,52 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                     else:
                         target = noise
 
-                    model_pred_chunks = torch.split(noise_pred, 1, dim=0)
-                    target_pred_chunks = torch.split(target, 1, dim=0)
-                    instance_chunks = []
-                    prior_chunks = []
-                    instance_pred_chunks = []
-                    prior_pred_chunks = []
+                    if not args.split_loss:
+                        loss = instance_loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="mean")
+                        loss *= batch["loss_avg"]
 
-                    # Iterate over the list of boolean values in batch["types"]
-                    for i, is_prior in enumerate(batch["types"]):
-                        # If is_prior is False, append the corresponding chunk to instance_chunks
-                        if not is_prior:
-                            instance_chunks.append(model_pred_chunks[i])
-                            instance_pred_chunks.append(target_pred_chunks[i])
-                        # If is_prior is True, append the corresponding chunk to prior_chunks
-                        else:
-                            prior_chunks.append(model_pred_chunks[i])
-                            prior_pred_chunks.append(target_pred_chunks[i])
-
-                    # initialize with 0 in case we are having batch = 1    
-                    instance_loss = torch.tensor(0)
-                    prior_loss = torch.tensor(0)
-
-                    # Concatenate the chunks in instance_chunks to form the model_pred_instance tensor
-                    if len(instance_chunks):
-                        model_pred = torch.stack(instance_chunks, dim=0)
-                        target = torch.stack(instance_pred_chunks, dim=0)
-                        instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
-
-                    if len(prior_pred_chunks):
-                        model_pred_prior = torch.stack(prior_chunks, dim=0)
-                        target_prior = torch.stack(prior_pred_chunks, dim=0)
-                        prior_loss = torch.nn.functional.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
-
-                    if len(instance_chunks) and len(prior_chunks):
-                        # Add the prior loss to the instance loss.
-                        loss = instance_loss + current_prior_loss_weight * prior_loss
-                        loss /= 2
-                    elif len(instance_chunks):
-                        loss = instance_loss
                     else:
-                        loss = prior_loss * current_prior_loss_weight
+                        model_pred_chunks = torch.split(noise_pred, 1, dim=0)
+                        target_pred_chunks = torch.split(target, 1, dim=0)
+                        instance_chunks = []
+                        prior_chunks = []
+                        instance_pred_chunks = []
+                        prior_pred_chunks = []
+
+                        # Iterate over the list of boolean values in batch["types"]
+                        for i, is_prior in enumerate(batch["types"]):
+                            # If is_prior is False, append the corresponding chunk to instance_chunks
+                            if not is_prior:
+                                instance_chunks.append(model_pred_chunks[i])
+                                instance_pred_chunks.append(target_pred_chunks[i])
+                            # If is_prior is True, append the corresponding chunk to prior_chunks
+                            else:
+                                prior_chunks.append(model_pred_chunks[i])
+                                prior_pred_chunks.append(target_pred_chunks[i])
+
+                        # initialize with 0 in case we are having batch = 1
+                        instance_loss = torch.tensor(0)
+                        prior_loss = torch.tensor(0)
+
+                        # Concatenate the chunks in instance_chunks to form the model_pred_instance tensor
+                        if len(instance_chunks):
+                            model_pred = torch.stack(instance_chunks, dim=0)
+                            target = torch.stack(instance_pred_chunks, dim=0)
+                            instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+                        if len(prior_pred_chunks):
+                            model_pred_prior = torch.stack(prior_chunks, dim=0)
+                            target_prior = torch.stack(prior_pred_chunks, dim=0)
+                            prior_loss = torch.nn.functional.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
+
+                        if len(instance_chunks) and len(prior_chunks):
+                            # Add the prior loss to the instance loss.
+                            loss = instance_loss + current_prior_loss_weight * prior_loss
+                            loss /= 2
+                        elif len(instance_chunks):
+                            loss = instance_loss
+                        else:
+                            loss = prior_loss * current_prior_loss_weight
 
                     accelerator.backward(loss)
                     if accelerator.sync_gradients and not args.use_lora:
@@ -939,15 +948,22 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 del target
 
                 loss_step = loss.detach().item()
+                loss_total += loss_step
+                if args.split_loss:
+                    logs = {
+                        "lr": float(last_lr),
+                        "loss": float(loss_step),
+                        "inst_loss": float(instance_loss.detach().item()),
+                        "prior_loss": float(prior_loss.detach().item()),
+                        "vram": float(cached)
+                    }
+                else:
+                    logs = {
+                        "lr": float(last_lr),
+                        "loss": float(loss_step),
+                        "vram": float(cached)
+                    }
 
-                logs = {
-                    "lr": float(last_lr),
-                    "loss": float(loss_step),
-                    "inst_loss": float(instance_loss.detach().item()),
-                    "prior_loss": float(prior_loss.detach().item()),
-                    "vram": float(cached),
-
-                }
                 status.textinfo2 = f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
                                     f"VRAM: {allocated}/{cached} GB"
                 progress_bar.update(train_batch_size)

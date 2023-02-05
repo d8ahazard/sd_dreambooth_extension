@@ -428,7 +428,9 @@ def on_ui_tabs():
                         db_sample_steps = gr.Slider(label="Sample Steps", value=40, minimum=1, maximum=500, step=1)
                         db_sample_scale = gr.Slider(label="Sample CFG Scale", value=7.5, step=0.1, minimum=1, maximum=20)
                         db_sample_txt2img = gr.Checkbox(label="Use txt2img", value=True)
-
+                with gr.Tab("Testing", elem_id="TabDebug"):
+                    db_ema_predict = gr.Checkbox(label="Use EMA for prediction.")
+                    db_split_loss = gr.Checkbox(label="Calculate Split Loss", value=True)
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")
                 db_check_progress_initial = gr.Button(value=update_symbol, elem_id="db_check_progress_initial",
@@ -578,6 +580,7 @@ def on_ui_tabs():
             db_clip_skip,
             db_concepts_path,
             db_custom_model_name,
+            db_ema_predict,
             db_epochs,
             db_epoch_pause_frequency,
             db_epoch_pause_time,
@@ -631,6 +634,7 @@ def on_ui_tabs():
             db_save_state_cancel,
             db_save_state_during,
             db_scheduler,
+            db_split_loss,
             db_strict_tokens,
             db_shuffle_tags,
             db_snapshot,

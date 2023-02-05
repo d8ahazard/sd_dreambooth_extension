@@ -510,7 +510,7 @@ def start_training(model_dir: str, use_txt2img: bool = True):
             status.textinfo = "Initializing dreambooth training..."
             print(status.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
-            result = main(config, use_txt2img=use_txt2img)
+            result = main(use_txt2img=use_txt2img)
 
         config = result.config
         images = result.samples
