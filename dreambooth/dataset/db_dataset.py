@@ -240,7 +240,7 @@ class DbDataset(torch.utils.data.Dataset):
         total_instances = 0
         total_classes = 0
         pbar = mytqdm(range(p_len), desc="Caching latents..." if self.cache_latents else "Processing images...")
-        image_cache_file = os.path.join(self.cache_dir, "image_cache.safetensors")
+        image_cache_file = os.path.join(self.cache_dir, f"image_cache_{self.resolution}.safetensors")
         latents_cache = {}
         if os.path.exists(image_cache_file):
             print("Loading cached latents...")

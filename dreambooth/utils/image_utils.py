@@ -101,7 +101,7 @@ def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str
     _, dirr = os.path.split(img_dir)
     for img in images:
         # Get prompt
-        pbar.set_description(f"Generating prompts for: {dirr}")
+        pbar.set_description(f"Pre-processing images: {dirr}")
         text = text_getter.read_text(img)
         prompt = text_getter.create_text(
             concept.class_prompt if is_class else concept.instance_prompt,
@@ -121,7 +121,6 @@ def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str
         prompt_list.append(pd)
         pbar.update()
         prompts[reso] = prompt_list
-
     return dict(sorted(prompts.items()))
 
 

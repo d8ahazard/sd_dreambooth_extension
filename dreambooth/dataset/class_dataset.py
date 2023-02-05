@@ -70,8 +70,6 @@ class ClassDataset(Dataset):
             if concept.num_class_images_per > 0 and class_dir:
                 class_prompt_datas = sort_prompts(concept, text_getter, class_dir, c_images[c_idx], bucket_resos, c_idx, True, pbar)
 
-            print(f"Concept requires {concept.num_class_images_per} class images per instance image.")
-
             # Iterate over each resolution of images, per concept
             for res, i_prompt_datas in instance_prompt_datas.items():
                 # Extend instance prompts by the instance data
@@ -128,7 +126,7 @@ class ClassDataset(Dataset):
                     else:
                         self.new_prompts[res] = new_prompts
             c_idx += 1
-
+        pbar.reset(0)
         if self.required_prompts > 0:
             print(f"We need a total of {self.required_prompts} class images.")
 
