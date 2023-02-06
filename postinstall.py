@@ -78,7 +78,7 @@ def actual_install():
 
         if use_torch2:
             print("Setting torch2 vars...")
-            xformers_ver = "0.0.17+48a77cc.d20230202"
+            xformers_ver = "0.0.17+48a77cc.d20230202" if os.name == "nt" else "0.0.17+7f4fdce.d20230204"
             #xformers_ver = "0.0.17+48a77"
             torch_ver = "2.0.0.dev20230202+cu118"
             torch_vis_ver = "0.15.0.dev20230202+cu118"
