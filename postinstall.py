@@ -49,6 +49,7 @@ def actual_install():
             return None, None
 
     def check_versions():
+        launch_errors = []
         use_torch2 = False
         try:
             print(f"ARGS: {sys.argv}")
@@ -63,8 +64,8 @@ def actual_install():
             print(f"Xformers libraries for Torch2 are not available for {platform.system()} yet, disabling.")
             use_torch2 = False
 
-        req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
-        reqs = open(req_file, 'r')
+        requirements = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
+        reqs = open(requirements, 'r')
         lines = reqs.readlines()
         reqs_dict = {}
         for line in lines:
@@ -77,7 +78,8 @@ def actual_install():
 
         if use_torch2:
             print("Setting torch2 vars...")
-            xformers_ver = "0.0.17+48a77"
+            xformers_ver = "0.0.17+48a77cc.d20230202"
+            #xformers_ver = "0.0.17+48a77"
             torch_ver = "2.0.0.dev20230202+cu118"
             torch_vis_ver = "0.15.0.dev20230202+cu118"
             xc = xformers2_cmd
@@ -89,6 +91,9 @@ def actual_install():
             xc = xformers_cmd
             tc = torch_cmd
 
+        from extensions.sd_dreambooth_extension.dreambooth import shared
+
+        # Check/install xformers
         has_xformers = importlib.util.find_spec("xformers") is not None
         xformers_check = str(importlib_metadata.version("xformers")) if has_xformers else None
         if xformers_check != xformers_ver:
@@ -110,8 +115,11 @@ def actual_install():
             if check != ver:
                 if not check:
                     print(f"[!] {module} NOT installed.")
+                    launch_errors.append(f"{module} not installed.")
+
                 else:
                     print(f"[!] {module} version {check} installed.")
+                    launch_errors.append(f"Incorrect version of {module} installed.")
             else:
                 print(f"[+] {module} version {check} installed.")
 
@@ -128,14 +136,21 @@ def actual_install():
                             status = "[+]"
                         else:
                             status = "[!]"
+                            launch_errors.append(f"Incorrect version of {check} installed.")
 
             except importlib_metadata.PackageNotFoundError:
                 check_available = False
-            if not check_available and check != "xformers":
+            if not check_available:
                 status = "[!]"
                 print(f"{status} {check} NOT installed.")
+                launch_errors.append(f"{check} not installed.")
             else:
                 print(f"{status} {check} version {check_ver} installed.")
+
+        if len(launch_errors):
+            shared.launch_error = launch_errors
+        else:
+            shared.launch_error = None
 
     base_dir = os.path.dirname(os.path.realpath(__file__))
     revision = ""

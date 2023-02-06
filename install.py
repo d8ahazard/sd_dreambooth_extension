@@ -1,1 +1,1 @@
-print("Yay.")
+print("")

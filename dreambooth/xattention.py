@@ -6,7 +6,6 @@ from typing import Any, Dict, Union, Optional
 import diffusers
 import torch
 import transformers
-from diffusers import EMAModel
 from diffusers.optimization import SchedulerType, TYPE_TO_SCHEDULER_FUNCTION
 from einops import rearrange
 from torch import einsum

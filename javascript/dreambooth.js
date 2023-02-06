@@ -3,6 +3,7 @@ let params_loaded = false;
 let training_started = false;
 let closeBtn;
 let modalShown = false;
+let locked = false;
 
 // Click a button. Whee.
 function save_config() {
@@ -18,8 +19,13 @@ function save_config() {
     }
 }
 
-function toggleComponents(enable) {
+function toggleComponents(enable, disableAll) {
     const elements = ['DbTopRow', 'SettingsPanel'];
+    if (disableAll) {
+        console.log("Disabling all DB elements!");
+        elements.push("ModelPanel")
+        locked = true;
+    }
     elements.forEach(element => {
         let elem = getRealElement(element);
         if (elem === null || elem === undefined) {
@@ -65,7 +71,7 @@ function check_save() {
 
 function clear_loaded() {
     if (arguments[0] !== "") {
-        toggleComponents(true);
+        toggleComponents(true, false);
         let hintRow = getRealElement("hint_row");
         hintRow.style.display = "none";
     }
@@ -318,11 +324,22 @@ onUiUpdate(function () {
         }
     }
 
+    let errors = getRealElement("launch_errors");
+    if (errors !== null && errors !== undefined && !locked) {
+        console.log("Launch error div: ", errors);
+        let hr = getRealElement("hint_row");
+        if (errors.innerHTML !== "") {
+            console.log("Setting error row...");
+            hr.innerHTML = errors.innerHTML;
+            toggleComponents(false, true);
+        }
+    }
+
     if (closeBtn === null || closeBtn === undefined) {
         let cb = getRealElement("close_modal");
         closeBtn = cb;
         if (cb && cm) {
-            toggleComponents(false);
+            toggleComponents(false, false);
             cb.addEventListener("click", function () {
                 cm.classList.remove("active");
             });

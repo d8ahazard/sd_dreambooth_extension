@@ -4,17 +4,17 @@ from typing import List
 import gradio as gr
 
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import save_config, from_file
-from extensions.sd_dreambooth_extension.dreambooth.shared import status
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
-from extensions.sd_dreambooth_extension.dreambooth.webhook import save_and_test_webhook
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret, create_secret, clear_secret
+from extensions.sd_dreambooth_extension.dreambooth.shared import status, get_launch_errors
+from extensions.sd_dreambooth_extension.dreambooth.ui_functions import performance_wizard, \
+    training_wizard, training_wizard_person, load_model_params, ui_classifiers, debug_buckets, create_model, \
+    generate_samples, load_params, start_training
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention, \
     list_floats, wrap_gpu_call, parse_logs, printm
+from extensions.sd_dreambooth_extension.dreambooth.webhook import save_and_test_webhook
 from extensions.sd_dreambooth_extension.helpers.version_helper import check_updates
-from extensions.sd_dreambooth_extension.scripts import dreambooth
-from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
-    training_wizard, training_wizard_person, load_model_params, ui_classifiers, debug_buckets, create_model, generate_samples
 from modules import script_callbacks, sd_models
 from modules.ui import gr_show, create_refresh_button
 
@@ -160,7 +160,7 @@ def on_ui_tabs():
         with gr.Row():
             gr.HTML(value="Select or create a model to begin.", elem_id="hint_row")
         with gr.Row().style(equal_height=False):
-            with gr.Column(variant="panel"):
+            with gr.Column(variant="panel", elem_id="ModelPanel"):
                 gr.HTML(value="<span class='hh'>Model</span>")
                 with gr.Tab("Select"):
                     with gr.Row():
@@ -447,7 +447,7 @@ def on_ui_tabs():
                 db_gallery_prompt = gr.HTML(elem_id="db_gallery_prompt", value="")
                 db_check_progress = gr.Button("Check Progress", elem_id=f"db_check_progress", visible=False)
                 db_update_params = gr.Button("Update Parameters", elem_id="db_update_params", visible=False)
-
+                db_launch_error = gr.HTML(elem_id="launch_errors", visible=False, value=get_launch_errors)
                 def check_toggles(use_ema, use_lora, lr_scheduler, train_unet, scale_prior):
                     stop_text_encoder = update_stop_tenc(train_unet)
                     show_ema, lora_save, lora_lr, lora_model = disable_ema(use_lora)
@@ -749,7 +749,7 @@ def on_ui_tabs():
 
         db_load_params.click(
             _js="db_start_load_params",
-            fn=dreambooth.load_params,
+            fn=load_params,
             inputs=[
                 db_model_name
             ],
@@ -979,7 +979,7 @@ def on_ui_tabs():
         )
 
         db_train_model.click(
-            fn=wrap_gpu_call(dreambooth.start_training),
+            fn=wrap_gpu_call(start_training),
             _js="db_start_train",
             inputs=[
                 db_model_name,

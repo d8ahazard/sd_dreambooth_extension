@@ -1,6 +1,5 @@
 # One wrapper we're going to use to not depend so much on the main app.
 import datetime
-import inspect
 import os
 import pathlib
 import time
@@ -10,7 +9,6 @@ import numpy
 import torch
 from PIL import Image
 from packaging import version
-
 
 script_path = '\\'.join(__file__.split('\\')[0:-4])
 print(f"Script path is {script_path}")
@@ -39,6 +37,7 @@ CLIP_stop_at_last_layers = 2
 sd_model = None
 config = os.path.join(script_path, "configs", "v1-inference.yaml")
 force_cpu = False
+launch_error = "Dreambooth install checks have not been completed."
 
 device = torch.device("cpu")
 if torch.cuda.is_available():
@@ -107,6 +106,15 @@ def load_auto_settings():
         print("Exception importing SD-WebUI module.")
         pass
 
+def get_launch_errors():
+    launch_errors = ""
+    if launch_error is not None:
+        launch_errors = "The Dreambooth extension has been disabled because the following error(s) were detected on launch.<br>" \
+                        " Please completely restart the Auto1111 web-UI.<br>" \
+                        "If this error persists, please consult the <a href='https://github.com/d8ahazard/sd_dreambooth_extension/wiki'> wiki</a> for more information.<br>"
+        launch_strings = "<br>".join(launch_error)
+        launch_errors += f"<b>{launch_strings}</b>"
+    return launch_errors
 
 def get_cuda_device_string():
     if device_id is not None:

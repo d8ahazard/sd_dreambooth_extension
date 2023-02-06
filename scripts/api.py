@@ -19,14 +19,13 @@ from pydantic import BaseModel, Field
 from extensions.sd_dreambooth_extension.dreambooth import shared
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.shared import DreamState
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
+from extensions.sd_dreambooth_extension.dreambooth.shared import DreamState
+from extensions.sd_dreambooth_extension.dreambooth.ui_functions import create_model, generate_samples, start_training
 from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
-from extensions.sd_dreambooth_extension.scripts import dreambooth
-from extensions.sd_dreambooth_extension.scripts.dreambooth import create_model, generate_samples
 from modules import sd_models
 
 
@@ -680,7 +679,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         return Response(content=img_byte_arr, media_type="image/png")
 
     @app.post("/dreambooth/start_training")
-    async def start_training(
+    async def train(
             model_name: str = Query(None,
                                     description="The model name to load params for.", ),
             use_tx2img: bool = Query(True, description="Use txt2img to generate class images.", ),
@@ -705,7 +704,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
 
         print("Starting Training")
         shared.status.begin()
-        run_in_background(dreambooth.start_training, model_name, use_tx2img)
+        run_in_background(start_training, model_name, use_tx2img)
         return {"Status": "Training started."}
 
     @app.post("/dreambooth/upload")
