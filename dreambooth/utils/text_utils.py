@@ -35,7 +35,7 @@ def encode_hidden_state(text_encoder: CLIPTextModel, input_ids, pad_tokens, b_si
     return encoder_hidden_states
 
 def process_tokens(new_tokens_list: str):
-    print("Adding new tokens to text model.")
+    print("Processing your tokens to add.")
     parsed_tokens = new_tokens_list.split(",")
     return [x.strip() for x in parsed_tokens] 
 
