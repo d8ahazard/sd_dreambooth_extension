@@ -228,10 +228,10 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 if args.attention == "xformers" and not shared.force_cpu:
                     xattention.set_diffusers_xformers_flag(ema_unet, True)
 
-                ema_model = EMAModel(ema_unet, device=accelerator.device)
+                ema_model = EMAModel(ema_unet, device=accelerator.device, dtype=weight_dtype)
                 del ema_unet
             else:
-                ema_model = EMAModel(unet, device=accelerator.device)
+                ema_model = EMAModel(unet, device=accelerator.device, dtype=weight_dtype)
 
         unet_lora_params = None
         text_encoder_lora_params = None
@@ -273,9 +273,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
         else:
             if not args.train_unet:
                 unet.requires_grad_(False)
-                if ema_model is not None:
-                    ema_model.model.requires_grad_(False)
-
 
         # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
         use_adam = False
