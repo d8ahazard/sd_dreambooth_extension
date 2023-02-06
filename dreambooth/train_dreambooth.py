@@ -197,10 +197,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
         )
 
         if args.attention == "xformers" and not shared.force_cpu:
-            xattention.set_diffusers_xformers_flag(unet, True)
-            xattention.set_diffusers_xformers_flag(vae, True)
-            xattention.set_diffusers_xformers_flag(text_encoder, True)
-
+            unet.enable_xformers_memory_efficient_attention()
+            vae.enable_xformers_memory_efficient_attention()
         elif args.attention == "flash_attention":
             xattention.replace_unet_cross_attn_to_flash_attention()
         else:
