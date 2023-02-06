@@ -343,6 +343,16 @@ def on_ui_tabs():
                         with gr.Row():
                             db_train_wizard_person = gr.Button(value="Training Wizard (Person)")
                             db_train_wizard_object = gr.Button(value="Training Wizard (Object/Style)")
+
+                        with gr.Column():
+                            gr.HTML("Text Tools")
+                            db_new_tokens_list = gr.Textbox(
+                                label="Add New Tokens",
+                                value="",
+                                placeholder="A list of new tokens to add for your subjects (like sks), without quotes. Example '%my_object%, <cool_thing>, |etc|...'",
+                                lines=3
+                            )
+
                         with gr.Tab("Concept 1"):
                             c1_instance_data_dir, c1_class_data_dir, c1_instance_prompt, \
                             c1_class_prompt, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token, \
@@ -643,6 +653,7 @@ def on_ui_tabs():
             db_use_lora,
             db_use_lora_extended,
             db_use_subdir,
+            db_new_tokens_list,
             c1_class_data_dir,
             c1_class_guidance_scale,
             c1_class_infer_steps,

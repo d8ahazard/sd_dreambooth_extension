@@ -187,6 +187,10 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
             torch_dtype=torch.float32
         )
         printm("Created tenc")
+
+        if bool(args.new_tokens_list.strip()) and os.path.exists(vocab_json_path):
+            add_new_tokens(text_encoder, tokenizer, args.new_tokens_list, args=args)
+
         vae = create_vae()
         printm("Created vae")
 

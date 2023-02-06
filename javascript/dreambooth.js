@@ -143,6 +143,7 @@ function filterArgs(argsCount, arguments) {
 
 let db_titles = {
     "API Key": "Used for securing the Web API. Click the refresh button to the right to (re)generate your key, the trash icon to remove it.",
+    "Add New Tokens": "Replaces rare words in the vocabulary with your own tokens. This is useful if you want to make the best use of Dreambooth while also being able to remember rare words. Example: <epic_style> would replace 'omd', and use it's initilized weights.",
     "AdamW Weight Decay": "The weight decay of the AdamW Optimizer. Values closer to 0 closely match your training dataset, and values closer to 1 generalize more and deviate from your training dataset. Default is 1e-2, values lower than 0.1 are recommended.",
     "Amount of time to pause between Epochs (s)": "When 'Pause After N Epochs' is greater than 0, this is the amount of time, in seconds, that training will be paused for",
     "Apply Horizontal Flip": "Randomly decide to flip images horizontally.",

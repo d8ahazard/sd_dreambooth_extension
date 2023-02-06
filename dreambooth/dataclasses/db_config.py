@@ -102,6 +102,7 @@ class DreamboothConfig(BaseModel):
     use_lora: bool = False
     use_lora_extended: bool = False
     use_subdir: bool = False
+    new_tokens_list: str = ""
     v2: bool = False
 
     def __init__(self, model_name: str = "", scheduler: str = "ddim", v2: bool = False, src: str = "",
