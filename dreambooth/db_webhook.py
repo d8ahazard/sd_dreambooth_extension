@@ -55,13 +55,18 @@ def send_training_update(
     global_step: Union[str, int],
 ):
     global hook_url
-    if not _is_valid_notification_target(hook_url):
+    target = __detect_webhook_target(hook_url)
+    if target == DreamboothWebhookTarget.UNKNOWN:
         return # early return
 
     # Accept a list, make a grid
     if isinstance(imgs, List):
         out_imgs = [Image.open(img) for img in imgs]
         image = images.image_grid(out_imgs)
+        
+        for i in out_imgs:
+            i.close()
+
         del out_imgs
     else:
         image = Image.open(imgs)
@@ -73,9 +78,10 @@ def send_training_update(
         for i,p in enumerate(_prompts,start=1):
             prompt += f"{i}: {p}\r\n"
 
-    target = __detect_webhook_target(hook_url)
     if target == DreamboothWebhookTarget.DISCORD:
         __send_discord_training_update(hook_url, image, model_name, prompt.strip(), training_step, global_step)
+        
+    image.close()
 
 
 def _is_valid_notification_target(url: str) -> bool:
