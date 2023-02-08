@@ -19,7 +19,6 @@ like a regular model.
 """
 
 import copy
-import logging
 import os
 import shutil
 

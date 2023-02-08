@@ -8,16 +8,14 @@ from accelerate import Accelerator
 from transformers import AutoTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth import shared
-from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import ClassDataset
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig, from_file
-from extensions.sd_dreambooth_extension.dreambooth.shared import status
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import ClassDataset
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup
 from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
 from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-
-
 
 
 def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None, class_prompts: List[PromptData] = None,

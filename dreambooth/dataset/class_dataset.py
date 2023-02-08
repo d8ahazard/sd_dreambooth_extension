@@ -1,16 +1,15 @@
 import os
 import random
-from pathlib import Path
 
 from torch.utils.data import Dataset
 
 from extensions.sd_dreambooth_extension.dreambooth import shared
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import FilenameTextGetter, make_bucket_resolutions, \
     sort_prompts, get_images
 from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
 
 
 class ClassDataset(Dataset):
