@@ -14,8 +14,10 @@ import torch
 import torch.backends.cudnn
 import torch.utils.checkpoint
 from accelerate import Accelerator
+from accelerate.utils.random import set_seed as set_seed2
 from diffusers import AutoencoderKL, DDIMScheduler, DiffusionPipeline, UNet2DConditionModel, DDPMScheduler
 from diffusers.utils import logging as dl
+from tensorflow.python.framework.random_seed import set_seed as set_seed1
 from torch.cuda.profiler import profile
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
@@ -55,6 +57,12 @@ last_prompts = []
 
 torch.backends.cudnn.deterministic = True
 
+
+def set_seed(seed: int):
+    set_seed1(seed)
+    set_seed2(seed)
+
+
 def current_prior_loss(args, current_epoch):
     if not args.prior_loss_scale:
         return args.prior_loss_weight
@@ -78,6 +86,7 @@ def stop_profiler(profiler):
         except:
             pass
 
+
 def main(use_txt2img: bool = True) -> TrainResult:
     """
     @param use_txt2img: Use txt2img when generating class images.
@@ -89,6 +98,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
     result = TrainResult
     result.config = args
 
+    set_seed(0)
 
     @find_executable_batch_size(starting_batch_size=args.train_batch_size,
                                 starting_grad_size=args.gradient_accumulation_steps,
@@ -113,7 +123,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
             weight_dtype = torch.float16
         elif precision == "bf16":
             weight_dtype = torch.bfloat16
-
 
         try:
             accelerator = Accelerator(
@@ -144,7 +153,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
             print(msg)
             status.textinfo = msg
             stop_text_percentage = 0
-        count, instance_prompts, class_prompts = generate_classifiers(args, use_txt2img=use_txt2img, accelerator=accelerator, ui = False)
+        count, instance_prompts, class_prompts = generate_classifiers(args, use_txt2img=use_txt2img,
+                                                                      accelerator=accelerator, ui=False)
         if status.interrupted:
             result.msg = "Training interrupted."
             stop_profiler(profiler)
@@ -291,12 +301,13 @@ def main(use_txt2img: bool = True) -> TrainResult:
             args.learning_rate = args.lora_learning_rate
 
             params_to_optimize = ([
-                    {"params": itertools.chain(*unet_lora_params), "lr": args.lora_learning_rate},
-                    {"params": itertools.chain(*text_encoder_lora_params), "lr": args.lora_txt_learning_rate},
-                ]
-                if stop_text_percentage != 0
-                else itertools.chain(*unet_lora_params)
-            )
+                                      {"params": itertools.chain(*unet_lora_params), "lr": args.lora_learning_rate},
+                                      {"params": itertools.chain(*text_encoder_lora_params),
+                                       "lr": args.lora_txt_learning_rate},
+                                  ]
+                                  if stop_text_percentage != 0
+                                  else itertools.chain(*unet_lora_params)
+                                  )
         else:
             params_to_optimize = (
                 itertools.chain(text_encoder.parameters()) if stop_text_percentage != 0 and not args.train_unet else
@@ -351,13 +362,13 @@ def main(use_txt2img: bool = True) -> TrainResult:
         printm("Loading dataset...")
         train_dataset = generate_dataset(
             model_name=args.model_name,
-            instance_prompts = instance_prompts,
-            class_prompts = class_prompts,
+            instance_prompts=instance_prompts,
+            class_prompts=class_prompts,
             batch_size=train_batch_size,
             tokenizer=tokenizer,
             vae=vae if args.cache_latents else None,
             debug=False,
-            model_dir = args.model_dir
+            model_dir=args.model_dir
         )
 
         printm("Dataset loaded.")
@@ -382,7 +393,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
             result.config = args
             stop_profiler(profiler)
             return result
-
 
         def collate_fn(examples):
             input_ids = [example["input_ids"] for example in examples]
@@ -523,8 +533,9 @@ def main(use_txt2img: bool = True) -> TrainResult:
         if args.use_lora and stop_text_percentage > 0: print(f"  LoRA Text Encoder LR: {args.lora_txt_learning_rate}")
         print(f"  V2: {args.v2}")
 
-        os.environ.__setattr__("CUDA_LAUNCH_BLOCKING",1)
-        def check_save(pbar: mytqdm, is_epoch_check = False):
+        os.environ.__setattr__("CUDA_LAUNCH_BLOCKING", 1)
+
+        def check_save(pbar: mytqdm, is_epoch_check=False):
             nonlocal last_model_save
             nonlocal last_image_save
             save_model_interval = args.save_embedding_every
@@ -652,9 +663,12 @@ def main(use_txt2img: bool = True) -> TrainResult:
                                 # We should save this regardless, because it's our fallback if no snapshot exists.
                                 status.textinfo = f"Saving diffusion model at step {args.revision}..."
                                 pbar.set_description("Saving diffusion model")
-                                s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"),safe_serialization=True)
+                                s_pipeline.save_pretrained(os.path.join(args.model_dir, "working"),
+                                                           safe_serialization=True)
                                 if ema_model is not None:
-                                    ema_model.save_pretrained(os.path.join(args.pretrained_model_name_or_path, "ema_unet"), safe_serialization=True)
+                                    ema_model.save_pretrained(
+                                        os.path.join(args.pretrained_model_name_or_path, "ema_unet"),
+                                        safe_serialization=True)
                                 pbar.update()
 
                             elif save_lora:
@@ -851,7 +865,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
                     pad_tokens = args.pad_tokens if train_tenc else False
                     encoder_hidden_states = encode_hidden_state(text_encoder, batch["input_ids"], pad_tokens,
-                                                                b_size, args.max_token_length, tokenizer.model_max_length, args.clip_skip)
+                                                                b_size, args.max_token_length,
+                                                                tokenizer.model_max_length, args.clip_skip)
 
                     # Predict the noise residual
                     if args.use_ema and args.ema_predict:
@@ -866,7 +881,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
                         target = noise
 
                     if not args.split_loss:
-                        loss = instance_loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="mean")
+                        loss = instance_loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(),
+                                                                            reduction="mean")
                         loss *= batch["loss_avg"]
 
                     else:
@@ -896,12 +912,14 @@ def main(use_txt2img: bool = True) -> TrainResult:
                         if len(instance_chunks):
                             model_pred = torch.stack(instance_chunks, dim=0)
                             target = torch.stack(instance_pred_chunks, dim=0)
-                            instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                            instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(),
+                                                                         reduction="mean")
 
                         if len(prior_pred_chunks):
                             model_pred_prior = torch.stack(prior_chunks, dim=0)
                             target_prior = torch.stack(prior_pred_chunks, dim=0)
-                            prior_loss = torch.nn.functional.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
+                            prior_loss = torch.nn.functional.mse_loss(model_pred_prior.float(), target_prior.float(),
+                                                                      reduction="mean")
 
                         if len(instance_chunks) and len(prior_chunks):
                             # Add the prior loss to the instance loss.
@@ -962,7 +980,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     }
 
                 status.textinfo2 = f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, " \
-                                    f"VRAM: {allocated}/{cached} GB"
+                                   f"VRAM: {allocated}/{cached} GB"
                 progress_bar.update(train_batch_size)
                 progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=args.revision)
@@ -1025,7 +1043,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
                             print("Training complete, interrupted.")
                             break
                         time.sleep(1)
-
 
         cleanup_memory()
         accelerator.end_training()
