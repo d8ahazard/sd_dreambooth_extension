@@ -145,7 +145,10 @@ class DbDataset(torch.utils.data.Dataset):
             else:
                 img = self.open_and_trim(image_path, res)
                 image = self.image_transforms(img)
-            input_ids = self.caption_cache[image_path]
+            if self.shuffle_tags:
+                caption, input_ids = self.cache_caption(image_path, caption)
+            else:
+                input_ids = self.caption_cache[image_path]
         return image, input_ids
 
     def cache_latent(self, image_path, res):
@@ -171,7 +174,8 @@ class DbDataset(torch.utils.data.Dataset):
                 input_ids = self.tokenizer(caption, padding='max_length', truncation=True,
                                            add_special_tokens=auto_add_special_tokens,
                                            return_tensors='pt').input_ids
-            self.caption_cache[image_path] = input_ids
+            if not self.shuffle_tags:
+                self.caption_cache[image_path] = input_ids
         return caption, input_ids
 
     def make_buckets_with_caching(self, vae, min_size):
@@ -361,13 +365,19 @@ class DbDataset(torch.utils.data.Dataset):
         if not self.debug_dataset:
             image_data, input_ids = self.load_image(image_path, caption, self.active_resolution)
         else:
+            # Pretty sure this path is broken
             image_data = image_path
             print(f"Recoding: {caption}")
             caption, cap_tokens = self.cache_caption(image_path, caption)
             rebuilt = self.tokenizer.decode(cap_tokens.tolist()[0])
             input_ids = (caption, rebuilt)
         # If we have reached the end of our bucket, increment to the next, update the count, reset image index.
-        example = {"image": image_data, "input_ids": input_ids, "res": self.active_resolution, "is_class":is_class_image}
+        example = {
+            "image": image_data,
+            "input_ids": input_ids,
+            "res": self.active_resolution,
+            "is_class": is_class_image
+        }
         return example
 
 
