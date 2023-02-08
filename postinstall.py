@@ -40,7 +40,8 @@ def actual_install():
             run(f'"{python}" -m {torch_command}', f"Installing torch{'2' if use_torch2 else ''} and torchvision.", "Couldn't install torch.")
             has_torch = importlib.util.find_spec("torch") is not None
             has_torch_vision = importlib.util.find_spec("torchvision") is not None
-
+            if use_torch2:
+                run(f"{python} -m install sympy==1.11.1")
             torch_check = str(importlib_metadata.version("torch")) if has_torch else None
             torch_vision_check = str(importlib_metadata.version("torchvision")) if has_torch_vision else None
             return torch_check, torch_vision_check
