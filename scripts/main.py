@@ -851,6 +851,7 @@ def on_ui_tabs():
         )
 
         db_generate_graph.click(
+            _js="db_start_logs",
             fn=parse_logs,
             inputs=[db_model_name, gr.Checkbox(value=True, visible=False)],
             outputs=[db_gallery, db_prompt_list]
