@@ -20,8 +20,5 @@ def preload(parser: argparse.ArgumentParser):
     parser.add_argument("--torch2", action='store_true',
                         help="Enable this flag to use torch V2.")
 
-    if not os.environ.get("PUBLIC_KEY"):
-        actual_install()
-    else:
-        print("Docker, skipping regular install.")
+    actual_install()
 
