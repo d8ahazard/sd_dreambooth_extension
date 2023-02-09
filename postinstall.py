@@ -59,8 +59,7 @@ def actual_install():
         torch_version = revisions[0]
         python_version = revisions[1]
         cuda_version = revisions[2]
-        xformers_ver = last_portion.replace(f"-{python_version}-{cuda_version}", "")
-        print(xformers_ver)
+        xformers_ver = last_portion.replace("xformers-", "").replace(f"-{python_version}-{cuda_version}", "")
         os_string = "win_amd64" if os.name == "nt" else "linux_x86_64"
 
         torch_ver = f"2.0.0.dev{torch_version}+{cuda_version}"
