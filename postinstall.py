@@ -62,7 +62,7 @@ def actual_install():
         xformers_ver = last_portion.replace(f"-{python_version}-{cuda_version}", "")
         print(xformers_ver)
         os_string = "win_amd64" if os.name == "nt" else "linux_x86_64"
-        # xformers_ver = "0.0.17+48a77"
+
         torch_ver = f"2.0.0.dev{torch_version}+{cuda_version}"
         torch_vis_ver = f"0.15.0.dev{torch_version}+{cuda_version}"
         xformers_url = f"{resolved_url}/{xformers_ver}-{python_version}-{python_version}-{os_string}.whl".replace("/tag/", "/download/")
