@@ -1,4 +1,5 @@
 import argparse
+import os
 
 
 def preload(parser: argparse.ArgumentParser):
@@ -18,5 +19,9 @@ def preload(parser: argparse.ArgumentParser):
                         help="Set this to enable memory logging. For science only.")
     parser.add_argument("--torch2", action='store_true',
                         help="Enable this flag to use torch V2.")
-    actual_install()
+
+    if not os.environ.get("PUBLIC_KEY"):
+        actual_install()
+    else:
+        print("Docker, skipping regular install.")
 
