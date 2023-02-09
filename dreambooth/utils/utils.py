@@ -316,19 +316,22 @@ def parse_logs(model_name: str, for_ui: bool = False):
     matplotlib.use("Agg")
     if for_ui:
         status.textinfo = "Generating graphs"
-    def convert_tfevent(filepaths) -> Tuple[DataFrame, DataFrame, DataFrame, bool]:
+    def convert_tfevent(filepath) -> Tuple[DataFrame, DataFrame, DataFrame, bool]:
         loss_events = []
         lr_events = []
         ram_events = []
         instance_loss_events = []
         prior_loss_events = []
-        serialized_examples = tensorflow.data.TFRecordDataset(filepath)
         has_all = False
         try:
             import tensorflow
+
         except:
             print("Unable to import tensorflow")
             return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events), has_all
+
+        serialized_examples = tensorflow.data.TFRecordDataset(filepath)
+
         for serialized_example in serialized_examples:
             e = event_pb2.Event.FromString(serialized_example.numpy())
             if len(e.summary.value):
