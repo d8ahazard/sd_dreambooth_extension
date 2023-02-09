@@ -9,7 +9,7 @@ from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret, cre
 from extensions.sd_dreambooth_extension.dreambooth.shared import status, get_launch_errors
 from extensions.sd_dreambooth_extension.dreambooth.ui_functions import performance_wizard, \
     training_wizard, training_wizard_person, load_model_params, ui_classifiers, debug_buckets, create_model, \
-    generate_samples, load_params, start_training
+    generate_samples, load_params, start_training, update_extension
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention, \
     list_floats, wrap_gpu_call, parse_logs, printm
@@ -431,6 +431,7 @@ def on_ui_tabs():
                 with gr.Tab("Testing", elem_id="TabDebug"):
                     db_ema_predict = gr.Checkbox(label="Use EMA for prediction.")
                     db_split_loss = gr.Checkbox(label="Calculate Split Loss", value=True)
+                    db_update_extension = gr.Button(value="Update Extension and Restart")
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")
                 db_check_progress_initial = gr.Button(value=update_symbol, elem_id="db_check_progress_initial",
@@ -487,6 +488,12 @@ def on_ui_tabs():
                              db_prior_loss_weight_min,
                              db_prior_loss_target]
 
+                )
+
+                db_update_extension.click(
+                    fn=update_extension,
+                    inputs=[],
+                    outputs=[]
                 )
 
                 notification_webhook_test_btn.click(
