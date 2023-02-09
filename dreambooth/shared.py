@@ -102,8 +102,9 @@ def load_auto_settings():
         except:
             pass
 
-    except:
-        print("Exception importing SD-WebUI module.")
+    except Exception as e:
+        print("Exception importing SD-WebUI module:")
+        print(f"{type(e).__name__} at line {e.__traceback__.tb_lineno} of {__file__}: {e}")
         pass
 
 def get_launch_errors():
