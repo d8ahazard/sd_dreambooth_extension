@@ -18,11 +18,11 @@ def actual_install():
         import importlib.metadata as importlib_metadata
 
     req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
-    torch2_url_win = "https://download.pytorch.org/whl/nightly/cu118/torch-2.0.0.dev20230202%2Bcu118-cp310-cp310-win_amd64.whl"
-    torchvision2_url_win = "https://download.pytorch.org/whl/nightly/cu118/torchvision-0.15.0.dev20230202%2Bcu118-cp310-cp310-win_amd64.whl"
+    torch2_url_win = "https://download.pytorch.org/whl/nightly/cu118/torch-2.0.0.dev20230209%2Bcu118-cp310-cp310-win_amd64.whl"
+    torchvision2_url_win = "https://download.pytorch.org/whl/nightly/cu118/torchvision-0.15.0.dev20230209%2Bcu118-cp310-cp310-win_amd64.whl"
 
-    torch2_url_linux = "https://download.pytorch.org/whl/nightly/cu118/torch-2.0.0.dev20230202%2Bcu118-cp310-cp310-linux_x86_64.whl"
-    torchvision2_url_linux = "https://download.pytorch.org/whl/nightly/cu118/torchvision-0.15.0.dev20230202%2Bcu118-cp310-cp310-linux_x86_64.whl"
+    torch2_url_linux = "https://download.pytorch.org/whl/nightly/cu118/torch-2.0.0.dev20230209%2Bcu118-cp310-cp310-linux_x86_64.whl"
+    torchvision2_url_linux = "https://download.pytorch.org/whl/nightly/cu118/torchvision-0.15.0.dev20230209%2Bcu118-cp310-cp310-linux_x86_64.whl"
     if os.name == "nt":
         torch2_cmd = f"pip install --no-deps {torch2_url_win} {torchvision2_url_win}"
     else:
@@ -30,8 +30,8 @@ def actual_install():
 
     torch_cmd = "pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117"
 
-    xformers_win = "https://github.com/ArrowM/xformers/releases/download/xformers-0.0.17-cu118-windows/xformers-0.0.17+48a77cc.d20230202-cp310-cp310-win_amd64.whl"
-    xformers_linux = "https://github.com/ArrowM/xformers/releases/download/xformers-0.0.17-cu118-linux/xformers-0.0.17+7f4fdce.d20230204-cp310-cp310-linux_x86_64.whl"
+    xformers_win = "https://github.com/ArrowM/xformers/releases/download/xformers-0.0.17%2B36e23c5.d20230209-cp310-cu118/xformers-0.0.17+36e23c5.d20230209-cp310-cp310-win_amd64.whl"
+    xformers_linux = "https://github.com/ArrowM/xformers/releases/download/xformers-0.0.17%2B36e23c5.d20230209-cp310-cu118/xformers-0.0.17+36e23c5.d20230209-cp310-cp310-linux_x86_64.whl"
     xformers2_cmd = f"pip install {xformers_win if os.name == 'nt' else xformers_linux}"
     xformers_cmd = "pip install xformers==0.0.17.dev442"
 
@@ -79,16 +79,16 @@ def actual_install():
 
         if use_torch2:
             print("Setting torch2 vars...")
-            xformers_ver = "0.0.17+48a77cc.d20230202" if os.name == "nt" else "0.0.17+7f4fdce.d20230204"
+            xformers_ver = "0.0.17+36e23c5.d20230209" if os.name == "nt" else "0.0.17+7f4fdce.d20230204"
             #xformers_ver = "0.0.17+48a77"
-            torch_ver = "2.0.0.dev20230202+cu118"
-            torch_vis_ver = "0.15.0.dev20230202+cu118"
+            torch_ver = "2.0.0.dev20230209+cu118"
+            torch_vis_ver = "0.15.0.dev20230209+cu118"
             xc = xformers2_cmd
             tc = torch2_cmd
         else:
             xformers_ver = "0.0.17.dev442"
-            torch_ver = "2.0.0.dev20230202+cu118"
-            torch_vis_ver = "0.15.0.dev20230202+cu118"
+            torch_ver = "2.0.0.dev20230209+cu118"
+            torch_vis_ver = "0.15.0.dev20230209+cu118"
             xc = xformers_cmd
             tc = torch_cmd
 
