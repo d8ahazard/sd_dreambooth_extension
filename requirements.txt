@@ -1,6 +1,6 @@
 accelerate==0.16.0
 albumentations==1.3.0
-bitsandbytes==0.35.4
+bitsandbytes==0.37.0
 diffusers==0.12.1
 fastapi==0.87.0
 ftfy==6.1.1
