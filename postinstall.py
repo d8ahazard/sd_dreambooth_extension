@@ -19,15 +19,6 @@ def actual_install():
         import importlib.metadata as importlib_metadata
 
     req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
-    torch2_url_win = "https://download.pytorch.org/whl/nightly/cu118/torch-2.0.0.dev20230209%2Bcu118-cp310-cp310-win_amd64.whl"
-    torchvision2_url_win = "https://download.pytorch.org/whl/nightly/cu118/torchvision-0.15.0.dev20230209%2Bcu118-cp310-cp310-win_amd64.whl"
-
-    torch2_url_linux = "https://download.pytorch.org/whl/nightly/cu118/torch-2.0.0.dev20230209%2Bcu118-cp310-cp310-linux_x86_64.whl"
-    torchvision2_url_linux = "https://download.pytorch.org/whl/nightly/cu118/torchvision-0.15.0.dev20230209%2Bcu118-cp310-cp310-linux_x86_64.whl"
-    if os.name == "nt":
-        torch2_cmd = f"pip install --no-deps {torch2_url_win} {torchvision2_url_win}"
-    else:
-        torch2_cmd = f"pip install --no-deps {torch2_url_linux} {torchvision2_url_linux}"
 
 
     def install_torch(torch_command, use_torch2):
@@ -60,15 +51,15 @@ def actual_install():
         python_version = revisions[1]
         cuda_version = revisions[2]
         xformers_ver = last_portion.replace(f"-{python_version}-{cuda_version}", "")
-        print(xformers_ver)
         os_string = "win_amd64" if os.name == "nt" else "linux_x86_64"
-
         torch_ver = f"2.0.0.dev{torch_version}+{cuda_version}"
         torch_vis_ver = f"0.15.0.dev{torch_version}+{cuda_version}"
         xformers_url = f"{resolved_url}/{xformers_ver}-{python_version}-{python_version}-{os_string}.whl".replace("/tag/", "/download/")
         torch2_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}/torch-2.0.0.dev{torch_version}%2B{cuda_version}-{python_version}-{python_version}-{os_string}.whl"
         torchvision2_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}/torchvision-0.15.0.dev{torch_version}%2B{cuda_version}-{python_version}-{python_version}-{os_string}.whl"
         triton_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}/pytorch_triton-2.0.0%2B0d7e753227-{python_version}-{python_version}-linux_x86_64.whl"
+        xformers_ver = xformers_ver.replace("xformers-", "")
+        print(f"Xformers version: {xformers_ver}")
         print(f"Torch version: {torch_ver}")
         print(f"Torch vision version: {torch_vis_ver}")
         print(f"xu: {xformers_url}")
@@ -121,7 +112,6 @@ def actual_install():
             torch_cmd = "pip install torch==1.13.1+cu118 torchvision==0.14.1+cu118 --extra-index-url https://download.pytorch.org/whl/cu118"
             xformers_cmd = "pip install xformers==0.0.17.dev442"
 
-        from extensions.sd_dreambooth_extension.dreambooth import shared
 
         # Check/install xformers
         has_xformers = importlib.util.find_spec("xformers") is not None
@@ -176,6 +166,8 @@ def actual_install():
                 launch_errors.append(f"{check} not installed.")
             else:
                 print(f"{status} {check} version {check_ver} installed.")
+
+        from extensions.sd_dreambooth_extension.dreambooth import shared
 
         if len(launch_errors):
             shared.launch_error = launch_errors

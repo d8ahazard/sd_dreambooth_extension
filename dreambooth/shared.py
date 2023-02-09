@@ -4,6 +4,7 @@ import os
 import pathlib
 import subprocess
 import time
+import traceback
 
 import PIL
 import numpy
@@ -59,8 +60,7 @@ def load_auto_settings():
         force_cpu, embeddings_dir, sd_model
     try:
         import modules.script_callbacks
-        from modules import shared as ws, devices, images
-        from modules import paths
+        from modules import shared as ws
         from modules.paths import models_path as mp, script_path as sp, sd_path as sdp
         models_path = mp
         script_path = sp
@@ -106,6 +106,7 @@ def load_auto_settings():
     except Exception as e:
         print("Exception importing SD-WebUI module:")
         print(f"{type(e).__name__} at line {e.__traceback__.tb_lineno} of {__file__}: {e}")
+        traceback.print_exc()
         pass
 
 def get_launch_errors():

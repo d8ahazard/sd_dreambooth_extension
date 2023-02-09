@@ -571,13 +571,6 @@ def update_extension():
     run(f'"{git}" -C "{ext_dir}" fetch', f"Fetching updates...", f"Couldn't fetch updates...")
     run(f'"{git}" -C "{ext_dir}" pull', f"Pulling updates...", f"Couldn't pull updates...")
     reload_extension()
-    try:
-        from modules.shared import state
-        print("Restarting web UI?")
-        shared.state.interrupt()
-        shared.state.need_restart = True
-    except:
-        pass
 
 
 def ui_classifiers(model_name: str,

@@ -6,7 +6,8 @@ from typing import Union, List
 import discord_webhook
 from PIL import Image
 
-from modules import shared, images
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from modules import images
 
 
 class DreamboothWebhookTarget(Enum):
