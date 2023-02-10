@@ -214,7 +214,8 @@ class DbDataset(torch.utils.data.Dataset):
                     # Otherwise, load it from existing cache
                     else:
                         self.latents_cache[img_path] = latents_cache[img_path]
-                    self.cache_caption(img_path, cap)
+                    if not self.shuffle_tags:
+                        self.cache_caption(img_path, cap)
                     self.sample_indices.append(img_path)
                     self.sample_cache.append((img_path, cap, is_prior))
                     p_bar.update()

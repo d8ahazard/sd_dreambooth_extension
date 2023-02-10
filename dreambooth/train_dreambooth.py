@@ -30,7 +30,7 @@ from extensions.sd_dreambooth_extension.dreambooth.dataset.sample_dataset import
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
 from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler
-from extensions.sd_dreambooth_extension.dreambooth.shared import status
+from extensions.sd_dreambooth_extension.dreambooth.shared import status, load_auto_settings
 from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
@@ -92,6 +92,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
     @param use_txt2img: Use txt2img when generating class images.
     @return: TrainResult
     """
+    load_auto_settings()
+
     args = shared.db_model_config
     logging_dir = Path(args.model_dir, "logging")
 
