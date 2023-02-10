@@ -13,6 +13,9 @@ from launch import run
 
 
 def actual_install():
+    if os.environ.get("PUBLIC_KEY", None):
+        print("Docker, returning.")
+        return
     if sys.version_info < (3, 8):
         import importlib_metadata
     else:
@@ -23,7 +26,9 @@ def actual_install():
 
     def install_torch(torch_command, use_torch2):
         try:
-            run(f'"{python}" -m {torch_command}', f"Installing torch{'2' if use_torch2 else ''} and torchvision.", "Couldn't install torch.")
+            install_cmd = f'"{python}" -m {torch_command}'
+            print(f"Torch install command: {install_cmd}")
+            run(install_cmd, f"Installing torch{'2' if use_torch2 else ''} and torchvision.", "Couldn't install torch.")
             has_torch = importlib.util.find_spec("torch") is not None
             has_torch_vision = importlib.util.find_spec("torchvision") is not None
             if use_torch2:
