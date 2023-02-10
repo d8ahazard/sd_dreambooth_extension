@@ -109,7 +109,7 @@ def actual_install():
             xformers_ver = "0.0.17.dev442"
             torch_ver = "1.13.1+cu118"
             torch_vis_ver = "0.14.1+cu118"
-            torch_cmd = "pip install torch==1.13.1+cu118 torchvision==0.14.1+cu118 --extra-index-url https://download.pytorch.org/whl/cu118"
+            torch_cmd = "pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117"
             xformers_cmd = "pip install xformers==0.0.17.dev442"
 
 
