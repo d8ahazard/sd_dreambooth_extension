@@ -165,7 +165,6 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
             try:
                 # Retrieve prompt data object
                 pd = prompts[i_idx]
-                image_base = hashlib.sha1(image.tobytes()).hexdigest()
                 # Save image and get new filename
                 image_filename = db_save_image(image, pd)
                 # Set filename here for later retrieval
