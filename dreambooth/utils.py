@@ -497,7 +497,7 @@ def db_save_image(image: Image, prompt_data: PromptData=None, seed=None, save_tx
         }
 
         generation_params_text = ", ".join(
-            [k if k == v else f'{k}: {f"{k}" if "," in str(k) else k}' for k, v in generation_params.items()
+            [k if k == v else f'{k}: {f"{v}" if "," in str(v) else v}' for k, v in generation_params.items()
              if v is not None])
 
 
