@@ -15,7 +15,6 @@ from packaging import version
 from pandas.plotting._matplotlib.style import get_standard_colors
 from tqdm.auto import tqdm
 
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import torch
 from PIL import Image

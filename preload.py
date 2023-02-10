@@ -1,5 +1,4 @@
 import argparse
-import os
 
 
 def preload(parser: argparse.ArgumentParser):

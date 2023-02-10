@@ -95,10 +95,27 @@ class ClassDataset(Dataset):
                     class_prompts = [img.prompt for img in c_prompt_datas]
                     instance_prompts = [img.prompt for img in i_prompt_datas]
 
-                    for prompt in instance_prompts:
-                        sample_prompt = text_getter.create_text(
-                            concept.class_prompt, prompt, concept.instance_token, concept.class_token, True)
-                        num_to_gen = concept.num_class_images_per - class_prompts.count(sample_prompt)
+                    if "[filewords]" in concept.class_prompt:
+                        for prompt in instance_prompts:
+                            sample_prompt = text_getter.create_text(
+                                concept.class_prompt, prompt, concept.instance_token, concept.class_token, True)
+                            num_to_gen = concept.num_class_images_per - class_prompts.count(sample_prompt)
+                            for _ in range(num_to_gen):
+                                pd = PromptData(
+                                    prompt=sample_prompt,
+                                    negative_prompt=concept.class_negative_prompt,
+                                    instance_token=concept.instance_token,
+                                    class_token=concept.class_token,
+                                    steps=concept.class_infer_steps,
+                                    scale=concept.class_guidance_scale,
+                                    out_dir=class_dir,
+                                    seed=-1,
+                                    concept_index=c_idx,
+                                    resolution=res)
+                                new_prompts.append(pd)
+                    else:
+                        sample_prompt = concept.class_prompt
+                        num_to_gen = concept.num_class_images_per * len(i_prompt_datas) - class_prompts.count(sample_prompt)
                         for _ in range(num_to_gen):
                             pd = PromptData(
                                 prompt=sample_prompt,
@@ -112,8 +129,7 @@ class ClassDataset(Dataset):
                                 concept_index=c_idx,
                                 resolution=res)
                             new_prompts.append(pd)
-                            # BAD BAD BAD. Need to append this after generating, so we have the output path
-                            # c_prompt_datas.append(pd)
+
 
                 # Extend class prompts by the proper amount
                 self.class_prompts.extend(c_prompt_datas)
