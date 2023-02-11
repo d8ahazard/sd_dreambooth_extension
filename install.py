@@ -1,1 +1,3 @@
-print("")
+from extensions.sd_dreambooth_extension.postinstall import actual_install
+
+actual_install()
