@@ -1,12 +1,13 @@
-import os
-from typing import Union, List
-from enum import Enum
 import hashlib
+import os
+from enum import Enum
+from typing import Union, List
 
+import discord_webhook
 from PIL import Image
 
-from modules import shared, images
-import discord_webhook
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from modules import images
 
 
 class DreamboothWebhookTarget(Enum):

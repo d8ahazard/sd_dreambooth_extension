@@ -4,17 +4,17 @@ from typing import List
 import gradio as gr
 
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import save_config, from_file
-from extensions.sd_dreambooth_extension.dreambooth.shared import status
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
-from extensions.sd_dreambooth_extension.dreambooth.webhook import save_and_test_webhook
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret, create_secret, clear_secret
+from extensions.sd_dreambooth_extension.dreambooth.shared import status, get_launch_errors
+from extensions.sd_dreambooth_extension.dreambooth.ui_functions import performance_wizard, \
+    training_wizard, training_wizard_person, load_model_params, ui_classifiers, debug_buckets, create_model, \
+    generate_samples, load_params, start_training, update_extension
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention, \
     list_floats, wrap_gpu_call, parse_logs, printm
+from extensions.sd_dreambooth_extension.dreambooth.webhook import save_and_test_webhook
 from extensions.sd_dreambooth_extension.helpers.version_helper import check_updates
-from extensions.sd_dreambooth_extension.scripts import dreambooth
-from extensions.sd_dreambooth_extension.scripts.dreambooth import performance_wizard, \
-    training_wizard, training_wizard_person, load_model_params, ui_classifiers, debug_buckets, create_model, generate_samples
 from modules import script_callbacks, sd_models
 from modules.ui import gr_show, create_refresh_button
 
@@ -148,7 +148,8 @@ def ui_gen_ckpt(model_name: str):
 
 def on_ui_tabs():
     with gr.Blocks() as dreambooth_interface:
-        with gr.Row(equal_height=True):
+        # Top button row
+        with gr.Row(equal_height=True, elem_id="DbTopRow"):
             db_load_params = gr.Button(value='Load Settings', elem_id="db_load_params")
             db_save_params = gr.Button(value="Save Settings", elem_id="db_save_config")
             db_train_model = gr.Button(value="Train", variant='primary', elem_id="db_train")
@@ -156,47 +157,47 @@ def on_ui_tabs():
             db_generate_checkpoint_during = gr.Button(value="Save Weights", elem_id="db_gen_ckpt_during")
             db_train_sample = gr.Button(value="Generate Samples", elem_id="db_train_sample")
             db_cancel = gr.Button(value="Cancel", elem_id="db_cancel")
+        with gr.Row():
+            gr.HTML(value="Select or create a model to begin.", elem_id="hint_row")
         with gr.Row().style(equal_height=False):
-            with gr.Column(variant="panel"):
-                gr.HTML(value="<span class='hh'>Model Selection</span>")
-                with gr.Row():
-                    db_model_name = gr.Dropdown(label='Model', choices=sorted(get_db_models()))
-                    create_refresh_button(db_model_name, get_db_models, lambda: {
-                        "choices": sorted(get_db_models())},
-                                          "refresh_db_models")
-                with gr.Row():
-                    db_snapshot = gr.Dropdown(label="Snapshot to Resume")
-                with gr.Row(visible=False) as lora_model_row:
-                    db_lora_model_name = gr.Dropdown(label='Lora Model', choices=sorted(get_lora_models()))
-                    create_refresh_button(db_lora_model_name, get_lora_models, lambda: {
-                        "choices": sorted(get_lora_models())},
-                                          "refresh_lora_models")
+            with gr.Column(variant="panel", elem_id="ModelPanel"):
+                gr.HTML(value="<span class='hh'>Model</span>")
+                with gr.Tab("Select"):
+                    with gr.Row():
+                        db_model_name = gr.Dropdown(label='Model', choices=sorted(get_db_models()))
+                        create_refresh_button(db_model_name, get_db_models, lambda: {
+                            "choices": sorted(get_db_models())},
+                                              "refresh_db_models")
+                    with gr.Row():
+                        db_snapshot = gr.Dropdown(label="Snapshot to Resume")
+                    with gr.Row(visible=False) as lora_model_row:
+                        db_lora_model_name = gr.Dropdown(label='Lora Model', choices=sorted(get_lora_models()))
+                        create_refresh_button(db_lora_model_name, get_lora_models, lambda: {
+                            "choices": sorted(get_lora_models())},
+                                              "refresh_lora_models")
 
-                with gr.Row():
-                    gr.HTML(value="Loaded Model:")
-                    db_model_path = gr.HTML()
-                with gr.Row():
-                    gr.HTML(value="Model Revision:")
-                    db_revision = gr.HTML(elem_id="db_revision")
-                with gr.Row():
-                    gr.HTML(value="Model Epoch:")
-                    db_epochs = gr.HTML(elem_id="db_epochs")
-                with gr.Row():
-                    gr.HTML(value="V2 Model:")
-                    db_v2 = gr.HTML(elem_id="db_v2")
-                with gr.Row():
-                    gr.HTML(value="Has EMA:")
-                    db_has_ema = gr.HTML(elem_id="db_has_ema")
-                with gr.Row():
-                    gr.HTML(value="Source Checkpoint:")
-                    db_src = gr.HTML()
-                with gr.Row():
-                    gr.HTML(value="Scheduler:")
-                    db_scheduler = gr.HTML()
+                    with gr.Row():
+                        gr.HTML(value="Loaded Model:")
+                        db_model_path = gr.HTML()
+                    with gr.Row():
+                        gr.HTML(value="Model Revision:")
+                        db_revision = gr.HTML(elem_id="db_revision")
+                    with gr.Row():
+                        gr.HTML(value="Model Epoch:")
+                        db_epochs = gr.HTML(elem_id="db_epochs")
+                    with gr.Row():
+                        gr.HTML(value="V2 Model:")
+                        db_v2 = gr.HTML(elem_id="db_v2")
+                    with gr.Row():
+                        gr.HTML(value="Has EMA:")
+                        db_has_ema = gr.HTML(elem_id="db_has_ema")
+                    with gr.Row():
+                        gr.HTML(value="Source Checkpoint:")
+                        db_src = gr.HTML()
+                    with gr.Row():
+                        gr.HTML(value="Scheduler:")
+                        db_scheduler = gr.HTML()
 
-
-            with gr.Column(variant="panel"):
-                gr.HTML(value="<span class='hh'>Input</span>")
                 with gr.Tab("Create"):
                     with gr.Column():
                         db_create_model = gr.Button(value="Create Model", variant='primary')
@@ -219,7 +220,11 @@ def on_ui_tabs():
                     db_new_model_scheduler = gr.Dropdown(label='Scheduler', choices=["pndm", "lms", "euler",
                                                                                      "euler-ancestral", "dpm", "ddim"],
                                                          value="ddim")
-                with gr.Tab("Settings"):
+
+
+            with gr.Column(variant="panel", elem_id="SettingsPanel"):
+                gr.HTML(value="<span class='hh'>Input</span>")
+                with gr.Tab("Settings", elem_id="TabSettings"):
                     db_performance_wizard = gr.Button(value="Performance Wizard (WIP)")
                     with gr.Accordion(open=True, label="Basic"):
                         with gr.Column():
@@ -272,7 +277,6 @@ def on_ui_tabs():
                         with gr.Column():
                             gr.HTML(value="Image Processing")
                             db_resolution = gr.Slider(label="Max Resolution", step=64, minimum=128, value=512, maximum=4096)
-                            db_center_crop = gr.Checkbox(label="Center Crop", value=False)
                             db_hflip = gr.Checkbox(label="Apply Horizontal Flip", value=False)
                             db_sanity_prompt = gr.Textbox(label="Sanity Sample Prompt", placeholder="A generic prompt "
                                                                                                     "used to generate"
@@ -338,7 +342,7 @@ def on_ui_tabs():
                     with gr.Row():
                         with gr.Column(scale=2):
                             gr.HTML(value="")
-                with gr.Tab("Concepts") as concept_tab:
+                with gr.Tab("Concepts", elem_id="TabConcepts") as concept_tab:
                     with gr.Column(variant="panel"):
                         with gr.Row():
                             db_train_wizard_person = gr.Button(value="Training Wizard (Person)")
@@ -370,7 +374,7 @@ def on_ui_tabs():
                             c4_class_token, c4_num_class_images_per, c4_class_negative_prompt, c4_class_guidance_scale, \
                             c4_class_infer_steps, c4_save_sample_negative_prompt, c4_n_save_sample, c4_sample_seed, \
                             c4_save_guidance_scale, c4_save_infer_steps = build_concept_panel(4)
-                with gr.Tab("Saving"):
+                with gr.Tab("Saving", elme_id="TabSave"):
                     with gr.Column():
                         gr.HTML("General")
                         db_custom_model_name = gr.Textbox(label="Custom Model Name", value="",
@@ -403,7 +407,7 @@ def on_ui_tabs():
                             label="Save separate diffusers snapshots when training completes.")
                         db_save_state_cancel = gr.Checkbox(
                             label="Save separate diffusers snapshots when training is canceled.")
-                with gr.Tab("Generate"):
+                with gr.Tab("Generate", elem_id="TabGenerate"):
                     with gr.Column():
                         db_generate_classes = gr.Button(value="Generate Class Images")
                         db_generate_graph = gr.Button(value="Generate Graph")
@@ -424,7 +428,10 @@ def on_ui_tabs():
                         db_sample_steps = gr.Slider(label="Sample Steps", value=40, minimum=1, maximum=500, step=1)
                         db_sample_scale = gr.Slider(label="Sample CFG Scale", value=7.5, step=0.1, minimum=1, maximum=20)
                         db_sample_txt2img = gr.Checkbox(label="Use txt2img", value=True)
-
+                with gr.Tab("Testing", elem_id="TabDebug"):
+                    db_ema_predict = gr.Checkbox(label="Use EMA for prediction.")
+                    db_split_loss = gr.Checkbox(label="Calculate Split Loss", value=True)
+                    db_update_extension = gr.Button(value="Update Extension and Restart")
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")
                 db_check_progress_initial = gr.Button(value=update_symbol, elem_id="db_check_progress_initial",
@@ -441,7 +448,7 @@ def on_ui_tabs():
                 db_gallery_prompt = gr.HTML(elem_id="db_gallery_prompt", value="")
                 db_check_progress = gr.Button("Check Progress", elem_id=f"db_check_progress", visible=False)
                 db_update_params = gr.Button("Update Parameters", elem_id="db_update_params", visible=False)
-
+                db_launch_error = gr.HTML(elem_id="launch_errors", visible=False, value=get_launch_errors)
                 def check_toggles(use_ema, use_lora, lr_scheduler, train_unet, scale_prior):
                     stop_text_encoder = update_stop_tenc(train_unet)
                     show_ema, lora_save, lora_lr, lora_model = disable_ema(use_lora)
@@ -481,6 +488,12 @@ def on_ui_tabs():
                              db_prior_loss_weight_min,
                              db_prior_loss_target]
 
+                )
+
+                db_update_extension.click(
+                    fn=update_extension,
+                    inputs=[],
+                    outputs=[]
                 )
 
                 notification_webhook_test_btn.click(
@@ -570,11 +583,11 @@ def on_ui_tabs():
             db_model_name,
             db_attention,
             db_cache_latents,
-            db_center_crop,
             db_freeze_clip_normalization,
             db_clip_skip,
             db_concepts_path,
             db_custom_model_name,
+            db_ema_predict,
             db_epochs,
             db_epoch_pause_frequency,
             db_epoch_pause_time,
@@ -628,6 +641,7 @@ def on_ui_tabs():
             db_save_state_cancel,
             db_save_state_during,
             db_scheduler,
+            db_split_loss,
             db_strict_tokens,
             db_shuffle_tags,
             db_snapshot,
@@ -742,7 +756,7 @@ def on_ui_tabs():
 
         db_load_params.click(
             _js="db_start_load_params",
-            fn=dreambooth.load_params,
+            fn=load_params,
             inputs=[
                 db_model_name
             ],
@@ -813,7 +827,17 @@ def on_ui_tabs():
             _js="clear_loaded",
             fn=load_model_params,
             inputs=[db_model_name],
-            outputs=[db_model_path, db_revision, db_epochs, db_v2, db_has_ema, db_src, db_scheduler, db_snapshot, db_status]
+            outputs=[
+                db_model_path,
+                db_revision,
+                db_epochs,
+                db_v2,
+                db_has_ema,
+                db_src,
+                db_scheduler,
+                db_snapshot,
+                db_status
+            ]
         )
 
         db_use_concepts.change(
@@ -827,6 +851,7 @@ def on_ui_tabs():
         )
 
         db_generate_graph.click(
+            _js="db_start_logs",
             fn=parse_logs,
             inputs=[db_model_name, gr.Checkbox(value=True, visible=False)],
             outputs=[db_gallery, db_prompt_list]
@@ -962,7 +987,7 @@ def on_ui_tabs():
         )
 
         db_train_model.click(
-            fn=wrap_gpu_call(dreambooth.start_training),
+            fn=wrap_gpu_call(start_training),
             _js="db_start_train",
             inputs=[
                 db_model_name,

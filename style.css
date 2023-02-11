@@ -7,6 +7,25 @@
     max-height: 20px;
 }
 
+button:disabled, input:disabled {
+    background: #4444 !important;
+    color: #6666 !important;
+    border: 1px #6666 solid !important;
+    pointer-events: none;
+}
+
+.\!cursor-not-allowed, .\!cursor-not-allowed > span, .\!cursor-not-allowed > option {
+    color: #6666 !important;
+    border: 1px #6666 solid !important;
+    pointer-events: none;
+}
+
+#hint_row {
+    text-align: center;
+    font-size: 22px;
+}
+
+
 #change_modal {
     display: none;
 }

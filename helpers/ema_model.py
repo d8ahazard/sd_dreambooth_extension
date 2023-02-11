@@ -19,16 +19,17 @@ like a regular model.
 """
 
 import copy
-import logging
 import os
 import shutil
 
+import safetensors.torch
 import torch
+from diffusers import UNet2DConditionModel
 
 
 class EMAModel(object):
 
-    def __init__(self, model, decay=0.9999, device=None):
+    def __init__(self, model: UNet2DConditionModel, decay: float = 0.9999, device=None, dtype=None):
         """
         @param model: model to initialize the EMA with
         @param decay: Decay rate to use
@@ -37,24 +38,19 @@ class EMAModel(object):
 
         self.decay = decay
         self.model = copy.deepcopy(model)
-        self.model.requires_grad_(False)
-        self.fp32_params = {}
+        self.model.to(device, dtype=dtype)
 
-        if device is not None:
-            logging.info(f"Copying EMA model to device {device}")
-            self.model = self.model.to(device=device)
-
-        self.build_fp32_params()
+        self.params = {}
+        self.build_params()
 
         self.update_freq_counter = 0
-
 
     def __call__(self, *args, **kwargs):
         return self.model(*args, **kwargs)
     def get_model(self):
         return self.model
 
-    def build_fp32_params(self, state_dict=None):
+    def build_params(self, state_dict=None):
         """
         Store a copy of the EMA params in fp32.
         If state dict is passed, the EMA params is copied from
@@ -64,31 +60,29 @@ class EMAModel(object):
         if state_dict is None:
             state_dict = self.model.state_dict()
 
-        def _to_float(t):
-            return t.float() if torch.is_floating_point(t) else t
-
         # for non-float params (like registered symbols), they are copied into this dict and covered in each update
         for param_key in state_dict:
-            if param_key in self.fp32_params:
-                self.fp32_params[param_key].copy_(state_dict[param_key])
+            if param_key in self.params:
+                self.params[param_key].copy_(state_dict[param_key])
             else:
-                self.fp32_params[param_key] = _to_float(state_dict[param_key])
+                self.params[param_key] = state_dict[param_key]
 
-    def load(self, state_dict, build_fp32_params=False):
+    def load(self, state_dict, build_params=False):
         """ Load data from a state_dict """
         self.model.load_state_dict(state_dict, strict=False)
-        if build_fp32_params:
-            self.build_fp32_params(state_dict)
+        if build_params:
+            self.build_params(state_dict)
 
     def get_decay(self):
         return self.decay
 
+    @torch.no_grad()
     def step(self, new_model):
         """ One update of the EMA model based on new model weights """
         decay = self.decay
 
         ema_state_dict = {}
-        ema_params = self.fp32_params
+        ema_params = self.params
         for key, param in new_model.state_dict().items():
             try:
                 ema_param = ema_params[key]
@@ -116,7 +110,7 @@ class EMAModel(object):
                 ema_param.mul_(decay)
                 ema_param.add_(param.to(dtype=ema_param.dtype), alpha=1-decay)
             ema_state_dict[key] = ema_param
-        self.load(ema_state_dict, build_fp32_params=False)
+        self.load(ema_state_dict, build_params=False)
 
     def apply(self, model):
         """
@@ -127,7 +121,14 @@ class EMAModel(object):
         return model
 
     def save_pretrained(self, model_path, safe_serialization=True):
+        model_file = os.path.join(model_path, "diffusion_pytorch_model.safetensors")
+        model_bin = model_file.replace("safetensors", "bin")
         self.model.save_pretrained(model_path, safe_serialization=safe_serialization)
+        if not os.path.exists(model_file):
+            print("Yeah, regular save_pretrained is not working.")
+            safetensors.torch.save_file(self.model.state_dict(), model_file)
+        if os.path.exists(model_bin):
+            os.remove(model_bin)
         model_config_path = os.path.join(model_path, "config.json")
         if not os.path.exists(model_config_path):
             unet_config_path = model_config_path.replace("ema_", "")

@@ -8,16 +8,14 @@ from accelerate import Accelerator
 from transformers import AutoTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth import shared
-from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import ClassDataset
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig, from_file
-from extensions.sd_dreambooth_extension.dreambooth.shared import status
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import ClassDataset
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup
 from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
 from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-
-
 
 
 def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None, class_prompts: List[PromptData] = None,
@@ -66,7 +64,6 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
         tokenizer=tokenizer,
         resolution=args.resolution,
         hflip=args.hflip,
-        random_crop=args.center_crop,
         shuffle_tags=args.shuffle_tags,
         strict_tokens=args.strict_tokens,
         not_pad_tokens=not args.pad_tokens,
@@ -168,7 +165,6 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
             try:
                 # Retrieve prompt data object
                 pd = prompts[i_idx]
-                image_base = hashlib.sha1(image.tobytes()).hexdigest()
                 # Save image and get new filename
                 image_filename = db_save_image(image, pd)
                 # Set filename here for later retrieval

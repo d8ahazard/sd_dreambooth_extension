@@ -2,18 +2,20 @@ from __future__ import annotations
 
 import gc
 import html
+import importlib.util
 import os
 import sys
 import traceback
 from typing import Optional, Union, Tuple, List
 
+import importlib_metadata
 import matplotlib
 import pandas as pd
+from packaging import version
 from pandas.plotting._matplotlib.style import get_standard_colors
 from tqdm.auto import tqdm
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-import tensorflow
 import torch
 from PIL import Image
 from huggingface_hub import HfFolder, whoami
@@ -67,17 +69,50 @@ def cleanup(do_print: bool = False):
     if do_print:
         print("Cleanup completed.")
 
+def xformers_check():
+    ENV_VARS_TRUE_VALUES = {"1", "ON", "YES", "TRUE"}
+    ENV_VARS_TRUE_AND_AUTO_VALUES = ENV_VARS_TRUE_VALUES.union({"AUTO"})
+
+    USE_TF = os.environ.get("USE_TF", "AUTO").upper()
+    USE_TORCH = os.environ.get("USE_TORCH", "AUTO").upper()
+    if USE_TORCH in ENV_VARS_TRUE_AND_AUTO_VALUES and USE_TF not in ENV_VARS_TRUE_VALUES:
+        print("All the torch things")
+        _torch_available = importlib.util.find_spec("torch") is not None
+
+        if _torch_available:
+            print("Torch available.")
+            try:
+                _torch_version = importlib_metadata.version("torch")
+                print(f"PyTorch version {_torch_version} available.")
+            except importlib_metadata.PackageNotFoundError:
+                print("No metadatapackage")
+                _torch_available = False
+    else:
+        print("Disabling PyTorch because USE_TORCH is set")
+        _torch_available = False
+
+    try:
+        _xformers_version = importlib_metadata.version("xformers")
+        print(f"Xver: {_xformers_version}")
+        if _torch_available:
+            print("Check torch again")
+            import torch
+            print("Imported.")
+            if version.Version(torch.__version__) < version.Version("1.12"):
+                print(f"Invalid torch version: {torch.__version__}")
+                raise ValueError("PyTorch should be >= 1.12")
+        print(f"Successfully imported xformers version {_xformers_version}")
+        has_xformers = True
+    except Exception as e:
+        print(f"EX: {e}")
+        has_xformers = False
+    return has_xformers
 
 def list_attention():
-    has_xformers = False
-    try:
-        import xformers
-        import xformers.ops
-        has_xformers = True
-    except:
-        pass
-    pass
-
+    has_xformers = xformers_check()
+    import diffusers.utils
+    diffusers.utils.is_xformers_available = xformers_check
+    print(f"Xformers: {has_xformers}")
     if has_xformers:
         return ["default", "xformers", "flash_attention"]
     else:
@@ -278,14 +313,24 @@ def parse_logs(model_name: str, for_ui: bool = False):
 
     """
     matplotlib.use("Agg")
-
+    if for_ui:
+        status.textinfo = "Generating graphs"
     def convert_tfevent(filepath) -> Tuple[DataFrame, DataFrame, DataFrame, bool]:
         loss_events = []
         lr_events = []
         ram_events = []
         instance_loss_events = []
         prior_loss_events = []
+        has_all = False
+        try:
+            import tensorflow
+
+        except:
+            print("Unable to import tensorflow")
+            return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events), has_all
+
         serialized_examples = tensorflow.data.TFRecordDataset(filepath)
+
         for serialized_example in serialized_examples:
             e = event_pb2.Event.FromString(serialized_example.numpy())
             if len(e.summary.value):
@@ -367,6 +412,10 @@ def parse_logs(model_name: str, for_ui: bool = False):
 
     out_images = []
     out_names = []
+    print("Plotting")
+    status.job_count = 2
+    status.job_no = 1
+    status.textinfo = "Plotting data..."
     if has_all_lr:
         plotted_loss = plot_multi_alt(
             all_df_loss,
@@ -395,6 +444,8 @@ def parse_logs(model_name: str, for_ui: bool = False):
         out_images.append(log_lr)
         out_names.append("Learning Rate")
 
+    status.job_no = 2
+    status.textinfo = "Saving graph data..."
     loss_img = os.path.join(model_config.model_dir, "logging", f"loss_plot_{model_config.revision}.png")
     printm(f"Saving {loss_img}")
     plotted_loss.figure.savefig(loss_img)
