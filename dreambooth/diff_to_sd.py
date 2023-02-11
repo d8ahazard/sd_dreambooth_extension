@@ -402,10 +402,11 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
             unet_model = UNet2DConditionModel().from_pretrained(
                 os.path.join(config.pretrained_model_name_or_path, "unet"))
 
-            apply_lora(unet_model, lora_path, config.lora_weight, "cpu", True)
+            lora_rev = apply_lora(unet_model, lora_path, config.lora_weight, "cpu", True)
             unet_state_dict = copy.deepcopy(unet_model.state_dict())
             del unet_model
-            checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}_lora{checkpoint_ext}")
+            if lora_rev is not None:
+                checkpoint_path = os.path.join(models_path, f"{save_model_name}_{lora_rev}_lora{checkpoint_ext}")
         else:
             unet_state_dict = load_model(unet_path, map_location="cpu")
 
@@ -533,6 +534,7 @@ def load_model(model_path: str, map_location: str):
         return loaded
 
 def apply_lora(model:nn.Module, loras: str, weight: float, device:str, is_tenc: bool):
+    lora_rev = None
     if loras is not None and loras != "":
         if not os.path.exists(loras):
             try:
@@ -543,7 +545,9 @@ def apply_lora(model:nn.Module, loras: str, weight: float, device:str, is_tenc: 
             loras = os.path.join(model_dir, "lora", loras)
 
         if os.path.exists(loras):
+            lora_rev = loras.split("_")[-1].replace(".pt", "")
             printi(f"Loading lora from {loras}", log=True)
             printi(f"Applying lora weight of alpha: {weight} to unet...", log=True)
             tenc_val = "tenc" if is_tenc else None
             weight_apply_lora(model, load_model(loras, device),target_replace_module=tenc_val, alpha=weight)
+    return lora_rev

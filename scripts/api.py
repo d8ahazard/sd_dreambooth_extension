@@ -19,14 +19,13 @@ from pydantic import BaseModel, Field
 from extensions.sd_dreambooth_extension.dreambooth import shared
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.shared import DreamState
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
+from extensions.sd_dreambooth_extension.dreambooth.shared import DreamState
+from extensions.sd_dreambooth_extension.dreambooth.ui_functions import create_model, generate_samples, start_training
 from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
-from extensions.sd_dreambooth_extension.scripts import dreambooth
-from extensions.sd_dreambooth_extension.scripts.dreambooth import create_model, generate_samples
 from modules import sd_models
 
 class InstanceData(BaseModel):
@@ -588,7 +587,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if config is None:
             return JSONResponse("Config not found")
 
-        prompts, images = generate_samples(
+        images, prompts, status = generate_samples(
             model_name,
             prompt=sample_prompt,
             prompt_file=sample_prompt_file,
@@ -608,10 +607,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if len(images) > 1:
             return zip_files(model_name, images, "_sample")
         else:
-            img_byte_arr = io.BytesIO()
             file = images[0]
-            file.save(img_byte_arr, format='PNG')
-            img_byte_arr = img_byte_arr.getvalue()
+            image = Image.open(file)
+            img_byte_arr = image.tobytes()
 
         return Response(content=img_byte_arr, media_type="image/png")
 
@@ -663,8 +661,8 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         return Response(content=img_byte_arr, media_type="image/png")
 
     @app.post("/dreambooth/start_training")
-    async def start_training(
-            model_name: str = Form(None,
+    async def train(
+            model_name: str = Query(None,
                                     description="The model name to load params for.", ),
             use_tx2img: bool = Form(True, description="Use txt2img to generate class images."),
             api_key: str = Form("", description="If an API key is set, this must be present.")
@@ -688,7 +686,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
 
         print("Starting Training")
         shared.status.begin()
-        run_in_background(dreambooth.start_training, model_name, use_tx2img)
+        run_in_background(start_training, model_name, use_tx2img)
         return {"Status": "Training started."}
 
     @app.post("/dreambooth/upload")

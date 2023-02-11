@@ -13,11 +13,11 @@ from torchvision.transforms import transforms
 from transformers import CLIPTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import make_bucket_resolutions, closest_resolution
 from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import build_strict_tokens
 from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
 
 
 class DbDataset(torch.utils.data.Dataset):
@@ -33,7 +33,6 @@ class DbDataset(torch.utils.data.Dataset):
             tokenizer: Union[CLIPTokenizer, None],
             resolution: int,
             hflip: bool,
-            random_crop: bool,
             shuffle_tags: bool,
             strict_tokens: bool,
             not_pad_tokens: bool,
@@ -78,7 +77,6 @@ class DbDataset(torch.utils.data.Dataset):
 
         self.tokenizer = tokenizer
         self.resolution = resolution
-        self.random_crop = random_crop
         self.debug_dataset = debug_dataset
         self.shuffle_tags = shuffle_tags
         self.not_pad_tokens = not_pad_tokens
@@ -147,7 +145,10 @@ class DbDataset(torch.utils.data.Dataset):
             else:
                 img = self.open_and_trim(image_path, res)
                 image = self.image_transforms(img)
-            input_ids = self.caption_cache[image_path]
+            if self.shuffle_tags:
+                caption, input_ids = self.cache_caption(image_path, caption)
+            else:
+                input_ids = self.caption_cache[image_path]
         return image, input_ids
 
     def cache_latent(self, image_path, res):
@@ -173,7 +174,8 @@ class DbDataset(torch.utils.data.Dataset):
                 input_ids = self.tokenizer(caption, padding='max_length', truncation=True,
                                            add_special_tokens=auto_add_special_tokens,
                                            return_tensors='pt').input_ids
-            self.caption_cache[image_path] = input_ids
+            if not self.shuffle_tags:
+                self.caption_cache[image_path] = input_ids
         return caption, input_ids
 
     def make_buckets_with_caching(self, vae, min_size):
@@ -212,7 +214,8 @@ class DbDataset(torch.utils.data.Dataset):
                     # Otherwise, load it from existing cache
                     else:
                         self.latents_cache[img_path] = latents_cache[img_path]
-                    self.cache_caption(img_path, cap)
+                    if not self.shuffle_tags:
+                        self.cache_caption(img_path, cap)
                     self.sample_indices.append(img_path)
                     self.sample_cache.append((img_path, cap, is_prior))
                     p_bar.update()
@@ -242,7 +245,7 @@ class DbDataset(torch.utils.data.Dataset):
         total_instances = 0
         total_classes = 0
         pbar = mytqdm(range(p_len), desc="Caching latents..." if self.cache_latents else "Processing images...")
-        image_cache_file = os.path.join(self.cache_dir, "image_cache.safetensors")
+        image_cache_file = os.path.join(self.cache_dir, f"image_cache_{self.resolution}.safetensors")
         latents_cache = {}
         if os.path.exists(image_cache_file):
             print("Loading cached latents...")
@@ -363,13 +366,19 @@ class DbDataset(torch.utils.data.Dataset):
         if not self.debug_dataset:
             image_data, input_ids = self.load_image(image_path, caption, self.active_resolution)
         else:
+            # Pretty sure this path is broken
             image_data = image_path
             print(f"Recoding: {caption}")
             caption, cap_tokens = self.cache_caption(image_path, caption)
             rebuilt = self.tokenizer.decode(cap_tokens.tolist()[0])
             input_ids = (caption, rebuilt)
         # If we have reached the end of our bucket, increment to the next, update the count, reset image index.
-        example = {"image": image_data, "input_ids": input_ids, "res": self.active_resolution, "is_class":is_class_image}
+        example = {
+            "image": image_data,
+            "input_ids": input_ids,
+            "res": self.active_resolution,
+            "is_class": is_class_image
+        }
         return example
 
 

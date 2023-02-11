@@ -3,6 +3,7 @@ let params_loaded = false;
 let training_started = false;
 let closeBtn;
 let modalShown = false;
+let locked = false;
 
 // Click a button. Whee.
 function save_config() {
@@ -18,6 +19,39 @@ function save_config() {
     }
 }
 
+function toggleComponents(enable, disableAll) {
+    const elements = ['DbTopRow', 'SettingsPanel'];
+    if (disableAll) {
+        console.log("Disabling all DB elements!");
+        elements.push("ModelPanel")
+        locked = true;
+    }
+    elements.forEach(element => {
+        let elem = getRealElement(element);
+        if (elem === null || elem === undefined) {
+            console.log("Can't find element: ", element);
+        } else {
+            const labels = elem.getElementsByTagName('label');
+            const inputs = elem.querySelectorAll("input, textarea, button");
+
+            Array.from(labels).forEach(label => {
+                if (enable) {
+                    label.classList.remove('!cursor-not-allowed');
+                } else {
+                    label.classList.add('!cursor-not-allowed');
+                }
+            });
+
+            Array.from(inputs).forEach(input => {
+                if (input.id.indexOf("secret") === -1) {
+                    input.disabled = !enable;
+                }
+            });
+        }
+    });
+}
+
+
 function check_save() {
     let do_save = true;
     if (params_loaded === false) {
@@ -26,6 +60,7 @@ function check_save() {
     if (do_save === true) {
         let filtered = filterArgs(arguments.length, arguments);
         let status = getRealElement("db_status");
+        status.innerHTML = "Config saved."
         params_loaded = true;
         return filtered;
     } else {
@@ -35,6 +70,12 @@ function check_save() {
 }
 
 function clear_loaded() {
+    if (arguments[0] !== "") {
+        toggleComponents(true, false);
+        let hintRow = getRealElement("hint_row");
+        hintRow.style.display = "none";
+    }
+
     params_loaded = false;
     return filterArgs(1, arguments);
 }
@@ -104,6 +145,10 @@ function db_start_prompts() {
     return db_start(1, true, false, arguments);
 }
 
+function db_start_logs() {
+    return db_start(2, false, true, arguments);
+}
+
 // Debug bucketing
 function db_start_buckets() {
     return db_start(3, true, true, arguments);
@@ -149,7 +194,6 @@ let db_titles = {
     "Batch Size": "How many images to process at once per training step?",
     "Cache Latents": "When this box is checked latents will be cached. Caching latents will use more VRAM, but improve training speed.",
     "Cancel": "Cancel training.",
-    "Center Crop": "If an image is too large, crop it from the center.",
     "Class Batch Size": "How many classifier/regularization images to generate at once.",
     "Class Images Per Instance Image": "How many classification images to use per instance image.",
     "Class Prompt": "A prompt for generating classification/regularization images. See the readme for more info.",
@@ -272,7 +316,8 @@ let db_titles = {
 onUiUpdate(function () {
     let db_active = document.getElementById("db_active");
     if (db_active) {
-        db_active.parentElement.style.display = "none";    }
+        db_active.parentElement.style.display = "none";
+    }
 
     let cm = getRealElement("change_modal");
     let cl = getRealElement("change_log");
@@ -283,11 +328,23 @@ onUiUpdate(function () {
         }
     }
 
+    let errors = getRealElement("launch_errors");
+    if (errors !== null && errors !== undefined && !locked) {
+        console.log("Launch error div: ", errors);
+        let hr = getRealElement("hint_row");
+        if (errors.innerHTML !== "") {
+            console.log("Setting error row...");
+            hr.innerHTML = errors.innerHTML;
+            toggleComponents(false, true);
+        }
+    }
+
     if (closeBtn === null || closeBtn === undefined) {
         let cb = getRealElement("close_modal");
         closeBtn = cb;
         if (cb && cm) {
-            cb.addEventListener("click", function() {
+            toggleComponents(false, false);
+            cb.addEventListener("click", function () {
                 cm.classList.remove("active");
             });
         }
@@ -297,6 +354,10 @@ onUiUpdate(function () {
 
     gradioApp().querySelectorAll('span, button, select, p').forEach(function (span) {
         let tooltip = db_titles[span.textContent];
+        if (span.disabled || span.classList.contains(".\\!cursor-not-allowed")) {
+            tooltip = "Select or Create a Model."
+        }
+
         if (!tooltip) {
             tooltip = db_titles[span.value];
         }

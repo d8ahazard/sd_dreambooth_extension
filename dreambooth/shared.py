@@ -1,16 +1,16 @@
 # One wrapper we're going to use to not depend so much on the main app.
 import datetime
-import inspect
 import os
 import pathlib
+import subprocess
 import time
+import traceback
 
 import PIL
 import numpy
 import torch
 from PIL import Image
 from packaging import version
-
 
 script_path = '\\'.join(__file__.split('\\')[0:-4])
 print(f"Script path is {script_path}")
@@ -19,7 +19,7 @@ embeddings_dir = os.path.join(script_path, "embeddings")
 dreambooth_models_path = os.path.join(models_path, "dreambooth")
 ckpt_dir = os.path.join(models_path, "Stable-diffusion")
 lora_models_path = os.path.join(models_path, "lora")
-
+db_model_config = None
 show_progress_every_n_steps = 10
 parallel_processing_allowed = True
 dataset_filename_word_regex = ""
@@ -39,6 +39,7 @@ CLIP_stop_at_last_layers = 2
 sd_model = None
 config = os.path.join(script_path, "configs", "v1-inference.yaml")
 force_cpu = False
+launch_error = "Dreambooth install checks have not been completed."
 
 device = torch.device("cpu")
 if torch.cuda.is_available():
@@ -59,8 +60,7 @@ def load_auto_settings():
         force_cpu, embeddings_dir, sd_model
     try:
         import modules.script_callbacks
-        from modules import shared as ws, devices, images
-        from modules import paths
+        from modules import shared as ws
         from modules.paths import models_path as mp, script_path as sp, sd_path as sdp
         models_path = mp
         script_path = sp
@@ -103,16 +103,54 @@ def load_auto_settings():
         except:
             pass
 
-    except:
-        print("Exception importing SD-WebUI module.")
+    except Exception as e:
+        print("Exception importing SD-WebUI module:")
+        print(f"{type(e).__name__} at line {e.__traceback__.tb_lineno} of {__file__}: {e}")
+        traceback.print_exc()
         pass
 
+def get_launch_errors():
+    launch_errors = ""
+    if launch_error is not None:
+        launch_errors = "The Dreambooth extension has been disabled because the following error(s) were detected on launch.<br>" \
+                        " Please completely restart the Auto1111 web-UI.<br>" \
+                        "If this error persists, please consult the <a href='https://github.com/d8ahazard/sd_dreambooth_extension/wiki'> wiki</a> for more information.<br>"
+        launch_strings = "<br>".join(launch_error)
+        launch_errors += f"<b>{launch_strings}</b>"
+    return launch_errors
 
 def get_cuda_device_string():
     if device_id is not None:
         return f"cuda:{device_id}"
 
     return "cuda"
+
+def run(command, desc=None, errdesc=None, custom_env=None, live=False):
+    if desc is not None:
+        print(desc)
+
+    if live:
+        result = subprocess.run(command, shell=True, env=os.environ if custom_env is None else custom_env)
+        if result.returncode != 0:
+            raise RuntimeError(f"""{errdesc or 'Error running command'}.
+Command: {command}
+Error code: {result.returncode}""")
+
+        return ""
+
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, env=os.environ if custom_env is None else custom_env)
+
+    if result.returncode != 0:
+
+        message = f"""{errdesc or 'Error running command'}.
+Command: {command}
+Error code: {result.returncode}
+stdout: {result.stdout.decode(encoding="utf8", errors="ignore") if len(result.stdout)>0 else '<empty>'}
+stderr: {result.stderr.decode(encoding="utf8", errors="ignore") if len(result.stderr)>0 else '<empty>'}
+"""
+        raise RuntimeError(message)
+
+    return result.stdout.decode(encoding="utf8", errors="ignore")
 
 
 def torch_gc():
@@ -270,8 +308,6 @@ def numpy_fix(self, *args, **kwargs):
         self = self.detach()
     return orig_tensor_numpy(self, *args, **kwargs)
 
-
-load_auto_settings()
 extension_path = os.path.join(script_path, "extensions", "sd_dreambooth_extension")
 
 orig_cumsum = torch.cumsum

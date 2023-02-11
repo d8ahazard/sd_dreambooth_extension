@@ -1,9 +1,11 @@
 import glob
+import importlib
 import json
 import logging
 import math
 import os
 import random
+import sys
 import traceback
 
 import gradio
@@ -15,20 +17,21 @@ from diffusers.utils import logging as dl
 
 from extensions.sd_dreambooth_extension.dreambooth import shared
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses import db_config
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig, \
+    sanitize_name
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
 from extensions.sd_dreambooth_extension.dreambooth.dataset.bucket_sampler import BucketSampler
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig, sanitize_name
+from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import ClassDataset
 from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler
-from extensions.sd_dreambooth_extension.dreambooth.shared import status
+from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
+from extensions.sd_dreambooth_extension.dreambooth.shared import status, run
 from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_dataset, generate_classifiers
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, db_save_image
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
     get_lora_models, get_checkpoint_match
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
-from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import ClassDataset
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printm, cleanup
+from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
+from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 
 logger = logging.getLogger(__name__)
 console = logging.StreamHandler()
@@ -509,7 +512,7 @@ def start_training(model_dir: str, use_txt2img: bool = True):
             status.textinfo = "Initializing dreambooth training..."
             print(status.textinfo)
             from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
-            result = main(config, use_txt2img=use_txt2img)
+            result = main(use_txt2img=use_txt2img)
 
         config = result.config
         images = result.samples
@@ -539,6 +542,34 @@ def start_training(model_dir: str, use_txt2img: bool = True):
     dirs = get_lora_models()
     lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
     return lora_model_name, total_steps, config.epoch, images, res
+
+
+
+def reload_extension():
+    ext_name = "extensions.sd_dreambooth_extension"
+    deleted = []
+    for module in list(sys.modules):
+        if module.startswith(ext_name):
+            del sys.modules[module]
+            deleted.append(module)
+
+
+    for re_add in deleted:
+        try:
+            print(f"Replacing: {re_add}")
+            importlib.import_module(re_add)
+
+        except Exception as e:
+            print(f"Couldn't import module: {re_add}")
+    from extensions.sd_dreambooth_extension.postinstall import actual_install
+    actual_install()
+
+def update_extension():
+    git = os.environ.get('GIT', "git")
+    ext_dir = os.path.join(shared.script_path,"extensions", "sd_dreambooth_extension")
+    run(f'"{git}" -C "{ext_dir}" fetch', f"Fetching updates...", f"Couldn't fetch updates...")
+    run(f'"{git}" -C "{ext_dir}" pull', f"Pulling updates...", f"Couldn't pull updates...")
+    reload_extension()
 
 
 def ui_classifiers(model_name: str,

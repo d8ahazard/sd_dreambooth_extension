@@ -54,12 +54,12 @@ def check_updates(force: bool = False) -> Union[Dict[str, str], None]:
         store_rev()
     changes = {}
     if last and current and last != current:
-        print("Fetching updated changs")
+        print("Fetching updated changes")
         changes = get_changes()
         store_changes(changes)
         store_rev()
     elif force:
-        print("Forcing changs")
+        print("Forcing changes")
         changes = load_changes()
     return changes
         
@@ -101,5 +101,5 @@ def get_changes()-> Union[Dict[str, str], None]:
         url = f"https://github.com/d8ahazard/sd_dreambooth_extension/commit/{rev}"
         changes[rev] = [title, author, date, url]
 
-    print(f"Changs: {changes}")
+    print(f"Changes: {changes}")
     return changes
