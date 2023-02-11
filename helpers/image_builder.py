@@ -13,7 +13,7 @@ from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data impor
 from extensions.sd_dreambooth_extension.dreambooth.shared import disable_safe_unpickle
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import process_txt2img
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_checkpoint_match, reload_system_models, \
-    enable_safe_unpickle
+    enable_safe_unpickle, disable_safe_unpickle
 from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, \
     get_target_module
@@ -69,7 +69,7 @@ class ImageBuilder:
                         msg = f"Exception initializing accelerator: {e}"
                     print(msg)
             torch_dtype = torch.float16 if shared.device.type == "cuda" else torch.float32
-
+            disable_safe_unpickle()
             self.image_pipe = DiffusionPipeline.from_pretrained(
                 config.pretrained_model_name_or_path,
                 vae=AutoencoderKL.from_pretrained(

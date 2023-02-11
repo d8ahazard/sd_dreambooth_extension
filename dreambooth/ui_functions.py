@@ -208,9 +208,8 @@ def performance_wizard(model_name):
 
     has_xformers = False
     try:
-        import xformers
-        import xformers.ops
-        has_xformers = True
+        from diffusers.utils.import_utils import is_xformers_available
+        has_xformers = is_xformers_available()
     except:
         pass
     if has_xformers:
