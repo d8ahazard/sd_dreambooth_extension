@@ -695,8 +695,9 @@ def main(use_txt2img: bool = True) -> TrainResult:
                                 compile_checkpoint(args.model_name, reload_models=False, lora_path=out_file, log=False,
                                                    snap_rev=snap_rev)
                                 pbar.update()
-                                modules.shared.refresh_checkpoints()
                                 printm("Restored, moved to acc.device.")
+                                import modules.shared
+                                modules.shared.refresh_checkpoints()
                         except Exception as ex:
                             print(f"Exception saving checkpoint/model: {ex}")
                             traceback.print_exc()
