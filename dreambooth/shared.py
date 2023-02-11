@@ -1,5 +1,6 @@
 # One wrapper we're going to use to not depend so much on the main app.
 import datetime
+import json
 import os
 import pathlib
 import subprocess
@@ -11,46 +12,6 @@ import numpy
 import torch
 from PIL import Image
 from packaging import version
-
-script_path = '\\'.join(__file__.split('\\')[0:-4])
-print(f"Script path is {script_path}")
-models_path = os.path.join(script_path, "models")
-embeddings_dir = os.path.join(script_path, "embeddings")
-dreambooth_models_path = os.path.join(models_path, "dreambooth")
-ckpt_dir = os.path.join(models_path, "Stable-diffusion")
-lora_models_path = os.path.join(models_path, "lora")
-db_model_config = None
-show_progress_every_n_steps = 10
-parallel_processing_allowed = True
-dataset_filename_word_regex = ""
-dataset_filename_join_string = " "
-device_id = None
-state = None
-disable_safe_unpickle = True
-ckptfix = False
-medvram = False
-lowvram = False
-debug = False
-profile_db = False
-sub_quad_q_chunk_size = 1024
-sub_quad_kv_chunk_size = None
-sub_quad_chunk_threshold = None
-CLIP_stop_at_last_layers = 2
-sd_model = None
-config = os.path.join(script_path, "configs", "v1-inference.yaml")
-force_cpu = False
-launch_error = "Dreambooth install checks have not been completed."
-
-device = torch.device("cpu")
-if torch.cuda.is_available():
-    device = torch.device("cuda")
-
-if getattr(torch, 'has_mps', False):
-    try:
-        torch.zeros(1).to(torch.device("mps"))
-        device = torch.device("mps")
-    except Exception:
-        pass
 
 
 def load_auto_settings():
@@ -110,6 +71,15 @@ def load_auto_settings():
         pass
 
 def get_launch_errors():
+    errors = os.environ.get("ERRORS", None)
+    print(f"Env errors: {errors}")
+    if errors == "":
+        launch_error = None
+    elif errors is not None:
+        errors = json.loads(errors)
+        launch_error = errors
+    else:
+        launch_error = None
     launch_errors = ""
     if launch_error is not None:
         launch_errors = "The Dreambooth extension has been disabled because the following error(s) were detected on launch.<br>" \
@@ -284,7 +254,7 @@ class DreamState:
 
 
 
-orig_tensor_to = torch.Tensor.to
+
 def tensor_to_fix(self, *args, **kwargs):
     if self.device.type != 'mps' and \
        ((len(args) > 0 and isinstance(args[0], torch.device) and args[0].type == 'mps') or
@@ -293,7 +263,7 @@ def tensor_to_fix(self, *args, **kwargs):
     return orig_tensor_to(self, *args, **kwargs)
 
 # MPS workaround for https://github.com/pytorch/pytorch/issues/80800
-orig_layer_norm = torch.nn.functional.layer_norm
+
 def layer_norm_fix(*args, **kwargs):
     if len(args) > 0 and isinstance(args[0], torch.Tensor) and args[0].device.type == 'mps':
         args = list(args)
@@ -301,17 +271,12 @@ def layer_norm_fix(*args, **kwargs):
     return orig_layer_norm(*args, **kwargs)
 
 
-# MPS workaround for https://github.com/pytorch/pytorch/issues/90532
-orig_tensor_numpy = torch.Tensor.numpy
+
 def numpy_fix(self, *args, **kwargs):
     if self.requires_grad:
         self = self.detach()
     return orig_tensor_numpy(self, *args, **kwargs)
 
-extension_path = os.path.join(script_path, "extensions", "sd_dreambooth_extension")
-
-orig_cumsum = torch.cumsum
-orig_Tensor_cumsum = torch.Tensor.cumsum
 def cumsum_fix(input, cumsum_func, *args, **kwargs):
     if input.device.type == 'mps':
         output_dtype = kwargs.get('dtype', input.dtype)
@@ -319,6 +284,57 @@ def cumsum_fix(input, cumsum_func, *args, **kwargs):
             return cumsum_func(input.cpu(), *args, **kwargs).to(input.device)
     return cumsum_func(input, *args, **kwargs)
 
+
+script_path = '\\'.join(__file__.split('\\')[0:-4])
+print(f"Script path is {script_path}")
+models_path = os.path.join(script_path, "models")
+embeddings_dir = os.path.join(script_path, "embeddings")
+dreambooth_models_path = os.path.join(models_path, "dreambooth")
+ckpt_dir = os.path.join(models_path, "Stable-diffusion")
+lora_models_path = os.path.join(models_path, "lora")
+db_model_config = None
+show_progress_every_n_steps = 10
+parallel_processing_allowed = True
+dataset_filename_word_regex = ""
+dataset_filename_join_string = " "
+device_id = None
+state = None
+disable_safe_unpickle = True
+ckptfix = False
+medvram = False
+lowvram = False
+debug = False
+profile_db = False
+sub_quad_q_chunk_size = 1024
+sub_quad_kv_chunk_size = None
+sub_quad_chunk_threshold = None
+CLIP_stop_at_last_layers = 2
+sd_model = None
+config = os.path.join(script_path, "configs", "v1-inference.yaml")
+force_cpu = False
+
+
+
+
+device = torch.device("cpu")
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+
+if getattr(torch, 'has_mps', False):
+    try:
+        torch.zeros(1).to(torch.device("mps"))
+        device = torch.device("mps")
+    except Exception:
+        pass
+
+orig_tensor_to = torch.Tensor.to
+orig_layer_norm = torch.nn.functional.layer_norm
+# MPS workaround for https://github.com/pytorch/pytorch/issues/90532
+orig_tensor_numpy = torch.Tensor.numpy
+extension_path = os.path.join(script_path, "extensions", "sd_dreambooth_extension")
+
+orig_cumsum = torch.cumsum
+orig_Tensor_cumsum = torch.Tensor.cumsum
 
 if device.type == "mps":
     if version.parse(torch.__version__) < version.parse("1.13"):

@@ -11,3 +11,4 @@ tensorflow-macos==2.11.0; sys_platform == 'darwin' and platform_machine == 'arm6
 tqdm==4.64.1
 transformers==4.26.0
 discord-webhook==1.0.0
+xformers==0.0.17.dev447

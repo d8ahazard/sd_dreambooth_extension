@@ -1,5 +1,6 @@
 import filecmp
 import importlib.util
+import json
 import os
 # import platform
 import shutil
@@ -104,8 +105,7 @@ def actual_install():
                 key = splits[0]
                 reqs_dict[key] = splits[1].replace("\n", "").strip()
 
-        checks = ["bitsandbytes", "diffusers", "transformers"]
-        xformers_ver = "0.0.17.dev447"
+        checks = ["bitsandbytes", "diffusers", "transformers", "xformers"]
         torch_ver = "1.13.1+cu117"
         torch_vis_ver = "0.14.1+cu117"
 
@@ -123,9 +123,9 @@ def actual_install():
         #     xformers_cmd = "pip install xformers==0.0.17.dev447"
 
 
-        # Check/install xformers
-        has_xformers = importlib.util.find_spec("xformers") is not None
-        xformers_check = str(importlib_metadata.version("xformers")) if has_xformers else None
+        # # Check/install xformers
+        # has_xformers = importlib.util.find_spec("xformers") is not None
+        # xformers_check = str(importlib_metadata.version("xformers")) if has_xformers else None
 
         # if xformers_check != xformers_ver:
         #     run(f'"{python}" -m {xformers_cmd}', f"Installing xformers {xformers_ver} from {'pypi' if '==' in xformers_cmd else 'github'}.", "Couldn't install torch.")
@@ -141,8 +141,7 @@ def actual_install():
         #     torch_ver, torch_vis_ver = install_torch(torch_cmd, use_torch2)
 
         for check, ver, module in [(torch_check, torch_ver, "torch"),
-                                   (torch_vision_check, torch_vis_ver, "torchvision"),
-                                   (xformers_check, xformers_ver, "xformers")]:
+                                   (torch_vision_check, torch_vis_ver, "torchvision")]:
             if check != ver:
                 if not check:
                     print(f"[!] {module} NOT installed.")
@@ -170,6 +169,7 @@ def actual_install():
                             launch_errors.append(f"Incorrect version of {check} installed.")
 
             except importlib_metadata.PackageNotFoundError:
+                print(f"No package for {check}")
                 check_available = False
             if not check_available:
                 status = "[!]"
@@ -178,12 +178,13 @@ def actual_install():
             else:
                 print(f"{status} {check} version {check_ver} installed.")
 
-        from extensions.sd_dreambooth_extension.dreambooth import shared
 
         if len(launch_errors):
-            shared.launch_error = launch_errors
+            print(f"Setting launch errors: {launch_errors}")
+            os.environ["ERRORS"] = json.dumps(launch_errors)
         else:
-            shared.launch_error = None
+            os.environ["ERRORS"] = ""
+            print(f"No, really, clearing launch errors: {os.environ.get('ERRORS', None)}")
 
     base_dir = os.path.dirname(os.path.realpath(__file__))
     revision = ""
