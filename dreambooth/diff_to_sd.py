@@ -13,7 +13,6 @@ import safetensors.torch
 import torch
 from diffusers import UNet2DConditionModel
 from torch import Tensor, nn
-from tqdm.auto import tqdm
 
 from extensions.sd_dreambooth_extension.dreambooth import shared as shared
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
@@ -374,7 +373,7 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
 
     new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{snap_rev}")
     if snap_rev != "" and os.path.exists(new_hotness) and os.path.isdir(new_hotness):
-            tqdm.write(f"Loading snapshot paths from {new_hotness}")
+            mytqdm.write(f"Loading snapshot paths from {new_hotness}")
             unet_path = get_model_path(new_hotness)
             text_enc_path = get_model_path(new_hotness, file_extra="1")
     else:

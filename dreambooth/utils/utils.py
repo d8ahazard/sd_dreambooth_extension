@@ -10,7 +10,8 @@ from typing import Optional, Union, Tuple, List
 import matplotlib
 import pandas as pd
 from pandas.plotting._matplotlib.style import get_standard_colors
-from tqdm.auto import tqdm
+
+from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow
@@ -29,9 +30,9 @@ def printi(msg, params=None, log=True):
         if status.job_count > status.job_no:
             status.job_no += 1
         if params:
-            tqdm.write(msg, params)
+            mytqdm.write(msg, params)
         else:
-            tqdm.write(msg)
+            mytqdm.write(msg)
 
 
 def sanitize_tags(name):
@@ -363,7 +364,7 @@ def parse_logs(model_name: str, for_ui: bool = False):
     all_df_loss = all_df_loss.sort_values("Wall_time")
     all_df_loss = all_df_loss.reset_index(drop=True)
     sw = smoothing_window if smoothing_window < len(all_df_loss)/3 else len(all_df_loss)/3
-    all_df_loss = all_df_loss.rolling(5).mean(numeric_only=True)
+    all_df_loss = all_df_loss.rolling(sw).mean(numeric_only=True)
 
     out_images = []
     out_names = []
