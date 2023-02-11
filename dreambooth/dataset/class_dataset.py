@@ -114,7 +114,8 @@ class ClassDataset(Dataset):
                                     resolution=res)
                                 new_prompts.append(pd)
                     else:
-                        sample_prompt = concept.class_prompt
+                        sample_prompt = text_getter.create_text(
+                            concept.class_prompt, "", concept.instance_token, concept.class_token, True)
                         num_to_gen = concept.num_class_images_per * len(i_prompt_datas) - class_prompts.count(sample_prompt)
                         for _ in range(num_to_gen):
                             pd = PromptData(
