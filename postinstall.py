@@ -1,7 +1,7 @@
 import filecmp
 import importlib.util
 import os
-import platform
+# import platform
 import shutil
 import sys
 import sysconfig
@@ -81,18 +81,18 @@ def actual_install():
     def check_versions():
         launch_errors = []
         use_torch2 = False
-        try:
-            print(f"ARGS: {sys.argv}")
-            if "--torch2" in sys.argv:
-                use_torch2 = True
-
-            print(f"Torch2 Selected: {use_torch2}")
-        except:
-            pass
-
-        if use_torch2 and not (platform.system() == "Linux" or platform.system() == "Windows"):
-            print(f"Xformers libraries for Torch2 are not available for {platform.system()} yet, disabling.")
-            use_torch2 = False
+        # try:
+        #     print(f"ARGS: {sys.argv}")
+        #     if "--torch2" in sys.argv:
+        #         use_torch2 = True
+        #
+        #     print(f"Torch2 Selected: {use_torch2}")
+        # except:
+        #     pass
+        #
+        # if use_torch2 and not (platform.system() == "Linux" or platform.system() == "Windows"):
+        #     print(f"Xformers libraries for Torch2 are not available for {platform.system()} yet, disabling.")
+        #     use_torch2 = False
 
         requirements = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
         reqs = open(requirements, 'r')
@@ -105,26 +105,30 @@ def actual_install():
                 reqs_dict[key] = splits[1].replace("\n", "").strip()
 
         checks = ["bitsandbytes", "diffusers", "transformers"]
+        xformers_ver = "0.0.17.dev447"
+        torch_ver = "1.13.1+cu117"
+        torch_vis_ver = "0.14.1+cu117"
 
-        if use_torch2:
-            xformers_ver, torch_ver, torch_vis_ver, xformers_url, torch_final = set_torch2_paths()
-            print("Setting torch2 vars...")
-            torch_cmd = f"pip install --no-deps {torch_final}"
-            xformers_cmd = f"pip install {xformers_url}"
-
-        else:
-            xformers_ver = "0.0.17.dev447"
-            torch_ver = "1.13.1+cu117"
-            torch_vis_ver = "0.14.1+cu117"
-            torch_cmd = "pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117"
-            xformers_cmd = "pip install xformers==0.0.17.dev447"
+        # if use_torch2:
+        #     xformers_ver, torch_ver, torch_vis_ver, xformers_url, torch_final = set_torch2_paths()
+        #     print("Setting torch2 vars...")
+        #     torch_cmd = f"pip install --no-deps {torch_final}"
+        #     xformers_cmd = f"pip install {xformers_url}"
+        #
+        # else:
+        #     xformers_ver = "0.0.17.dev447"
+        #     torch_ver = "1.13.1+cu117"
+        #     torch_vis_ver = "0.14.1+cu117"
+        #     torch_cmd = "pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117"
+        #     xformers_cmd = "pip install xformers==0.0.17.dev447"
 
 
         # Check/install xformers
         has_xformers = importlib.util.find_spec("xformers") is not None
         xformers_check = str(importlib_metadata.version("xformers")) if has_xformers else None
-        if xformers_check != xformers_ver:
-            run(f'"{python}" -m {xformers_cmd}', f"Installing xformers {xformers_ver} from {'pypi' if '==' in xformers_cmd else 'github'}.", "Couldn't install torch.")
+
+        # if xformers_check != xformers_ver:
+        #     run(f'"{python}" -m {xformers_cmd}', f"Installing xformers {xformers_ver} from {'pypi' if '==' in xformers_cmd else 'github'}.", "Couldn't install torch.")
 
         # torch check
         has_torch = importlib.util.find_spec("torch") is not None
@@ -133,8 +137,8 @@ def actual_install():
         torch_check = str(importlib_metadata.version("torch")) if has_torch else None
         torch_vision_check = str(importlib_metadata.version("torchvision")) if has_torch_vision else None
 
-        if torch_check != torch_ver or torch_vision_check != torch_vis_ver:
-            torch_ver, torch_vis_ver = install_torch(torch_cmd, use_torch2)
+        # if torch_check != torch_ver or torch_vision_check != torch_vis_ver:
+        #     torch_ver, torch_vis_ver = install_torch(torch_cmd, use_torch2)
 
         for check, ver, module in [(torch_check, torch_ver, "torch"),
                                    (torch_vision_check, torch_vis_ver, "torchvision"),
