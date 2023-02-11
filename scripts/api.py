@@ -60,9 +60,6 @@ active = False
 
 
 def is_running():
-    if shared.status.job_count != 0 and shared.status.job_count is not None:
-        print("Something is already running.")
-        return JSONResponse(content={"message": "Job already in progress.", "status": shared.status.dict()})
     return False
 
 
