@@ -15,6 +15,8 @@ from launch import run
 def actual_install():
     if os.environ.get("PUBLIC_KEY", None):
         print("Docker, returning.")
+        from extensions.sd_dreambooth_extension.dreambooth import shared
+        shared.launch_error = None
         return
     if sys.version_info < (3, 8):
         import importlib_metadata
