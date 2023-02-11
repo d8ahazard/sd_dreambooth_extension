@@ -602,7 +602,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if config is None:
             return JSONResponse("Config not found")
 
-        prompts, images = generate_samples(
+        prompts, images, status = generate_samples(
             model_name,
             prompt=sample_prompt,
             prompt_file=sample_prompt_file,
