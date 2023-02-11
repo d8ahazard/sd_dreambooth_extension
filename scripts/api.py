@@ -602,7 +602,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if config is None:
             return JSONResponse("Config not found")
 
-        prompts, images, status = generate_samples(
+        images, prompts, status = generate_samples(
             model_name,
             prompt=sample_prompt,
             prompt_file=sample_prompt_file,
@@ -621,10 +621,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if len(images) > 1:
             return zip_files(model_name, images, "_sample")
         else:
-            img_byte_arr = io.BytesIO()
             file = images[0]
-            file.save(img_byte_arr, format='PNG')
-            img_byte_arr = img_byte_arr.getvalue()
+            image = Image.open(file)
+            img_byte_arr = image.tobytes()
 
         return Response(content=img_byte_arr, media_type="image/png")
 
