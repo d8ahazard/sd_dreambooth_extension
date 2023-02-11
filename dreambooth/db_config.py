@@ -203,7 +203,7 @@ def concepts_from_file(concepts_path: str):
         concepts_str = concepts_path
 
     try:
-        concepts_data = json.loads(concepts_str)["concepts_list"]
+        concepts_data = json.loads(concepts_str)
         for concept_data in concepts_data:
             concept = Concept(input_dict=concept_data)
             if concept.is_valid:
