@@ -414,7 +414,7 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
         unet_state_dict = {"model.diffusion_model." + k: v for k, v in unet_state_dict.items()}
 
         # Append EMA values
-        if len(ema_state_dict.items() or (config.save_ema and ema_unet_path is not None)):
+        if len(ema_state_dict.items()) or (config.save_ema and ema_unet_path is not None):
             print("Appending EMA keys to state dict.")
             checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}_ema{checkpoint_ext}")
 
