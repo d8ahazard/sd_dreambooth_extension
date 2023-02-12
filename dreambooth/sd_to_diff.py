@@ -18,7 +18,7 @@ import os
 import re
 import shutil
 import traceback
-
+import glob
 import gradio as gr
 import huggingface_hub.utils.tqdm
 import importlib_metadata
@@ -808,25 +808,30 @@ def replace_symlinks(path, base):
 
 def download_model(db_config: DreamboothConfig, token, extract_ema: bool = False):
     tmp_dir = os.path.join(db_config.model_dir, "src")
-    working_dir = db_config.pretrained_model_name_or_path
 
     hub_url = db_config.src
     if "http" in hub_url or "huggingface.co" in hub_url:
         hub_url = "/".join(hub_url.split("/")[-2:])
 
-    api = HfApi()
-    repo_info = api.repo_info(
-        repo_id=hub_url,
-        repo_type="model",
-        revision="main",
-        token=token,
-    )
+    repo_info = None
+    local_repo = False
+    if not os.path.isdir(hub_url):
+        api = HfApi()
+        repo_info = api.repo_info(
+            repo_id=hub_url,
+            repo_type="model",
+            revision="main",
+            token=token,
+        )
 
-    if repo_info.sha is None:
-        print("Unable to fetch repo?")
-        return None, None
+        if repo_info.sha is None:
+            print("Unable to fetch repo?")
+            return None, None
 
-    siblings = repo_info.siblings
+        siblings = [ sibling.rfilename for sibling in repo_info.siblings ]
+    else:
+        local_repo = True
+        siblings = [ os.path.relpath(file, hub_url) for file in glob.glob(f'{hub_url}/**/*', recursive=True) ]
 
     diffusion_dirs = ["text_encoder", "unet", "vae", "tokenizer", "scheduler", "feature_extractor", "safety_checker"]
     config_file = None
@@ -834,20 +839,24 @@ def download_model(db_config: DreamboothConfig, token, extract_ema: bool = False
     model_files = []
     diffusion_files = []
 
-    for sibling in siblings:
-        name = sibling.rfilename
+    for name in siblings:
+        local_name = name if not local_repo else os.path.join(hub_url, name)
         if "inference.yaml" in name:
-            config_file = name
+            print(f'Found inference file: {name}')
+            config_file = local_name
             continue
         if "model_index.json" in name:
-            model_index = name
+            print(f'Found model index: {name}')
+            model_index = local_name
             continue
         if (".ckpt" in name or ".safetensors" in name) and not "/" in name:
-            model_files.append(name)
+            print(f'Found model: {name}')
+            model_files.append(local_name)
             continue
         for diffusion_dir in diffusion_dirs:
             if f"{diffusion_dir}/" in name:
-                diffusion_files.append(name)
+                print(f'Found diffusion file: {name}')
+                diffusion_files.append(local_name)
 
     for diffusion_dir in diffusion_dirs:
         safe_model = None
@@ -861,6 +870,7 @@ def download_model(db_config: DreamboothConfig, token, extract_ema: bool = False
         if safe_model and bin_model:
             diffusion_files.remove(bin_model)
 
+    print(f'Diffusion files: {diffusion_files}')
     model_file = next((x for x in model_files if ".safetensors" in x and "nonema" in x), next((x for x in model_files if "nonema" in x), next((x for x in model_files if ".safetensors" in x), model_files[0] if model_files else None)))
     model_file_alt = None
     if "nonema" in model_file:
@@ -878,6 +888,16 @@ def download_model(db_config: DreamboothConfig, token, extract_ema: bool = False
         files_to_fetch = diffusion_files
         if model_index is not None:
             files_to_fetch.append(model_index)
+    
+    if local_repo:
+        files_to_fetch = [ model_file ]
+        if model_file_alt is not None:
+            files_to_fetch.append(model_file_alt)
+        if len(diffusion_files):
+            files_to_fetch += diffusion_files
+            if model_index is not None:
+                files_to_fetch.append(model_index)
+
 
     if files_to_fetch and config_file:
         files_to_fetch.append(config_file)
@@ -892,15 +912,18 @@ def download_model(db_config: DreamboothConfig, token, extract_ema: bool = False
     huggingface_hub.utils.tqdm.tqdm = mytqdm
     out_model = None
     for repo_file in mytqdm(files_to_fetch, desc=f"Fetching {len(files_to_fetch)} files"):
-        out = hf_hub_download(
-            hub_url,
-            filename=repo_file,
-            repo_type="model",
-            revision=repo_info.sha,
-            cache_dir=cache_dir,
-            token=token
-        )
-        replace_symlinks(out, db_config.model_dir)
+        if not os.path.exists(repo_file):
+            out = hf_hub_download(
+                hub_url,
+                filename=repo_file,
+                repo_type="model",
+                revision=repo_info.sha,
+                cache_dir=cache_dir,
+                token=token
+            )
+            replace_symlinks(out, db_config.model_dir)
+        else:
+            out = repo_file
         dest = None
         file_name = os.path.basename(out)
         if "yaml" in repo_file:
@@ -1092,6 +1115,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
                 v2 = False
         else:
             unet_dir = os.path.join(db_config.pretrained_model_name_or_path, "unet")
+            print(f'Loading UNet from {unet_dir}')
             try:
                 unet = UNet2DConditionModel.from_pretrained(unet_dir)
                 print("Loaded unet.")
