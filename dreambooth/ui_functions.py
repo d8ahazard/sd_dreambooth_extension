@@ -346,7 +346,7 @@ def generate_samples(model_name: str,
 
             pbar = mytqdm("Generating samples")
             sample_index = 0
-            while len(images) < num_samples:
+            while len(images) < num_samples and not shared.status.interrupted:
                 samples_needed = num_samples - len(images)
                 to_gen = min(samples_needed, train_batch_size)
                 to_generate = []

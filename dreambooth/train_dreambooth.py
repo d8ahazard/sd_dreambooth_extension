@@ -228,7 +228,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
 
         ema_model = None
         if args.use_ema:
-            if os.path.exists(os.path.join(args.pretrained_model_name_or_path, "ema_unet")):
+            if os.path.exists(os.path.join(args.pretrained_model_name_or_path, "ema_unet", "diffusion_pytorch_model.safetensors")):
                 ema_unet = UNet2DConditionModel.from_pretrained(
                     args.pretrained_model_name_or_path,
                     subfolder="ema_unet",
@@ -881,7 +881,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
                         target = noise_scheduler.get_velocity(latents, noise, timesteps)
                     else:
                         target = noise
-
                     if not args.split_loss:
                         loss = instance_loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(),
                                                                             reduction="mean")
@@ -926,7 +925,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
                         if len(instance_chunks) and len(prior_chunks):
                             # Add the prior loss to the instance loss.
                             loss = instance_loss + current_prior_loss_weight * prior_loss
-                            loss /= 2
                         elif len(instance_chunks):
                             loss = instance_loss
                         else:
