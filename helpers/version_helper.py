@@ -48,18 +48,15 @@ def load_changes():
 def check_updates(force: bool = False) -> Union[Dict[str, str], None]:
     last = get_rev()
     current = current_revision()
-    print(f"Last/current: {last}/{current}")
     if last is None and current:
         last = current
         store_rev()
     changes = {}
     if last and current and last != current:
-        print("Fetching updated changes")
         changes = get_changes()
         store_changes(changes)
         store_rev()
     elif force:
-        print("Forcing changes")
         changes = load_changes()
     return changes
         
@@ -76,11 +73,9 @@ def get_changes()-> Union[Dict[str, str], None]:
     # Determine the current revision and branch
     current = get_rev()
     if current is None:
-        print("Cant fetch from file, using 'current'")
         current = current_revision()
 
     # Get the commit history for the repository and branch
-    print(f"CMD is 'git log {current_branch} --pretty=format:'%h%x09%an%x09%ad%x09%s' --date=format:%Y-%m-%d --after={current}'")
     commit_history = subprocess.run(
         ['git', 'log', current_branch, '--pretty=format:"%h%x09%an%x09%ad%x09%s"', '--date=format:%Y-%m-%d',
          f"{current}..HEAD"], cwd=shared.extension_path, capture_output=True, text=True).stdout.strip().split(
@@ -88,11 +83,9 @@ def get_changes()-> Union[Dict[str, str], None]:
 
     # Parse all commits after the current revision
     changes = {}
-    print(f"History: {commit_history}")
     for commit in commit_history:
         parts = commit.split('\t')
         if len(parts) < 4:
-            print(f"invalid line: {commit}")
             continue
         rev = parts[0].lstrip('"')
         author = parts[1]
@@ -101,5 +94,4 @@ def get_changes()-> Union[Dict[str, str], None]:
         url = f"https://github.com/d8ahazard/sd_dreambooth_extension/commit/{rev}"
         changes[rev] = [title, author, date, url]
 
-    print(f"Changes: {changes}")
     return changes

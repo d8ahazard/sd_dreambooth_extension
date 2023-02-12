@@ -105,9 +105,10 @@ def actual_install():
                 key = splits[0]
                 reqs_dict[key] = splits[1].replace("\n", "").strip()
 
-        checks = ["bitsandbytes", "diffusers", "transformers", "xformers"]
+        checks = ["bitsandbytes", "diffusers", "transformers"]
         torch_ver = "1.13.1+cu117"
         torch_vis_ver = "0.14.1+cu117"
+        xformers_ver = "0.0.17.dev447"
 
         # if use_torch2:
         #     xformers_ver, torch_ver, torch_vis_ver, xformers_url, torch_final = set_torch2_paths()
@@ -131,17 +132,23 @@ def actual_install():
         #     run(f'"{python}" -m {xformers_cmd}', f"Installing xformers {xformers_ver} from {'pypi' if '==' in xformers_cmd else 'github'}.", "Couldn't install torch.")
 
         # torch check
+
         has_torch = importlib.util.find_spec("torch") is not None
         has_torch_vision = importlib.util.find_spec("torchvision") is not None
+        has_xformers = importlib.util.find_spec("xformers") is not None
 
         torch_check = str(importlib_metadata.version("torch")) if has_torch else None
         torch_vision_check = str(importlib_metadata.version("torchvision")) if has_torch_vision else None
+        xformers_check = str(importlib_metadata.version("xformers")) if has_xformers else None
+
 
         # if torch_check != torch_ver or torch_vision_check != torch_vis_ver:
         #     torch_ver, torch_vis_ver = install_torch(torch_cmd, use_torch2)
 
         for check, ver, module in [(torch_check, torch_ver, "torch"),
-                                   (torch_vision_check, torch_vis_ver, "torchvision")]:
+                                   (torch_vision_check, torch_vis_ver, "torchvision"),
+                                   (xformers_check, xformers_ver, "xformers")]:
+
             if check != ver:
                 if not check:
                     print(f"[!] {module} NOT installed.")
@@ -180,11 +187,10 @@ def actual_install():
 
 
         if len(launch_errors):
-            print(f"Setting launch errors: {launch_errors}")
+            print(f"Launch errors detected: {launch_errors}")
             os.environ["ERRORS"] = json.dumps(launch_errors)
         else:
             os.environ["ERRORS"] = ""
-            print(f"No, really, clearing launch errors: {os.environ.get('ERRORS', None)}")
 
     base_dir = os.path.dirname(os.path.realpath(__file__))
     revision = ""
