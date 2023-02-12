@@ -24,22 +24,24 @@ import huggingface_hub.utils.tqdm
 import importlib_metadata
 import safetensors.torch
 import torch
+from omegaconf import OmegaConf
+
 from diffusers.pipelines.paint_by_example import PaintByExampleImageEncoder
 from huggingface_hub import HfApi, hf_hub_download
 
-from extensions.sd_dreambooth_extension.dreambooth import shared
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, disable_safe_unpickle, \
-    enable_safe_unpickle
-from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-
 try:
-    from omegaconf import OmegaConf
-except ImportError:
-    raise ImportError(
-        "OmegaConf is required to convert the LDM checkpoints. Please install it with `pip install OmegaConf`."
-    )
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, disable_safe_unpickle, \
+        enable_safe_unpickle
+    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+except:
+    from dreambooth import shared # noqa
+    from dreambooth.dataclasses.db_config import DreamboothConfig # noqa
+    from dreambooth.utils.model_utils import get_db_models, disable_safe_unpickle, enable_safe_unpickle # noqa
+    from dreambooth.utils.utils import printi # noqa
+    from helpers.mytqdm import mytqdm # noqa
 
 from diffusers import (
     AutoencoderKL,

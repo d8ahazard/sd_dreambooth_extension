@@ -3,13 +3,21 @@ import random
 
 from torch.utils.data import Dataset
 
-from extensions.sd_dreambooth_extension.dreambooth import shared
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-from extensions.sd_dreambooth_extension.dreambooth.shared import status
-from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import FilenameTextGetter, make_bucket_resolutions, \
-    sort_prompts, get_images
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+    from extensions.sd_dreambooth_extension.dreambooth.shared import status
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import FilenameTextGetter, make_bucket_resolutions, \
+        sort_prompts, get_images
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+except:
+    from dreambooth import shared # noqa
+    from dreambooth.dataclasses.db_concept import Concept # noqa
+    from dreambooth.dataclasses.prompt_data import PromptData # noqa
+    from dreambooth.shared import status # noqa
+    from dreambooth.utils.image_utils import FilenameTextGetter, make_bucket_resolutions, sort_prompts, get_images # noqa
+    from helpers.mytqdm import mytqdm # noqa
 
 
 class ClassDataset(Dataset):

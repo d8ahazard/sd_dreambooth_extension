@@ -15,23 +15,40 @@ import torch.utils.data.dataloader
 from accelerate import find_executable_batch_size
 from diffusers.utils import logging as dl
 
-from extensions.sd_dreambooth_extension.dreambooth import shared
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses import db_config
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig, \
-    sanitize_name
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-from extensions.sd_dreambooth_extension.dreambooth.dataset.bucket_sampler import BucketSampler
-from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import ClassDataset
-from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler
-from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.shared import status, run
-from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_dataset, generate_classifiers
-from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, db_save_image
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
-    get_lora_models, get_checkpoint_match
-from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printm, cleanup
-from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses import db_config
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig, \
+        sanitize_name
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+    from extensions.sd_dreambooth_extension.dreambooth.dataset.bucket_sampler import BucketSampler
+    from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import ClassDataset
+    from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler
+    from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
+    from extensions.sd_dreambooth_extension.dreambooth.shared import status, run
+    from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_dataset, generate_classifiers
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, db_save_image
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
+        get_lora_models, get_checkpoint_match
+    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printm, cleanup
+    from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+except:
+    from dreambooth import shared # noqa
+    from dreambooth.dataclasses import db_config # noqa
+    from dreambooth.dataclasses.db_config import from_file, DreamboothConfig, sanitize_name # noqa
+    from dreambooth.dataclasses.prompt_data import PromptData # noqa
+    from dreambooth.dataset.bucket_sampler import BucketSampler # noqa
+    from dreambooth.dataset.class_dataset import ClassDataset # noqa
+    from dreambooth.optimization import UniversalScheduler # noqa
+    from dreambooth.sd_to_diff import extract_checkpoint # noqa
+    from dreambooth.shared import status, run # noqa
+    from dreambooth.utils.gen_utils import generate_dataset, generate_classifiers # noqa
+    from dreambooth.utils.image_utils import get_images, db_save_image # noqa
+    from dreambooth.utils.model_utils import unload_system_models, reload_system_models, get_lora_models, get_checkpoint_match # noqa
+    from dreambooth.utils.utils import printm, cleanup # noqa
+    from helpers.image_builder import ImageBuilder # noqa
+    from helpers.mytqdm import mytqdm # noqa
 
 logger = logging.getLogger(__name__)
 console = logging.StreamHandler()

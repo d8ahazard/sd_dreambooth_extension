@@ -7,8 +7,10 @@ import torch.nn as nn
 from safetensors.torch import safe_open
 from safetensors.torch import save_file as safe_save
 
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import disable_safe_unpickle, enable_safe_unpickle
-
+try:
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import disable_safe_unpickle, enable_safe_unpickle
+except:
+    from utils.model_utils import disable_safe_unpickle, enable_safe_unpickle # noqa
 
 class LoraInjectedLinear(nn.Module):
     def __init__(self, in_features, out_features, bias=False, r=4, dropout_p=0.1):

@@ -14,14 +14,24 @@ import torch
 from diffusers import UNet2DConditionModel
 from torch import Tensor, nn
 
-from extensions.sd_dreambooth_extension.dreambooth import shared as shared
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
-from extensions.sd_dreambooth_extension.dreambooth.shared import status
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
-    disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path
-from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared as shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
+    from extensions.sd_dreambooth_extension.dreambooth.shared import status
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
+        disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path
+    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+    from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
+except:
+    from dreambooth import shared as shared # noqa
+    from dreambooth.dataclasses.db_config import from_file # noqa
+    from dreambooth.shared import status # noqa
+    from dreambooth.utils.model_utils import unload_system_models, reload_system_models, disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path # noqa
+    from dreambooth.utils.utils import printi # noqa
+    from helpers.mytqdm import mytqdm # noqa
+    from lora_diffusion.lora import weight_apply_lora # noqa
+
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)

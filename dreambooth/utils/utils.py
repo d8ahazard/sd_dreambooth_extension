@@ -14,7 +14,6 @@ import pandas as pd
 from packaging import version
 from pandas.plotting._matplotlib.style import get_standard_colors
 
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import torch
@@ -23,7 +22,12 @@ from huggingface_hub import HfFolder, whoami
 from pandas import DataFrame
 from tensorboard.compat.proto import event_pb2
 
-from extensions.sd_dreambooth_extension.dreambooth.shared import status
+try:
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+    from extensions.sd_dreambooth_extension.dreambooth.shared import status
+except:
+    from helpers.mytqdm import mytqdm # noqa
+    from dreambooth.shared import status # noqa
 
 
 def printi(msg, params=None, log=True):

@@ -16,17 +16,31 @@ from fastapi import FastAPI, Response, Query, Body, Form, Header
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 
-from extensions.sd_dreambooth_extension.dreambooth import shared
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
-from extensions.sd_dreambooth_extension.dreambooth.shared import DreamState
-from extensions.sd_dreambooth_extension.dreambooth.ui_functions import create_model, generate_samples, start_training
-from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers
-from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig
+    from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
+    from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
+    from extensions.sd_dreambooth_extension.dreambooth.shared import DreamState
+    from extensions.sd_dreambooth_extension.dreambooth.ui_functions import create_model, generate_samples, start_training
+    from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
+except:
+    from dreambooth import shared # noqa
+    from dreambooth.dataclasses.db_concept import Concept # noqa
+    from dreambooth.dataclasses.db_config import from_file, DreamboothConfig # noqa
+    from dreambooth.diff_to_sd import compile_checkpoint # noqa
+    from dreambooth.secret import get_secret # noqa
+    from dreambooth.shared import DreamState # noqa
+    from dreambooth.ui_functions import create_model, generate_samples, start_training # noqa
+    from dreambooth.utils.gen_utils import generate_classifiers # noqa
+    from dreambooth.utils.image_utils import get_images # noqa
+    from dreambooth.utils.model_utils import get_db_models, get_lora_models # noqa
+
 from modules import sd_models
+
 
 class InstanceData(BaseModel):
     data: str = Field(title="File data", description="Base64 representation of the file")

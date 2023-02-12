@@ -1,14 +1,112 @@
 from __future__ import annotations
 
+import collections
 import os
 from typing import Union
 
 import gradio
 from transformers import PretrainedConfig
 
-from extensions.sd_dreambooth_extension.dreambooth import shared
-from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup
-from modules.sd_models import CheckpointInfo
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup
+except:
+    from dreambooth import shared # noqa
+    from dreambooth.utils.utils import cleanup # noqa
+
+checkpoints_list = {}
+checkpoint_alisases = {}
+checkpoints_loaded = collections.OrderedDict()
+
+model_dir = "Stable-diffusion"
+model_path = os.path.abspath(os.path.join(shared.models_path, model_dir))
+
+
+class CheckpointInfo:
+    def __init__(self, filename):
+        self.filename = filename
+        abspath = os.path.abspath(filename)
+
+        if shared.cmd_opts.ckpt_dir is not None and abspath.startswith(shared.cmd_opts.ckpt_dir):
+            name = abspath.replace(shared.cmd_opts.ckpt_dir, '')
+        elif abspath.startswith(model_path):
+            name = abspath.replace(model_path, '')
+        else:
+            name = os.path.basename(filename)
+
+        if name.startswith("\\") or name.startswith("/"):
+            name = name[1:]
+
+        self.name = name
+        self.name_for_extra = os.path.splitext(os.path.basename(filename))[0]
+        self.model_name = os.path.splitext(name.replace("/", "_").replace("\\", "_"))[0]
+        self.hash = model_hash(filename)
+
+        self.sha256 = hashes.sha256_from_cache(self.filename, "checkpoint/" + name)
+        self.shorthash = self.sha256[0:10] if self.sha256 else None
+
+        self.title = name if self.shorthash is None else f'{name} [{self.shorthash}]'
+
+        self.ids = [self.hash, self.model_name, self.title, name, f'{name} [{self.hash}]'] + ([self.shorthash, self.sha256, f'{self.name} [{self.shorthash}]'] if self.shorthash else [])
+
+    def register(self):
+        checkpoints_list[self.title] = self
+        for id in self.ids:
+            checkpoint_alisases[id] = self
+
+    def calculate_shorthash(self):
+        self.sha256 = hashes.sha256(self.filename, "checkpoint/" + self.name)
+        if self.sha256 is None:
+            return
+
+        self.shorthash = self.sha256[0:10]
+
+        if self.shorthash not in self.ids:
+            self.ids += [self.shorthash, self.sha256, f'{self.name} [{self.shorthash}]']
+
+        checkpoints_list.pop(self.title)
+        self.title = f'{self.name} [{self.shorthash}]'
+        self.register()
+
+        return self.shorthash
+
+def list_models():
+    checkpoints_list.clear()
+    checkpoint_alisases.clear()
+    model_list = modelloader.load_models(model_path=model_path, command_path=shared.cmd_opts.ckpt_dir, ext_filter=[".ckpt", ".safetensors"], ext_blacklist=[".vae.safetensors"])
+
+    cmd_ckpt = shared.cmd_opts.ckpt
+    if os.path.exists(cmd_ckpt):
+        checkpoint_info = CheckpointInfo(cmd_ckpt)
+        checkpoint_info.register()
+
+        shared.opts.data['sd_model_checkpoint'] = checkpoint_info.title
+    elif cmd_ckpt is not None and cmd_ckpt != shared.default_sd_model_file:
+        print(f"Checkpoint in --ckpt argument not found (Possible it was moved to {model_path}: {cmd_ckpt}", file=sys.stderr)
+
+    for filename in model_list:
+        checkpoint_info = CheckpointInfo(filename)
+        checkpoint_info.register()
+
+def get_model_snapshots(model_name: str):
+    try:
+        from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
+    except:
+        from dreambooth.dataclasses.db_config import from_file # noqa
+
+    result = gradio.update(visible=True)
+    if model_name == "" or model_name is None:
+        return result
+    config = from_file(model_name)
+    snaps_path = os.path.join(config.model_dir, "snapshots")
+    snaps = []
+    if os.path.exists(snaps_path):
+        for directory in os.listdir(snaps_path):
+            if "checkpoint_" in directory:
+                fullpath = os.path.join(snaps_path, directory)
+                snaps.append(fullpath)
+    return snaps
+
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
@@ -36,20 +134,6 @@ def get_lora_models():
                     output.append(found)
     return output
 
-def get_model_snapshots(model_name: str):
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
-    result = gradio.update(visible=True)
-    if model_name == "" or model_name is None:
-        return result
-    config = from_file(model_name)
-    snaps_path = os.path.join(config.model_dir, "snapshots")
-    snaps = []
-    if os.path.exists(snaps_path):
-        for directory in os.listdir(snaps_path):
-            if "checkpoint_" in directory:
-                fullpath = os.path.join(snaps_path, directory)
-                snaps.append(fullpath)
-    return snaps
 
 def unload_system_models():
     try:
@@ -74,15 +158,6 @@ def reload_system_models():
     except:
         pass
 
-def get_checkpoint_match(search_string) -> Union[CheckpointInfo, None]:
-    try:
-        from modules import sd_models
-        for info in sd_models.checkpoints_list.values():
-            if search_string in info.title or search_string in info.model_name or search_string in info.filename:
-                return info
-    except:
-        pass
-    return None
 
 
 def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision):
@@ -103,6 +178,18 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
         return RobertaSeriesModelWithTransformation
     else:
         raise ValueError(f"{model_class} is not supported.")
+
+#from modules.sd_models import CheckpointInfo
+
+def get_checkpoint_match(search_string):
+    try:
+        from modules import sd_models
+        for info in sd_models.checkpoints_list.values():
+            if search_string in info.title or search_string in info.model_name or search_string in info.filename:
+                return info
+    except:
+        pass
+    return None
 
 def disable_safe_unpickle():
     try:

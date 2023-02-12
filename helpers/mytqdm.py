@@ -2,7 +2,10 @@ from typing import Iterable
 
 from tqdm import tqdm
 
-from extensions.sd_dreambooth_extension.dreambooth import shared
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+except:
+    from dreambooth import shared  # noqa
 
 
 class mytqdm(tqdm):

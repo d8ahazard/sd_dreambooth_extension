@@ -1,6 +1,9 @@
 from PIL import Image
 
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
+try:
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
+except:
+    from dreambooth.dataclasses.db_config import DreamboothConfig # noqa
 
 
 class TrainResult:

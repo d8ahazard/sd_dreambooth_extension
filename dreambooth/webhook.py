@@ -6,8 +6,12 @@ from typing import Union, List
 import discord_webhook
 from PIL import Image
 
-from extensions.sd_dreambooth_extension.dreambooth import shared
-from modules import images
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import image_grid
+except:
+    from dreambooth import shared # noqa
+    from dreambooth.utils.image_utils import image_grid # noqa
 
 
 class DreamboothWebhookTarget(Enum):
@@ -63,7 +67,8 @@ def send_training_update(
     # Accept a list, make a grid
     if isinstance(imgs, List):
         out_imgs = [Image.open(img) for img in imgs]
-        image = images.image_grid(out_imgs)
+
+        image = image_grid(out_imgs)
         
         for i in out_imgs:
             i.close()

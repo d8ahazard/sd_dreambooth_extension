@@ -7,19 +7,30 @@ from PIL import Image
 from accelerate import Accelerator
 from diffusers import DiffusionPipeline, AutoencoderKL, DEISMultistepScheduler, UNet2DConditionModel
 
-from extensions.sd_dreambooth_extension.dreambooth import shared
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-from extensions.sd_dreambooth_extension.dreambooth.shared import disable_safe_unpickle
-from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import process_txt2img
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_checkpoint_match, reload_system_models, \
-    enable_safe_unpickle, disable_safe_unpickle, unload_system_models
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, \
-    get_target_module
-from modules import sd_models
-from modules import shared as auto_shared
-from modules.processing import StableDiffusionProcessingTxt2Img
+
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+    from extensions.sd_dreambooth_extension.dreambooth.shared import disable_safe_unpickle
+    from extensions.sd_dreambooth_extension.dreambooth.utils import image_utils
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import process_txt2img
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_checkpoint_match, \
+        reload_system_models, \
+        enable_safe_unpickle, disable_safe_unpickle, unload_system_models
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+    from extensions.sd_dreambooth_extension.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, \
+        get_target_module
+except:
+    from dreambooth import shared # noqa
+    from dreambooth.dataclasses.db_config import DreamboothConfig # noqa
+    from dreambooth.dataclasses.prompt_data import PromptData # noqa
+    from dreambooth.shared import disable_safe_unpickle # noqa
+    from dreambooth.utils import image_utils # noqa
+    from dreambooth.utils.image_utils import process_txt2img # noqa
+    from dreambooth.utils.model_utils import get_checkpoint_match, reload_system_models, enable_safe_unpickle, disable_safe_unpickle, unload_system_models # noqa
+    from helpers.mytqdm import mytqdm # noqa
+    from lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, get_target_module # noqa
 
 
 class ImageBuilder:
@@ -40,10 +51,15 @@ class ImageBuilder:
         self.batch_size = batch_size
         self.exception_count = 0
 
+        if not image_utils.txt2img_available and use_txt2img:
+            print("No txt2img available.")
+            use_txt2img = False
+
         if (source_checkpoint is None or not os.path.isfile(source_checkpoint)) and use_txt2img:
             print("Unable to find source model, can't use txt2img.")
             use_txt2img = False
-
+           
+        
         self.use_txt2img = use_txt2img
         self.del_accelerator = False
 
@@ -116,15 +132,19 @@ class ImageBuilder:
                     tune_lora_scale(self.image_pipe.text_encoder, config.lora_txt_weight)
 
         else:
-            current_model = sd_models.select_checkpoint()
-            print(f"Source checkpoint: {source_checkpoint}")
-            new_model_info = get_checkpoint_match(source_checkpoint)
-            print(f"Model info: {new_model_info.filename}")
-            self.last_model = current_model
-            if new_model_info is not None:
-                print(f"Loading model: {new_model_info.model_name}")
-                shared.sd_model = sd_models.load_model(new_model_info)
-                reload_system_models()
+            try:
+                from modules import sd_models
+                current_model = sd_models.select_checkpoint()
+                print(f"Source checkpoint: {source_checkpoint}")
+                new_model_info = get_checkpoint_match(source_checkpoint)
+                print(f"Model info: {new_model_info.filename}")
+                self.last_model = current_model
+                if new_model_info is not None:
+                    print(f"Loading model: {new_model_info.model_name}")
+                    shared.sd_model = sd_models.load_model(new_model_info)
+                    reload_system_models()
+            except:
+                pass
 
 
     def generate_images(self, prompt_data: List[PromptData], pbar: mytqdm) -> [Image]:
@@ -135,6 +155,7 @@ class ImageBuilder:
         steps = 60
         width = self.resolution
         height = self.resolution
+
         for prompt in prompt_data:
             positive_prompts.append(prompt.prompt)
             negative_prompts.append(prompt.negative_prompt)
@@ -144,28 +165,35 @@ class ImageBuilder:
             width, height = prompt.resolution
 
         if self.use_txt2img:
-            p = StableDiffusionProcessingTxt2Img(
-                sampler_name='DPM++ 2S a Karras',
-                sd_model=auto_shared.sd_model,
-                prompt=positive_prompts,
-                negative_prompt=negative_prompts,
-                batch_size=self.batch_size,
-                steps=steps,
-                cfg_scale=scale,
-                width=width,
-                height=height,
-                do_not_save_grid=True,
-                do_not_save_samples=True,
-                do_not_reload_embeddings=True
-            )
+            try:
+                from modules.processing import StableDiffusionProcessingTxt2Img
+                from modules import shared as auto_shared
 
-            auto_tqdm = auto_shared.total_tqdm
-            shared.total_tqdm = pbar
-            pbar.reset(steps)
-            processed = process_txt2img(p)
-            p.close()
-            auto_shared.total_tqdm = auto_tqdm
-            output = processed
+                p = StableDiffusionProcessingTxt2Img(
+                    sampler_name='DPM++ 2S a Karras',
+                    sd_model=auto_shared.sd_model,
+                    prompt=positive_prompts,
+                    negative_prompt=negative_prompts,
+                    batch_size=self.batch_size,
+                    steps=steps,
+                    cfg_scale=scale,
+                    width=width,
+                    height=height,
+                    do_not_save_grid=True,
+                    do_not_save_samples=True,
+                    do_not_reload_embeddings=True
+                )
+
+                auto_tqdm = auto_shared.total_tqdm
+                shared.total_tqdm = pbar
+                pbar.reset(steps)
+                processed = process_txt2img(p)
+                p.close()
+                auto_shared.total_tqdm = auto_tqdm
+                output = processed
+            except:
+                print("No txt2img.")
+                self.use_txt2img = False
         else:
             with self.accelerator.autocast(), torch.inference_mode():
                 if seed is None or seed == '' or seed == -1:
@@ -199,7 +227,11 @@ class ImageBuilder:
             del self.accelerator
         # If there was a model loaded already, reload it
         if self.last_model is not None and not is_ui:
-            shared.sd_model = sd_models.load_model(self.last_model)
+            try:
+                from modules import sd_models
+                shared.sd_model = sd_models.load_model(self.last_model)
+            except:
+                pass
 
         if not is_ui:
             reload_system_models()

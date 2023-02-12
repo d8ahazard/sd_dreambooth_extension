@@ -12,12 +12,20 @@ from PIL import Image
 from torchvision.transforms import transforms
 from transformers import CLIPTokenizer
 
-from extensions.sd_dreambooth_extension.dreambooth import shared
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-from extensions.sd_dreambooth_extension.dreambooth.shared import status
-from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import make_bucket_resolutions, closest_resolution
-from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import build_strict_tokens
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+    from extensions.sd_dreambooth_extension.dreambooth.shared import status
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import make_bucket_resolutions, closest_resolution
+    from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import build_strict_tokens
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+except:
+    from dreambooth import shared # noqa
+    from dreambooth.dataclasses.prompt_data import PromptData # noqa
+    from dreambooth.shared import status # noqa
+    from dreambooth.utils.image_utils import make_bucket_resolutions, closest_resolution # noqa
+    from dreambooth.utils.text_utils import build_strict_tokens # noqa
+    from helpers.mytqdm import mytqdm # noqa
 
 
 class DbDataset(torch.utils.data.Dataset):

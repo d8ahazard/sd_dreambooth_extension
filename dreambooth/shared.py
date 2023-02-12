@@ -13,7 +13,6 @@ import torch
 from PIL import Image
 from packaging import version
 
-
 def load_auto_settings():
     global models_path, script_path, ckpt_dir, device_id, disable_safe_unpickle, dataset_filename_word_regex, \
         dataset_filename_join_string, show_progress_every_n_steps, parallel_processing_allowed, state, ckptfix, medvram, \
@@ -63,11 +62,12 @@ def load_auto_settings():
                 device = torch.device("cpu")
         except:
             pass
-
+        return True
     except Exception as e:
         print("Exception importing SD-WebUI module:")
         print(f"{type(e).__name__} at line {e.__traceback__.tb_lineno} of {__file__}: {e}")
         traceback.print_exc()
+        return False
         pass
 
 def get_launch_errors():
@@ -313,6 +313,7 @@ sd_model = None
 config = os.path.join(script_path, "configs", "v1-inference.yaml")
 force_cpu = False
 
+is_auto = load_auto_settings()
 
 
 
@@ -350,5 +351,6 @@ if device.type == "mps":
         torch.narrow = lambda *args, **kwargs: ( orig_narrow(*args, **kwargs).clone() )
 
 status = DreamState()
+
 if state is None:
     state = status

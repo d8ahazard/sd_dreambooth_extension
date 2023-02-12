@@ -22,27 +22,48 @@ from torch.cuda.profiler import profile
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
 
-from extensions.sd_dreambooth_extension.dreambooth import xattention, shared
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.train_result import TrainResult
-from extensions.sd_dreambooth_extension.dreambooth.dataset.bucket_sampler import BucketSampler
-from extensions.sd_dreambooth_extension.dreambooth.dataset.sample_dataset import SampleDataset
-from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
-from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler
-from extensions.sd_dreambooth_extension.dreambooth.shared import status, load_auto_settings
-from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
-from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
-    import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle
-from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import encode_hidden_state
-from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup, parse_logs, printm
-from extensions.sd_dreambooth_extension.dreambooth.webhook import send_training_update
-from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
-from extensions.sd_dreambooth_extension.helpers.ema_model import EMAModel
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, \
-    TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import xattention, shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.train_result import TrainResult
+    from extensions.sd_dreambooth_extension.dreambooth.dataset.bucket_sampler import BucketSampler
+    from extensions.sd_dreambooth_extension.dreambooth.dataset.sample_dataset import SampleDataset
+    from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
+    from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
+    from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler
+    from extensions.sd_dreambooth_extension.dreambooth.shared import status, load_auto_settings
+    from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
+        import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle
+    from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import encode_hidden_state
+    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup, parse_logs, printm
+    from extensions.sd_dreambooth_extension.dreambooth.webhook import send_training_update
+    from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
+    from extensions.sd_dreambooth_extension.helpers.ema_model import EMAModel
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+    from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, \
+        TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
+except:
+    from dreambooth import xattention, shared # noqa
+    from dreambooth.dataclasses.prompt_data import PromptData # noqa
+    from dreambooth.dataclasses.train_result import TrainResult # noqa
+    from dreambooth.dataset.bucket_sampler import BucketSampler # noqa
+    from dreambooth.dataset.sample_dataset import SampleDataset # noqa
+    from dreambooth.diff_to_sd import compile_checkpoint # noqa
+    from dreambooth.memory import find_executable_batch_size # noqa
+    from dreambooth.optimization import UniversalScheduler # noqa
+    from dreambooth.shared import status, load_auto_settings # noqa
+    from dreambooth.utils.gen_utils import generate_classifiers, generate_dataset # noqa
+    from dreambooth.utils.image_utils import db_save_image # noqa
+    from dreambooth.utils.model_utils import unload_system_models, import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle # noqa
+    from dreambooth.utils.text_utils import encode_hidden_state # noqa
+    from dreambooth.utils.utils import cleanup, parse_logs, printm # noqa
+    from dreambooth.webhook import send_training_update # noqa
+    from dreambooth.xattention import optim_to # noqa
+    from helpers.ema_model import EMAModel # noqa
+    from helpers.mytqdm import mytqdm # noqa
+    from lora_diffusion.lora import save_lora_weight, TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module # noqa
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
@@ -92,8 +113,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
     @param use_txt2img: Use txt2img when generating class images.
     @return: TrainResult
     """
-    load_auto_settings()
-
     args = shared.db_model_config
     logging_dir = Path(args.model_dir, "logging")
 
