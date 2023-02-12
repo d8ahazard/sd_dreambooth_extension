@@ -381,7 +381,7 @@ def on_ui_tabs():
                                                           placeholder="Enter a model name for saving checkpoints and lora models.")
                         db_save_safetensors = gr.Checkbox(label="Save in .safetensors format", value=True, visible=False)
                         db_save_ema = gr.Checkbox(label="Save EMA Weights to Generated Models", value=True)
-                        db_save_ema_infer = gr.Checkbox(label="Use EMA Weights for Inference", value=False)
+                        db_infer_ema = gr.Checkbox(label="Use EMA Weights for Inference", value=False)
                     with gr.Column():
                         gr.HTML("Checkpoints")
                         db_half_model = gr.Checkbox(label="Half Model", value=False)
@@ -597,6 +597,7 @@ def on_ui_tabs():
             db_graph_smoothing,
             db_half_model,
             db_hflip,
+            db_infer_ema,
             db_learning_rate,
             db_learning_rate_min,
             db_lora_learning_rate,
@@ -632,6 +633,7 @@ def on_ui_tabs():
             db_save_ckpt_cancel,
             db_save_ckpt_during,
             db_save_embedding_every,
+            db_save_ema,
             db_save_lora_after,
             db_save_lora_cancel,
             db_save_lora_during,

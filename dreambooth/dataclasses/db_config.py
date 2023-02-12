@@ -40,6 +40,7 @@ class DreamboothConfig(BaseModel):
     train_unfrozen: bool = True
     has_ema: bool = False
     hflip: bool = False
+    infer_ema: bool = False
     initial_revision: int = 0
     learning_rate: float = 5e-6
     learning_rate_min: float = 1e-6
@@ -78,6 +79,7 @@ class DreamboothConfig(BaseModel):
     save_ckpt_after: bool = True
     save_ckpt_cancel: bool = False
     save_ckpt_during: bool = True
+    save_ema: bool = True
     save_embedding_every: int = 25
     save_lora_after: bool = True
     save_lora_cancel: bool = False
