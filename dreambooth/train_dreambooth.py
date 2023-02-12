@@ -321,8 +321,13 @@ def main(use_txt2img: bool = True) -> TrainResult:
             weight_decay=args.adamw_weight_decay
         )
 
-        #noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
-        noise_scheduler = DEISMultistepScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
+        if args.deis_train_scheduler:
+            print("Using DEIS for noise scheduler.")
+            noise_scheduler = DEISMultistepScheduler.from_pretrained(args.pretrained_model_name_or_path,
+                                                                     subfolder="scheduler")
+        else:
+            noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
+
 
         def cleanup_memory():
             try:

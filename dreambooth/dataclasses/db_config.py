@@ -23,15 +23,16 @@ class DreamboothConfig(BaseModel):
     adamw_weight_decay: float = 0.01
     attention: str = "xformers"
     cache_latents: bool = True
-    freeze_clip_normalization: bool = True
     clip_skip: int = 1
     concepts_list: List[Dict] = []
     concepts_path: str = ""
     custom_model_name: str = ""
+    deis_train_scheduler: bool = False
     ema_predict: bool = False
     epoch: int = 0
     epoch_pause_frequency: int = 0
     epoch_pause_time: int = 0
+    freeze_clip_normalization: bool = True
     gradient_accumulation_steps: int = 1
     gradient_checkpointing: bool = True
     gradient_set_to_none: bool = True

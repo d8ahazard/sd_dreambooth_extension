@@ -431,6 +431,7 @@ def on_ui_tabs():
                 with gr.Tab("Testing", elem_id="TabDebug"):
                     db_ema_predict = gr.Checkbox(label="Use EMA for prediction.")
                     db_split_loss = gr.Checkbox(label="Calculate Split Loss", value=True)
+                    db_deis_train_scheduler = gr.Checkbox(label="Use DEIS for noise scheduler", value=False)
                     db_update_extension = gr.Button(value="Update Extension and Restart")
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")
@@ -583,14 +584,15 @@ def on_ui_tabs():
             db_model_name,
             db_attention,
             db_cache_latents,
-            db_freeze_clip_normalization,
             db_clip_skip,
             db_concepts_path,
             db_custom_model_name,
+            db_deis_train_scheduler,
             db_ema_predict,
             db_epochs,
             db_epoch_pause_frequency,
             db_epoch_pause_time,
+            db_freeze_clip_normalization,
             db_gradient_accumulation_steps,
             db_gradient_checkpointing,
             db_gradient_set_to_none,
