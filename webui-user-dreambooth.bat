@@ -4,6 +4,7 @@ set PYTHON=
 set GIT=
 set VENV_DIR=
 set COMMANDLINE_ARGS=
+set "XFORMERS_PACKAGE=xformers==0.0.17.dev447"
 :: Use the below argument if getting OOM extracting checkpoints
 :: set COMMANDLINE_ARGS=--ckptfix
 set "REQS_FILE=.\extensions\sd_dreambooth_extension\requirements.txt"
