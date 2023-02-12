@@ -403,7 +403,6 @@ def parse_logs(model_name: str, for_ui: bool = False):
 
     out_images = []
     out_names = []
-    print("Plotting")
     status.job_count = 2
     status.job_no = 1
     status.textinfo = "Plotting data..."
