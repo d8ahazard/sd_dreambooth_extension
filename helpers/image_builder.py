@@ -13,7 +13,7 @@ from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data impor
 from extensions.sd_dreambooth_extension.dreambooth.shared import disable_safe_unpickle
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import process_txt2img
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_checkpoint_match, reload_system_models, \
-    enable_safe_unpickle, disable_safe_unpickle
+    enable_safe_unpickle, disable_safe_unpickle, unload_system_models
 from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 from extensions.sd_dreambooth_extension.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, \
     get_target_module
@@ -48,6 +48,7 @@ class ImageBuilder:
         self.del_accelerator = False
 
         if not self.use_txt2img:
+            unload_system_models()
             self.accelerator = accelerator
             if accelerator is None:
                 try:
@@ -87,6 +88,7 @@ class ImageBuilder:
                 safety_checker=None,
                 revision=config.revision
             )
+            self.image_pipe.enable_attention_slicing()
             self.image_pipe.enable_xformers_memory_efficient_attention()
             self.image_pipe.scheduler = DEISMultistepScheduler.from_config(self.image_pipe.scheduler.config)
             self.image_pipe.to(accelerator.device)
@@ -168,8 +170,6 @@ class ImageBuilder:
             with self.accelerator.autocast(), torch.inference_mode():
                 if seed is None or seed == '' or seed == -1:
                     seed = int(random.randrange(21474836147))
-                print(f"SEED: {seed}")
-                g_cuda = torch.Generator(device=self.accelerator.device).manual_seed(seed)
                 generator = torch.manual_seed(seed)
                 try:
                     output = self.image_pipe(
@@ -200,4 +200,6 @@ class ImageBuilder:
         # If there was a model loaded already, reload it
         if self.last_model is not None and not is_ui:
             shared.sd_model = sd_models.load_model(self.last_model)
+
+        if not is_ui:
             reload_system_models()
