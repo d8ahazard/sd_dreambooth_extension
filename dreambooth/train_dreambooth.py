@@ -15,7 +15,7 @@ import torch.backends.cudnn
 import torch.utils.checkpoint
 from accelerate import Accelerator
 from accelerate.utils.random import set_seed as set_seed2
-from diffusers import AutoencoderKL, DDIMScheduler, DiffusionPipeline, UNet2DConditionModel, DDPMScheduler
+from diffusers import AutoencoderKL, DiffusionPipeline, UNet2DConditionModel, DDPMScheduler, DEISMultistepScheduler
 from diffusers.utils import logging as dl
 from tensorflow.python.framework.random_seed import set_seed as set_seed1
 from torch.cuda.profiler import profile
@@ -320,7 +320,9 @@ def main(use_txt2img: bool = True) -> TrainResult:
             lr=args.learning_rate,
             weight_decay=args.adamw_weight_decay
         )
-        noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
+
+        #noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
+        noise_scheduler = DEISMultistepScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
 
         def cleanup_memory():
             try:
@@ -614,13 +616,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 optim_to(torch, profiler, optimizer)
                 if profiler is not None:
                     cleanup()
-                g_cuda = None
-                pred_type = "epsilon"
-                if args.v2 and args.resolution > 512:
-                    pred_type = "v_prediction"
-                scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
-                                          steps_offset=1, clip_sample=False, set_alpha_to_one=False,
-                                          prediction_type=pred_type)
 
                 if vae is None:
                     printm("Loading vae.")
@@ -633,16 +628,20 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=True),
                     text_encoder=accelerator.unwrap_model(text_encoder, keep_fp32_wrapper=True),
                     vae=vae,
-                    scheduler=scheduler,
                     torch_dtype=weight_dtype,
                     revision=args.revision,
                     safety_checker=None,
                     requires_safety_checker=None
                 )
-                s_pipeline = s_pipeline.to(accelerator.device)
-                s_pipeline.enable_attention_slicing()
+
                 if args.attention == "xformers":
                     s_pipeline.enable_xformers_memory_efficient_attention()
+                else:
+                    s_pipeline.enable_attention_slicing()
+
+                s_pipeline.scheduler = DEISMultistepScheduler.from_config(s_pipeline.scheduler.config)
+                s_pipeline = s_pipeline.to(accelerator.device)
+
                 with accelerator.autocast(), torch.inference_mode():
                     if save_model:
                         # We are saving weights, we need to ensure revision is saved
@@ -731,13 +730,13 @@ def main(use_txt2img: bool = True) -> TrainResult:
                                 ci = 0
                                 for c in prompts:
                                     c.out_dir = os.path.join(args.model_dir, "samples")
-                                    g_cuda = torch.Generator(device=accelerator.device).manual_seed(int(c.seed))
+                                    generator = torch.manual_seed(int(c.seed))
                                     s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
                                                          guidance_scale=c.scale,
                                                          negative_prompt=c.negative_prompt,
                                                          height=c.resolution[0],
                                                          width=c.resolution[1],
-                                                         generator=g_cuda).images[0]
+                                                         generator=generator).images[0]
                                     sample_prompts.append(c.prompt)
                                     image_name = db_save_image(s_image, c, custom_name=f"sample_{args.revision}-{ci}")
                                     shared.status.current_image = image_name
@@ -758,10 +757,9 @@ def main(use_txt2img: bool = True) -> TrainResult:
                             pass
                 printm("Starting cleanup.")
                 del s_pipeline
-                del scheduler
                 if save_image:
-                    if g_cuda:
-                        del g_cuda
+                    if generator:
+                        del generator
                     try:
                         printm("Parse logs.")
                         log_images, log_names = parse_logs(model_name=args.model_name)

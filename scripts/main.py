@@ -1060,7 +1060,7 @@ def build_concept_panel(concept: int):
         n_save_sample = gr.Slider(label="Number of Samples to Generate", value=1, maximum=100, step=1)
         sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
         save_guidance_scale = gr.Slider(label="Sample CFG Scale", value=7.5, maximum=12, minimum=1, step=0.1)
-        save_infer_steps = gr.Slider(label="Sample Steps", value=40, minimum=10, maximum=200, step=1)
+        save_infer_steps = gr.Slider(label="Sample Steps", value=20, minimum=10, maximum=200, step=1)
     return [instance_data_dir, class_data_dir, instance_prompt, class_prompt,save_sample_prompt, sample_template,
             instance_token, class_token, num_class_images_per, class_negative_prompt, class_guidance_scale,
             class_infer_steps, save_sample_negative_prompt, n_save_sample, sample_seed,save_guidance_scale,

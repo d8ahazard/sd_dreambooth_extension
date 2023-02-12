@@ -168,7 +168,9 @@ class ImageBuilder:
             with self.accelerator.autocast(), torch.inference_mode():
                 if seed is None or seed == '' or seed == -1:
                     seed = int(random.randrange(21474836147))
+                print(f"SEED: {seed}")
                 g_cuda = torch.Generator(device=self.accelerator.device).manual_seed(seed)
+                generator = torch.manual_seed(seed)
                 try:
                     output = self.image_pipe(
                         positive_prompts,
@@ -176,7 +178,7 @@ class ImageBuilder:
                         guidance_scale=scale,
                         height=height,
                         width=width,
-                        generator=g_cuda,
+                        generator=generator,
                         negative_prompt=negative_prompts).images
                     self.exception_count = 0
                 except Exception as e:
