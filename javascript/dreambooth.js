@@ -307,6 +307,7 @@ let db_titles = {
     "Use CPU Only (SLOW)": "Guess what - this will be incredibly slow, but it will work for < 8GB GPUs.",
     "Use Concepts List": "Train multiple concepts from a JSON file or string.",
     "Use EMA": "Enabling this will provide better results and editability, but cost more VRAM.",
+    "Use EMA Weights for Inference": "Enabling this will save the EMA unet weights as the 'normal' model weights and ignore the regular unet weights.",
     "Use Epoch Values for Save Frequency": "When enabled, save frequencies below are based on number of epochs. When disabled, frequencies are based on number of training steps.",
     "Use LORA": "Uses Low-rank Adaptation for Fast Text-to-Image Diffusion Fine-tuning. Uses less VRAM, saves a .pt file instead of a full checkpoint",
     "Use Lifetime Epochs When Saving": "When checked, will save preview images and checkpoints using lifetime epochs, versus current training epochs.",
