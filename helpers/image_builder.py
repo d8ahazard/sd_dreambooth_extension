@@ -5,7 +5,7 @@ from typing import List
 import torch
 from PIL import Image
 from accelerate import Accelerator
-from diffusers import DiffusionPipeline, AutoencoderKL
+from diffusers import DiffusionPipeline, AutoencoderKL, DEISMultistepScheduler, UNet2DConditionModel
 
 from extensions.sd_dreambooth_extension.dreambooth import shared
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
@@ -29,6 +29,7 @@ class ImageBuilder:
             lora_model: str = None, 
             batch_size: int = 1, 
             accelerator: Accelerator = None,
+            source_checkpoint: str = None,
             lora_unet_rank: int = 4,
             lora_txt_rank: int = 4
         ):
@@ -38,13 +39,9 @@ class ImageBuilder:
         self.last_model = None
         self.batch_size = batch_size
         self.exception_count = 0
-        config_src = config.src
-        if not os.path.exists(config_src):
-            alt_src = os.path.join(shared.dreambooth_models_path, config_src)
-            if os.path.exists(alt_src):
-                config_src = alt_src
-        if not os.path.exists(config_src) and use_txt2img:
-            print("Source model is from hub, can't use txt2image.")
+
+        if (source_checkpoint is None or not os.path.isfile(source_checkpoint)) and use_txt2img:
+            print("Unable to find source model, can't use txt2img.")
             use_txt2img = False
 
         self.use_txt2img = use_txt2img
@@ -70,6 +67,12 @@ class ImageBuilder:
                     print(msg)
             torch_dtype = torch.float16 if shared.device.type == "cuda" else torch.float32
             disable_safe_unpickle()
+            unet_path = os.path.join(config.pretrained_model_name_or_path, "unet")
+            if config.infer_ema:
+                ema_path = os.path.join(config.pretrained_model_name_or_path, "ema_unet", "diffusion_pytorch_model.safetensors")
+                if os.path.isfile(ema_path):
+                    unet_path = os.path.join(config.pretrained_model_name_or_path, "ema_unet")
+
             self.image_pipe = DiffusionPipeline.from_pretrained(
                 config.pretrained_model_name_or_path,
                 vae=AutoencoderKL.from_pretrained(
@@ -78,12 +81,14 @@ class ImageBuilder:
                     revision=config.revision,
                     torch_dtype=torch_dtype
                 ),
+                unet=UNet2DConditionModel.from_pretrained(unet_path),
                 torch_dtype=torch_dtype,
                 requires_safety_checker=False,
                 safety_checker=None,
                 revision=config.revision
             )
             self.image_pipe.enable_xformers_memory_efficient_attention()
+            self.image_pipe.scheduler = DEISMultistepScheduler.from_config(self.image_pipe.scheduler.config)
             self.image_pipe.to(accelerator.device)
             new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
             if os.path.exists(new_hotness):
@@ -99,8 +104,8 @@ class ImageBuilder:
                     maybe_unet_path=lora_model_path,
                     unet_target_replace_module=get_target_module("module", config.use_lora_extended),
                     token=None,
-                    r=config.lora_unet_rank,
-                    r_txt=config.lora_txt_rank
+                    r=lora_unet_rank,
+                    r_txt=lora_txt_rank
                 )
                 tune_lora_scale(self.image_pipe.unet, config.lora_weight)
                 
@@ -110,17 +115,14 @@ class ImageBuilder:
 
         else:
             current_model = sd_models.select_checkpoint()
-            new_model_info = get_checkpoint_match(config.src)
-            if new_model_info is not None and current_model is not None:
-
-                if isinstance(new_model_info, sd_models.CheckpointInfo) and new_model_info.sha256 != current_model.sha256:
-                    self.last_model = current_model
-                    print(f"Loading model: {new_model_info.model_name}")
-                    sd_models.load_model(new_model_info)
-
-            if new_model_info is not None and current_model is None:
-                sd_models.load_model(new_model_info)
-            reload_system_models()
+            print(f"Source checkpoint: {source_checkpoint}")
+            new_model_info = get_checkpoint_match(source_checkpoint)
+            print(f"Model info: {new_model_info.filename}")
+            self.last_model = current_model
+            if new_model_info is not None:
+                print(f"Loading model: {new_model_info.model_name}")
+                shared.sd_model = sd_models.load_model(new_model_info)
+                reload_system_models()
 
 
     def generate_images(self, prompt_data: List[PromptData], pbar: mytqdm) -> [Image]:
@@ -195,4 +197,5 @@ class ImageBuilder:
             del self.accelerator
         # If there was a model loaded already, reload it
         if self.last_model is not None and not is_ui:
-            sd_models.load_model(self.last_model)
+            shared.sd_model = sd_models.load_model(self.last_model)
+            reload_system_models()

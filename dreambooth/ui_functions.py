@@ -277,20 +277,24 @@ def generate_samples(model_name: str,
         if model_name is None or model_name == "":
             return "Please select a model."
         config = from_file(model_name)
+        source_model = None
+
         if use_txt2img:
             tgt_name = model_name if not config.custom_model_name else config.custom_model_name
             tgt_ext = ".safetensors" if config.save_safetensors else ".ckpt"
             if config.use_subdir:
                 tgt_file = os.path.join(tgt_name, f"{tgt_name}_{config.revision}{tgt_ext}")
+                tgt_file_ema = os.path.join(tgt_name, f"{tgt_name}_{config.revision}_ema{tgt_ext}")
+                tgt_file_lora = os.path.join(tgt_name, f"{tgt_name}_{config.revision}_lora{tgt_ext}")
             else:
                 tgt_file = f"{tgt_name}{config.revision}{tgt_ext}"
-            model_file = os.path.join(shared.models_path, "Stable-diffusion", tgt_file)
-            print(f"Looking for: {model_file}")
-            if not os.path.exists(model_file):
-                msg = "No checkpoint found, can't use txt2img."
-                print(msg)
-                return None, None, msg
-            config.src = model_file
+                tgt_file_ema = f"{tgt_name}{config.revision}_ema{tgt_ext}"
+                tgt_file_lora = f"{tgt_name}{config.revision}_lora{tgt_ext}"
+            for tgt in [tgt_file, tgt_file_ema, tgt_file_lora]:
+                model_file = os.path.join(shared.models_path, "Stable-diffusion", tgt)
+                print(f"Looking for: {model_file}")
+                if os.path.exists(model_file):
+                    source_model = model_file
 
         images = []
         prompts_out = []
@@ -325,7 +329,8 @@ def generate_samples(model_name: str,
                 lora_model=config.lora_model_name,
                 batch_size=batch_size,
                 lora_unet_rank=config.lora_unet_rank,
-                lora_txt_rank=config.lora_txt_rank
+                lora_txt_rank=config.lora_txt_rank,
+                source_checkpoint=source_model
             )
 
             prompt_data = []

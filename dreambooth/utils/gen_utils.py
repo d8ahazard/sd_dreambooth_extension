@@ -126,7 +126,8 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
         batch_size=args.sample_batch_size,
         accelerator=accelerator,
         lora_unet_rank=args.lora_unet_rank,
-        lora_txt_rank=args.lora_txt_rank
+        lora_txt_rank=args.lora_txt_rank,
+        source_checkpoint=args.src
         )
     
     generated = 0
