@@ -193,7 +193,7 @@ class DreamboothConfig(BaseModel):
 
 def concepts_from_file(concepts_path: str):
     concepts = []
-    if os.path.exists(concepts_path) and os.path.isfile(str):
+    if os.path.exists(concepts_path) and os.path.isfile(concepts_path):
         try:
             with open(concepts_path,"r") as concepts_file:
                 concepts_str = concepts_file.read()
