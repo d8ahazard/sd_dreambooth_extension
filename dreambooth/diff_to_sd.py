@@ -24,13 +24,13 @@ try:
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
     from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
 except:
-    from dreambooth import shared as shared # noqa
-    from dreambooth.dataclasses.db_config import from_file # noqa
-    from dreambooth.shared import status # noqa
-    from dreambooth.utils.model_utils import unload_system_models, reload_system_models, disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path # noqa
-    from dreambooth.utils.utils import printi # noqa
-    from helpers.mytqdm import mytqdm # noqa
-    from lora_diffusion.lora import weight_apply_lora # noqa
+    from dreambooth.dreambooth import shared as shared # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import from_file # noqa
+    from dreambooth.dreambooth.shared import status # noqa
+    from dreambooth.dreambooth.utils.model_utils import unload_system_models, reload_system_models, disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path # noqa
+    from dreambooth.dreambooth.utils.utils import printi # noqa
+    from dreambooth.helpers.mytqdm import mytqdm # noqa
+    from dreambooth.lora_diffusion.lora import weight_apply_lora # noqa
 
 
 unet_conversion_map = [

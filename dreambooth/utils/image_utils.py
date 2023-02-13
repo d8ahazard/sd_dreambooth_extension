@@ -26,12 +26,10 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
     from extensions.sd_dreambooth_extension.dreambooth.shared import status
 except:
-    from dreambooth.dataclasses.db_concept import Concept # noqa
-    from dreambooth.dataclasses.prompt_data import PromptData # noqa
-    from helpers.mytqdm import mytqdm # noqa
-
-    from dreambooth import shared # noqa
-    from dreambooth.shared import status # noqa
+    from dreambooth.dreambooth.dataclasses.db_concept import Concept # noqa
+    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData # noqa
+    from dreambooth.helpers.mytqdm import mytqdm # noqa
+    from dreambooth.dreambooth.shared import status # noqa
 
 
 
@@ -365,6 +363,8 @@ try:
         return output_images
 except:
     print("Oops, no txt2img available. Oh well.")
+    def process_txt2img(p: StableDiffusionProcessing) -> None:
+        return None
 
 def load_image_directory(db_dir, concept: Concept, is_class: bool = True) -> List[Tuple[str, str]]:
     img_paths = get_images(db_dir)

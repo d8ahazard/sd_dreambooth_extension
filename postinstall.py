@@ -3,19 +3,42 @@ import importlib.util
 import json
 import os
 import shutil
+import subprocess
 import sys
 import sysconfig
 
 import git
 import requests
 
-from launch import run
+
+def run(command, desc=None, errdesc=None, custom_env=None, live=True):
+    if desc:
+        print(desc)
+
+    if live:
+        result = subprocess.run(command, shell=True, env=custom_env or os.environ)
+        if result.returncode:
+            raise RuntimeError(f"{errdesc or 'Error running command'}. Command: {command} Error code: {result.returncode}")
+        return ""
+
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, env=custom_env or os.environ)
+
+    if result.returncode:
+        message = f"{errdesc or 'Error running command'}. Command: {command} Error code: {result.returncode}\n"
+        message += f"stdout: {result.stdout.decode(encoding='utf8', errors='ignore') or '<empty>'}\n"
+        message += f"stderr: {result.stderr.decode(encoding='utf8', errors='ignore') or '<empty>'}\n"
+        raise RuntimeError(message)
+
+    return result.stdout.decode(encoding='utf8', errors='ignore')
 
 
 def actual_install():
     if os.environ.get("PUBLIC_KEY", None):
         print("Docker, returning.")
-        from extensions.sd_dreambooth_extension.dreambooth import shared
+        try:
+            from extensions.sd_dreambooth_extension.dreambooth import shared
+        except:
+            from dreambooth.dreambooth import shared # noqa
         shared.launch_error = None
         return
     if sys.version_info < (3, 8):

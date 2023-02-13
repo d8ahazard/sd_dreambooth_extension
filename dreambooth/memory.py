@@ -29,8 +29,8 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
     from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup
 except:
-    from dreambooth import shared # noqa
-    from dreambooth.utils.utils import cleanup # noqa
+    from dreambooth.dreambooth import shared # noqa
+    from dreambooth.dreambooth.utils.utils import cleanup # noqa
 
 
 def should_reduce_batch_size(exception: Exception) -> bool:

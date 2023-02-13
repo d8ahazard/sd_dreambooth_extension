@@ -3,7 +3,6 @@ import os
 import traceback
 from typing import List
 
-import gradio
 from accelerate import Accelerator
 from transformers import AutoTokenizer
 
@@ -18,15 +17,15 @@ try:
     from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 except:
-    from dreambooth import shared # noqa
-    from dreambooth.dataclasses.db_config import DreamboothConfig, from_file # noqa
-    from dreambooth.dataclasses.prompt_data import PromptData # noqa
-    from dreambooth.dataset.class_dataset import ClassDataset # noqa
-    from dreambooth.shared import status # noqa
-    from dreambooth.utils.image_utils import db_save_image # noqa
-    from dreambooth.utils.utils import cleanup # noqa
-    from helpers.image_builder import ImageBuilder # noqa
-    from helpers.mytqdm import mytqdm # noqa
+    from dreambooth.dreambooth import shared # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig, from_file # noqa
+    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData # noqa
+    from dreambooth.dreambooth.dataset.class_dataset import ClassDataset # noqa
+    from dreambooth.dreambooth.shared import status # noqa
+    from dreambooth.dreambooth.utils.image_utils import db_save_image # noqa
+    from dreambooth.dreambooth.utils.utils import cleanup # noqa
+    from dreambooth.helpers.image_builder import ImageBuilder # noqa
+    from dreambooth.helpers.mytqdm import mytqdm # noqa
 
 
 def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None, class_prompts: List[PromptData] = None,
@@ -34,9 +33,10 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
     if debug:
         print("Generating dataset.")
 
-    db_gallery = gradio.update(value=None)
-    db_prompt_list = gradio.update(value=None)
-    db_status = gradio.update(value=None)
+    from dreambooth.dreambooth.ui_functions import gr_update
+    db_gallery = gr_update(value=None)
+    db_prompt_list = gr_update(value=None)
+    db_status = gr_update(value=None)
 
     args = from_file(model_name)
 
@@ -61,7 +61,10 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
     print(f"Found {len(class_prompts)} reg images.")
 
     min_bucket_reso = (int(args.resolution * 0.28125) // 64) * 64
-    from extensions.sd_dreambooth_extension.dreambooth.dataset.db_dataset import DbDataset
+    try:
+        from extensions.sd_dreambooth_extension.dreambooth.dataset.db_dataset import DbDataset
+    except:
+        from dreambooth.dreambooth.dataset.db_dataset import DbDataset
 
     print("Preparing dataset...")
 

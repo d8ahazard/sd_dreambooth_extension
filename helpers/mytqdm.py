@@ -5,7 +5,7 @@ from tqdm import tqdm
 try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
 except:
-    from dreambooth import shared  # noqa
+    from dreambooth.dreambooth import shared  # noqa
 
 
 class mytqdm(tqdm):

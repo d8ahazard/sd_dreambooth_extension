@@ -19,7 +19,6 @@ import re
 import shutil
 import traceback
 
-import gradio as gr
 import huggingface_hub.utils.tqdm
 import importlib_metadata
 import safetensors.torch
@@ -29,6 +28,8 @@ from omegaconf import OmegaConf
 from diffusers.pipelines.paint_by_example import PaintByExampleImageEncoder
 from huggingface_hub import HfApi, hf_hub_download
 
+
+
 try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
     from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
@@ -37,11 +38,11 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 except:
-    from dreambooth import shared # noqa
-    from dreambooth.dataclasses.db_config import DreamboothConfig # noqa
-    from dreambooth.utils.model_utils import get_db_models, disable_safe_unpickle, enable_safe_unpickle # noqa
-    from dreambooth.utils.utils import printi # noqa
-    from helpers.mytqdm import mytqdm # noqa
+    from dreambooth.dreambooth import shared # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig # noqa
+    from dreambooth.dreambooth.utils.model_utils import get_db_models, disable_safe_unpickle, enable_safe_unpickle # noqa
+    from dreambooth.dreambooth.utils.utils import printi # noqa
+    from dreambooth.helpers.mytqdm import mytqdm # noqa
 
 from diffusers import (
     AutoencoderKL,
@@ -1122,7 +1123,11 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
         if from_hub:
             result_status = "Model fetched from hub."
             db_config.save()
-            return gr.Dropdown.update(choices=sorted(get_db_models()), value=new_model_name), \
+            try:
+                from extensions.sd_dreambooth_extension.dreambooth.ui_functions import gr_update
+            except:
+                from dreambooth.dreambooth.ui_functions import gr_update # noqa
+            return gr_update(choices=sorted(get_db_models()), value=new_model_name), \
                 db_config.model_dir, \
                 revision, \
                 epoch, \
@@ -1326,7 +1331,12 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
     enable_safe_unpickle()
     printi(result_status)
 
-    return gr.Dropdown.update(choices=sorted(get_db_models()), value=new_model_name), \
+    try:
+        from extensions.sd_dreambooth_extension.dreambooth.ui_functions import gr_update
+    except:
+        from dreambooth.dreambooth.ui_functions import gr_update # noqa
+
+    return gr_update(choices=sorted(get_db_models()), value=new_model_name), \
            model_dir, \
            revision, \
            epoch, \

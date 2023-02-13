@@ -22,15 +22,15 @@ try:
     from extensions.sd_dreambooth_extension.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, \
         get_target_module
 except:
-    from dreambooth import shared # noqa
-    from dreambooth.dataclasses.db_config import DreamboothConfig # noqa
-    from dreambooth.dataclasses.prompt_data import PromptData # noqa
-    from dreambooth.shared import disable_safe_unpickle # noqa
-    from dreambooth.utils import image_utils # noqa
-    from dreambooth.utils.image_utils import process_txt2img # noqa
-    from dreambooth.utils.model_utils import get_checkpoint_match, reload_system_models, enable_safe_unpickle, disable_safe_unpickle, unload_system_models # noqa
-    from helpers.mytqdm import mytqdm # noqa
-    from lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, get_target_module # noqa
+    from dreambooth.dreambooth import shared # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig # noqa
+    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData # noqa
+    from dreambooth.dreambooth.shared import disable_safe_unpickle # noqa
+    from dreambooth.dreambooth.utils import image_utils # noqa
+    from dreambooth.dreambooth.utils.image_utils import process_txt2img # noqa
+    from dreambooth.dreambooth.utils.model_utils import get_checkpoint_match, reload_system_models, enable_safe_unpickle, disable_safe_unpickle, unload_system_models # noqa
+    from dreambooth.helpers.mytqdm import mytqdm # noqa
+    from dreambooth.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, get_target_module # noqa
 
 
 class ImageBuilder:

@@ -6,7 +6,7 @@ from typing import Union, Dict
 try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
 except:
-    from dreambooth import shared # noqa
+    from dreambooth.dreambooth import shared # noqa
 
 store_file = os.path.join(shared.dreambooth_models_path, "revision.txt")
 change_file = os.path.join(shared.dreambooth_models_path, "changelog.txt")

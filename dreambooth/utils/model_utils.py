@@ -4,15 +4,14 @@ import collections
 import os
 from typing import Union
 
-import gradio
 from transformers import PretrainedConfig
 
 try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared
-    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup
+    from extensions.sd_dreambooth_extension.dreambooth import shared # noqa
+    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup  # noqa
 except:
-    from dreambooth import shared # noqa
-    from dreambooth.utils.utils import cleanup # noqa
+    from dreambooth.dreambooth import shared # noqa
+    from dreambooth.dreambooth.utils.utils import cleanup # noqa
 
 checkpoints_list = {}
 checkpoint_alisases = {}
@@ -20,6 +19,20 @@ checkpoints_loaded = collections.OrderedDict()
 
 model_dir = "Stable-diffusion"
 model_path = os.path.abspath(os.path.join(shared.models_path, model_dir))
+
+def model_hash(filename):
+    """old hash that only looks at a small part of the file and is prone to collisions"""
+
+    try:
+        with open(filename, "rb") as file:
+            import hashlib
+            m = hashlib.sha256()
+
+            file.seek(0x100000)
+            m.update(file.read(0x10000))
+            return m.hexdigest()[0:8]
+    except FileNotFoundError:
+        return 'NOFILE'
 
 
 class CheckpointInfo:
@@ -92,9 +105,14 @@ def get_model_snapshots(model_name: str):
     try:
         from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
     except:
-        from dreambooth.dataclasses.db_config import from_file # noqa
+        from dreambooth.dreambooth.dataclasses.db_config import from_file # noqa
 
-    result = gradio.update(visible=True)
+    result = None
+    try:
+        import gradio
+        result = gradio.update(visible=True)
+    except:
+        pass
     if model_name == "" or model_name is None:
         return result
     config = from_file(model_name)

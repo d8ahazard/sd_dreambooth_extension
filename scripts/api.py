@@ -10,7 +10,6 @@ import zipfile
 from pathlib import Path
 from typing import List, Union
 
-import gradio as gr
 from PIL import Image
 from fastapi import FastAPI, Response, Query, Body, Form, Header
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
@@ -28,18 +27,18 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images
     from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
 except:
-    from dreambooth import shared # noqa
-    from dreambooth.dataclasses.db_concept import Concept # noqa
-    from dreambooth.dataclasses.db_config import from_file, DreamboothConfig # noqa
-    from dreambooth.diff_to_sd import compile_checkpoint # noqa
-    from dreambooth.secret import get_secret # noqa
-    from dreambooth.shared import DreamState # noqa
-    from dreambooth.ui_functions import create_model, generate_samples, start_training # noqa
-    from dreambooth.utils.gen_utils import generate_classifiers # noqa
-    from dreambooth.utils.image_utils import get_images # noqa
-    from dreambooth.utils.model_utils import get_db_models, get_lora_models # noqa
+    from dreambooth.dreambooth import shared # noqa
+    from dreambooth.dreambooth.dataclasses.db_concept import Concept # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import from_file, DreamboothConfig # noqa
+    from dreambooth.dreambooth.diff_to_sd import compile_checkpoint # noqa
+    from dreambooth.dreambooth.secret import get_secret # noqa
+    from dreambooth.dreambooth.shared import DreamState # noqa
+    from dreambooth.dreambooth.ui_functions import create_model, generate_samples, start_training # noqa
+    from dreambooth.dreambooth.utils.gen_utils import generate_classifiers # noqa
+    from dreambooth.dreambooth.utils.image_utils import get_images # noqa
+    from dreambooth.dreambooth.utils.model_utils import get_db_models, get_lora_models # noqa
+    pass
 
-from modules import sd_models
 
 
 class InstanceData(BaseModel):
@@ -143,11 +142,11 @@ def file_to_base64(file_path) -> str:
         return str(im_b64, 'utf-8')
 
 
-def dreambooth_api(_: gr.Blocks, app: FastAPI):
+def dreambooth_api(_, app: FastAPI):
     @app.get("/dreambooth/cancel")
     async def cancel_jobs(
             api_key: str = Query("", description="If an API key is set, this must be present.", )) -> \
-            Union[DreamState, JSONResponse]:
+            JSONResponse:
         """
         Check the current state of Dreambooth processes.
         @return:
@@ -234,8 +233,15 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        sd_models.list_models()
-        ckpt_list = sd_models.checkpoints_list
+
+        ckpt_list = {}
+        try:
+            from modules import sd_models
+
+            sd_models.list_models()
+            ckpt_list = sd_models.checkpoints_list
+        except:
+            pass
         models = []
         for key, _ in ckpt_list.items():
             models.append(key)
@@ -325,7 +331,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             class_token: str = Form("", description="The class token to use."),
             api_key: str = Form("", description="If an API key is set, this must be present."),
             concept: Union[Concept, None] = Body(None, description="A concept to update or add to the model.")
-    ) -> Union[List[Concept], JSONResponse]:
+    ) -> JSONResponse:
         """
         Add or update a concept. Provide either a full json concept or path to instance dir.
         """
@@ -366,7 +372,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
     async def get_model_concepts(
             model_name: str = Query(description="The model name to fetch config for."),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
-    ) -> Union[List[Concept], JSONResponse]:
+    ) -> JSONResponse:
         """
         Get a model's concepts.
         """
@@ -386,7 +392,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             model_name: str = Form(description="The model name to fetch config for."),
             api_key: str = Form("", description="If an API key is set, this must be present."),
             concepts: List[Concept] = Body()
-    ) -> Union[List[Concept], JSONResponse]:
+    ) -> JSONResponse:
         """
         Replace a full concepts list.
         """
@@ -469,7 +475,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
     async def get_model_config(
             model_name: str = Query(description="The model name to fetch config for."),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
-    ) -> Union[DreamboothConfig, JSONResponse]:
+    ) -> JSONResponse:
         """
         Get a specified model config.
         """
@@ -630,7 +636,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
     @app.get("/dreambooth/status")
     async def check_status(
             api_key: str = Query("", description="If an API key is set, this must be present.", )) -> \
-            Union[DreamState, JSONResponse]:
+            JSONResponse:
         """
         Check the current state of Dreambooth processes.
         @return:
@@ -639,6 +645,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if key_check is not None:
             return key_check
         return JSONResponse(content={"current_state": f"{json.dumps(shared.status.dict())}"})
+
     @app.get("/dreambooth/status_images")
     async def check_status_images(
             api_key: str = Query("", description="If an API key is set, this must be present.", )) -> JSONResponse:

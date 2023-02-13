@@ -45,25 +45,25 @@ try:
     from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, \
         TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
 except:
-    from dreambooth import xattention, shared # noqa
-    from dreambooth.dataclasses.prompt_data import PromptData # noqa
-    from dreambooth.dataclasses.train_result import TrainResult # noqa
-    from dreambooth.dataset.bucket_sampler import BucketSampler # noqa
-    from dreambooth.dataset.sample_dataset import SampleDataset # noqa
-    from dreambooth.diff_to_sd import compile_checkpoint # noqa
-    from dreambooth.memory import find_executable_batch_size # noqa
-    from dreambooth.optimization import UniversalScheduler # noqa
-    from dreambooth.shared import status, load_auto_settings # noqa
-    from dreambooth.utils.gen_utils import generate_classifiers, generate_dataset # noqa
-    from dreambooth.utils.image_utils import db_save_image # noqa
-    from dreambooth.utils.model_utils import unload_system_models, import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle # noqa
-    from dreambooth.utils.text_utils import encode_hidden_state # noqa
-    from dreambooth.utils.utils import cleanup, parse_logs, printm # noqa
-    from dreambooth.webhook import send_training_update # noqa
-    from dreambooth.xattention import optim_to # noqa
-    from helpers.ema_model import EMAModel # noqa
-    from helpers.mytqdm import mytqdm # noqa
-    from lora_diffusion.lora import save_lora_weight, TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module # noqa
+    from dreambooth.dreambooth import xattention, shared # noqa
+    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData # noqa
+    from dreambooth.dreambooth.dataclasses.train_result import TrainResult # noqa
+    from dreambooth.dreambooth.dataset.bucket_sampler import BucketSampler # noqa
+    from dreambooth.dreambooth.dataset.sample_dataset import SampleDataset # noqa
+    from dreambooth.dreambooth.diff_to_sd import compile_checkpoint # noqa
+    from dreambooth.dreambooth.memory import find_executable_batch_size # noqa
+    from dreambooth.dreambooth.optimization import UniversalScheduler # noqa
+    from dreambooth.dreambooth.shared import status, load_auto_settings # noqa
+    from dreambooth.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset # noqa
+    from dreambooth.dreambooth.utils.image_utils import db_save_image # noqa
+    from dreambooth.dreambooth.utils.model_utils import unload_system_models, import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle # noqa
+    from dreambooth.dreambooth.utils.text_utils import encode_hidden_state # noqa
+    from dreambooth.dreambooth.utils.utils import cleanup, parse_logs, printm # noqa
+    from dreambooth.dreambooth.webhook import send_training_update # noqa
+    from dreambooth.dreambooth.xattention import optim_to # noqa
+    from dreambooth.helpers.ema_model import EMAModel # noqa
+    from dreambooth.helpers.mytqdm import mytqdm # noqa
+    from dreambooth.lora_diffusion.lora import save_lora_weight, TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module # noqa
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr

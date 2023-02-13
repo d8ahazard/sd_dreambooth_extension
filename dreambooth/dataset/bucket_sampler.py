@@ -4,7 +4,7 @@ from typing import Tuple
 try:
     from extensions.sd_dreambooth_extension.dreambooth.dataset.db_dataset import DbDataset
 except:
-    from dreambooth.dataset.db_dataset import DbDataset # noqa
+    from dreambooth.dreambooth.dataset.db_dataset import DbDataset # noqa
 
 class BucketSampler:
     def __init__(self, dataset: DbDataset, batch_size, debug=False):

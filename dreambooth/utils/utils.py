@@ -26,8 +26,8 @@ try:
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
     from extensions.sd_dreambooth_extension.dreambooth.shared import status
 except:
-    from helpers.mytqdm import mytqdm # noqa
-    from dreambooth.shared import status # noqa
+    from dreambooth.helpers.mytqdm import mytqdm # noqa
+    from dreambooth.dreambooth.shared import status # noqa
 
 
 def printi(msg, params=None, log=True):

@@ -9,8 +9,8 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
     from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
 except:
-    from dreambooth import shared # noqa
-    from dreambooth.dataclasses.db_concept import Concept # noqa
+    from dreambooth.dreambooth import shared # noqa
+    from dreambooth.dreambooth.dataclasses.db_concept import Concept # noqa
 
 # Keys to save, replacing our dumb __init__ method
 save_keys = []
