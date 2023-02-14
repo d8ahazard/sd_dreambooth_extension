@@ -782,7 +782,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 printm("Starting cleanup.")
                 del s_pipeline
                 if save_image:
-                    if generator:
+                    if 'generator' in locals():
                         del generator
                     try:
                         printm("Parse logs.")
