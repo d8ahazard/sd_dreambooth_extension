@@ -206,7 +206,7 @@ let db_titles = {
     "Clip Skip": "Use output of nth layer from back of text encoder (n>=1)",
     "Concepts List": "The path to the concepts JSON file, or a JSON string.",
     "Constant/Linear Starting Factor": "Sets the initial learning rate to the main_lr * this value. If you had a target LR of .000006 and set this to .5, the scheduler would start at .000003 and increase until it reached .000006.",
-    "Create From Hub": "Import a model from Huggingface.co instead of using a local checkpoint. Hub model MUST contain diffusion weights.",
+    "Create From Hub": "Import a model from Huggingface.co instead of using a local checkpoint. Hub model MUST contain diffusion weights. You can specify a local folder with a cloned model, no HF token will be needed in this case.",
     "Create Model": "Create a new model.",
     "Create": "Create the danged model already.",
     "Custom Model Name": "A custom name to use when saving .ckpt and .pt files. Subdirectories will also be named this.",
