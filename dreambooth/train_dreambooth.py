@@ -879,7 +879,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     if args.offset_noise < 0:
                         noise = torch.randn_like(latents, device=latents.device)
                     else:
-                        noise = torch.randn_like(latents, device=latents.device) + args.offset_noise * torch.randn(latents.shape[0], latents.shape[1], 1, 1)
+                        noise = torch.randn_like(latents, device=latents.device) + args.offset_noise * \
+                            torch.randn(latents.shape[0], latents.shape[1], 1, 1, device=latents.device)
                     b_size = latents.shape[0]
 
                     # Sample a random timestep for each image
