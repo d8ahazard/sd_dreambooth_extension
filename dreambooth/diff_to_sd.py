@@ -14,14 +14,24 @@ import torch
 from diffusers import UNet2DConditionModel
 from torch import Tensor, nn
 
-from extensions.sd_dreambooth_extension.dreambooth import shared as shared
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
-from extensions.sd_dreambooth_extension.dreambooth.shared import status
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
-    disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path
-from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared as shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
+    from extensions.sd_dreambooth_extension.dreambooth.shared import status
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
+        disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path
+    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+    from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
+except:
+    from dreambooth.dreambooth import shared as shared # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import from_file # noqa
+    from dreambooth.dreambooth.shared import status # noqa
+    from dreambooth.dreambooth.utils.model_utils import unload_system_models, reload_system_models, disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path # noqa
+    from dreambooth.dreambooth.utils.utils import printi # noqa
+    from dreambooth.helpers.mytqdm import mytqdm # noqa
+    from dreambooth.lora_diffusion.lora import weight_apply_lora # noqa
+
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -312,7 +322,6 @@ def convert_text_enc_state_dict(text_enc_dict: Dict[str, torch.Tensor]):
     return text_enc_dict
 
 def get_model_path(working_dir: str, model_name: str = "", file_extra: str = ""):
-
     model_base = osp.join(working_dir, model_name) if model_name != "" else working_dir
     if os.path.exists(model_base) and os.path.isdir(model_base):
         for f in os.listdir(model_base):
@@ -322,7 +331,7 @@ def get_model_path(working_dir: str, model_name: str = "", file_extra: str = "")
             if f"{file_extra}.bin" in f:
                 print(f"Returning: {f}")
                 return os.path.join(model_base, f)
-    print(f"Got nufin: {model_base}")
+    print(f"Unable to find model file: {model_base}")
     return None
 
 def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool = True, log:bool =True, snap_rev: str=""):
@@ -385,13 +394,16 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
 
     ema_state_dict = {}
     try:
-        if ema_unet_path is not None:
+        if ema_unet_path is not None and (config.save_ema or config.infer_ema):
             printi("Converting ema unet...", log=log)
             try:
-                ema_unet_state_dict = load_model(ema_unet_path, map_location="cpu")
-                ema_state_dict = convert_unet_state_dict(ema_unet_state_dict)
-                ema_state_dict = {"model_ema." + "".join(k.split(".")): v for k, v in ema_state_dict.items()}
-                del ema_unet_state_dict
+                if config.infer_ema:
+                    unet_path = ema_unet_path
+                else:
+                    ema_unet_state_dict = load_model(ema_unet_path, map_location="cpu")
+                    ema_state_dict = convert_unet_state_dict(ema_unet_state_dict)
+                    ema_state_dict = {"model_ema." + "".join(k.split(".")): v for k, v in ema_state_dict.items()}
+                    del ema_unet_state_dict
             except Exception as e:
                 print(f"Exception: {e}")
                 traceback.print_exc()
@@ -399,9 +411,7 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
 
         # Apply LoRA to the unet
         if lora_path is not None and lora_path != "":
-            unet_model = UNet2DConditionModel().from_pretrained(
-                os.path.join(config.pretrained_model_name_or_path, "unet"))
-
+            unet_model = UNet2DConditionModel().from_pretrained(os.path.dirname(unet_path))
             lora_rev = apply_lora(unet_model, lora_path, config.lora_weight, "cpu", True)
             unet_state_dict = copy.deepcopy(unet_model.state_dict())
             del unet_model
@@ -414,7 +424,7 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
         unet_state_dict = {"model.diffusion_model." + k: v for k, v in unet_state_dict.items()}
 
         # Append EMA values
-        if len(ema_state_dict.items()):
+        if len(ema_state_dict.items()) or (config.save_ema and ema_unet_path is not None):
             print("Appending EMA keys to state dict.")
             checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}_ema{checkpoint_ext}")
 

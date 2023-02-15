@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 import random
 import re
 from io import StringIO
 
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from PIL import features, PngImagePlugin, Image
@@ -20,12 +18,19 @@ import numpy as np
 import torch
 import torch.utils.checkpoint
 
-from extensions.sd_dreambooth_extension.dreambooth import shared
-from extensions.sd_dreambooth_extension.dreambooth.shared import status
-from modules import devices, sd_hijack, prompt_parser, lowvram
-from modules.processing import StableDiffusionProcessing, Processed, \
-    get_fixed_seed, create_infotext, decode_first_stage
-from modules.sd_hijack import model_hijack
+try:
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+    
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.shared import status
+except:
+    from dreambooth.dreambooth.dataclasses.db_concept import Concept # noqa
+    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData # noqa
+    from dreambooth.helpers.mytqdm import mytqdm # noqa
+    from dreambooth.dreambooth.shared import status # noqa
+
 
 
 def get_dim(filename, max_res):
@@ -148,7 +153,7 @@ class FilenameTextGetter:
                 tokens = self.re_word.findall(filename_text)
                 filename_text = (shared.dataset_filename_join_string or "").join(tokens)
 
-        filename_text = filename_text.replace("\\", "")  # work with \(franchies\)
+        filename_text = re.sub(r'\\', "", filename_text)  # work with \(franchies\)
         return filename_text
 
     def create_text(self, text_template, filename_text, instance_token, class_token, is_class=True):
@@ -157,43 +162,41 @@ class FilenameTextGetter:
         # If we are creating text for a class image and it has our instance token in it, remove/replace it
         class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
         if instance_token != "" and class_token != "":
-            if is_class and re.search(f'(^|\\W){instance_token}($|\\W)', filename_text):
-                if re.search(f'(^|\\W){class_token}($|\\W)', filename_text):
-                    filename_text = filename_text.replace(instance_token, "")
-                    filename_text = filename_text.replace("  ", " ")
+            reg_inst = f"\\b{instance_token}\\b"
+            reg_class = f"\\b{class_token}\\b"
+
+            if is_class and re.search(reg_inst, filename_text):
+                if re.search(reg_class, filename_text):
+                    filename_text = re.sub(reg_inst, "", filename_text)
                 else:
-                    filename_text = filename_text.replace(instance_token, class_token)
+                    filename_text = re.sub(reg_inst, class_token, filename_text)
 
             if not is_class:
-                if re.search(f'(^|\\W){class_token}($|\\W)', filename_text):
+                if re.search(reg_class, filename_text):
                     # Do nothing if we already have class and instance in string
-                    if re.search(f'(^|\\W){instance_token}($|\\W)', filename_text):
+                    if re.search(reg_inst, filename_text):
                         pass
                     # Otherwise, substitute class tokens for the base token
                     else:
                         for token in class_tokens:
-                            if re.search(f'(^|\\W){token}($|\\W)', filename_text):
-                                filename_text = filename_text.replace(token, f"{class_token}")
+                            reg_token = f"\\b{token}\\b"
+                            filename_text = re.sub(reg_token, class_token, filename_text)
+
                     # Now, replace class with instance + class tokens
-                    filename_text = filename_text.replace(class_token, f"{instance_token} {class_token}")
+                    filename_text = re.sub(reg_class, f"{instance_token} {class_token}", filename_text)
                 else:
                     # If class is not in the string, check if instance is
-                    if re.search(f'(^|\\W){instance_token}($|\\W)', filename_text):
-                        filename_text = filename_text.replace(instance_token, f"{instance_token} {class_token}")
+                    if re.search(reg_inst, filename_text):
+                        filename_text = re.sub(reg_inst, f"{instance_token} {class_token}", filename_text)
                     else:
                         # Description only, insert both at the front?
                         filename_text = f"{instance_token} {class_token}, {filename_text}"
 
-        # We already replaced [filewords] up there ^^
-        output = filename_text
         # Remove underscores, double-spaces, and other characters that will cause issues.
-        output = output.replace("_", " ")
-        output = output.replace("  ", " ")
-        strip_chars = ["(", ")", "/", "\\", ":", "[", "]"]
-        for s_char in strip_chars:
-            output = output.replace(s_char, "")
+        filename_text = re.sub(r"_| +", " ", filename_text)
+        filename_text = re.sub(r"[^\w ]", "", filename_text)
 
-        tags = output.split(',')
+        tags = filename_text.split(',')
 
         if self.shuffle_tags and len(tags) > 2:
             first_tag = tags.pop(0)
@@ -230,126 +233,136 @@ def closest_resolution(width, height, resos) -> Tuple[int, int]:
 
     return min(resos, key=distance)
 
+txt2img_available = False
+try:
+    from modules import devices, sd_hijack, prompt_parser, lowvram
+    from modules.processing import StableDiffusionProcessing, Processed, \
+        get_fixed_seed, create_infotext, decode_first_stage
+    from modules.sd_hijack import model_hijack
 
-def process_txt2img(p: StableDiffusionProcessing) -> [Image]:
-    """this is the main loop that both txt2img and img2img use; it calls func_init once inside all the scopes and func_sample once per batch"""
+    txt2img_available = True
+    def process_txt2img(p: StableDiffusionProcessing) -> [Image]:
+        """this is the main loop that both txt2img and img2img use; it calls func_init once inside all the scopes and func_sample once per batch"""
 
-    if type(p.prompt) == list:
-        assert (len(p.prompt) > 0)
-    else:
-        assert p.prompt is not None
+        if type(p.prompt) == list:
+            assert (len(p.prompt) > 0)
+        else:
+            assert p.prompt is not None
 
-    devices.torch_gc()
+        devices.torch_gc()
 
-    seed = get_fixed_seed(p.seed)
-    subseed = get_fixed_seed(p.subseed)
+        seed = get_fixed_seed(p.seed)
+        subseed = get_fixed_seed(p.subseed)
 
-    sd_hijack.model_hijack.clear_comments()
+        sd_hijack.model_hijack.clear_comments()
 
-    comments = {}
+        comments = {}
 
-    if type(p.prompt) == list:
-        p.all_prompts = p.prompt
-    else:
-        p.all_prompts = p.batch_size * p.n_iter * [p.prompt]
+        if type(p.prompt) == list:
+            p.all_prompts = p.prompt
+        else:
+            p.all_prompts = p.batch_size * p.n_iter * [p.prompt]
 
-    if type(p.negative_prompt) == list:
-        p.all_negative_prompts = p.negative_prompt
-    else:
-        p.all_negative_prompts = p.batch_size * p.n_iter * [p.negative_prompt]
+        if type(p.negative_prompt) == list:
+            p.all_negative_prompts = p.negative_prompt
+        else:
+            p.all_negative_prompts = p.batch_size * p.n_iter * [p.negative_prompt]
 
-    if type(seed) == list:
-        p.all_seeds = seed
-    else:
-        p.all_seeds = [int(seed) + (x if p.subseed_strength == 0 else 0) for x in range(len(p.all_prompts))]
+        if type(seed) == list:
+            p.all_seeds = seed
+        else:
+            p.all_seeds = [int(seed) + (x if p.subseed_strength == 0 else 0) for x in range(len(p.all_prompts))]
 
-    if type(subseed) == list:
-        p.all_subseeds = subseed
-    else:
-        p.all_subseeds = [int(subseed) + x for x in range(len(p.all_prompts))]
+        if type(subseed) == list:
+            p.all_subseeds = subseed
+        else:
+            p.all_subseeds = [int(subseed) + x for x in range(len(p.all_prompts))]
 
-    def infotext(iteration=0, position_in_batch=0):
-        return create_infotext(p, p.all_prompts, p.all_seeds, p.all_subseeds, comments, iteration, position_in_batch)
+        def infotext(iteration=0, position_in_batch=0):
+            return create_infotext(p, p.all_prompts, p.all_seeds, p.all_subseeds, comments, iteration, position_in_batch)
 
-    with open(os.path.join(shared.script_path, "params.txt"), "w", encoding="utf8") as file:
-        processed = Processed(p, [], p.seed, "")
-        file.write(processed.infotext(p, 0))
+        with open(os.path.join(shared.script_path, "params.txt"), "w", encoding="utf8") as file:
+            processed = Processed(p, [], p.seed, "")
+            file.write(processed.infotext(p, 0))
 
-    infotexts = []
-    output_images = []
+        infotexts = []
+        output_images = []
 
-    with torch.no_grad(), p.sd_model.ema_scope():
-        with devices.autocast():
-            p.init(p.all_prompts, p.all_seeds, p.all_subseeds)
-
-        if status.job_count == -1:
-            status.job_count = p.n_iter
-
-        for n in range(p.n_iter):
-            if status.skipped:
-                status.skipped = False
-
-            if status.interrupted:
-                break
-
-            prompts = p.all_prompts[n * p.batch_size:(n + 1) * p.batch_size]
-            negative_prompts = p.all_negative_prompts[n * p.batch_size:(n + 1) * p.batch_size]
-            seeds = p.all_seeds[n * p.batch_size:(n + 1) * p.batch_size]
-            subseeds = p.all_subseeds[n * p.batch_size:(n + 1) * p.batch_size]
-
-            if len(prompts) == 0:
-                break
-
+        with torch.no_grad(), p.sd_model.ema_scope():
             with devices.autocast():
-                uc = prompt_parser.get_learned_conditioning(shared.sd_model, negative_prompts, p.steps)
-                c = prompt_parser.get_multicond_learned_conditioning(shared.sd_model, prompts, p.steps)
+                p.init(p.all_prompts, p.all_seeds, p.all_subseeds)
 
-            if len(model_hijack.comments) > 0:
-                for comment in model_hijack.comments:
-                    comments[comment] = 1
+            if status.job_count == -1:
+                status.job_count = p.n_iter
 
-            if p.n_iter > 1:
-                status.job = f"Batch {n + 1} out of {p.n_iter}"
+            for n in range(p.n_iter):
+                if status.skipped:
+                    status.skipped = False
 
-            with devices.autocast():
-                samples_ddim = p.sample(conditioning=c, unconditional_conditioning=uc, seeds=seeds, subseeds=subseeds,
-                                        subseed_strength=p.subseed_strength, prompts=prompts)
+                if status.interrupted:
+                    break
 
-            x_samples_ddim = [decode_first_stage(p.sd_model, samples_ddim[i:i + 1].to(dtype=devices.dtype_vae))[0].cpu()
-                              for i in range(samples_ddim.size(0))]
-            x_samples_ddim = torch.stack(x_samples_ddim).float()
-            x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
+                prompts = p.all_prompts[n * p.batch_size:(n + 1) * p.batch_size]
+                negative_prompts = p.all_negative_prompts[n * p.batch_size:(n + 1) * p.batch_size]
+                seeds = p.all_seeds[n * p.batch_size:(n + 1) * p.batch_size]
+                subseeds = p.all_subseeds[n * p.batch_size:(n + 1) * p.batch_size]
 
-            del samples_ddim
+                if len(prompts) == 0:
+                    break
 
-            if shared.lowvram or shared.medvram:
-                lowvram.send_everything_to_cpu()
+                with devices.autocast():
+                    uc = prompt_parser.get_learned_conditioning(shared.sd_model, negative_prompts, p.steps)
+                    c = prompt_parser.get_multicond_learned_conditioning(shared.sd_model, prompts, p.steps)
 
-            devices.torch_gc()
+                if len(model_hijack.comments) > 0:
+                    for comment in model_hijack.comments:
+                        comments[comment] = 1
 
-            for i, x_sample in enumerate(x_samples_ddim):
-                x_sample = 255. * np.moveaxis(x_sample.cpu().numpy(), 0, 2)
-                x_sample = x_sample.astype(np.uint8)
+                if p.n_iter > 1:
+                    status.job = f"Batch {n + 1} out of {p.n_iter}"
 
-                image = Image.fromarray(x_sample)
+                with devices.autocast():
+                    samples_ddim = p.sample(conditioning=c, unconditional_conditioning=uc, seeds=seeds, subseeds=subseeds,
+                                            subseed_strength=p.subseed_strength, prompts=prompts)
 
-                text = infotext(n, i)
-                infotexts.append(text)
-                image.info["parameters"] = text
-                output_images.append(image)
+                x_samples_ddim = [decode_first_stage(p.sd_model, samples_ddim[i:i + 1].to(dtype=devices.dtype_vae))[0].cpu()
+                                  for i in range(samples_ddim.size(0))]
+                x_samples_ddim = torch.stack(x_samples_ddim).float()
+                x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
 
-            del x_samples_ddim
+                del samples_ddim
 
-            devices.torch_gc()
+                if shared.lowvram or shared.medvram:
+                    lowvram.send_everything_to_cpu()
 
-            status.nextjob()
+                devices.torch_gc()
 
-        p.color_corrections = None
+                for i, x_sample in enumerate(x_samples_ddim):
+                    x_sample = 255. * np.moveaxis(x_sample.cpu().numpy(), 0, 2)
+                    x_sample = x_sample.astype(np.uint8)
 
-    devices.torch_gc()
+                    image = Image.fromarray(x_sample)
 
-    return output_images
+                    text = infotext(n, i)
+                    infotexts.append(text)
+                    image.info["parameters"] = text
+                    output_images.append(image)
 
+                del x_samples_ddim
+
+                devices.torch_gc()
+
+                status.nextjob()
+
+            p.color_corrections = None
+
+        devices.torch_gc()
+
+        return output_images
+except:
+    print("Oops, no txt2img available. Oh well.")
+    def process_txt2img(p: StableDiffusionProcessing) -> None:
+        return None
 
 def load_image_directory(db_dir, concept: Concept, is_class: bool = True) -> List[Tuple[str, str]]:
     img_paths = get_images(db_dir)
@@ -398,3 +411,21 @@ def db_save_image(image: Image, prompt_data: PromptData = None, save_txt: bool =
             file.write(prompt_data.prompt)
     os.replace(image_filename, image_filename.replace(".tmp", ".png"))
     return image_filename.replace(".tmp", ".png")
+
+def image_grid(imgs):
+    rows = math.floor(math.sqrt(len(imgs)))
+    while len(imgs) % rows != 0:
+        rows -= 1
+
+    if rows > len(imgs):
+        rows = len(imgs)
+
+    cols = math.ceil(len(imgs) / rows)
+
+    w, h = imgs[0].size
+    grid = Image.new('RGB', size=(cols * w, rows * h), color='black')
+
+    for i, img in enumerate(imgs):
+        grid.paste(img, box=(i % cols * w, i // cols * h))
+
+    return grid

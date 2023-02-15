@@ -381,7 +381,7 @@ def on_ui_tabs():
                                                           placeholder="Enter a model name for saving checkpoints and lora models.")
                         db_save_safetensors = gr.Checkbox(label="Save in .safetensors format", value=True, visible=False)
                         db_save_ema = gr.Checkbox(label="Save EMA Weights to Generated Models", value=True)
-                        db_save_ema_infer = gr.Checkbox(label="Use EMA Weights for Inference", value=False)
+                        db_infer_ema = gr.Checkbox(label="Use EMA Weights for Inference", value=False)
                     with gr.Column():
                         gr.HTML("Checkpoints")
                         db_half_model = gr.Checkbox(label="Half Model", value=False)
@@ -431,6 +431,7 @@ def on_ui_tabs():
                 with gr.Tab("Testing", elem_id="TabDebug"):
                     db_ema_predict = gr.Checkbox(label="Use EMA for prediction.")
                     db_split_loss = gr.Checkbox(label="Calculate Split Loss", value=True)
+                    db_deis_train_scheduler = gr.Checkbox(label="Use DEIS for noise scheduler", value=False)
                     db_update_extension = gr.Button(value="Update Extension and Restart")
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")
@@ -583,20 +584,22 @@ def on_ui_tabs():
             db_model_name,
             db_attention,
             db_cache_latents,
-            db_freeze_clip_normalization,
             db_clip_skip,
             db_concepts_path,
             db_custom_model_name,
+            db_deis_train_scheduler,
             db_ema_predict,
             db_epochs,
             db_epoch_pause_frequency,
             db_epoch_pause_time,
+            db_freeze_clip_normalization,
             db_gradient_accumulation_steps,
             db_gradient_checkpointing,
             db_gradient_set_to_none,
             db_graph_smoothing,
             db_half_model,
             db_hflip,
+            db_infer_ema,
             db_learning_rate,
             db_learning_rate_min,
             db_lora_learning_rate,
@@ -632,6 +635,7 @@ def on_ui_tabs():
             db_save_ckpt_cancel,
             db_save_ckpt_during,
             db_save_embedding_every,
+            db_save_ema,
             db_save_lora_after,
             db_save_lora_cancel,
             db_save_lora_during,
@@ -1058,7 +1062,7 @@ def build_concept_panel(concept: int):
         n_save_sample = gr.Slider(label="Number of Samples to Generate", value=1, maximum=100, step=1)
         sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
         save_guidance_scale = gr.Slider(label="Sample CFG Scale", value=7.5, maximum=12, minimum=1, step=0.1)
-        save_infer_steps = gr.Slider(label="Sample Steps", value=40, minimum=10, maximum=200, step=1)
+        save_infer_steps = gr.Slider(label="Sample Steps", value=20, minimum=10, maximum=200, step=1)
     return [instance_data_dir, class_data_dir, instance_prompt, class_prompt,save_sample_prompt, sample_template,
             instance_token, class_token, num_class_images_per, class_negative_prompt, class_guidance_scale,
             class_infer_steps, save_sample_negative_prompt, n_save_sample, sample_seed,save_guidance_scale,

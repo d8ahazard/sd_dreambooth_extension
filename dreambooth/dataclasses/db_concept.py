@@ -20,7 +20,7 @@ class Concept(BaseModel):
     num_class_images_per: int = 0
     sample_seed: int = -1
     save_guidance_scale: float = 7.5
-    save_infer_steps: int = 60
+    save_infer_steps: int = 20
     save_sample_negative_prompt: str = ""
     save_sample_prompt: str = ""
     save_sample_template: str = ""

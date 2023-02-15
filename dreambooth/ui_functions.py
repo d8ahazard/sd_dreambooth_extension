@@ -8,30 +8,48 @@ import random
 import sys
 import traceback
 
-import gradio
 import torch
 import torch.utils.checkpoint
 import torch.utils.data.dataloader
 from accelerate import find_executable_batch_size
 from diffusers.utils import logging as dl
 
-from extensions.sd_dreambooth_extension.dreambooth import shared
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses import db_config
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig, \
-    sanitize_name
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-from extensions.sd_dreambooth_extension.dreambooth.dataset.bucket_sampler import BucketSampler
-from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import ClassDataset
-from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler
-from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.shared import status, run
-from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_dataset, generate_classifiers
-from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, db_save_image
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
-    get_lora_models, get_checkpoint_match
-from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printm, cleanup
-from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses import db_config
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig, \
+        sanitize_name
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+    from extensions.sd_dreambooth_extension.dreambooth.dataset.bucket_sampler import BucketSampler
+    from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import ClassDataset
+    from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler
+    from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
+    from extensions.sd_dreambooth_extension.dreambooth.shared import status, run
+    from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_dataset, generate_classifiers
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, db_save_image
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
+        reload_system_models, \
+        get_lora_models, get_checkpoint_match
+    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printm, cleanup
+    from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+except:
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.dataclasses import db_config  # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import from_file, DreamboothConfig, sanitize_name  # noqa
+    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
+    from dreambooth.dreambooth.dataset.bucket_sampler import BucketSampler  # noqa
+    from dreambooth.dreambooth.dataset.class_dataset import ClassDataset  # noqa
+    from dreambooth.dreambooth.optimization import UniversalScheduler  # noqa
+    from dreambooth.dreambooth.sd_to_diff import extract_checkpoint  # noqa
+    from dreambooth.dreambooth.shared import status, run  # noqa
+    from dreambooth.dreambooth.utils.gen_utils import generate_dataset, generate_classifiers  # noqa
+    from dreambooth.dreambooth.utils.image_utils import get_images, db_save_image  # noqa
+    from dreambooth.dreambooth.utils.model_utils import unload_system_models, reload_system_models, get_lora_models, \
+        get_checkpoint_match  # noqa
+    from dreambooth.dreambooth.utils.utils import printm, cleanup  # noqa
+    from dreambooth.helpers.image_builder import ImageBuilder  # noqa
+    from dreambooth.helpers.mytqdm import mytqdm  # noqa
 
 logger = logging.getLogger(__name__)
 console = logging.StreamHandler()
@@ -39,6 +57,14 @@ console.setLevel(logging.DEBUG)
 logger.addHandler(console)
 logger.setLevel(logging.DEBUG)
 dl.set_verbosity_error()
+
+
+def gr_update(default=None, **kwargs):
+    try:
+        import gradio
+        return gradio.update(visible=True, **kwargs)
+    except:
+        return kwargs["value"] if "value" in kwargs else default
 
 
 def get_model_snapshot(config: DreamboothConfig):
@@ -175,12 +201,13 @@ def performance_wizard(model_name):
     use_lora = False
     use_ema = False
     config = None
-    save_samples_every = gradio.update(visible=True)
-    save_weights_every = gradio.update(visible=True)
     if model_name == "" or model_name is None:
         print("Can't load config, specify a model name!")
     else:
         config = from_file(model_name)
+    save_samples_every = gr_update(config.save_preview_every)
+    save_weights_every = gr_update(config.save_embedding_every)
+
     if torch.cuda.is_bf16_supported():
         mixed_precision = 'bf16'
     if config is not None:
@@ -235,8 +262,8 @@ def performance_wizard(model_name):
             train_batch_size = 1
         if gb < 12:
             use_lora = True
-            save_samples_every = gradio.update(value=0)
-            save_weights_every = gradio.update(value=0)
+            save_samples_every = gr_update(value=0)
+            save_weights_every = gr_update(value=0)
 
         msg = f"Calculated training params based on {gb}GB of VRAM:"
     except Exception as e:
@@ -253,7 +280,6 @@ def performance_wizard(model_name):
     return attention, gradient_checkpointing, gradient_accumulation_steps, mixed_precision, cache_latents, \
         sample_batch_size, train_batch_size, stop_text_encoder, use_8bit_adam, use_lora, use_ema, save_samples_every, \
         save_weights_every, msg
-
 
 
 def generate_samples(model_name: str,
@@ -277,20 +303,24 @@ def generate_samples(model_name: str,
         if model_name is None or model_name == "":
             return "Please select a model."
         config = from_file(model_name)
+        source_model = None
+
         if use_txt2img:
             tgt_name = model_name if not config.custom_model_name else config.custom_model_name
             tgt_ext = ".safetensors" if config.save_safetensors else ".ckpt"
             if config.use_subdir:
                 tgt_file = os.path.join(tgt_name, f"{tgt_name}_{config.revision}{tgt_ext}")
+                tgt_file_ema = os.path.join(tgt_name, f"{tgt_name}_{config.revision}_ema{tgt_ext}")
+                tgt_file_lora = os.path.join(tgt_name, f"{tgt_name}_{config.revision}_lora{tgt_ext}")
             else:
                 tgt_file = f"{tgt_name}{config.revision}{tgt_ext}"
-            model_file = os.path.join(shared.models_path, "Stable-diffusion", tgt_file)
-            print(f"Looking for: {model_file}")
-            if not os.path.exists(model_file):
-                msg = "No checkpoint found, can't use txt2img."
-                print(msg)
-                return None, None, msg
-            config.src = model_file
+                tgt_file_ema = f"{tgt_name}{config.revision}_ema{tgt_ext}"
+                tgt_file_lora = f"{tgt_name}{config.revision}_lora{tgt_ext}"
+            for tgt in [tgt_file, tgt_file_ema, tgt_file_lora]:
+                model_file = os.path.join(shared.models_path, "Stable-diffusion", tgt)
+                print(f"Looking for: {model_file}")
+                if os.path.exists(model_file):
+                    source_model = model_file
 
         images = []
         prompts_out = []
@@ -325,7 +355,8 @@ def generate_samples(model_name: str,
                 lora_model=config.lora_model_name,
                 batch_size=batch_size,
                 lora_unet_rank=config.lora_unet_rank,
-                lora_txt_rank=config.lora_txt_rank
+                lora_txt_rank=config.lora_txt_rank,
+                source_checkpoint=source_model
             )
 
             prompt_data = []
@@ -431,7 +462,7 @@ def load_model_params(model_name):
     db_outcome: The result of loading model params
     """
     data = from_file(model_name)
-    db_model_snapshots = gradio.update(choices=[], value="")
+    db_model_snapshots = gr_update(choices=[], value="")
     if data is None:
         print("Can't load config!")
         msg = f"Error loading model params: '{model_name}'."
@@ -440,7 +471,7 @@ def load_model_params(model_name):
         snaps = get_model_snapshot(data)
         snap_selection = data.revision if str(data.revision) in snaps else ""
         snaps.insert(0, "")
-        db_model_snapshots = gradio.update(choices=snaps, value=snap_selection)
+        db_model_snapshots = gr_update(choices=snaps, value=snap_selection)
 
         msg = f"Selected model: '{model_name}'."
         return data.model_dir, \
@@ -469,7 +500,7 @@ def start_training(model_dir: str, use_txt2img: bool = True):
     if model_dir == "" or model_dir is None:
         print("Invalid model name.")
         msg = "Create or select a model first."
-        lora_model_name = gradio.update(visible=True)
+        lora_model_name = gr_update(visible=True)
         return lora_model_name, 0, 0, [], msg
     config = from_file(model_dir)
     # Clear pretrained VAE Name if applicable
@@ -492,7 +523,7 @@ def start_training(model_dir: str, use_txt2img: bool = True):
 
     if msg:
         print(msg)
-        lora_model_name = gradio.update(visible=True)
+        lora_model_name = gr_update(visible=True)
         return lora_model_name, 0, 0, [], msg
     status.begin()
     # Clear memory and do "stuff" only after we've ensured all the things are right
@@ -506,12 +537,19 @@ def start_training(model_dir: str, use_txt2img: bool = True):
         if config.train_imagic:
             status.textinfo = "Initializing imagic training..."
             print(status.textinfo)
-            from extensions.sd_dreambooth_extension.dreambooth.train_imagic import train_imagic
+            try:
+                from extensions.sd_dreambooth_extension.dreambooth.train_imagic import train_imagic  # noqa
+            except:
+                from dreambooth.dreambooth.train_imagic import train_imagic
+
             result = train_imagic(config)
         else:
             status.textinfo = "Initializing dreambooth training..."
             print(status.textinfo)
-            from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
+            try:
+                from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main  # noqa
+            except:
+                from dreambooth.dreambooth.train_dreambooth import main
             result = main(use_txt2img=use_txt2img)
 
         config = result.config
@@ -540,9 +578,8 @@ def start_training(model_dir: str, use_txt2img: bool = True):
     if config.lora_model_name != "" and config.lora_model_name is not None:
         lora_model_name = f"{config.model_name}_{total_steps}.pt"
     dirs = get_lora_models()
-    lora_model_name = gradio.Dropdown.update(choices=sorted(dirs), value=lora_model_name)
+    lora_model_name = gr_update(choices=sorted(dirs), value=lora_model_name)
     return lora_model_name, total_steps, config.epoch, images, res
-
 
 
 def reload_extension():
@@ -553,7 +590,6 @@ def reload_extension():
             del sys.modules[module]
             deleted.append(module)
 
-
     for re_add in deleted:
         try:
             print(f"Replacing: {re_add}")
@@ -561,12 +597,17 @@ def reload_extension():
 
         except Exception as e:
             print(f"Couldn't import module: {re_add}")
-    from extensions.sd_dreambooth_extension.postinstall import actual_install
+    try:
+        from extensions.sd_dreambooth_extension.postinstall import actual_install  # noqa
+    except:
+        from dreambooth.postinstall import actual_install
+
     actual_install()
+
 
 def update_extension():
     git = os.environ.get('GIT', "git")
-    ext_dir = os.path.join(shared.script_path,"extensions", "sd_dreambooth_extension")
+    ext_dir = os.path.join(shared.script_path, "extensions", "sd_dreambooth_extension")
     run(f'"{git}" -C "{ext_dir}" fetch', f"Fetching updates...", f"Couldn't fetch updates...")
     run(f'"{git}" -C "{ext_dir}" pull', f"Pulling updates...", f"Couldn't pull updates...")
     reload_extension()

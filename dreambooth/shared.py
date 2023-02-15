@@ -63,12 +63,14 @@ def load_auto_settings():
                 device = torch.device("cpu")
         except:
             pass
-
+        return True
     except Exception as e:
         print("Exception importing SD-WebUI module:")
-        print(f"{type(e).__name__} at line {e.__traceback__.tb_lineno} of {__file__}: {e}")
-        traceback.print_exc()
+        # print(f"{type(e).__name__} at line {e.__traceback__.tb_lineno} of {__file__}: {e}")
+        # traceback.print_exc()
+        return False
         pass
+
 
 def get_launch_errors():
     errors = os.environ.get("ERRORS", None)
@@ -89,11 +91,13 @@ def get_launch_errors():
         launch_errors += f"<b>{launch_strings}</b>"
     return launch_errors
 
+
 def get_cuda_device_string():
     if device_id is not None:
         return f"cuda:{device_id}"
 
     return "cuda"
+
 
 def run(command, desc=None, errdesc=None, custom_env=None, live=False):
     if desc is not None:
@@ -108,15 +112,15 @@ Error code: {result.returncode}""")
 
         return ""
 
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, env=os.environ if custom_env is None else custom_env)
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True,
+                            env=os.environ if custom_env is None else custom_env)
 
     if result.returncode != 0:
-
         message = f"""{errdesc or 'Error running command'}.
 Command: {command}
 Error code: {result.returncode}
-stdout: {result.stdout.decode(encoding="utf8", errors="ignore") if len(result.stdout)>0 else '<empty>'}
-stderr: {result.stderr.decode(encoding="utf8", errors="ignore") if len(result.stderr)>0 else '<empty>'}
+stdout: {result.stdout.decode(encoding="utf8", errors="ignore") if len(result.stdout) > 0 else '<empty>'}
+stderr: {result.stderr.decode(encoding="utf8", errors="ignore") if len(result.stderr) > 0 else '<empty>'}
 """
         raise RuntimeError(message)
 
@@ -250,17 +254,17 @@ class DreamState:
             for check in to_check:
                 if isinstance(check, (numpy.ndarray, PIL.Image.Image, pathlib.Path, str)):
                     real_images.append(check)
-            self.current_image = real_images if len(real_images) > 2 else real_images[0] if len (real_images) == 1 else None
-
-
+            self.current_image = real_images if len(real_images) > 2 else real_images[0] if len(
+                real_images) == 1 else None
 
 
 def tensor_to_fix(self, *args, **kwargs):
     if self.device.type != 'mps' and \
-       ((len(args) > 0 and isinstance(args[0], torch.device) and args[0].type == 'mps') or
-        (isinstance(kwargs.get('device'), torch.device) and kwargs['device'].type == 'mps')):
+            ((len(args) > 0 and isinstance(args[0], torch.device) and args[0].type == 'mps') or
+             (isinstance(kwargs.get('device'), torch.device) and kwargs['device'].type == 'mps')):
         self = self.contiguous()
     return orig_tensor_to(self, *args, **kwargs)
+
 
 # MPS workaround for https://github.com/pytorch/pytorch/issues/80800
 
@@ -271,11 +275,11 @@ def layer_norm_fix(*args, **kwargs):
     return orig_layer_norm(*args, **kwargs)
 
 
-
 def numpy_fix(self, *args, **kwargs):
     if self.requires_grad:
         self = self.detach()
     return orig_tensor_numpy(self, *args, **kwargs)
+
 
 def cumsum_fix(input, cumsum_func, *args, **kwargs):
     if input.device.type == 'mps':
@@ -293,6 +297,7 @@ dreambooth_models_path = os.path.join(models_path, "dreambooth")
 ckpt_dir = os.path.join(models_path, "Stable-diffusion")
 lora_models_path = os.path.join(models_path, "lora")
 db_model_config = None
+data_path = os.path.join(script_path, ".cache")
 show_progress_every_n_steps = 10
 parallel_processing_allowed = True
 dataset_filename_word_regex = ""
@@ -313,8 +318,7 @@ sd_model = None
 config = os.path.join(script_path, "configs", "v1-inference.yaml")
 force_cpu = False
 
-
-
+is_auto = load_auto_settings()
 
 device = torch.device("cpu")
 if torch.cuda.is_available():
@@ -343,12 +347,14 @@ if device.type == "mps":
         torch.nn.functional.layer_norm = layer_norm_fix
         torch.Tensor.numpy = numpy_fix
     elif version.parse(torch.__version__) > version.parse("1.13.1"):
-        if not torch.Tensor([1,2]).to(torch.device("mps")).equal(torch.Tensor([1,1]).to(torch.device("mps")).cumsum(0, dtype=torch.int16)):
-            torch.cumsum = lambda input, *args, **kwargs: ( cumsum_fix(input, orig_cumsum, *args, **kwargs) )
-            torch.Tensor.cumsum = lambda self, *args, **kwargs: ( cumsum_fix(self, orig_Tensor_cumsum, *args, **kwargs) )
+        if not torch.Tensor([1, 2]).to(torch.device("mps")).equal(
+                torch.Tensor([1, 1]).to(torch.device("mps")).cumsum(0, dtype=torch.int16)):
+            torch.cumsum = lambda input, *args, **kwargs: (cumsum_fix(input, orig_cumsum, *args, **kwargs))
+            torch.Tensor.cumsum = lambda self, *args, **kwargs: (cumsum_fix(self, orig_Tensor_cumsum, *args, **kwargs))
         orig_narrow = torch.narrow
-        torch.narrow = lambda *args, **kwargs: ( orig_narrow(*args, **kwargs).clone() )
+        torch.narrow = lambda *args, **kwargs: (orig_narrow(*args, **kwargs).clone())
 
 status = DreamState()
+
 if state is None:
     state = status

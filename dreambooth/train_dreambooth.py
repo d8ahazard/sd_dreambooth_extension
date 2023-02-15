@@ -15,34 +15,55 @@ import torch.backends.cudnn
 import torch.utils.checkpoint
 from accelerate import Accelerator
 from accelerate.utils.random import set_seed as set_seed2
-from diffusers import AutoencoderKL, DDIMScheduler, DiffusionPipeline, UNet2DConditionModel, DDPMScheduler
+from diffusers import AutoencoderKL, DiffusionPipeline, UNet2DConditionModel, DDPMScheduler, DEISMultistepScheduler
 from diffusers.utils import logging as dl
 from tensorflow.python.framework.random_seed import set_seed as set_seed1
 from torch.cuda.profiler import profile
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
 
-from extensions.sd_dreambooth_extension.dreambooth import xattention, shared
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.train_result import TrainResult
-from extensions.sd_dreambooth_extension.dreambooth.dataset.bucket_sampler import BucketSampler
-from extensions.sd_dreambooth_extension.dreambooth.dataset.sample_dataset import SampleDataset
-from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
-from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler
-from extensions.sd_dreambooth_extension.dreambooth.shared import status, load_auto_settings
-from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
-from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
-    import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle
-from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import encode_hidden_state
-from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup, parse_logs, printm
-from extensions.sd_dreambooth_extension.dreambooth.webhook import send_training_update
-from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
-from extensions.sd_dreambooth_extension.helpers.ema_model import EMAModel
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, \
-    TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import xattention, shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.train_result import TrainResult
+    from extensions.sd_dreambooth_extension.dreambooth.dataset.bucket_sampler import BucketSampler
+    from extensions.sd_dreambooth_extension.dreambooth.dataset.sample_dataset import SampleDataset
+    from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
+    from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
+    from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler
+    from extensions.sd_dreambooth_extension.dreambooth.shared import status, load_auto_settings
+    from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
+        import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle
+    from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import encode_hidden_state
+    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup, parse_logs, printm
+    from extensions.sd_dreambooth_extension.dreambooth.webhook import send_training_update
+    from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
+    from extensions.sd_dreambooth_extension.helpers.ema_model import EMAModel
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+    from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, \
+        TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
+except:
+    from dreambooth.dreambooth import xattention, shared # noqa
+    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData # noqa
+    from dreambooth.dreambooth.dataclasses.train_result import TrainResult # noqa
+    from dreambooth.dreambooth.dataset.bucket_sampler import BucketSampler # noqa
+    from dreambooth.dreambooth.dataset.sample_dataset import SampleDataset # noqa
+    from dreambooth.dreambooth.diff_to_sd import compile_checkpoint # noqa
+    from dreambooth.dreambooth.memory import find_executable_batch_size # noqa
+    from dreambooth.dreambooth.optimization import UniversalScheduler # noqa
+    from dreambooth.dreambooth.shared import status, load_auto_settings # noqa
+    from dreambooth.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset # noqa
+    from dreambooth.dreambooth.utils.image_utils import db_save_image # noqa
+    from dreambooth.dreambooth.utils.model_utils import unload_system_models, import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle # noqa
+    from dreambooth.dreambooth.utils.text_utils import encode_hidden_state # noqa
+    from dreambooth.dreambooth.utils.utils import cleanup, parse_logs, printm # noqa
+    from dreambooth.dreambooth.webhook import send_training_update # noqa
+    from dreambooth.dreambooth.xattention import optim_to # noqa
+    from dreambooth.helpers.ema_model import EMAModel # noqa
+    from dreambooth.helpers.mytqdm import mytqdm # noqa
+    from dreambooth.lora_diffusion.lora import save_lora_weight, TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module # noqa
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
@@ -92,8 +113,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
     @param use_txt2img: Use txt2img when generating class images.
     @return: TrainResult
     """
-    load_auto_settings()
-
     args = shared.db_model_config
     logging_dir = Path(args.model_dir, "logging")
 
@@ -320,7 +339,14 @@ def main(use_txt2img: bool = True) -> TrainResult:
             lr=args.learning_rate,
             weight_decay=args.adamw_weight_decay
         )
-        noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
+
+        if args.deis_train_scheduler:
+            print("Using DEIS for noise scheduler.")
+            noise_scheduler = DEISMultistepScheduler.from_pretrained(args.pretrained_model_name_or_path,
+                                                                     subfolder="scheduler")
+        else:
+            noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
+
 
         def cleanup_memory():
             try:
@@ -614,13 +640,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 optim_to(torch, profiler, optimizer)
                 if profiler is not None:
                     cleanup()
-                g_cuda = None
-                pred_type = "epsilon"
-                if args.v2 and args.resolution > 512:
-                    pred_type = "v_prediction"
-                scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
-                                          steps_offset=1, clip_sample=False, set_alpha_to_one=False,
-                                          prediction_type=pred_type)
 
                 if vae is None:
                     printm("Loading vae.")
@@ -633,16 +652,20 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=True),
                     text_encoder=accelerator.unwrap_model(text_encoder, keep_fp32_wrapper=True),
                     vae=vae,
-                    scheduler=scheduler,
                     torch_dtype=weight_dtype,
                     revision=args.revision,
                     safety_checker=None,
                     requires_safety_checker=None
                 )
-                s_pipeline = s_pipeline.to(accelerator.device)
-                s_pipeline.enable_attention_slicing()
+
                 if args.attention == "xformers":
                     s_pipeline.enable_xformers_memory_efficient_attention()
+                else:
+                    s_pipeline.enable_attention_slicing()
+
+                s_pipeline.scheduler = DEISMultistepScheduler.from_config(s_pipeline.scheduler.config)
+                s_pipeline = s_pipeline.to(accelerator.device)
+
                 with accelerator.autocast(), torch.inference_mode():
                     if save_model:
                         # We are saving weights, we need to ensure revision is saved
@@ -731,13 +754,13 @@ def main(use_txt2img: bool = True) -> TrainResult:
                                 ci = 0
                                 for c in prompts:
                                     c.out_dir = os.path.join(args.model_dir, "samples")
-                                    g_cuda = torch.Generator(device=accelerator.device).manual_seed(int(c.seed))
+                                    generator = torch.manual_seed(int(c.seed))
                                     s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
                                                          guidance_scale=c.scale,
                                                          negative_prompt=c.negative_prompt,
                                                          height=c.resolution[0],
                                                          width=c.resolution[1],
-                                                         generator=g_cuda).images[0]
+                                                         generator=generator).images[0]
                                     sample_prompts.append(c.prompt)
                                     image_name = db_save_image(s_image, c, custom_name=f"sample_{args.revision}-{ci}")
                                     shared.status.current_image = image_name
@@ -758,10 +781,9 @@ def main(use_txt2img: bool = True) -> TrainResult:
                             pass
                 printm("Starting cleanup.")
                 del s_pipeline
-                del scheduler
                 if save_image:
-                    if g_cuda:
-                        del g_cuda
+                    if 'generator' in locals():
+                        del generator
                     try:
                         printm("Parse logs.")
                         log_images, log_names = parse_logs(model_name=args.model_name)

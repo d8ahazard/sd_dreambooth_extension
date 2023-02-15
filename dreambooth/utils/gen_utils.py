@@ -3,19 +3,29 @@ import os
 import traceback
 from typing import List
 
-import gradio
 from accelerate import Accelerator
 from transformers import AutoTokenizer
 
-from extensions.sd_dreambooth_extension.dreambooth import shared
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig, from_file
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import ClassDataset
-from extensions.sd_dreambooth_extension.dreambooth.shared import status
-from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image
-from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup
-from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
-from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig, from_file
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+    from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import ClassDataset
+    from extensions.sd_dreambooth_extension.dreambooth.shared import status
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image
+    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup
+    from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+except:
+    from dreambooth.dreambooth import shared # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig, from_file # noqa
+    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData # noqa
+    from dreambooth.dreambooth.dataset.class_dataset import ClassDataset # noqa
+    from dreambooth.dreambooth.shared import status # noqa
+    from dreambooth.dreambooth.utils.image_utils import db_save_image # noqa
+    from dreambooth.dreambooth.utils.utils import cleanup # noqa
+    from dreambooth.helpers.image_builder import ImageBuilder # noqa
+    from dreambooth.helpers.mytqdm import mytqdm # noqa
 
 
 def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None, class_prompts: List[PromptData] = None,
@@ -23,9 +33,10 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
     if debug:
         print("Generating dataset.")
 
-    db_gallery = gradio.update(value=None)
-    db_prompt_list = gradio.update(value=None)
-    db_status = gradio.update(value=None)
+    from dreambooth.dreambooth.ui_functions import gr_update
+    db_gallery = gr_update(value=None)
+    db_prompt_list = gr_update(value=None)
+    db_status = gr_update(value=None)
 
     args = from_file(model_name)
 
@@ -50,7 +61,10 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
     print(f"Found {len(class_prompts)} reg images.")
 
     min_bucket_reso = (int(args.resolution * 0.28125) // 64) * 64
-    from extensions.sd_dreambooth_extension.dreambooth.dataset.db_dataset import DbDataset
+    try:
+        from extensions.sd_dreambooth_extension.dreambooth.dataset.db_dataset import DbDataset
+    except:
+        from dreambooth.dreambooth.dataset.db_dataset import DbDataset
 
     print("Preparing dataset...")
 
@@ -126,7 +140,8 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
         batch_size=args.sample_batch_size,
         accelerator=accelerator,
         lora_unet_rank=args.lora_unet_rank,
-        lora_txt_rank=args.lora_txt_rank
+        lora_txt_rank=args.lora_txt_rank,
+        source_checkpoint=args.src
         )
     
     generated = 0

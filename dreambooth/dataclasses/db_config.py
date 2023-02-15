@@ -5,8 +5,12 @@ from typing import List, Dict
 
 from pydantic import BaseModel
 
-from extensions.sd_dreambooth_extension.dreambooth import shared
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
+except:
+    from dreambooth.dreambooth import shared # noqa
+    from dreambooth.dreambooth.dataclasses.db_concept import Concept # noqa
 
 # Keys to save, replacing our dumb __init__ method
 save_keys = []
@@ -23,15 +27,16 @@ class DreamboothConfig(BaseModel):
     adamw_weight_decay: float = 0.01
     attention: str = "xformers"
     cache_latents: bool = True
-    freeze_clip_normalization: bool = True
     clip_skip: int = 1
     concepts_list: List[Dict] = []
     concepts_path: str = ""
     custom_model_name: str = ""
+    deis_train_scheduler: bool = False
     ema_predict: bool = False
     epoch: int = 0
     epoch_pause_frequency: int = 0
     epoch_pause_time: int = 0
+    freeze_clip_normalization: bool = True
     gradient_accumulation_steps: int = 1
     gradient_checkpointing: bool = True
     gradient_set_to_none: bool = True
@@ -40,6 +45,7 @@ class DreamboothConfig(BaseModel):
     train_unfrozen: bool = True
     has_ema: bool = False
     hflip: bool = False
+    infer_ema: bool = False
     initial_revision: int = 0
     learning_rate: float = 5e-6
     learning_rate_min: float = 1e-6
@@ -78,6 +84,7 @@ class DreamboothConfig(BaseModel):
     save_ckpt_after: bool = True
     save_ckpt_cancel: bool = False
     save_ckpt_during: bool = True
+    save_ema: bool = True
     save_embedding_every: int = 25
     save_lora_after: bool = True
     save_lora_cancel: bool = False
