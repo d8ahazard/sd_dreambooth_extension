@@ -33,7 +33,8 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
     if debug:
         print("Generating dataset.")
 
-    from dreambooth.dreambooth.ui_functions import gr_update
+
+    from extensions.sd_dreambooth_extension.dreambooth.ui_functions import gr_update
     db_gallery = gr_update(value=None)
     db_prompt_list = gr_update(value=None)
     db_status = gr_update(value=None)

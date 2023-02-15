@@ -716,7 +716,7 @@ def debug_buckets(model_name, num_epochs, batch_size):
         return "Invalid config."
     print("Preparing prompt dataset...")
 
-    prompt_dataset = ClassDataset(args.concepts(), args.model_dir, args.resolution)
+    prompt_dataset = ClassDataset(args.concepts(), args.model_dir, args.resolution, False)
     inst_paths = prompt_dataset.instance_prompts
     class_paths = prompt_dataset.class_prompts
     print("Generating training dataset...")
