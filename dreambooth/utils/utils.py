@@ -104,6 +104,15 @@ def xformers_check():
         has_xformers = False
     return has_xformers
 
+
+def list_optimizer():
+    try:
+        from lion_pytorch import Lion
+        return ["Lion", "8Bit Adam"]
+    except:
+        return ["8Bit Adam"]
+
+
 def list_attention():
     has_xformers = xformers_check()
     import diffusers.utils

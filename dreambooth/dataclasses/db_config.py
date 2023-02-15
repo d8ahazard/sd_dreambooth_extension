@@ -70,6 +70,7 @@ class DreamboothConfig(BaseModel):
     model_path: str = ""
     num_train_epochs: int = 100
     offset_noise: float = 0
+    optimizer: str = "8Bit Adam"
     pad_tokens: bool = True
     pretrained_model_name_or_path: str = ""
     pretrained_vae_name_or_path: str = ""
@@ -105,7 +106,6 @@ class DreamboothConfig(BaseModel):
     train_batch_size: int = 1
     train_imagic: bool = False
     train_unet: bool = True
-    use_8bit_adam: bool = True
     use_concepts: bool = False
     use_ema: bool = True
     use_lora: bool = False

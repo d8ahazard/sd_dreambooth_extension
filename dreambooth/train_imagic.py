@@ -185,7 +185,7 @@ def train_imagic(args: DreamboothConfig):
 
     # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
     optimizer_class = torch.optim.Adam
-    if args.use_8bit_adam:
+    if args.optimizer == "8Bit Adam":
         try:
             import bitsandbytes as bnb
             optimizer_class = bnb.optim.Adam8bit

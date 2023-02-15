@@ -304,14 +304,20 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 unet.requires_grad_(False)
 
         # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
-        use_adam = False
         optimizer_class = torch.optim.AdamW
 
-        if args.use_8bit_adam and not shared.force_cpu:
+        if args.optimizer == "8Bit Adam" and not shared.force_cpu:
             try:
                 import bitsandbytes as bnb
                 optimizer_class = bnb.optim.AdamW8bit
-                use_adam = True
+            except Exception as a:
+                logger.warning(f"Exception importing 8bit adam: {a}")
+                traceback.print_exc()
+
+        elif args.optimizer == "Lion" and not shared.force_cpu:
+            try:
+                from lion_pytorch import Lion
+                optimizer_class = Lion
             except Exception as a:
                 logger.warning(f"Exception importing 8bit adam: {a}")
                 traceback.print_exc()
@@ -549,7 +555,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
         print(f"  Resuming from checkpoint: {resume_from_checkpoint}")
         print(f"  First resume epoch: {first_epoch}")
         print(f"  First resume step: {resume_step}")
-        print(f"  Lora: {args.use_lora}, Adam: {use_adam}, Prec: {precision}")
+        print(f"  Lora: {args.use_lora}, Optimizer: {args.optimizer}, Prec: {precision}")
         print(f"  Gradient Checkpointing: {args.gradient_checkpointing}")
         print(f"  EMA: {args.use_ema}")
         print(f"  UNET: {args.train_unet}")
