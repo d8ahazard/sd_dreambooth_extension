@@ -12,3 +12,4 @@ tqdm==4.64.1
 transformers==4.26.0
 discord-webhook==1.0.0
 xformers==0.0.17.dev447
+lion-pytorch
