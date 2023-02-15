@@ -69,6 +69,7 @@ class DreamboothConfig(BaseModel):
     model_dir: str = ""
     model_path: str = ""
     num_train_epochs: int = 100
+    offset_noise: float = 0
     pad_tokens: bool = True
     pretrained_model_name_or_path: str = ""
     pretrained_vae_name_or_path: str = ""

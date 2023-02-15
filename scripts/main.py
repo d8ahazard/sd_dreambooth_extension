@@ -322,6 +322,8 @@ def on_ui_tabs():
                                     db_cache_latents = gr.Checkbox(label="Cache Latents", value=True)
                                     db_train_unet = gr.Checkbox(label="Train UNET", value=True)
                                     db_stop_text_encoder = gr.Slider(label="Step Ratio of Text Encoder Training", minimum=0, maximum=1, step=0.01, value=1, visible=True)
+                                    db_offset_noise = gr.Slider(label="Offset Noise", minimum=0, maximum=1,
+                                                                     step=.01, value=0)
                                     db_freeze_clip_normalization = gr.Checkbox(label="Freeze CLIP Normalization Layers", visible=True, value=False)
                                     db_clip_skip = gr.Slider(label="Clip Skip", value=1, minimum=1, maximum=12, step=1)
                                     db_adamw_weight_decay = gr.Slider(label="AdamW Weight Decay", minimum=0, maximum=1, step=1e-7, value=1e-2, visible=True)
@@ -620,6 +622,7 @@ def on_ui_tabs():
             db_adamw_weight_decay,
             db_model_path,
             db_num_train_epochs,
+            db_offset_noise,
             db_pad_tokens,
             db_pretrained_vae_name_or_path,
             db_prior_loss_scale,
