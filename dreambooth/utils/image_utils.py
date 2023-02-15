@@ -153,7 +153,7 @@ class FilenameTextGetter:
                 tokens = self.re_word.findall(filename_text)
                 filename_text = (shared.dataset_filename_join_string or "").join(tokens)
 
-        filename_text = filename_text.replace("\\", "")  # work with \(franchies\)
+        filename_text = re.sub(r'\\', "", filename_text)  # work with \(franchies\)
         return filename_text
 
     def create_text(self, text_template, filename_text, instance_token, class_token, is_class=True):
@@ -162,43 +162,41 @@ class FilenameTextGetter:
         # If we are creating text for a class image and it has our instance token in it, remove/replace it
         class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
         if instance_token != "" and class_token != "":
-            if is_class and re.search(f'(^|\\W){instance_token}($|\\W)', filename_text):
-                if re.search(f'(^|\\W){class_token}($|\\W)', filename_text):
-                    filename_text = filename_text.replace(instance_token, "")
-                    filename_text = filename_text.replace("  ", " ")
+            reg_inst = f"\\b{instance_token}\\b"
+            reg_class = f"\\b{class_token}\\b"
+
+            if is_class and re.search(reg_inst, filename_text):
+                if re.search(reg_class, filename_text):
+                    filename_text = re.sub(reg_inst, "", filename_text)
                 else:
-                    filename_text = filename_text.replace(instance_token, class_token)
+                    filename_text = re.sub(reg_inst, class_token, filename_text)
 
             if not is_class:
-                if re.search(f'(^|\\W){class_token}($|\\W)', filename_text):
+                if re.search(reg_class, filename_text):
                     # Do nothing if we already have class and instance in string
-                    if re.search(f'(^|\\W){instance_token}($|\\W)', filename_text):
+                    if re.search(reg_inst, filename_text):
                         pass
                     # Otherwise, substitute class tokens for the base token
                     else:
                         for token in class_tokens:
-                            if re.search(f'(^|\\W){token}($|\\W)', filename_text):
-                                filename_text = filename_text.replace(token, f"{class_token}")
+                            reg_token = f"\\b{token}\\b"
+                            filename_text = re.sub(reg_token, class_token, filename_text)
+
                     # Now, replace class with instance + class tokens
-                    filename_text = filename_text.replace(class_token, f"{instance_token} {class_token}")
+                    filename_text = re.sub(reg_class, f"{instance_token} {class_token}", filename_text)
                 else:
                     # If class is not in the string, check if instance is
-                    if re.search(f'(^|\\W){instance_token}($|\\W)', filename_text):
-                        filename_text = filename_text.replace(instance_token, f"{instance_token} {class_token}")
+                    if re.search(reg_inst, filename_text):
+                        filename_text = re.sub(reg_inst, f"{instance_token} {class_token}", filename_text)
                     else:
                         # Description only, insert both at the front?
                         filename_text = f"{instance_token} {class_token}, {filename_text}"
 
-        # We already replaced [filewords] up there ^^
-        output = filename_text
         # Remove underscores, double-spaces, and other characters that will cause issues.
-        output = output.replace("_", " ")
-        output = output.replace("  ", " ")
-        strip_chars = ["(", ")", "/", "\\", ":", "[", "]"]
-        for s_char in strip_chars:
-            output = output.replace(s_char, "")
+        filename_text = re.sub(r"_| +", " ", filename_text)
+        filename_text = re.sub(r"[^\w ]", "", filename_text)
 
-        tags = output.split(',')
+        tags = filename_text.split(',')
 
         if self.shuffle_tags and len(tags) > 2:
             first_tag = tags.pop(0)
