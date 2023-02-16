@@ -108,7 +108,7 @@ def xformers_check():
 def list_optimizer():
     try:
         from lion_pytorch import Lion
-        return ["Lion", "8Bit Adam"]
+        return ["8Bit Adam", "Lion"]
     except:
         return ["8Bit Adam"]
 

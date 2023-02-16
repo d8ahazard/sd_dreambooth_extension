@@ -721,7 +721,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                             if save_checkpoint:
                                 pbar.set_description("Compiling Checkpoint")
                                 snap_rev = str(args.revision) if save_snapshot else ""
-                                compile_checkpoint(args.model_name, reload_models=True, lora_path=out_file, log=False,
+                                compile_checkpoint(args.model_name, reload_models=False, lora_path=out_file, log=False,
                                                    snap_rev=snap_rev)
                                 pbar.update()
                                 printm("Restored, moved to acc.device.")
