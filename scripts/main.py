@@ -12,7 +12,7 @@ from extensions.sd_dreambooth_extension.dreambooth.ui_functions import performan
     generate_samples, load_params, start_training, update_extension
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention, \
-    list_floats, wrap_gpu_call, parse_logs, printm
+    list_floats, wrap_gpu_call, parse_logs, printm, list_optimizer
 from extensions.sd_dreambooth_extension.dreambooth.webhook import save_and_test_webhook
 from extensions.sd_dreambooth_extension.helpers.version_helper import check_updates
 from modules import script_callbacks, sd_models
@@ -313,15 +313,17 @@ def on_ui_tabs():
                                 with gr.Column():
                                     gr.HTML(value="Tuning")
                                     db_use_ema = gr.Checkbox(label="Use EMA", value=False)
-                                    db_use_8bit_adam = gr.Checkbox(label="Use 8bit Adam", value=False)
+                                    db_optimizer = gr.Dropdown(
+                                        label="Optimizer", value="8Bit Adam", choices=list_optimizer())
                                     db_mixed_precision = gr.Dropdown(label="Mixed Precision", value="no",
                                                                      choices=list_floats())
                                     db_attention = gr.Dropdown(
-                                        label="Memory Attention", value="default",
-                                        choices=list_attention())
+                                        label="Memory Attention", value="default", choices=list_attention())
                                     db_cache_latents = gr.Checkbox(label="Cache Latents", value=True)
                                     db_train_unet = gr.Checkbox(label="Train UNET", value=True)
                                     db_stop_text_encoder = gr.Slider(label="Step Ratio of Text Encoder Training", minimum=0, maximum=1, step=0.01, value=1, visible=True)
+                                    db_offset_noise = gr.Slider(label="Offset Noise", minimum=0, maximum=1,
+                                                                     step=.01, value=0)
                                     db_freeze_clip_normalization = gr.Checkbox(label="Freeze CLIP Normalization Layers", visible=True, value=False)
                                     db_clip_skip = gr.Slider(label="Clip Skip", value=1, minimum=1, maximum=12, step=1)
                                     db_adamw_weight_decay = gr.Slider(label="AdamW Weight Decay", minimum=0, maximum=1, step=1e-7, value=1e-2, visible=True)
@@ -620,6 +622,8 @@ def on_ui_tabs():
             db_adamw_weight_decay,
             db_model_path,
             db_num_train_epochs,
+            db_offset_noise,
+            db_optimizer,
             db_pad_tokens,
             db_pretrained_vae_name_or_path,
             db_prior_loss_scale,
@@ -654,7 +658,6 @@ def on_ui_tabs():
             db_train_imagic_only,
             db_train_unet,         
             db_stop_text_encoder,
-            db_use_8bit_adam,
             db_use_concepts,
             db_train_unfrozen,
             db_use_ema,
@@ -878,10 +881,10 @@ def on_ui_tabs():
                 db_gradient_accumulation_steps,
                 db_mixed_precision,
                 db_cache_latents,
+                db_optimizer,
                 db_sample_batch_size,
                 db_train_batch_size,
                 db_stop_text_encoder,
-                db_use_8bit_adam,
                 db_use_lora,
                 db_use_ema,
                 db_save_preview_every,

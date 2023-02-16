@@ -9,6 +9,6 @@ tensorboard==2.11.2
 tensorflow==2.11.0; sys_platform != 'darwin' or platform_machine != 'arm64'
 tensorflow-macos==2.11.0; sys_platform == 'darwin' and platform_machine == 'arm64'
 tqdm==4.64.1
-transformers==4.26.0
+transformers==4.26.1
 discord-webhook==1.0.0
-xformers==0.0.17.dev447
+lion-pytorch==0.0.4

@@ -206,7 +206,7 @@ let db_titles = {
     "Clip Skip": "Use output of nth layer from back of text encoder (n>=1)",
     "Concepts List": "The path to the concepts JSON file, or a JSON string.",
     "Constant/Linear Starting Factor": "Sets the initial learning rate to the main_lr * this value. If you had a target LR of .000006 and set this to .5, the scheduler would start at .000003 and increase until it reached .000006.",
-    "Create From Hub": "Import a model from Huggingface.co instead of using a local checkpoint. Hub model MUST contain diffusion weights.",
+    "Create From Hub": "Import a model from Huggingface.co instead of using a local checkpoint. Hub model MUST contain diffusion weights. You can specify a local folder with a cloned model, no HF token will be needed in this case.",
     "Create Model": "Create a new model.",
     "Create": "Create the danged model already.",
     "Custom Model Name": "A custom name to use when saving .ckpt and .pt files. Subdirectories will also be named this.",
@@ -259,6 +259,7 @@ let db_titles = {
     "Name": "The name of the model to create.",
     "Number of Hard Resets": "Number of hard resets of the lr in cosine_with_restarts scheduler.",
     "Number of Samples to Generate": "How many samples to generate per subject.",
+    "Offset Noise": "Allows the model to learn brightness and contrast with greater detail during training. Value controls the strength of the effect, 0 disables it.",
     "Pad Tokens": "Pad the input images token length to this amount. You probably want to do this.",
     "Pause After N Epochs": "Number of epochs after which training will be paused for the specified time. Useful if you want to give your GPU a rest.",
     "Performance Wizard (WIP)": "Attempt to automatically set training parameters based on total VRAM. Still under development.",
@@ -331,14 +332,10 @@ onUiUpdate(function () {
     }
 
     let errors = getRealElement("launch_errors");
-    if (errors !== null && errors !== undefined && !locked) {
-        console.log("Launch error div: ", errors);
+    if (errors !== null && errors !== undefined && !locked && errors.innerHTML !== "") {
         let hr = getRealElement("hint_row");
-        if (errors.innerHTML !== "") {
-            console.log("Setting error row...");
-            hr.innerHTML = errors.innerHTML;
-            toggleComponents(false, true);
-        }
+        hr.innerHTML = errors.innerHTML;
+        toggleComponents(false, true);
     }
 
     if (closeBtn === null || closeBtn === undefined) {

@@ -177,6 +177,7 @@ def performance_wizard(model_name):
     Calculate performance settings based on available resources.
     @return:
     attention: Memory Attention
+    optimizer: Optimizer
     gradient_checkpointing: Whether to use gradient checkpointing or not.
     gradient_accumulation_steps: Number of steps to use. Set to batch size.
     mixed_precision: Mixed precision to use. BF16 will be selected if available.
@@ -184,12 +185,12 @@ def performance_wizard(model_name):
     sample_batch_size: Batch size to use when creating class images.
     train_batch_size: Batch size to use when training.
     stop_text_encoder: Whether to train text encoder or not.
-    use_8bit_adam: Use 8bit adam. Defaults to true.
     use_lora: Train using LORA. Better than "use CPU".
     use_ema: Train using EMA.
     msg: Stuff to show in the UI
     """
     attention = "flash_attention"
+    optimizer = "8Bit Adam"
     gradient_checkpointing = False
     gradient_accumulation_steps = 1
     mixed_precision = 'fp16'
@@ -197,7 +198,6 @@ def performance_wizard(model_name):
     sample_batch_size = 1
     train_batch_size = 1
     stop_text_encoder = 0
-    use_8bit_adam = True
     use_lora = False
     use_ema = False
     config = None
@@ -274,12 +274,13 @@ def performance_wizard(model_name):
                 "Accumulation Steps": gradient_accumulation_steps, "Precision": mixed_precision,
                 "Cache Latents": cache_latents, "Training Batch Size": train_batch_size,
                 "Class Generation Batch Size": sample_batch_size,
-                "Text Encoder Ratio": stop_text_encoder, "8Bit Adam": use_8bit_adam, "EMA": use_ema, "LORA": use_lora}
+                "Text Encoder Ratio": stop_text_encoder, "Optimizer": optimizer,
+                "EMA": use_ema, "LORA": use_lora}
     for key in log_dict:
         msg += f"<br>{key}: {log_dict[key]}"
     return attention, gradient_checkpointing, gradient_accumulation_steps, mixed_precision, cache_latents, \
-        sample_batch_size, train_batch_size, stop_text_encoder, use_8bit_adam, use_lora, use_ema, save_samples_every, \
-        save_weights_every, msg
+        sample_batch_size, train_batch_size, stop_text_encoder, optimizer, use_lora, use_ema, \
+        save_samples_every, save_weights_every, msg
 
 
 def generate_samples(model_name: str,
@@ -716,7 +717,7 @@ def debug_buckets(model_name, num_epochs, batch_size):
         return "Invalid config."
     print("Preparing prompt dataset...")
 
-    prompt_dataset = ClassDataset(args.concepts(), args.model_dir, args.resolution)
+    prompt_dataset = ClassDataset(args.concepts(), args.model_dir, args.resolution, False)
     inst_paths = prompt_dataset.instance_prompts
     class_paths = prompt_dataset.class_prompts
     print("Generating training dataset...")
