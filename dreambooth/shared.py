@@ -317,7 +317,7 @@ CLIP_stop_at_last_layers = 2
 sd_model = None
 config = os.path.join(script_path, "configs", "v1-inference.yaml")
 force_cpu = False
-
+paths = []
 is_auto = load_auto_settings()
 
 device = torch.device("cpu")

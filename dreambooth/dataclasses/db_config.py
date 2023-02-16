@@ -120,7 +120,13 @@ class DreamboothConfig(BaseModel):
         models_path = shared.dreambooth_models_path
         if models_path == "" or models_path is None:
             models_path = os.path.join(shared.models_path, "dreambooth")
+
+        # If we're using the new UI, this should be populated, so load models from here.
+        if len(shared.paths):
+            models_path = os.path.join(shared.paths["models"], "dreambooth")
+
         model_dir = os.path.join(models_path, model_name)
+        print(f"Model dir set to: {model_dir}")
         working_dir = os.path.join(model_dir, "working")
 
         if not os.path.exists(working_dir):
