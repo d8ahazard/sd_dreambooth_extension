@@ -10,6 +10,7 @@ import traceback
 from decimal import Decimal
 from pathlib import Path
 
+import importlib_metadata
 import torch
 import torch.backends.cudnn
 import torch.utils.checkpoint
@@ -44,6 +45,7 @@ try:
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
     from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, \
         TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
+    from extensions.sd_dreambooth_extension.dreambooth.deis_velocity import get_velocity
 except:
     from dreambooth.dreambooth import xattention, shared # noqa
     from dreambooth.dreambooth.dataclasses.prompt_data import PromptData # noqa
@@ -64,6 +66,7 @@ except:
     from dreambooth.helpers.ema_model import EMAModel # noqa
     from dreambooth.helpers.mytqdm import mytqdm # noqa
     from dreambooth.lora_diffusion.lora import save_lora_weight, TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module # noqa
+    from dreambooth.dreambooth.deis_velocity import get_velocity
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
@@ -75,6 +78,21 @@ dl.set_verbosity_error()
 
 last_samples = []
 last_prompts = []
+
+try:
+    diff_version = str(importlib_metadata.version("diffusers"))
+    version_string = diff_version.split('.')
+    major_version = int(version_string[0])
+    minor_version = int(version_string[1])
+    patch_version = int(version_string[2])
+    if major_version < 12 or (major_version == 12 and minor_version == 0 and patch_version <= 1):
+        print("The version of the package is less than or equal to 12.0.1. Performing monkey-patch...")
+        DEISMultistepScheduler.get_velocity = get_velocity
+    else:
+        print("The version of the package is greater than 12.0.1, hopefully they merged the PR by now")
+except:
+    print("Exception monkey-patching DEIS scheduler.")
+
 
 torch.backends.cudnn.deterministic = True
 
