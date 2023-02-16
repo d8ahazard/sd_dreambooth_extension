@@ -332,14 +332,10 @@ onUiUpdate(function () {
     }
 
     let errors = getRealElement("launch_errors");
-    if (errors !== null && errors !== undefined && !locked) {
-        console.log("Launch error div: ", errors);
+    if (errors !== null && errors !== undefined && !locked && errors.innerHTML !== "") {
         let hr = getRealElement("hint_row");
-        if (errors.innerHTML !== "") {
-            console.log("Setting error row...");
-            hr.innerHTML = errors.innerHTML;
-            toggleComponents(false, true);
-        }
+        hr.innerHTML = errors.innerHTML;
+        toggleComponents(false, true);
     }
 
     if (closeBtn === null || closeBtn === undefined) {
