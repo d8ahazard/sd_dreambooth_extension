@@ -419,13 +419,13 @@ def dreambooth_api(_, app: FastAPI):
             create_from_hub: bool = Form(False, description="Create this model from the hub", ),
             new_model_url: str = Form(None,
                                        description="The hub URL to use for this model. Must contain diffusers model.", ),
-            is_512: bool = Query(False,
+            is_512: bool = Form(False,
                                        description="Whether or not the model is 512x resolution.", ),
-            train_unfrozen: bool = Query(True,
+            train_unfrozen: bool = Form(True,
                              description="Un-freeze the model.", ),
-            new_model_token: str = Query(None, description="Your huggingface hub token.", ),
-            new_model_extract_ema: bool = Query(False, description="Whether to extract EMA weights if present.", ),
-            api_key: str = Query("", description="If an API key is set, this must be present.", ),
+            new_model_token: str = Form(None, description="Your huggingface hub token.", ),
+            new_model_extract_ema: bool = Form(False, description="Whether to extract EMA weights if present.", ),
+            api_key: str = Form("", description="If an API key is set, this must be present.", ),
     ):
         """
         Create a new Dreambooth model.
