@@ -22,29 +22,30 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
     from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
     from extensions.sd_dreambooth_extension.dreambooth.shared import DreamState
-    from extensions.sd_dreambooth_extension.dreambooth.ui_functions import create_model, generate_samples, start_training
+    from extensions.sd_dreambooth_extension.dreambooth.ui_functions import create_model, generate_samples, \
+        start_training
     from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers
     from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images
     from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
 except:
-    from dreambooth.dreambooth import shared # noqa
-    from dreambooth.dreambooth.dataclasses.db_concept import Concept # noqa
-    from dreambooth.dreambooth.dataclasses.db_config import from_file, DreamboothConfig # noqa
-    from dreambooth.dreambooth.diff_to_sd import compile_checkpoint # noqa
-    from dreambooth.dreambooth.secret import get_secret # noqa
-    from dreambooth.dreambooth.shared import DreamState # noqa
-    from dreambooth.dreambooth.ui_functions import create_model, generate_samples, start_training # noqa
-    from dreambooth.dreambooth.utils.gen_utils import generate_classifiers # noqa
-    from dreambooth.dreambooth.utils.image_utils import get_images # noqa
-    from dreambooth.dreambooth.utils.model_utils import get_db_models, get_lora_models # noqa
-    pass
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.dataclasses.db_concept import Concept  # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import from_file, DreamboothConfig  # noqa
+    from dreambooth.dreambooth.diff_to_sd import compile_checkpoint  # noqa
+    from dreambooth.dreambooth.secret import get_secret  # noqa
+    from dreambooth.dreambooth.shared import DreamState  # noqa
+    from dreambooth.dreambooth.ui_functions import create_model, generate_samples, start_training  # noqa
+    from dreambooth.dreambooth.utils.gen_utils import generate_classifiers  # noqa
+    from dreambooth.dreambooth.utils.image_utils import get_images  # noqa
+    from dreambooth.dreambooth.utils.model_utils import get_db_models, get_lora_models  # noqa
 
+    pass
 
 
 class InstanceData(BaseModel):
     data: str = Field(title="File data", description="Base64 representation of the file")
-    name: str = Field(title="File name")
-    txt: str = Field(title="Prompt")
+    name: str = Field(title="File name", description="File name to save image as")
+    txt: str = Field(title="Prompt", description="Training prompt for image")
 
 
 class ImageData:
@@ -85,6 +86,7 @@ def run_in_background(func, *args, **kwargs):
         new_func = functools.partial(func, *args, **kwargs)
         await asyncio.get_running_loop().run_in_executor(None, new_func)
         active = False
+
     asyncio.create_task(wrapper())
 
 
@@ -420,9 +422,9 @@ def dreambooth_api(_, app: FastAPI):
             new_model_url: str = Query(None,
                                        description="The hub URL to use for this model. Must contain diffusers model.", ),
             is_512: bool = Query(False,
-                                       description="Whether or not the model is 512x resolution.", ),
+                                 description="Whether or not the model is 512x resolution.", ),
             train_unfrozen: bool = Query(True,
-                             description="Un-freeze the model.", ),
+                                         description="Un-freeze the model.", ),
             new_model_token: str = Query(None, description="Your huggingface hub token.", ),
             new_model_extract_ema: bool = Query(False, description="Whether to extract EMA weights if present.", ),
             api_key: str = Query("", description="If an API key is set, this must be present.", ),
@@ -443,14 +445,14 @@ def dreambooth_api(_, app: FastAPI):
 
         print("Creating new Checkpoint: " + new_model_name)
         res = create_model(new_model_name,
-                         new_model_src,
-                         new_model_scheduler,
-                         create_from_hub,
-                         new_model_url,
-                         new_model_token,
-                         new_model_extract_ema,
-                         train_unfrozen,
-                         is_512)
+                           new_model_src,
+                           new_model_scheduler,
+                           create_from_hub,
+                           new_model_url,
+                           new_model_token,
+                           new_model_extract_ema,
+                           train_unfrozen,
+                           is_512)
 
         return JSONResponse(res[-1])
 
@@ -537,7 +539,6 @@ def dreambooth_api(_, app: FastAPI):
         config.save()
         return JSONResponse(content=config.__dict__)
 
-
     @app.get("/dreambooth/models")
     async def get_models(
             api_key: str = Query("", description="If an API key is set, this must be present."),
@@ -555,7 +556,6 @@ def dreambooth_api(_, app: FastAPI):
             return key_check
         models = get_db_models()
         return JSONResponse(models)
-
 
     @app.get("/dreambooth/models_lora")
     async def get_models_lora(
@@ -714,7 +714,8 @@ def dreambooth_api(_, app: FastAPI):
     async def upload_db_images(
             model_name: str = Query(description="The model name to upload images for."),
             instance_name: str = Query(description="The concept/instance name the images are for."),
-            create_concept: bool = Query(True, description="Enable to automatically append the new concept to the model config."),
+            create_concept: bool = Query(True,
+                                         description="Enable to automatically append the new concept to the model config."),
             images: DbImagesRequest = Body(description="A dictionary of images, filenames, and prompts to save."),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ):
@@ -741,18 +742,19 @@ def dreambooth_api(_, app: FastAPI):
         image_dir = os.path.abspath(image_dir)
         if not os.path.exists(image_dir):
             os.makedirs(image_dir)
-
+        print(f"Input data: {images}")
         image_paths = []
         for img_data in images.imageList:
             img = base64_to_pil(img_data.data)
             name = img_data.name
             prompt = img_data.txt
+            print(f"Input prompt: {prompt}")
             image_path = os.path.join(image_dir, name)
             text_path = os.path.splitext(image_path)[0]
             text_path = F"{text_path}.txt"
             print(f"Saving image to: {image_path}")
             img.save(image_path)
-            print(f"Saving prompt to: {text_path}")
+            print(f"Saving prompt ({prompt}) to: {text_path}")
             with open(text_path, "w") as tx_file:
                 tx_file.writelines(prompt)
             image_paths.append(image_path)
