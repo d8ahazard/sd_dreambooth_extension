@@ -3,6 +3,7 @@ import functools
 import hashlib
 import io
 import json
+import logging
 import os
 import shutil
 import traceback
@@ -12,8 +13,12 @@ from typing import List, Union
 
 from PIL import Image
 from fastapi import FastAPI, Response, Query, Body, Form, Header
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
+from starlette import status
+from starlette.requests import Request
 
 try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
@@ -41,6 +46,8 @@ except:
 
     pass
 
+
+logger = logging.getLogger(__name__)
 
 class InstanceData(BaseModel):
     data: str = Field(title="File data", description="Base64 representation of the file")
@@ -96,13 +103,13 @@ def zip_files(db_model_name, files, name_part=""):
                          zipfile.ZIP_DEFLATED, False) as zip_file:
         for file in files:
             if isinstance(file, str):
-                print(f"Zipping img: {file}")
+                logger.debug(f"Zipping img: {file}")
                 if os.path.exists(file) and os.path.isfile(file):
                     parent_path = os.path.join(Path(file).parent, Path(file).name)
                     zip_file.write(file, arcname=parent_path)
                     check_txt = os.path.join(os.path.splitext(file)[0], ".txt")
                     if os.path.exists(check_txt):
-                        print(f"Zipping txt: {check_txt}")
+                        logger.debug(f"Zipping txt: {check_txt}")
                         parent_path = os.path.join(Path(check_txt).parent, Path(check_txt).name)
                         zip_file.write(check_txt, arcname=parent_path)
             else:
@@ -145,6 +152,12 @@ def file_to_base64(file_path) -> str:
 
 
 def dreambooth_api(_, app: FastAPI):
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"detail": exc.errors(), "body": exc.body}),
+        )
     @app.get("/dreambooth/cancel")
     async def cancel_jobs(
             api_key: str = Query("", description="If an API key is set, this must be present.", )) -> \
@@ -202,9 +215,9 @@ def dreambooth_api(_, app: FastAPI):
                 checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}.ckpt")
             if config.save_safetensors:
                 checkpoint_path = checkpoint_path.replace(".ckpt", ".safetensors")
-            print(f"Looking for checkpoint at {checkpoint_path}")
+            logger.debug(f"Looking for checkpoint at {checkpoint_path}")
             if os.path.exists(checkpoint_path):
-                print("Existing checkpoint found, returning.")
+                logger.debug("Existing checkpoint found, returning.")
                 path = checkpoint_path
             else:
                 skip_build = False
@@ -217,10 +230,10 @@ def dreambooth_api(_, app: FastAPI):
             shared.status.end()
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()
-                print(f"Checkpoint aved to path: {path}")
+                logger.debug(f"Checkpoint aved to path: {path}")
 
         if path is not None and os.path.exists(path):
-            print(f"Returning file response: {path}-{os.path.splitext(path)}")
+            logger.debug(f"Returning file response: {path}-{os.path.splitext(path)}")
             return FileResponse(path)
 
         return {"exception": f"Unable to find or compile checkpoint."}
@@ -300,7 +313,7 @@ def dreambooth_api(_, app: FastAPI):
         out_images = []
         if concept_idx >= 0:
             if len(concepts) - 1 >= concept_idx:
-                print(f"Returning class images for concept {concept_idx}")
+                logger.debug(f"Returning class images for concept {concept_idx}")
                 concept_dict[concept_idx] = concepts[concept_idx]
             else:
                 return {"Exception": f"Concept index {concept_idx} out of range."}
@@ -314,7 +327,7 @@ def dreambooth_api(_, app: FastAPI):
             class_images_dir = concept["class_data_dir"]
             if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:
                 class_images_dir = os.path.join(config.model_dir, f"classifiers_{concept_key}")
-                print(f"Class image dir is not set, defaulting to {class_images_dir}")
+                logger.debug(f"Class image dir is not set, defaulting to {class_images_dir}")
             if os.path.exists(class_images_dir):
                 class_images = get_images(class_images_dir)
                 for image in class_images:
@@ -443,7 +456,7 @@ def dreambooth_api(_, app: FastAPI):
         if status:
             return status
 
-        print("Creating new Checkpoint: " + new_model_name)
+        logger.debug("Creating new Checkpoint: " + new_model_name)
         res = create_model(new_model_name,
                            new_model_src,
                            new_model_scheduler,
@@ -504,13 +517,13 @@ def dreambooth_api(_, app: FastAPI):
         if key_check is not None:
             return key_check
         try:
-            print("Create config")
+            logger.debug("Create config")
             config = DreamboothConfig()
             for key in model_cfg.dict():
                 if key in config.__dict__:
                     config.__dict__[key] = model_cfg.dict()[key]
             config.save()
-            print("Saved?")
+            logger.debug("Saved?")
             return JSONResponse(content=config.__dict__)
         except Exception as e:
             traceback.print_exc()
@@ -534,7 +547,7 @@ def dreambooth_api(_, app: FastAPI):
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
-        print(f"Loading new params: {params}")
+        logger.debug(f"Loading new params: {params}")
         config.load_params(params)
         config.save()
         return JSONResponse(content=config.__dict__)
@@ -705,7 +718,7 @@ def dreambooth_api(_, app: FastAPI):
         if status:
             return status
 
-        print("Starting Training")
+        logger.debug("Starting Training")
         shared.status.begin()
         run_in_background(start_training, model_name, use_tx2img)
         return {"Status": "Training started."}
@@ -735,26 +748,26 @@ def dreambooth_api(_, app: FastAPI):
 
         root_img_path = os.path.join(shared.script_path, "..", "InstanceImages")
         if not os.path.exists(root_img_path):
-            print(f"Creating root instance dir: {root_img_path}")
+            logger.debug(f"Creating root instance dir: {root_img_path}")
             os.makedirs(root_img_path)
 
         image_dir = os.path.join(root_img_path, model_name, instance_name)
         image_dir = os.path.abspath(image_dir)
         if not os.path.exists(image_dir):
             os.makedirs(image_dir)
-        print(f"Input data: {images}")
+        # logger.debug(f"Input data: {images}")
         image_paths = []
         for img_data in images.imageList:
             img = base64_to_pil(img_data.data)
             name = img_data.name
             prompt = img_data.txt
-            print(f"Input prompt: {prompt}")
+            logger.debug(f"Input prompt: {prompt}")
             image_path = os.path.join(image_dir, name)
             text_path = os.path.splitext(image_path)[0]
             text_path = F"{text_path}.txt"
-            print(f"Saving image to: {image_path}")
+            logger.debug(f"Saving image to: {image_path}")
             img.save(image_path)
-            print(f"Saving prompt ({prompt}) to: {text_path}")
+            logger.debug(f"Saving prompt ({prompt}) to: {text_path}")
             with open(text_path, "w") as tx_file:
                 tx_file.writelines(prompt)
             image_paths.append(image_path)
@@ -770,7 +783,7 @@ def dreambooth_api(_, app: FastAPI):
             new_concept.instance_prompt = "[filewords]"
             new_concept.save_sample_prompt = "[filewords]"
             new_concept.is_valid = True
-            print(f"New concept: {new_concept}")
+            logger.debug(f"New concept: {new_concept}")
             new_concepts = []
             replaced = False
             for concept in config.concepts():
@@ -792,6 +805,6 @@ try:
     import modules.script_callbacks as script_callbacks
 
     script_callbacks.on_app_started(dreambooth_api)
-    print("SD-Webui API layer loaded")
+    logger.debug("SD-Webui API layer loaded")
 except:
     pass
