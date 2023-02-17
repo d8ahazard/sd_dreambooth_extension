@@ -685,8 +685,8 @@ def dreambooth_api(_, app: FastAPI):
     async def train(
             model_name: str = Query(None,
                                     description="The model name to load params for.", ),
-            use_tx2img: bool = Form(True, description="Use txt2img to generate class images."),
-            api_key: str = Form("", description="If an API key is set, this must be present.")
+            use_tx2img: bool = Query(True, description="Use txt2img to generate class images."),
+            api_key: str = Query("", description="If an API key is set, this must be present.")
     ):
         """
         Start training dreambooth.
