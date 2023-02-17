@@ -46,8 +46,11 @@ except:
 
     pass
 
+logging.basicConfig(level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
+
+
 
 class InstanceData(BaseModel):
     data: str = Field(title="File data", description="Base64 representation of the file")
