@@ -156,47 +156,49 @@ class FilenameTextGetter:
         filename_text = re.sub(r'\\', "", filename_text)  # work with \(franchies\)
         return filename_text
 
-    def create_text(self, text_template, filename_text, instance_token, class_token, is_class=True):
-        # Append the filename text to the template first...THEN shuffle it all.
-        filename_text = text_template.replace("[filewords]", filename_text)
-        # If we are creating text for a class image and it has our instance token in it, remove/replace it
-        class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
+    def create_text(self, prompt, file_text, instance_token, class_token, is_class=True):
+        output = prompt.replace("[filewords]", file_text)
         if instance_token != "" and class_token != "":
-            reg_inst = f"\\b{instance_token}\\b"
-            reg_class = f"\\b{class_token}\\b"
+            instance_regex = re.compile(f"\\b{instance_token}\\b", flags=re.IGNORECASE)
+            class_regex = re.compile(f"\\b{class_token}\\b", flags=re.IGNORECASE)
 
-            if is_class and re.search(reg_inst, filename_text):
-                if re.search(reg_class, filename_text):
-                    filename_text = re.sub(reg_inst, "", filename_text)
+            if is_class and instance_regex.search(output):
+                if class_regex.search(output):
+                    output = instance_regex.sub("", output)
                 else:
-                    filename_text = re.sub(reg_inst, class_token, filename_text)
+                    output = instance_regex.sub(class_token, output)
 
             if not is_class:
-                if re.search(reg_class, filename_text):
+                if class_regex.search(output):
                     # Do nothing if we already have class and instance in string
-                    if re.search(reg_inst, filename_text):
+                    if instance_regex.search(output):
                         pass
                     # Otherwise, substitute class tokens for the base token
                     else:
+                        class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
                         for token in class_tokens:
-                            reg_token = f"\\b{token}\\b"
-                            filename_text = re.sub(reg_token, class_token, filename_text)
+                            token_regex = re.compile(f"\\b{token}\\b", flags=re.IGNORECASE)
+                            output = token_regex.sub(class_token, output)
 
                     # Now, replace class with instance + class tokens
-                    filename_text = re.sub(reg_class, f"{instance_token} {class_token}", filename_text)
+                    output = class_regex.sub(f"{instance_token} {class_token}", output)
                 else:
                     # If class is not in the string, check if instance is
-                    if re.search(reg_inst, filename_text):
-                        filename_text = re.sub(reg_inst, f"{instance_token} {class_token}", filename_text)
+                    if instance_regex.search(output):
+                        output = instance_regex.sub(f"{instance_token} {class_token}", output)
                     else:
                         # Description only, insert both at the front?
-                        filename_text = f"{instance_token} {class_token}, {filename_text}"
+                        output = f"{instance_token} {class_token}, {output}"
+        elif instance_token != "" and not is_class:
+            output = f"{instance_token}, {output}"
+        elif class_token != "" and is_class:
+            output = f"{class_token}, {output}"
 
         # Remove underscores, double-spaces, and other characters that will cause issues.
-        filename_text = re.sub(r"_| +", " ", filename_text)
-        filename_text = re.sub(r"[^\w ]", "", filename_text)
+        output = re.sub(r"_| +", " ", output)
+        output = re.sub(r"[^\w, ]", "", output)
 
-        tags = filename_text.split(',')
+        tags = output.split(',')
 
         if self.shuffle_tags and len(tags) > 2:
             first_tag = tags.pop(0)
