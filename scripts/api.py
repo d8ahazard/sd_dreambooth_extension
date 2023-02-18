@@ -51,7 +51,6 @@ except:
 logger = logging.getLogger(__name__)
 
 
-
 class InstanceData(BaseModel):
     data: str = Field(title="File data", description="Base64 representation of the file")
     name: str = Field(title="File name", description="File name to save image as")
@@ -161,6 +160,7 @@ def dreambooth_api(_, app: FastAPI):
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content=jsonable_encoder({"detail": exc.errors(), "body": exc.body}),
         )
+
     @app.get("/dreambooth/cancel")
     async def cancel_jobs(
             api_key: str = Query("", description="If an API key is set, this must be present.", )) -> \

@@ -19,7 +19,7 @@ import re
 import shutil
 import traceback
 import glob
-import gradio as gr
+
 import huggingface_hub.utils.tqdm
 import importlib_metadata
 import safetensors.torch
@@ -1026,7 +1026,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
     @param train_unfrozen: Set the model to unfrozen
     @param is_512: Is it a 512 model?
     @return:
-        db_new_model_name: Gr.dropdown populated with our model name, if applicable.
+        db_new_model_name: Gradio dropdown populated with our model name, if applicable.
         db_config.model_dir: The directory where our model was created.
         db_config.revision: Model revision
         db_config.epoch: Model epoch
