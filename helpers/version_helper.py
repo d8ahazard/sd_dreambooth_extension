@@ -79,10 +79,13 @@ def get_changes()-> Union[Dict[str, str], None]:
         current = current_revision()
 
     # Get the commit history for the repository and branch
-    commit_history = subprocess.run(
-        ['git', 'log', current_branch, '--pretty=format:"%h%x09%an%x09%ad%x09%s"', '--date=format:%Y-%m-%d',
-         f"{current}..HEAD"], cwd=shared.extension_path, capture_output=True, text=True).stdout.strip().split(
-        '\n')
+    try:
+        commit_history = subprocess.run(
+            ['git', 'log', current_branch, '--pretty=format:"%h%x09%an%x09%ad%x09%s"', '--date=format:%Y-%m-%d',
+             f"{current}..HEAD"], cwd=shared.extension_path, capture_output=True, text=True).stdout.strip().split(
+            '\n')
+    except:
+        commit_history = []
 
     # Parse all commits after the current revision
     changes = {}
