@@ -511,6 +511,25 @@ def on_ui_tabs():
                     outputs=[db_secret]
                 )
 
+                def force_res(input_res):
+                    if input_res is None:
+                        return gr.update(value=64)
+                    if input_res < 64:
+                        return gr.update(value=64)
+                    if input_res % 64 == 0:
+                        return gr.update(visible=True)
+                    else:
+                        closest_multiple = (input_res // 64) * 64
+                        if input_res - closest_multiple < 32:
+                            return closest_multiple
+                        else:
+                            return closest_multiple + 64
+
+                db_resolution.change(
+                    fn=force_res,
+                    inputs=db_resolution,
+                    outputs=db_resolution
+                )
 
                 def update_stop_tenc(train_unet):
                     # If train unet enabled, read "hidden" value from stop_tenc and restore
