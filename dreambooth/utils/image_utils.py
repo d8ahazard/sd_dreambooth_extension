@@ -158,6 +158,7 @@ class FilenameTextGetter:
 
     def create_text(self, prompt, file_text, instance_token, class_token, is_class=True):
         output = prompt.replace("[filewords]", file_text)
+
         if instance_token != "" and class_token != "":
             instance_regex = re.compile(f"\\b{instance_token}\\b", flags=re.IGNORECASE)
             class_regex = re.compile(f"\\b{class_token}\\b", flags=re.IGNORECASE)
@@ -189,24 +190,30 @@ class FilenameTextGetter:
                     else:
                         # Description only, insert both at the front?
                         output = f"{instance_token} {class_token}, {output}"
+
         elif instance_token != "" and not is_class:
             output = f"{instance_token}, {output}"
+
         elif class_token != "" and is_class:
             output = f"{class_token}, {output}"
 
-        # Remove underscores, double-spaces, and other characters that will cause issues.
-        output = re.sub(r"_| +", " ", output)
-        output = re.sub(r"[^\w, ]", "", output)
+        # replace underscores with spaces and remove redundant spacing
+        output = re.sub(r"\s+", " ", output)
 
-        tags = output.split(',')
+        if self.shuffle_tags:
+            output = shuffle_tags(output)
 
-        if self.shuffle_tags and len(tags) > 2:
-            first_tag = tags.pop(0)
-            random.shuffle(tags)
-            tags.insert(0, first_tag)
+        return output
 
-        output = ','.join(tags)
-        return output.strip()
+
+def shuffle_tags(caption: str):
+    tags = caption.split(',')
+    if len(tags) > 2:
+        first_tag = tags.pop(0)
+        random.shuffle(tags)
+        tags.insert(0, first_tag)
+    output = ','.join(tags).strip()
+    return output
 
 
 def make_bucket_resolutions(max_size, min_size=256, divisible=64) -> List[Tuple[int, int]]:
@@ -365,6 +372,7 @@ except:
     print("Oops, no txt2img available. Oh well.")
     def process_txt2img(p: StableDiffusionProcessing) -> None:
         return None
+
 
 def load_image_directory(db_dir, concept: Concept, is_class: bool = True) -> List[Tuple[str, str]]:
     img_paths = get_images(db_dir)

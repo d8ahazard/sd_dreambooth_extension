@@ -171,7 +171,8 @@ class DbDataset(torch.utils.data.Dataset):
         input_ids = None
         auto_add_special_tokens = False if self.strict_tokens else True
         if self.tokenizer is not None and (image_path not in self.caption_cache or self.debug_dataset):
-            caption = self.check_shuffle_tags(caption)
+            if self.shuffle_tags:
+                caption = shuffle_tags(caption)
             if self.strict_tokens:
                 caption = build_strict_tokens(caption, self.tokenizer.bos_token, self.tokenizer.eos_token)
             if self.not_pad_tokens:
@@ -327,16 +328,6 @@ class DbDataset(torch.utils.data.Dataset):
         self.sample_dict = sample_dict
         self.batch_indices = batch_indices
         self.batch_samples = batch_samples
-
-    def check_shuffle_tags(self, caption):
-        if self.shuffle_tags and not self.debug_dataset:
-            tags = caption.split(',')
-            if len(tags) > 2:
-                first_tag = tags.pop(0)
-                random.shuffle(tags)
-                tags.insert(0, first_tag)
-            caption = ','.join(tags)
-        return caption
 
     def __len__(self):
         return self._length
