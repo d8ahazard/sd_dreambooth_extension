@@ -638,7 +638,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                 )
                 s_pipeline = s_pipeline.to(accelerator.device)
                 s_pipeline.enable_attention_slicing()
-                with accelerator.autocast(), torch.inference_mode():
+                with accelerator.autocast(), torch.inference_mode(mode= accelerator.device != torch.device('mps')):
                     if save_model:
                         # We are saving weights, we need to ensure revision is saved
                         args.save()
@@ -710,7 +710,7 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                             s_pipeline.set_progress_bar_config(disable=True)
                             sample_dir = os.path.join(save_dir, "samples")
                             os.makedirs(sample_dir, exist_ok=True)
-                            with accelerator.autocast(), torch.inference_mode():
+                            with accelerator.autocast(), torch.inference_mode(mode= accelerator.device != torch.device('mps')):
                                 sd = SampleDataset(args)
                                 prompts = sd.get_prompts()
                                 concepts = args.concepts()
@@ -732,7 +732,10 @@ def main(args: DreamboothConfig, use_txt2img: bool = True) -> TrainResult:
                                     if seed is None or seed == '' or seed == -1:
                                         seed = int(random.randrange(21474836147))
                                     c.seed = seed
-                                    g_cuda = torch.Generator(device=accelerator.device).manual_seed(seed)
+                                    if accelerator.device == torch.device('mps'):
+                                        g_cuda = torch.Generator(device='cpu').manual_seed(seed)
+                                    else:
+                                        g_cuda = torch.Generator(device=accelerator.device).manual_seed(seed)
                                     s_image = s_pipeline(c.prompt, num_inference_steps=c.steps,
                                                          guidance_scale=c.scale,
                                                          negative_prompt=c.negative_prompt,
