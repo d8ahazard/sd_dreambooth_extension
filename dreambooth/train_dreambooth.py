@@ -698,8 +698,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
                         pbar.reset(4)
                         pbar.update()
                         try:
+                            out_file = None
                             if not args.use_lora:
-                                out_file = None
                                 if save_snapshot:
                                     pbar.set_description("Saving Snapshot")
                                     status.textinfo = f"Saving snapshot at step {args.revision}..."
