@@ -197,7 +197,6 @@ class FilenameTextGetter:
         elif class_token != "" and is_class:
             output = f"{class_token}, {output}"
 
-        # replace underscores with spaces and remove redundant spacing
         output = re.sub(r"\s+", " ", output)
 
         if self.shuffle_tags:
@@ -208,10 +207,9 @@ class FilenameTextGetter:
 
 def shuffle_tags(caption: str):
     tags = caption.split(',')
-    if len(tags) > 2:
-        first_tag = tags.pop(0)
-        random.shuffle(tags)
-        tags.insert(0, first_tag)
+    first_tag = tags.pop(0)
+    random.shuffle(tags)
+    tags.insert(0, first_tag)
     output = ','.join(tags).strip()
     return output
 
