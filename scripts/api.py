@@ -46,7 +46,8 @@ except:
 
     pass
 
-# logging.basicConfig(level=logging.DEBUG)
+if os.environ.get("DEBUG_API", False):
+    logging.basicConfig(level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
@@ -745,26 +746,31 @@ def dreambooth_api(_, app: FastAPI):
         'name' - The filename to store the image under.
         'txt' - The caption for the image. Will be stored in a text file beside the image.
         """
+        logger.debug("API UPLOAD STARTED.")
         key_check = check_api_key(api_key)
         if key_check is not None:
+            logger.debug("NO KEY")
             return key_check
 
         root_img_path = os.path.join(shared.script_path, "..", "InstanceImages")
         if not os.path.exists(root_img_path):
             logger.debug(f"Creating root instance dir: {root_img_path}")
             os.makedirs(root_img_path)
+        else:
+            logger.debug(f"Root dir exists already: {root_img_path}")
 
         image_dir = os.path.join(root_img_path, model_name, instance_name)
         image_dir = os.path.abspath(image_dir)
         if not os.path.exists(image_dir):
             os.makedirs(image_dir)
-        # logger.debug(f"Input data: {images}")
+            logger.debug(f"Input data: {images}")
+
         image_paths = []
         for img_data in images.imageList:
             img = base64_to_pil(img_data.data)
             name = img_data.name
             prompt = img_data.txt
-            logger.debug(f"Input prompt: {prompt}")
+            logger.debug(f"Input prompt for image: {prompt} {name}")
             image_path = os.path.join(image_dir, name)
             text_path = os.path.splitext(image_path)[0]
             text_path = F"{text_path}.txt"
@@ -773,11 +779,13 @@ def dreambooth_api(_, app: FastAPI):
             logger.debug(f"Saving prompt ({prompt}) to: {text_path}")
             with open(text_path, "w") as tx_file:
                 tx_file.writelines(prompt)
+                logger.debug(f"Saved prompt text to: {text_path}")
             image_paths.append(image_path)
 
         status = {"Status": f"Saved {len(image_paths)} images.", "Image dir": {image_dir}}
         if create_concept:
             config = from_file(model_name)
+            logger.debug(f"Creating concept: {model_name}")
             if config is None:
                 status["Status"] += " Unable to load model config."
             new_concept = Concept()
@@ -799,6 +807,7 @@ def dreambooth_api(_, app: FastAPI):
                 new_concepts.append(new_concept.__dict__)
             config.concepts_list = new_concepts
             config.save()
+            logger.debug("Saved concepts.")
             status["Concepts"] = config.concepts_list
 
         return status
