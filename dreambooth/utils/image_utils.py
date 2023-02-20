@@ -201,6 +201,8 @@ class FilenameTextGetter:
 
         if self.shuffle_tags:
             output = shuffle_tags(output)
+        else:
+            output = output.strip()
 
         return output
 
