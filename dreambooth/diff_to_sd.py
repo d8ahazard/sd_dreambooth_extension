@@ -350,8 +350,6 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
     status.job_count = 7
 
     config = from_file(model_name)
-    if lora_path is None and config.lora_model_name:
-        lora_path = config.lora_model_name
     save_model_name = model_name if config.custom_model_name == "" else config.custom_model_name
     if config.custom_model_name == "":
         printi(f"Compiling checkpoint for {model_name}...", log=log)
@@ -398,6 +396,7 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
             printi("Converting ema unet...", log=log)
             try:
                 if config.infer_ema:
+                    print("Replacing unet with ema unet.")
                     unet_path = ema_unet_path
                 else:
                     ema_unet_state_dict = load_model(ema_unet_path, map_location="cpu")
@@ -423,14 +422,12 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
         unet_state_dict = convert_unet_state_dict(unet_state_dict)
         unet_state_dict = {"model.diffusion_model." + k: v for k, v in unet_state_dict.items()}
 
-        # Append EMA values
-        if len(ema_state_dict.items()) or (config.save_ema and ema_unet_path is not None):
-            print("Appending EMA keys to state dict.")
+        # We should really be appending "ema" to the checkpoint name only if using the ema unet
+        if config.infer_ema and ema_unet_path == unet_path:
             checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}_ema{checkpoint_ext}")
 
         for key, value in ema_state_dict.items():
             unet_state_dict[key] = value
-
 
         printi("Converting vae...", log=log)
         # Convert the VAE model
