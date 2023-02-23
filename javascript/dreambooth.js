@@ -125,6 +125,10 @@ function db_start_sample() {
     return db_start(12, false, true, arguments);
 }
 
+function db_start_crop() {
+    return db_start(5, false, true, arguments);
+}
+
 // Performance wizard
 function db_start_pwizard() {
     return db_start(1, false, false, arguments);

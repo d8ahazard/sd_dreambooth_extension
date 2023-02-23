@@ -5,7 +5,6 @@ import os
 import pathlib
 import subprocess
 import time
-import traceback
 
 import PIL
 import numpy

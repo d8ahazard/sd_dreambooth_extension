@@ -9,7 +9,7 @@ from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret, cre
 from extensions.sd_dreambooth_extension.dreambooth.shared import status, get_launch_errors
 from extensions.sd_dreambooth_extension.dreambooth.ui_functions import performance_wizard, \
     training_wizard, training_wizard_person, load_model_params, ui_classifiers, debug_buckets, create_model, \
-    generate_samples, load_params, start_training, update_extension
+    generate_samples, load_params, start_training, update_extension, start_crop
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention, \
     list_floats, wrap_gpu_call, parse_logs, printm, list_optimizer
@@ -142,6 +142,7 @@ def ui_gen_ckpt(model_name: str):
     config = from_file(model_name)
     printm("Config loaded")
     lora_path = config.lora_model_name
+    print(f"Lora path: {lora_path}")
     res = compile_checkpoint(model_name, lora_path, True, True, config.snapshot)
     return res
 
@@ -435,6 +436,14 @@ def on_ui_tabs():
                     db_split_loss = gr.Checkbox(label="Calculate Split Loss", value=True)
                     db_deis_train_scheduler = gr.Checkbox(label="Use DEIS for noise scheduler", value=False)
                     db_update_extension = gr.Button(value="Update Extension and Restart")
+                    with gr.Column(variant="panel"):
+                        gr.HTML(value="Bucket Cropping")
+                        db_crop_src_path = gr.Textbox(label="Source Path")
+                        db_crop_dst_path = gr.Textbox(label="Dest Path")
+                        db_crop_max_res = gr.Slider(label="Max Res", value=512, step=64, maximum=4096)
+                        db_crop_bucket_step = gr.Slider(label="Bucket Steps", value=64, step=64, maximum=4096)
+                        db_crop_dry = gr.Checkbox(label="Dry Run", value=True)
+                        db_start_crop = gr.Button("Start Cropping")
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")
                 db_check_progress_initial = gr.Button(value=update_symbol, elem_id="db_check_progress_initial",
@@ -473,6 +482,22 @@ def on_ui_tabs():
                         lr_warmup_steps, \
                         loss_min, \
                         loss_tgt
+
+                db_start_crop.click(
+                    _js="db_start_crop",
+                    fn=start_crop,
+                    inputs=[
+                        db_crop_src_path,
+                        db_crop_dst_path,
+                        db_crop_max_res,
+                        db_crop_bucket_step,
+                        db_crop_dry
+                    ],
+                    outputs=[
+                        db_gallery,
+                        db_status
+                    ]
+                )
 
                 db_update_params.click(
                     fn=check_toggles,

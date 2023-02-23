@@ -26,7 +26,7 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
     from extensions.sd_dreambooth_extension.dreambooth.shared import status, run
     from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_dataset, generate_classifiers
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, db_save_image
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, db_save_image, make_bucket_resolutions, get_dim, closest_resolution, make_bucket_resolutions_2, open_and_trim
     from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
         reload_system_models, \
         get_lora_models, get_checkpoint_match
@@ -44,9 +44,8 @@ except:
     from dreambooth.dreambooth.sd_to_diff import extract_checkpoint  # noqa
     from dreambooth.dreambooth.shared import status, run  # noqa
     from dreambooth.dreambooth.utils.gen_utils import generate_dataset, generate_classifiers  # noqa
-    from dreambooth.dreambooth.utils.image_utils import get_images, db_save_image  # noqa
-    from dreambooth.dreambooth.utils.model_utils import unload_system_models, reload_system_models, get_lora_models, \
-        get_checkpoint_match  # noqa
+    from dreambooth.dreambooth.utils.image_utils import get_images, db_save_image, make_bucket_resolutions, get_dim, closest_resolution, make_buekct_resolutions2, open_and_trim  # noqa
+    from dreambooth.dreambooth.utils.model_utils import unload_system_models, reload_system_models, get_lora_models, get_checkpoint_match  # noqa
     from dreambooth.dreambooth.utils.utils import printm, cleanup  # noqa
     from dreambooth.helpers.image_builder import ImageBuilder  # noqa
     from dreambooth.helpers.mytqdm import mytqdm  # noqa
@@ -550,7 +549,7 @@ def start_training(model_dir: str, use_txt2img: bool = True):
             try:
                 from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main  # noqa
             except:
-                from dreambooth.dreambooth.train_dreambooth import main
+                from dreambooth.dreambooth.train_dreambooth import main # noqa
             result = main(use_txt2img=use_txt2img)
 
         config = result.config
@@ -663,6 +662,84 @@ def ui_classifiers(model_name: str,
         status.job_no = status.job_count
         status.textinfo = msg
     return images, msg
+
+
+def start_crop(src_dir: str, dest_dir: str, max_res: int, bucket_step: int, dry_run: bool):
+    src_images = get_images(src_dir)
+    min_res = (int(max_res * 0.28125) // 64) * 64
+
+    # Create available resolutions
+    bucket_resos_2 = make_bucket_resolutions(max_res, min_res, bucket_step)
+
+    bucket_resos = make_bucket_resolutions_2(max_res)
+
+    max_dim = 0
+    for (w, h) in bucket_resos:
+        if w > max_dim:
+            max_dim = w
+        if h > max_dim:
+            max_dim = h
+    _, dirr = os.path.split(src_dir)
+    shared.status.begin()
+    pbar = mytqdm(src_images, desc=f"Sorting images in directory: {dirr}")
+
+    out_counts = {}
+    out_paths = {}
+    for img in src_images:
+        pbar.update()
+        # Get prompt
+        w, h = get_dim(img, max_dim)
+        reso = closest_resolution(w, h, bucket_resos)
+        if reso in out_counts:
+            out_paths[reso].append(img)
+        else:
+            out_paths[reso] = [img]
+        out_counts[reso] = len(out_paths[reso])
+
+    def sort_key(res):
+        # Sort by square resolutions first
+        if res[0] == res[1]:
+            return 0, -res[0]
+        # Sort landscape resolutions by height
+        elif res[0] > res[1]:
+            return 1, -res[1]
+        # Sort portrait resolutions by width
+        else:
+            return 2, -res[0]
+
+    sorted_counts = sorted(out_counts.items(), key=lambda x: sort_key(x[0]), reverse=True)
+    total_images = 0
+    for res, count in sorted_counts:
+        total_images += count
+        print(f"RES: {res}  -  {count}  - {[os.path.basename(file) for file in out_paths[res]]}")
+
+    out_images = []
+    out_status = ""
+
+    if not dry_run:
+        if not os.path.exists(dest_dir):
+            os.makedirs(dest_dir)
+    pbar.set_description("Cropping images.")
+
+    pbar.reset(total_images)
+    for res, images in out_paths.items():
+        for image in images:
+            pbar.update()
+            out_img = os.path.join(dest_dir, os.path.basename(image))
+            cropped = open_and_trim(image, res, True)
+            if not dry_run:
+                print(f"\nSaving to {out_img}")
+                cropped.save(out_img)
+            out_images.append(cropped)
+            shared.status.current_image = [cropped]
+
+        out_status = f"{'Saved' if not dry_run else 'Previewed'} {total_images} cropped images."
+    shared.status.end()
+    return out_status, out_images
+
+
+
+
 
 
 def create_model(new_model_name: str, ckpt_path: str, scheduler_type="ddim", from_hub=False, new_model_url="",
