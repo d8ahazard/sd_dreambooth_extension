@@ -337,7 +337,7 @@ def get_model_path(working_dir: str, model_name: str = "", is_tenc=False):
             if file_name_regex.search(f):
                 print(f"Returning: {f}")
                 return os.path.join(model_base, f)
-    if model_name is not "ema_unet":
+    if model_name != "ema_unet":
         print(f"Unable to find model file: {model_base}")
     return None
 
