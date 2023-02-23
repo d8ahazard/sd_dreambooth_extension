@@ -168,7 +168,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 gradient_accumulation_steps=gradient_accumulation_steps,
                 mixed_precision=precision,
                 log_with="tensorboard",
-                logging_dir=logging_dir,
+                project_dir=logging_dir,
                 cpu=shared.force_cpu
             )
         except Exception as e:
