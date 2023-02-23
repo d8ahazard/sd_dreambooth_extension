@@ -18,20 +18,21 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth import shared as shared
     from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
     from extensions.sd_dreambooth_extension.dreambooth.shared import status
-    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
+        reload_system_models, \
         disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path
     from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
     from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
 except:
-    from dreambooth.dreambooth import shared as shared # noqa
-    from dreambooth.dreambooth.dataclasses.db_config import from_file # noqa
-    from dreambooth.dreambooth.shared import status # noqa
-    from dreambooth.dreambooth.utils.model_utils import unload_system_models, reload_system_models, disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path # noqa
-    from dreambooth.dreambooth.utils.utils import printi # noqa
-    from dreambooth.helpers.mytqdm import mytqdm # noqa
-    from dreambooth.lora_diffusion.lora import weight_apply_lora # noqa
-
+    from dreambooth.dreambooth import shared as shared  # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import from_file  # noqa
+    from dreambooth.dreambooth.shared import status  # noqa
+    from dreambooth.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
+        disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path  # noqa
+    from dreambooth.dreambooth.utils.utils import printi  # noqa
+    from dreambooth.helpers.mytqdm import mytqdm  # noqa
+    from dreambooth.lora_diffusion.lora import weight_apply_lora  # noqa
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -226,6 +227,7 @@ textenc_pattern = re.compile("|".join(protected.keys()))
 # Ordering is from https://github.com/pytorch/pytorch/blob/master/test/cpp/api/modules.cpp
 code2idx = {'q': 0, 'k': 1, 'v': 2}
 
+
 def conv_fp16(t: Tensor):
     return t.half()
 
@@ -244,6 +246,7 @@ _g_precision_func = {
     "bf16": conv_bf16,
 }
 
+
 def check_weight_type(k: str) -> str:
     if k.startswith("model.diffusion_model"):
         return "unet"
@@ -252,6 +255,7 @@ def check_weight_type(k: str) -> str:
     elif k.startswith("cond_stage_model"):
         return "clip"
     return "other"
+
 
 def split_dict(state_dict):
     ok = {}
@@ -270,11 +274,11 @@ def split_dict(state_dict):
                 ok.update(moar_ok)
                 json_dict.update(moar_json)
 
-    
     for k, v in mytqdm(state_dict.items()):
         _hf(k, v)
 
     return ok, json_dict
+
 
 def convert_text_enc_state_dict_v20(text_enc_dict: Dict[str, torch.Tensor]):
     new_state_dict = {}
@@ -321,20 +325,25 @@ def convert_text_enc_state_dict_v20(text_enc_dict: Dict[str, torch.Tensor]):
 def convert_text_enc_state_dict(text_enc_dict: Dict[str, torch.Tensor]):
     return text_enc_dict
 
-def get_model_path(working_dir: str, model_name: str = "", file_extra: str = ""):
+
+def get_model_path(working_dir: str, model_name: str = "", is_tenc=False):
     model_base = osp.join(working_dir, model_name) if model_name != "" else working_dir
     if os.path.exists(model_base) and os.path.isdir(model_base):
+        if is_tenc:
+            file_name_regex = re.compile(f"(custom_checkpoint_0.pkl|pytorch_model_1.bin)")
+        else:
+            file_name_regex = re.compile(f".*model\\.(safetensors|bin)")
         for f in os.listdir(model_base):
-            if f"{file_extra}.safetensors" in f:
+            if file_name_regex.search(f):
                 print(f"Returning: {f}")
                 return os.path.join(model_base, f)
-            if f"{file_extra}.bin" in f:
-                print(f"Returning: {f}")
-                return os.path.join(model_base, f)
-    print(f"Unable to find model file: {model_base}")
+    if model_name is not "ema_unet":
+        print(f"Unable to find model file: {model_base}")
     return None
 
-def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool = True, log:bool =True, snap_rev: str=""):
+
+def compile_checkpoint(model_name: str, lora_path: str = None, reload_models: bool = True, log: bool = True,
+                       snap_rev: str = ""):
     """
 
     @param model_name: The model name to compile
@@ -380,9 +389,9 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
 
     new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{snap_rev}")
     if snap_rev != "" and os.path.exists(new_hotness) and os.path.isdir(new_hotness):
-            mytqdm.write(f"Loading snapshot paths from {new_hotness}")
-            unet_path = get_model_path(new_hotness)
-            text_enc_path = get_model_path(new_hotness, file_extra="1")
+        mytqdm.write(f"Loading snapshot paths from {new_hotness}")
+        unet_path = get_model_path(new_hotness)
+        text_enc_path = get_model_path(new_hotness, is_tenc=True)
     else:
         unet_path = get_model_path(model_path, "unet")
         text_enc_path = get_model_path(model_path, "text_encoder")
@@ -464,12 +473,11 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
             text_enc_dict = {"transformer." + k: v for k, v in text_enc_dict.items()}
             text_enc_dict = convert_text_enc_state_dict_v20(text_enc_dict)
             text_enc_dict = {"cond_stage_model.model." + k: v for k, v in text_enc_dict.items()}
-            
+
         else:
             printi("Converting text enc dict for V1 model.", log=log)
             text_enc_dict = convert_text_enc_state_dict(text_enc_dict)
             text_enc_dict = {"cond_stage_model.transformer." + k: v for k, v in text_enc_dict.items()}
-            
 
         # Put together new checkpoint
         state_dict = {**unet_state_dict, **vae_state_dict, **text_enc_dict}
@@ -497,9 +505,9 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
                 config_version = "v2-inference"
 
             cfg_file = os.path.join(
-                os.path.dirname(os.path.realpath(__file__)), 
-                "..", 
-                "configs", 
+                os.path.dirname(os.path.realpath(__file__)),
+                "..",
+                "configs",
                 f"{config_version}.yaml"
             )
 
@@ -533,14 +541,15 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
 
 def load_model(model_path: str, map_location: str):
     if ".safetensors" in model_path:
-        return safetensors.torch.load_file(model_path,device=map_location)
+        return safetensors.torch.load_file(model_path, device=map_location)
     else:
         disable_safe_unpickle()
         loaded = torch.load(model_path, map_location=map_location)
         enable_safe_unpickle()
         return loaded
 
-def apply_lora(model:nn.Module, loras: str, weight: float, device:str, is_tenc: bool):
+
+def apply_lora(model: nn.Module, loras: str, weight: float, device: str, is_tenc: bool):
     lora_rev = None
     if loras is not None and loras != "":
         if not os.path.exists(loras):
@@ -556,5 +565,5 @@ def apply_lora(model:nn.Module, loras: str, weight: float, device:str, is_tenc: 
             printi(f"Loading lora from {loras}", log=True)
             printi(f"Applying lora weight of alpha: {weight} to unet...", log=True)
             tenc_val = "tenc" if is_tenc else None
-            weight_apply_lora(model, load_model(loras, device),target_replace_module=tenc_val, alpha=weight)
+            weight_apply_lora(model, load_model(loras, device), target_replace_module=tenc_val, alpha=weight)
     return lora_rev
