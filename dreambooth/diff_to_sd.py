@@ -359,6 +359,8 @@ def compile_checkpoint(model_name: str, lora_path: str = None, reload_models: bo
     status.job_count = 7
 
     config = from_file(model_name)
+    if lora_path is None and config.lora_model_name:
+        lora_path = config.lora_model_name
     save_model_name = model_name if config.custom_model_name == "" else config.custom_model_name
     if config.custom_model_name == "":
         printi(f"Compiling checkpoint for {model_name}...", log=log)
