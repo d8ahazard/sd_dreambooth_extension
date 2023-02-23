@@ -244,6 +244,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
             revision=args.revision,
             torch_dtype=torch.float32
         )
+        unet = torch2ify(unet)
 
         if args.attention == "xformers" and not shared.force_cpu:
             unet.set_use_memory_efficient_attention_xformers(True)
@@ -266,7 +267,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
 
         ema_model = None
         if args.use_ema:
-            if os.path.exists(os.path.join(args.pretrained_model_name_or_path, "ema_unet", "diffusion_pytorch_model.safetensors")):
+            if os.path.exists(os.path.join(args.pretrained_model_name_or_path, "ema_unet",
+                                           "diffusion_pytorch_model.safetensors")):
                 ema_unet = UNet2DConditionModel.from_pretrained(
                     args.pretrained_model_name_or_path,
                     subfolder="ema_unet",
@@ -372,7 +374,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
         else:
             noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
 
-
         def cleanup_memory():
             try:
                 if unet:
@@ -395,10 +396,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     del unet_lora_params
             except:
                 pass
-            try:
-                cleanup(True)
-            except:
-                pass
+            cleanup(True)
 
         if args.cache_latents:
             vae.to(accelerator.device, dtype=weight_dtype)
@@ -609,7 +607,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
             else:
                 print("\nSave completed/canceled.")
                 if global_step > 0:
-                    save_image = True
                     save_model = True
 
             save_snapshot = False
@@ -648,9 +645,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 pbar.reset(max_train_steps)
                 pbar.update(global_step)
                 printm(" Complete.")
-                if profiler is not None:
-                    cleanup()
-                printm("Cleaned again.")
 
             return save_model
 
@@ -682,11 +676,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     safety_checker=None,
                     requires_safety_checker=None
                 )
-
-                if args.attention == "xformers":
-                    s_pipeline.set_use_memory_efficient_attention_xformers(True)
-                else:
-                    s_pipeline.enable_attention_slicing()
+                s_pipeline.unet = torch2ify(s_pipeline.unet)
+                s_pipeline.set_use_memory_efficient_attention_xformers(True)
 
                 s_pipeline.scheduler = DEISMultistepScheduler.from_config(s_pipeline.scheduler.config)
                 s_pipeline = s_pipeline.to(accelerator.device)
@@ -1106,3 +1097,11 @@ def main(use_txt2img: bool = True) -> TrainResult:
         return result
 
     return inner_loop()
+
+
+def torch2ify(unet):
+    try:
+        unet = torch.compile(unet, mode="max-autotune", fullgraph=False)
+    except:
+        pass
+    return unet
