@@ -677,6 +677,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     requires_safety_checker=None
                 )
                 s_pipeline.unet = torch2ify(s_pipeline.unet)
+                s_pipeline.image_pipe.enable_attention_slicing()
                 s_pipeline.set_use_memory_efficient_attention_xformers(True)
 
                 s_pipeline.scheduler = DEISMultistepScheduler.from_config(s_pipeline.scheduler.config)
