@@ -607,6 +607,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
             else:
                 print("\nSave completed/canceled.")
                 if global_step > 0:
+                    save_image = True
                     save_model = True
 
             save_snapshot = False
