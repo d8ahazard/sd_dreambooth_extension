@@ -7,12 +7,14 @@ import random
 import re
 from io import StringIO
 
+import cv2
+from numpy import ndarray
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from PIL import features, PngImagePlugin, Image
 
 import os
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Union
 
 import numpy as np
 import torch
@@ -232,11 +234,32 @@ def make_bucket_resolutions(max_size, min_size=256, divisible=64) -> List[Tuple[
     resos.sort()
     return resos
 
+def make_bucket_resolutions_2(max_resolution, divisible=64) -> List[Tuple[int, int]]:
+    aspect_ratios = [(16, 9), (5, 4), (4, 3), (3, 2), (2, 1), (1, 1)]
+    resos = set()
+
+    for ar in aspect_ratios:
+        d0 = max_resolution
+        d1_t = (max_resolution / ar[0]) * ar[1]
+        d1 = int((d1_t // divisible) * divisible)
+
+        w = d0
+        h = d1
+
+        print(f"RES: {w}, {h}")
+
+        resos.add((w, h))
+        resos.add((h, w))
+
+    resos = list(resos)
+    resos.sort()
+    return resos
+
 
 def closest_resolution(width, height, resos) -> Tuple[int, int]:
     def distance(reso):
         w, h = reso
-        if w > width or h > height:
+        if w > width + 7 or h > height + 7:
             return float("inf")
         return (w - width) ** 2 + (h - height) ** 2
 
@@ -385,6 +408,33 @@ def load_image_directory(db_dir, concept: Concept, is_class: bool = True) -> Lis
         captions.append(final_caption)
 
     return list(zip(img_paths, captions))
+
+
+def open_and_trim(image_path: str, reso: Tuple[int, int], return_pil: bool = False) -> Union[np.ndarray, Image]:
+    # Open image with PIL
+    image = Image.open(image_path)
+
+    # Convert to RGB if necessary
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+
+    # Upscale image if necessary
+    scale_factor = max(reso[0] / image.width, reso[1] / image.height)
+    if scale_factor != 1:
+        new_size = (int(image.width * scale_factor), int(image.height * scale_factor))
+        image = image.resize(new_size, resample=Image.LANCZOS)
+
+    # Crop image to target resolution
+    if image.width != reso[0] or image.height != reso[1]:
+        box = (0, 0, reso[0], reso[1])
+        image = image.crop(box)
+
+    # Return as np array or PIL image
+    if return_pil:
+        return image
+    else:
+        return np.array(image)
+
 
 
 def db_save_image(image: Image, prompt_data: PromptData = None, save_txt: bool = True, custom_name: str = None):
