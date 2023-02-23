@@ -130,7 +130,7 @@ def actual_install():
         checks = ["bitsandbytes", "diffusers", "transformers"]
         torch_ver = "1.13.1+cu117"
         torch_vis_ver = "0.14.1+cu117"
-        xformers_ver = "0.0.17.dev447"
+        #xformers_ver = "0.0.17.dev464"
 
         # if use_torch2:
         #     xformers_ver, torch_ver, torch_vis_ver, xformers_url, torch_final = set_torch2_paths()
@@ -143,7 +143,7 @@ def actual_install():
         #     torch_ver = "1.13.1+cu117"
         #     torch_vis_ver = "0.14.1+cu117"
         #     torch_cmd = "pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117"
-        #     xformers_cmd = "pip install xformers==0.0.17.dev447"
+        #     xformers_cmd = "pip install xformers==0.0.17.dev464"
 
 
         # # Check/install xformers
