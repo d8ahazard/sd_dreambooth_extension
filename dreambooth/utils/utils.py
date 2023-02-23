@@ -70,9 +70,10 @@ def cleanup(do_print: bool = False):
             torch.cuda.ipc_collect()
         gc.collect()
     except:
-        pass
+        print('cleanup exception')
     if do_print:
         print("Cleanup completed.")
+
 
 def xformers_check():
     ENV_VARS_TRUE_VALUES = {"1", "ON", "YES", "TRUE"}
@@ -328,7 +329,6 @@ def parse_logs(model_name: str, for_ui: bool = False):
         has_all = False
         try:
             import tensorflow
-
         except:
             print("Unable to import tensorflow")
             return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events), has_all

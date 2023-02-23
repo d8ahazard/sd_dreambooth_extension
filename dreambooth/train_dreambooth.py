@@ -47,26 +47,27 @@ try:
         TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
     from extensions.sd_dreambooth_extension.dreambooth.deis_velocity import get_velocity
 except:
-    from dreambooth.dreambooth import xattention, shared # noqa
-    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData # noqa
-    from dreambooth.dreambooth.dataclasses.train_result import TrainResult # noqa
-    from dreambooth.dreambooth.dataset.bucket_sampler import BucketSampler # noqa
-    from dreambooth.dreambooth.dataset.sample_dataset import SampleDataset # noqa
-    from dreambooth.dreambooth.diff_to_sd import compile_checkpoint # noqa
-    from dreambooth.dreambooth.memory import find_executable_batch_size # noqa
-    from dreambooth.dreambooth.optimization import UniversalScheduler # noqa
-    from dreambooth.dreambooth.shared import status, load_auto_settings # noqa
-    from dreambooth.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset # noqa
-    from dreambooth.dreambooth.utils.image_utils import db_save_image # noqa
-    from dreambooth.dreambooth.utils.model_utils import unload_system_models, import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle # noqa
-    from dreambooth.dreambooth.utils.text_utils import encode_hidden_state # noqa
-    from dreambooth.dreambooth.utils.utils import cleanup, parse_logs, printm # noqa
-    from dreambooth.dreambooth.webhook import send_training_update # noqa
-    from dreambooth.dreambooth.xattention import optim_to # noqa
-    from dreambooth.helpers.ema_model import EMAModel # noqa
-    from dreambooth.helpers.mytqdm import mytqdm # noqa
-    from dreambooth.lora_diffusion.lora import save_lora_weight, TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module # noqa
-    from dreambooth.dreambooth.deis_velocity import get_velocity
+    from dreambooth.dreambooth import xattention, shared  # noqa
+    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
+    from dreambooth.dreambooth.dataclasses.train_result import TrainResult  # noqa
+    from dreambooth.dreambooth.dataset.bucket_sampler import BucketSampler  # noqa
+    from dreambooth.dreambooth.dataset.sample_dataset import SampleDataset  # noqa
+    from dreambooth.dreambooth.diff_to_sd import compile_checkpoint  # noqa
+    from dreambooth.dreambooth.memory import find_executable_batch_size  # noqa
+    from dreambooth.dreambooth.optimization import UniversalScheduler  # noqa
+    from dreambooth.dreambooth.shared import status, load_auto_settings  # noqa
+    from dreambooth.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset  # noqa
+    from dreambooth.dreambooth.utils.image_utils import db_save_image  # noqa
+    from dreambooth.dreambooth.utils.model_utils import unload_system_models, \
+        import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle  # noqa
+    from dreambooth.dreambooth.utils.text_utils import encode_hidden_state  # noqa
+    from dreambooth.dreambooth.utils.utils import cleanup, parse_logs, printm  # noqa
+    from dreambooth.dreambooth.webhook import send_training_update  # noqa
+    from dreambooth.dreambooth.xattention import optim_to  # noqa
+    from dreambooth.helpers.ema_model import EMAModel  # noqa
+    from dreambooth.helpers.mytqdm import mytqdm  # noqa
+    from dreambooth.lora_diffusion.lora import save_lora_weight, TEXT_ENCODER_DEFAULT_TARGET_REPLACE, \
+        get_target_module  # noqa
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
@@ -85,14 +86,13 @@ try:
     major_version = int(version_string[0])
     minor_version = int(version_string[1])
     patch_version = int(version_string[2])
-    if major_version < 12 or (major_version == 12 and minor_version == 0 and patch_version <= 1):
-        print("The version of the package is less than or equal to 12.0.1. Performing monkey-patch...")
+    if minor_version < 13 or (minor_version == 13 and patch_version <= 1):
+        print("The version of diffusers is less than or equal to 0.13.1. Performing monkey-patch...")
         DEISMultistepScheduler.get_velocity = get_velocity
     else:
-        print("The version of the package is greater than 12.0.1, hopefully they merged the PR by now")
+        print("The version of diffusers is greater than 0.13.1, hopefully they merged the PR by now")
 except:
     print("Exception monkey-patching DEIS scheduler.")
-
 
 torch.backends.cudnn.deterministic = True
 
@@ -246,11 +246,12 @@ def main(use_txt2img: bool = True) -> TrainResult:
         )
 
         if args.attention == "xformers" and not shared.force_cpu:
-            unet.enable_xformers_memory_efficient_attention()
-            vae.enable_xformers_memory_efficient_attention()
+            unet.set_use_memory_efficient_attention_xformers(True)
+            vae.set_use_memory_efficient_attention_xformers(True)
         elif args.attention == "flash_attention":
             xattention.replace_unet_cross_attn_to_flash_attention()
-        else:
+        # skip for torch2
+        elif int(str(importlib_metadata.version("torch")).split('.')[0]) <= 1:
             xattention.replace_unet_cross_attn_to_default()
 
         if args.gradient_checkpointing:
@@ -683,7 +684,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 )
 
                 if args.attention == "xformers":
-                    s_pipeline.enable_xformers_memory_efficient_attention()
+                    s_pipeline.set_use_memory_efficient_attention_xformers(True)
                 else:
                     s_pipeline.enable_attention_slicing()
 
@@ -837,8 +838,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 status.current_image = last_samples
                 printm("Cleanup.")
                 optim_to(torch, profiler, optimizer, accelerator.device)
-                if profiler is not None:
-                    cleanup()
+                cleanup()
                 printm("Cleanup completed.")
 
         # Only show the progress bar once on each machine.
@@ -904,7 +904,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                         noise = torch.randn_like(latents, device=latents.device)
                     else:
                         noise = torch.randn_like(latents, device=latents.device) + args.offset_noise * \
-                            torch.randn(latents.shape[0], latents.shape[1], 1, 1, device=latents.device)
+                                torch.randn(latents.shape[0], latents.shape[1], 1, 1, device=latents.device)
                     b_size = latents.shape[0]
 
                     # Sample a random timestep for each image
