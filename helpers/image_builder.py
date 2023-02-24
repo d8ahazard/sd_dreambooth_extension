@@ -106,6 +106,7 @@ class ImageBuilder:
             )
             self.image_pipe.enable_attention_slicing()
             self.image_pipe.set_use_memory_efficient_attention_xformers(True)
+            self.image_pipe.progress_bar = self.progress_bar
             print(f"Using scheduler: {config.scheduler}")
             scheduler_class = get_scheduler_class(config.scheduler)
             print(f"Got scheduler: {scheduler_class}")
@@ -153,6 +154,21 @@ class ImageBuilder:
             except:
                 pass
 
+
+    def progress_bar(self, iterable=None, total=None):
+        if not hasattr(self, "_progress_bar_config"):
+            self._progress_bar_config = {}
+        elif not isinstance(self._progress_bar_config, dict):
+            raise ValueError(
+                f"`self._progress_bar_config` should be of type `dict`, but is {type(self._progress_bar_config)}."
+            )
+
+        if iterable is not None:
+            return mytqdm(iterable, **self._progress_bar_config)
+        elif total is not None:
+            return mytqdm(total=total, **self._progress_bar_config)
+        else:
+            raise ValueError("Either `total` or `iterable` has to be defined.")
 
     def generate_images(self, prompt_data: List[PromptData], pbar: mytqdm) -> [Image]:
         positive_prompts = []

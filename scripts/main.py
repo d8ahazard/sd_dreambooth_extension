@@ -425,12 +425,12 @@ def on_ui_tabs():
                         db_num_samples = gr.Slider(label="Number of Samples to Generate", value=1, minimum=1, maximum=1000, step=1)
                         db_gen_sample_batch_size = gr.Slider(label="Sample Batch Size", value=1, step=1, minimum=1,
                                                      maximum=100, interactive=True)
-                        db_sample_steps = gr.Slider(label="Sample Steps", value=40, minimum=1, maximum=500, step=1)
+                        db_sample_steps = gr.Slider(label="Sample Steps", value=20, minimum=1, maximum=500, step=1)
                         db_sample_scale = gr.Slider(label="Sample CFG Scale", value=7.5, step=0.1, minimum=1, maximum=20)
                         db_scheduler = gr.Dropdown(label='Scheduler', choices=get_scheduler_names(),
                                                    value="DEISMultistep")
 
-                        db_sample_txt2img = gr.Checkbox(label="Use txt2img", value=True)
+                        db_sample_txt2img = gr.Checkbox(label="Use txt2img", value=False)
                 with gr.Tab("Testing", elem_id="TabDebug"):
                     db_ema_predict = gr.Checkbox(label="Use EMA for prediction.")
                     db_split_loss = gr.Checkbox(label="Calculate Split Loss", value=True)

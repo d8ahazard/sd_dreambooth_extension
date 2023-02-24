@@ -376,6 +376,7 @@ def generate_samples(model_name: str,
             status.textinfo = f"Generating sample image for model {config.model_name}..."
 
             pbar = mytqdm("Generating samples")
+            pbar.reset(num_samples * steps)
             sample_index = 0
             while len(images) < num_samples and not shared.status.interrupted:
                 samples_needed = num_samples - len(images)
@@ -392,7 +393,6 @@ def generate_samples(model_name: str,
                     sample_index += 1
                 out_images = img_builder.generate_images(to_generate, pbar)
                 for img, pd in zip(out_images, to_generate):
-                    pbar.update()
                     image_name = db_save_image(img, pd)
                     batch_images.append(image_name)
                 images.extend(batch_images)
