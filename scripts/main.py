@@ -434,6 +434,7 @@ def on_ui_tabs():
                 with gr.Tab("Testing", elem_id="TabDebug"):
                     db_ema_predict = gr.Checkbox(label="Use EMA for prediction.")
                     db_split_loss = gr.Checkbox(label="Calculate Split Loss", value=True)
+                    db_tf32_enable = gr.Checkbox(label="Use TensorFloat 32", value=False)
                     db_deis_train_scheduler = gr.Checkbox(label="Use DEIS for noise scheduler", value=False)
                     db_update_extension = gr.Button(value="Update Extension and Restart")
                     with gr.Column(variant="panel"):
@@ -679,6 +680,7 @@ def on_ui_tabs():
             db_shuffle_tags,
             db_snapshot,
             db_src,
+            db_tf32_enable,
             db_train_batch_size,
             db_train_imagic_only,
             db_train_unet,         

@@ -105,6 +105,7 @@ class DreamboothConfig(BaseModel):
     src: str = ""
     stop_text_encoder: float = 1.0
     strict_tokens: bool = False
+    tf32_enable: bool = False
     train_batch_size: int = 1
     train_imagic: bool = False
     train_unet: bool = True

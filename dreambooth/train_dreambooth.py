@@ -281,7 +281,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
 
         # Enable TF32 for faster training on Ampere GPUs,
         # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
-        if torch.cuda.is_available():
+        if torch.cuda.is_available() and args.tf32_enable:
             device = torch.device("cuda")
             cuda_props = torch.cuda.get_device_properties(device)
             cuda_version = float('.'.join([cuda_props.major, cuda_props.minor]))
