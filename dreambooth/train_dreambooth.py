@@ -1022,7 +1022,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     if profiler is not None:
                         profiler.step()
 
-                    optimizer.zero_grad(set_to_none=args.gradient_set_to_none & args.stop_text_encoder not in (0, 1))
+                    optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
 
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
