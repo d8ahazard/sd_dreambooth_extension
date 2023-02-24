@@ -29,7 +29,7 @@ from omegaconf import OmegaConf
 from diffusers.pipelines.paint_by_example import PaintByExampleImageEncoder
 from huggingface_hub import HfApi, hf_hub_download
 
-
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_class
 
 try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
@@ -1192,25 +1192,8 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, from_hub=False
         )
         # make sure scheduler works correctly with DDIM
         scheduler.register_to_config(clip_sample=False)
-        if scheduler_type == "pndm":
-            config = dict(scheduler.config)
-            config["skip_prk_steps"] = True
-            scheduler = PNDMScheduler.from_config(config)
-        elif scheduler_type == "lms":
-            scheduler = LMSDiscreteScheduler.from_config(scheduler.config)
-        elif scheduler_type == "heun":
-            scheduler = HeunDiscreteScheduler.from_config(scheduler.config)
-        elif scheduler_type == "euler":
-            scheduler = EulerDiscreteScheduler.from_config(scheduler.config)
-        elif scheduler_type == "euler-ancestral":
-            scheduler = EulerAncestralDiscreteScheduler.from_config(scheduler.config)
-        elif scheduler_type == "dpm":
-            scheduler = DPMSolverMultistepScheduler.from_config(scheduler.config)
-        elif scheduler_type == "ddim":
-            scheduler = scheduler
-        else:
-            raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
-
+        scheduler = get_scheduler_class("DEISMultistep").from_config(scheduler.config)
+        
         scheduler_type = scheduler.__class__.__name__
         scheduler.save_pretrained(os.path.join(db_config.pretrained_model_name_or_path, "scheduler"))
 
