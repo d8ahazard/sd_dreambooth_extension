@@ -1,12 +1,12 @@
 import os
 import random
+import traceback
 from typing import List
 
 import torch
 from PIL import Image
 from accelerate import Accelerator
-from diffusers import DiffusionPipeline, AutoencoderKL, DEISMultistepScheduler, UNet2DConditionModel
-
+from diffusers import DiffusionPipeline, AutoencoderKL, UNet2DConditionModel
 
 try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
@@ -106,8 +106,13 @@ class ImageBuilder:
             )
             self.image_pipe.enable_attention_slicing()
             self.image_pipe.set_use_memory_efficient_attention_xformers(True)
+            print(f"Using scheduler: {config.scheduler}")
             scheduler_class = get_scheduler_class(config.scheduler)
+            print(f"Got scheduler: {scheduler_class}")
             self.image_pipe.scheduler = scheduler_class.from_config(self.image_pipe.scheduler.config)
+
+            if "UniPC" in config.scheduler:
+                self.image_pipe.scheduler.config.solver_type = "bh2"
 
             self.image_pipe.to(accelerator.device)
             new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
@@ -157,7 +162,7 @@ class ImageBuilder:
         steps = 60
         width = self.resolution
         height = self.resolution
-
+        output = []
         for prompt in prompt_data:
             positive_prompts.append(prompt.prompt)
             negative_prompts.append(prompt.negative_prompt)
@@ -213,6 +218,7 @@ class ImageBuilder:
                     self.exception_count = 0
                 except Exception as e:
                     print(f"Exception generating images: {e}")
+                    traceback.print_exc()
                     self.exception_count += 1
                     if self.exception_count > 10:
                         raise

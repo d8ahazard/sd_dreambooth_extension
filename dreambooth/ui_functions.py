@@ -383,6 +383,8 @@ def generate_samples(model_name: str,
                 to_generate = []
                 batch_images = []
                 batch_prompts = []
+                print(f"Looping: {len(images)} {to_gen}")
+
                 for i in range(to_gen):
                     sel = prompt_data[sample_index]
                     to_generate.append(sel)

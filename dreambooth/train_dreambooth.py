@@ -718,6 +718,9 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 s_pipeline.set_use_memory_efficient_attention_xformers(True)
 
                 s_pipeline.scheduler = scheduler_class.from_config(s_pipeline.scheduler.config)
+                if "UniPC" in args.scheduler:
+                    s_pipeline.scheduler.config.solver_type = "bh2"
+
                 s_pipeline = s_pipeline.to(accelerator.device)
 
                 with accelerator.autocast(), torch.inference_mode():
