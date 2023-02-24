@@ -1012,13 +1012,12 @@ def load_checkpoint(checkpoint_file: str, map_location: str):
         enable_safe_unpickle()
     return checkpoint
 
-def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type="ddim", from_hub=False, new_model_url="",
+def extract_checkpoint(new_model_name: str, checkpoint_file: str, from_hub=False, new_model_url="",
                        new_model_token="", extract_ema=False, train_unfrozen=False, is_512=True):
     """
 
     @param new_model_name: The name of the new model
     @param checkpoint_file: The source checkpoint to use, if not from hub. Needs full path
-    @param scheduler_type: The target scheduler type
     @param from_hub: Are we making this model from the hub?
     @param new_model_url: The URL to pull. Should be formatted like compviz/stable-diffusion-2, not a full URL.
     @param new_model_token: Your huggingface.co token.
@@ -1054,8 +1053,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
         return "", "", 0, 0, "", "", "", "", image_size, "", msg
 
     # Create empty config
-    db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type,
-                                 src=checkpoint_file if not from_hub else new_model_url)
+    db_config = DreamboothConfig(model_name=new_model_name, src=checkpoint_file if not from_hub else new_model_url)
 
     original_config_file = None
 

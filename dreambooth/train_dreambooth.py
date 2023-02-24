@@ -13,11 +13,13 @@ from pathlib import Path
 import importlib_metadata
 import torch
 import torch.backends.cudnn
+import torch.backends.cuda
 import torch.utils.checkpoint
 from accelerate import Accelerator
 from accelerate.utils.random import set_seed as set_seed2
 from diffusers import AutoencoderKL, DiffusionPipeline, UNet2DConditionModel, DDPMScheduler, DEISMultistepScheduler
-from diffusers.utils import logging as dl
+from diffusers.utils import logging as dl, is_xformers_available
+from packaging import version
 from tensorflow.python.framework.random_seed import set_seed as set_seed1
 from torch.cuda.profiler import profile
 from torch.utils.data import Dataset
@@ -34,7 +36,7 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler
     from extensions.sd_dreambooth_extension.dreambooth.shared import status, load_auto_settings
     from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image, get_scheduler_class
     from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
         import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle
     from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import encode_hidden_state
@@ -57,17 +59,15 @@ except:
     from dreambooth.dreambooth.optimization import UniversalScheduler  # noqa
     from dreambooth.dreambooth.shared import status, load_auto_settings  # noqa
     from dreambooth.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset  # noqa
-    from dreambooth.dreambooth.utils.image_utils import db_save_image  # noqa
-    from dreambooth.dreambooth.utils.model_utils import unload_system_models, \
-        import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle  # noqa
+    from dreambooth.dreambooth.utils.image_utils import db_save_image, get_scheduler_class  # noqa
+    from dreambooth.dreambooth.utils.model_utils import unload_system_models, import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle  # noqa
     from dreambooth.dreambooth.utils.text_utils import encode_hidden_state  # noqa
     from dreambooth.dreambooth.utils.utils import cleanup, parse_logs, printm  # noqa
     from dreambooth.dreambooth.webhook import send_training_update  # noqa
     from dreambooth.dreambooth.xattention import optim_to  # noqa
     from dreambooth.helpers.ema_model import EMAModel  # noqa
     from dreambooth.helpers.mytqdm import mytqdm  # noqa
-    from dreambooth.lora_diffusion.lora import save_lora_weight, TEXT_ENCODER_DEFAULT_TARGET_REPLACE, \
-        get_target_module  # noqa
+    from dreambooth.lora_diffusion.lora import save_lora_weight, TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module  # noqa
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
@@ -245,14 +245,49 @@ def main(use_txt2img: bool = True) -> TrainResult:
             torch_dtype=torch.float32
         )
 
+        # Check that all trainable models are in full precision
+        low_precision_error_string = (
+            "Please make sure to always have all model weights in full float32 precision when starting training - even if"
+            " doing mixed precision training. copy of the weights should still be float32."
+        )
+
         if args.attention == "xformers" and not shared.force_cpu:
-            unet.set_use_memory_efficient_attention_xformers(True)
-            vae.set_use_memory_efficient_attention_xformers(True)
+            if is_xformers_available():
+                import xformers
+
+                xformers_version = version.parse(xformers.__version__)
+                if xformers_version == version.parse("0.0.16"):
+                    logger.warning(
+                        "xFormers 0.0.16 cannot be used for training in some GPUs. If you observe problems during training, please update xFormers to at least 0.0.17. See https://huggingface.co/docs/diffusers/main/en/optimization/xformers for more details."
+                    )
+                unet.enable_xformers_memory_efficient_attention()
+                vae.enable_xformers_memory_efficient_attention()
+            else:
+                raise ValueError("xformers is not available. Make sure it is installed correctly")
         elif args.attention == "flash_attention":
             xattention.replace_unet_cross_attn_to_flash_attention()
         # skip for torch2
         elif int(str(importlib_metadata.version("torch")).split('.')[0]) <= 1:
             xattention.replace_unet_cross_attn_to_default()
+
+        if accelerator.unwrap_model(unet).dtype != torch.float32:
+            print(f"Unet loaded as datatype {accelerator.unwrap_model(unet).dtype}. {low_precision_error_string}")
+
+        if args.train_text_encoder and accelerator.unwrap_model(text_encoder).dtype != torch.float32:
+            print(f"Text encoder loaded as datatype {accelerator.unwrap_model(text_encoder).dtype}."
+                f" {low_precision_error_string}"
+            )
+
+        # Enable TF32 for faster training on Ampere GPUs,
+        # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+            cuda_props = torch.cuda.get_device_properties(device)
+            cuda_version = float('.'.join([cuda_props.major, cuda_props.minor]))
+            if cuda_version >= 11.0 and cuda_props.tf32_support:
+                print("GPU supports TF32, enabling.")
+                torch.backends.cuda.matmul.allow_tf32 = True
+
 
         if args.gradient_checkpointing:
             if args.train_unet:
@@ -687,8 +722,9 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     s_pipeline.set_use_memory_efficient_attention_xformers(True)
                 else:
                     s_pipeline.enable_attention_slicing()
+                scheduler_class = get_scheduler_class(args.scheduler)
 
-                s_pipeline.scheduler = DEISMultistepScheduler.from_config(s_pipeline.scheduler.config)
+                s_pipeline.scheduler = scheduler_class.from_config(s_pipeline.scheduler.config)
                 s_pipeline = s_pipeline.to(accelerator.device)
 
                 with accelerator.autocast(), torch.inference_mode():
@@ -981,7 +1017,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
                             loss = instance_loss
                         else:
                             loss = prior_loss * current_prior_loss_weight
-
                     accelerator.backward(loss)
                     if accelerator.sync_gradients and not args.use_lora:
                         params_to_clip = (

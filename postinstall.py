@@ -127,7 +127,7 @@ def actual_install():
                 key = splits[0]
                 reqs_dict[key] = splits[1].replace("\n", "").strip()
 
-        checks = ["bitsandbytes", "diffusers", "transformers"]
+        checks = ["bitsandbytes", "diffusers", "transformers", "xformers"]
         torch_ver = "1.13.1+cu117"
         torch_vis_ver = "0.14.1+cu117"
         #xformers_ver = "0.0.17.dev464"
@@ -157,19 +157,17 @@ def actual_install():
 
         has_torch = importlib.util.find_spec("torch") is not None
         has_torch_vision = importlib.util.find_spec("torchvision") is not None
-        has_xformers = importlib.util.find_spec("xformers") is not None
+        # has_xformers = importlib.util.find_spec("xformers") is not None
 
         torch_check = str(importlib_metadata.version("torch")) if has_torch else None
         torch_vision_check = str(importlib_metadata.version("torchvision")) if has_torch_vision else None
-        xformers_check = str(importlib_metadata.version("xformers")) if has_xformers else None
+        # xformers_check = str(importlib_metadata.version("xformers")) if has_xformers else None
 
 
         # if torch_check != torch_ver or torch_vision_check != torch_vis_ver:
         #     torch_ver, torch_vis_ver = install_torch(torch_cmd, use_torch2)
 
-        for check, ver, module in [(torch_check, torch_ver, "torch"),
-                                   (torch_vision_check, torch_vis_ver, "torchvision"),
-                                   (xformers_check, xformers_ver, "xformers")]:
+        for check, ver, module in [(torch_check, torch_ver, "torch"), (torch_vision_check, torch_vis_ver, "torchvision")]:
 
             if check != ver:
                 if not check:
@@ -206,6 +204,16 @@ def actual_install():
                 launch_errors.append(f"{check} not installed.")
             else:
                 print(f"{status} {check} version {check_ver} installed.")
+
+        try:
+            from modules.shared import cmd_opts
+            xformers_flag = cmd_opts["xformers"]
+            if not xformers_flag:
+                error = "XFORMERS FLAG IS DISABLED, XFORMERS MUST BE ENABLED IN AUTO1111!"
+                print(error)
+                launch_errors.append(error)
+        except:
+            pass
 
 
         if len(launch_errors):
@@ -268,6 +276,7 @@ def actual_install():
             pass
 
     check_versions()
+
     print("")
     print("#######################################################################################################")
     try:

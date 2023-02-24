@@ -10,6 +10,7 @@ from extensions.sd_dreambooth_extension.dreambooth.shared import status, get_lau
 from extensions.sd_dreambooth_extension.dreambooth.ui_functions import performance_wizard, \
     training_wizard, training_wizard_person, load_model_params, ui_classifiers, debug_buckets, create_model, \
     generate_samples, load_params, start_training, update_extension, start_crop
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_names
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention, \
     list_floats, wrap_gpu_call, parse_logs, printm, list_optimizer
@@ -195,9 +196,6 @@ def on_ui_tabs():
                     with gr.Row():
                         gr.HTML(value="Source Checkpoint:")
                         db_src = gr.HTML()
-                    with gr.Row():
-                        gr.HTML(value="Scheduler:")
-                        db_scheduler = gr.HTML()
 
                 with gr.Tab("Create"):
                     with gr.Column():
@@ -218,9 +216,6 @@ def on_ui_tabs():
                                                   "refresh_sd_models")
                     db_new_model_extract_ema = gr.Checkbox(label='Extract EMA Weights', value=False)
                     db_train_unfrozen = gr.Checkbox(label='Unfreeze Model', value=False)
-                    db_new_model_scheduler = gr.Dropdown(label='Scheduler', choices=["pndm", "lms", "euler",
-                                                                                     "euler-ancestral", "dpm", "ddim"],
-                                                         value="ddim")
 
 
             with gr.Column(variant="panel", elem_id="SettingsPanel"):
@@ -236,7 +231,7 @@ def on_ui_tabs():
                             db_train_inpainting = gr.Checkbox(label="Train Inpainting Model", value=False,
                                                               visible=False)
                             db_use_txt2img = gr.Checkbox(label="Generate Classification Images Using txt2img",
-                                                         value=True)
+                                                         value=False)
                         with gr.Column():
                             gr.HTML(value="Intervals")
                             db_num_train_epochs = gr.Slider(label="Training Steps Per Image (Epochs)", value=100, maximum=1000, step=1)
@@ -277,14 +272,18 @@ def on_ui_tabs():
 
                         with gr.Column():
                             gr.HTML(value="Image Processing")
-                            db_resolution = gr.Slider(label="Max Resolution", step=64, minimum=128, value=512, maximum=4096)
+                            db_resolution = gr.Slider(label="Max Resolution", step=64, minimum=128, value=512, maximum=4096, elem_id="max_res")
                             db_hflip = gr.Checkbox(label="Apply Horizontal Flip", value=False)
                             db_sanity_prompt = gr.Textbox(label="Sanity Sample Prompt", placeholder="A generic prompt "
                                                                                                     "used to generate"
                                                                                                     " a sample image "
                                                                                                     "to verify model "
                                                                                                     "fidelity.")
+                            db_sanity_negative_prompt = gr.Textbox(label="Sanity Sample Negative Prompt", placeholder="A negative prompt for the generic sample image.")
                             db_sanity_seed = gr.Number(label="Sanity Sample Seed", value=420420)
+                            db_scheduler = gr.Dropdown(label='Scheduler', choices=get_scheduler_names(),
+                                                                 value="DEISMultistep")
+
                         with gr.Column():
                             gr.HTML(value="Miscellaneous")
                             db_pretrained_vae_name_or_path = gr.Textbox(label='Pretrained VAE Name or Path',
@@ -536,25 +535,6 @@ def on_ui_tabs():
                     outputs=[db_secret]
                 )
 
-                def force_res(input_res):
-                    if input_res is None:
-                        return gr.update(value=64)
-                    if input_res < 64:
-                        return gr.update(value=64)
-                    if input_res % 64 == 0:
-                        return gr.update(visible=True)
-                    else:
-                        closest_multiple = (input_res // 64) * 64
-                        if input_res - closest_multiple < 32:
-                            return closest_multiple
-                        else:
-                            return closest_multiple + 64
-
-                db_resolution.change(
-                    fn=force_res,
-                    inputs=db_resolution,
-                    outputs=db_resolution
-                )
 
                 def update_stop_tenc(train_unet):
                     # If train unet enabled, read "hidden" value from stop_tenc and restore
@@ -778,7 +758,7 @@ def on_ui_tabs():
             c4_save_sample_template
         ]
         # Do not load these values when 'load settings' is clicked
-        params_to_exclude = [db_model_name,db_epochs,db_model_path,db_revision,db_scheduler,db_src]
+        params_to_exclude = [db_model_name,db_epochs,db_model_path,db_revision,db_src]
 
         # Populate by the below method and handed out to other elements
         params_to_load = []
@@ -885,7 +865,6 @@ def on_ui_tabs():
                 db_v2,
                 db_has_ema,
                 db_src,
-                db_scheduler,
                 db_snapshot,
                 db_status
             ]
@@ -1023,7 +1002,6 @@ def on_ui_tabs():
             inputs=[
                 db_new_model_name,
                 db_new_model_src,
-                db_new_model_scheduler,
                 db_create_from_hub,
                 db_new_model_url,
                 db_new_model_token,
@@ -1032,7 +1010,7 @@ def on_ui_tabs():
                 db_512_model,
             ],
             outputs=[
-                db_model_name, db_model_path, db_revision, db_epochs, db_scheduler, db_src, db_has_ema, db_v2, db_resolution,
+                db_model_name, db_model_path, db_revision, db_epochs, db_src, db_has_ema, db_v2, db_resolution,
                 db_status
             ]
         )

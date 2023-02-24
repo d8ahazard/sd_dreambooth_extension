@@ -14,7 +14,7 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
     from extensions.sd_dreambooth_extension.dreambooth.shared import disable_safe_unpickle
     from extensions.sd_dreambooth_extension.dreambooth.utils import image_utils
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import process_txt2img
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import process_txt2img, get_scheduler_class
     from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_checkpoint_match, \
         reload_system_models, \
         enable_safe_unpickle, disable_safe_unpickle, unload_system_models
@@ -27,7 +27,7 @@ except:
     from dreambooth.dreambooth.dataclasses.prompt_data import PromptData # noqa
     from dreambooth.dreambooth.shared import disable_safe_unpickle # noqa
     from dreambooth.dreambooth.utils import image_utils # noqa
-    from dreambooth.dreambooth.utils.image_utils import process_txt2img # noqa
+    from dreambooth.dreambooth.utils.image_utils import process_txt2img, get_scheduler_class # noqa
     from dreambooth.dreambooth.utils.model_utils import get_checkpoint_match, reload_system_models, enable_safe_unpickle, disable_safe_unpickle, unload_system_models # noqa
     from dreambooth.helpers.mytqdm import mytqdm # noqa
     from dreambooth.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, get_target_module # noqa
@@ -106,7 +106,8 @@ class ImageBuilder:
             )
             self.image_pipe.enable_attention_slicing()
             self.image_pipe.enable_xformers_memory_efficient_attention()
-            self.image_pipe.scheduler = DEISMultistepScheduler.from_config(self.image_pipe.scheduler.config)
+            scheduler_class = get_scheduler_class(config.scheduler)
+            self.image_pipe.scheduler = scheduler_class.from_config(self.image_pipe.scheduler.config)
             self.image_pipe.to(accelerator.device)
             new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
             if os.path.exists(new_hotness):

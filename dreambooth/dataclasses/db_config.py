@@ -5,6 +5,8 @@ from typing import List, Dict
 
 from pydantic import BaseModel
 
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_names
+
 try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
     from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
@@ -113,7 +115,7 @@ class DreamboothConfig(BaseModel):
     use_subdir: bool = False
     v2: bool = False
 
-    def __init__(self, model_name: str = "", scheduler: str = "ddim", v2: bool = False, src: str = "",
+    def __init__(self, model_name: str = "", v2: bool = False, src: str = "",
                  resolution: int = 512, **kwargs):
 
         super().__init__(**kwargs)
@@ -138,7 +140,7 @@ class DreamboothConfig(BaseModel):
         self.pretrained_model_name_or_path = working_dir
         self.resolution = resolution
         self.src = src
-        self.scheduler = scheduler
+        self.scheduler = "ddim"
         self.v2 = v2
 
     # Actually save as a file
@@ -157,11 +159,25 @@ class DreamboothConfig(BaseModel):
             json.dump(self.__dict__, outfile, indent=4)
 
     def load_params(self, params_dict):
+        sched_swap = False
         for key, value in params_dict.items():
             if "db_" in key:
                 key = key.replace("db_", "")
+            if key == "scheduler":
+                schedulers = get_scheduler_names()
+                if value not in schedulers:
+                    sched_swap = True
+                    for scheduler in schedulers:
+                        print(f"Check {value.lower()} vs. {scheduler.lower()}")
+                        if value.lower() in scheduler.lower():
+                            print(f"Updating scheduler name to: {scheduler}")
+                            value = scheduler
+                            break
+
             if hasattr(self, key):
                 setattr(self, key, value)
+        if sched_swap:
+            self.save()
 
     # Pass a dict and return a list of Concept objects
     def concepts(self, required: int = -1):

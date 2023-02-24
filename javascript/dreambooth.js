@@ -4,8 +4,10 @@ let training_started = false;
 let closeBtn;
 let modalShown = false;
 let locked = false;
+let listenersSet = false;
+let timeouts = [];
+let listeners = {};
 
-// Click a button. Whee.
 function save_config() {
     let btn = gradioApp().getElementById("db_save_config");
     if (btn == null) return;
@@ -47,6 +49,121 @@ function toggleComponents(enable, disableAll) {
                     input.disabled = !enable;
                 }
             });
+        }
+    });
+}
+
+// Disconnect a gradio mutation observer, update the element value, and reconnect the observer?
+function updateInputValue(elements, newValue) {
+  const savedListeners = [];
+  const savedObservers = [];
+
+  elements.forEach((element) => {
+    // Save any existing listeners and remove them
+    const listeners = [];
+    const events = ['change', 'input'];
+    events.forEach((event) => {
+      if (element['on' + event]) {
+        listeners.push({
+          event,
+          listener: element['on' + event],
+        });
+        element['on' + event] = null;
+      }
+      const eventListeners = element.getEventListeners?.(event);
+      if (eventListeners) {
+        eventListeners.forEach(({ listener }) => {
+          listeners.push({
+            event,
+            listener,
+          });
+          element.removeEventListener(event, listener);
+        });
+      }
+    });
+    savedListeners.push(listeners);
+
+    // Save any existing MutationObservers and disconnect them
+    const observer = new MutationObserver(() => {});
+    if (observer && element.tagName === 'INPUT') {
+      observer.observe(element, {
+        attributes: true,
+        attributeFilter: ['value'],
+      });
+      savedObservers.push(observer);
+      observer.disconnect();
+    } else {
+      savedObservers.push(null);
+    }
+
+    // Update the value of the element
+    element.value = newValue;
+  });
+
+  // Restore any saved listeners and MutationObservers
+  savedListeners.forEach((listeners, i) => {
+    const element = elements[i];
+    listeners.forEach(({ event, listener }) => {
+      if (listener) {
+        element.addEventListener(event, listener);
+      }
+    });
+  });
+
+  savedObservers.forEach((observer, i) => {
+    const element = elements[i];
+    if (observer) {
+      observer.observe(element, {
+        attributes: true,
+        attributeFilter: ['value'],
+      });
+    }
+  });
+}
+
+
+
+// Fix steps on sliders. God this is a lot of work for one stupid thing...
+function handleNumberInputs() {
+    const numberInputs = gradioApp().querySelectorAll('input[type="number"]');
+    numberInputs.forEach((numberInput) => {
+        const step = Number(numberInput.step) || 1;
+        const parentDiv = numberInput.parentElement;
+        const labelFor = parentDiv.querySelector('label');
+        if (labelFor) {
+            const tgt = labelFor.getAttribute("for");
+            if (listeners[tgt]) return;
+            const rangeInput = getRealElement(tgt);
+            if (rangeInput && rangeInput.type === 'range') {
+                let timeouts = [];
+                listeners[tgt] = true;
+                numberInput.oninput = () => {
+                    if (timeouts[tgt]) {
+                        clearTimeout(timeouts[tgt]);
+                    }
+                    timeouts[tgt] = setTimeout(() => {
+                        let value = Number(numberInput.value) || 0;
+                        const min = parseFloat(rangeInput.min) || 0;
+                        const max = parseFloat(rangeInput.max) || 100;
+                        if (value < min) {
+                            value = min;
+                        } else if (value > max) {
+                            value = max;
+                        }
+                        const remainder = value % step;
+                        if (remainder !== 0) {
+                            value -= remainder;
+                            if (remainder >= step / 2) {
+                                value += step;
+                            }
+                        }
+                        if (value !== numberInput.value) {
+                            numberInput.value = value;
+                        }
+                    }, 500);
+                };
+
+            }
         }
     });
 }
@@ -166,7 +283,7 @@ function db_start_load_params() {
 // Create new checkpoint
 function db_start_create() {
     clear_loaded();
-    return db_start(9, false, true, arguments);
+    return db_start(8, false, true, arguments);
 }
 
 // Train!
@@ -409,6 +526,12 @@ onUiUpdate(function () {
         observer.observe(btn, options);
 
     });
+    try {
+        handleNumberInputs();
+    } catch (e) {
+        console.log("Gotcha: ", e);
+    }
+
 });
 
 function checkPrompts() {
@@ -613,4 +736,3 @@ function requestMoreDbProgress() {
         }
     }
 }
-

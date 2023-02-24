@@ -8,6 +8,7 @@ import re
 from io import StringIO
 
 import cv2
+from diffusers.schedulers import KarrasDiffusionSchedulers
 from numpy import ndarray
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -218,23 +219,15 @@ def shuffle_tags(caption: str):
     return output
 
 
-def make_bucket_resolutions(max_size, min_size=256, divisible=64) -> List[Tuple[int, int]]:
-    resos = set()
+def get_scheduler_names():
+    return [scheduler.name.replace('Scheduler', '') for scheduler in KarrasDiffusionSchedulers]
 
-    w = max_size
-    while w > min_size:
-        h = max_size
-        while h > min_size:
-            resos.add((w, h))
-            resos.add((h, w))
-            h -= divisible
-        w -= divisible
+def get_scheduler_class(scheduler_name):
+    for scheduler in KarrasDiffusionSchedulers:
+        if scheduler.name.replace('Scheduler', '') == scheduler_name:
+            return scheduler
 
-    resos = list(resos)
-    resos.sort()
-    return resos
-
-def make_bucket_resolutions_2(max_resolution, divisible=64) -> List[Tuple[int, int]]:
+def make_bucket_resolutions(max_resolution, divisible=64) -> List[Tuple[int, int]]:
     aspect_ratios = [(16, 9), (5, 4), (4, 3), (3, 2), (2, 1), (1, 1)]
     resos = set()
 

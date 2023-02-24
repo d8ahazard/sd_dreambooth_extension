@@ -463,7 +463,6 @@ def dreambooth_api(_, app: FastAPI):
         logger.debug("Creating new Checkpoint: " + new_model_name)
         res = create_model(new_model_name,
                            new_model_src,
-                           new_model_scheduler,
                            create_from_hub,
                            new_model_url,
                            new_model_token,

@@ -26,7 +26,7 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
     from extensions.sd_dreambooth_extension.dreambooth.shared import status, run
     from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_dataset, generate_classifiers
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, db_save_image, make_bucket_resolutions, get_dim, closest_resolution, make_bucket_resolutions_2, open_and_trim
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, db_save_image, make_bucket_resolutions, get_dim, closest_resolution, open_and_trim
     from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
         reload_system_models, \
         get_lora_models, get_checkpoint_match
@@ -44,7 +44,7 @@ except:
     from dreambooth.dreambooth.sd_to_diff import extract_checkpoint  # noqa
     from dreambooth.dreambooth.shared import status, run  # noqa
     from dreambooth.dreambooth.utils.gen_utils import generate_dataset, generate_classifiers  # noqa
-    from dreambooth.dreambooth.utils.image_utils import get_images, db_save_image, make_bucket_resolutions, get_dim, closest_resolution, make_buekct_resolutions2, open_and_trim  # noqa
+    from dreambooth.dreambooth.utils.image_utils import get_images, db_save_image, make_bucket_resolutions, get_dim, closest_resolution, open_and_trim  # noqa
     from dreambooth.dreambooth.utils.model_utils import unload_system_models, reload_system_models, get_lora_models, get_checkpoint_match  # noqa
     from dreambooth.dreambooth.utils.utils import printm, cleanup  # noqa
     from dreambooth.helpers.image_builder import ImageBuilder  # noqa
@@ -466,7 +466,7 @@ def load_model_params(model_name):
     if data is None:
         print("Can't load config!")
         msg = f"Error loading model params: '{model_name}'."
-        return "", "", "", "", "", "", db_model_snapshots, msg
+        return "", "", "", "", "", db_model_snapshots, msg
     else:
         snaps = get_model_snapshot(data)
         snap_selection = data.revision if str(data.revision) in snaps else ""
@@ -480,7 +480,6 @@ def load_model_params(model_name):
             "True" if data.v2 else "False", \
             "True" if data.has_ema else "False", \
             data.src, \
-            data.scheduler, \
             db_model_snapshots, \
             msg
 
@@ -540,7 +539,7 @@ def start_training(model_dir: str, use_txt2img: bool = True):
             try:
                 from extensions.sd_dreambooth_extension.dreambooth.train_imagic import train_imagic  # noqa
             except:
-                from dreambooth.dreambooth.train_imagic import train_imagic
+                from dreambooth.dreambooth.train_imagic import train_imagic # noqa
 
             result = train_imagic(config)
         else:
@@ -600,7 +599,7 @@ def reload_extension():
     try:
         from extensions.sd_dreambooth_extension.postinstall import actual_install  # noqa
     except:
-        from dreambooth.postinstall import actual_install
+        from dreambooth.postinstall import actual_install # noqa
 
     actual_install()
 
@@ -668,10 +667,7 @@ def start_crop(src_dir: str, dest_dir: str, max_res: int, bucket_step: int, dry_
     src_images = get_images(src_dir)
     min_res = (int(max_res * 0.28125) // 64) * 64
 
-    # Create available resolutions
-    bucket_resos_2 = make_bucket_resolutions(max_res, min_res, bucket_step)
-
-    bucket_resos = make_bucket_resolutions_2(max_res)
+    bucket_resos = make_bucket_resolutions(max_res)
 
     max_dim = 0
     for (w, h) in bucket_resos:
@@ -742,7 +738,7 @@ def start_crop(src_dir: str, dest_dir: str, max_res: int, bucket_step: int, dry_
 
 
 
-def create_model(new_model_name: str, ckpt_path: str, scheduler_type="ddim", from_hub=False, new_model_url="",
+def create_model(new_model_name: str, ckpt_path: str, from_hub=False, new_model_url="",
                  new_model_token="", extract_ema=False, train_unfrozen=False, is_512=True):
     printm("Extracting model.")
     res = 512 if is_512 else 768
@@ -763,7 +759,7 @@ def create_model(new_model_name: str, ckpt_path: str, scheduler_type="ddim", fro
         ckpt_path = checkpoint_info.filename
 
     unload_system_models()
-    result = extract_checkpoint(new_model_name, ckpt_path, scheduler_type, from_hub, new_model_url, new_model_token,
+    result = extract_checkpoint(new_model_name, ckpt_path, from_hub, new_model_url, new_model_token,
                                 extract_ema, train_unfrozen, is_512)
     cleanup()
     reload_system_models()
