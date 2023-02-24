@@ -105,9 +105,10 @@ class ImageBuilder:
                 revision=config.revision
             )
             self.image_pipe.enable_attention_slicing()
-            self.image_pipe.enable_xformers_memory_efficient_attention()
+            self.image_pipe.set_use_memory_efficient_attention_xformers(True)
             scheduler_class = get_scheduler_class(config.scheduler)
             self.image_pipe.scheduler = scheduler_class.from_config(self.image_pipe.scheduler.config)
+
             self.image_pipe.to(accelerator.device)
             new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
             if os.path.exists(new_hotness):

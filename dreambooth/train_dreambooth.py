@@ -244,6 +244,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
             revision=args.revision,
             torch_dtype=torch.float32
         )
+        unet = torch2ify(unet)
 
         # Check that all trainable models are in full precision
         low_precision_error_string = (
@@ -301,7 +302,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
 
         ema_model = None
         if args.use_ema:
-            if os.path.exists(os.path.join(args.pretrained_model_name_or_path, "ema_unet", "diffusion_pytorch_model.safetensors")):
+            if os.path.exists(os.path.join(args.pretrained_model_name_or_path, "ema_unet",
+                                           "diffusion_pytorch_model.safetensors")):
                 ema_unet = UNet2DConditionModel.from_pretrained(
                     args.pretrained_model_name_or_path,
                     subfolder="ema_unet",
@@ -407,7 +409,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
         else:
             noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
 
-
         def cleanup_memory():
             try:
                 if unet:
@@ -430,10 +431,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     del unet_lora_params
             except:
                 pass
-            try:
-                cleanup(True)
-            except:
-                pass
+            cleanup(True)
 
         if args.cache_latents:
             vae.to(accelerator.device, dtype=weight_dtype)
@@ -683,9 +681,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 pbar.reset(max_train_steps)
                 pbar.update(global_step)
                 printm(" Complete.")
-                if profiler is not None:
-                    cleanup()
-                printm("Cleaned again.")
 
             return save_model
 
@@ -717,12 +712,10 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     safety_checker=None,
                     requires_safety_checker=None
                 )
-
-                if args.attention == "xformers":
-                    s_pipeline.set_use_memory_efficient_attention_xformers(True)
-                else:
-                    s_pipeline.enable_attention_slicing()
                 scheduler_class = get_scheduler_class(args.scheduler)
+                s_pipeline.unet = torch2ify(s_pipeline.unet)
+                s_pipeline.enable_attention_slicing()
+                s_pipeline.set_use_memory_efficient_attention_xformers(True)
 
                 s_pipeline.scheduler = scheduler_class.from_config(s_pipeline.scheduler.config)
                 s_pipeline = s_pipeline.to(accelerator.device)
@@ -742,8 +735,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
                                 if save_snapshot:
                                     pbar.set_description("Saving Snapshot")
                                     status.textinfo = f"Saving snapshot at step {args.revision}..."
-                                    if args.stop_text_encoder == 0:
-                                        accelerator.register_for_checkpointing(text_encoder)
                                     accelerator.save_state(os.path.join(args.model_dir, "checkpoints",
                                                                         f"checkpoint-{args.revision}"))
                                     pbar.update()
@@ -1141,3 +1132,12 @@ def main(use_txt2img: bool = True) -> TrainResult:
         return result
 
     return inner_loop()
+
+
+def torch2ify(unet):
+    if hasattr(torch, 'compile'):
+        try:
+            unet = torch.compile(unet, mode="max-autotune", fullgraph=False)
+        except:
+            pass
+    return unet
