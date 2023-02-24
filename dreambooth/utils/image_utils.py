@@ -5,6 +5,8 @@ import math
 import os
 import random
 import re
+import sys
+
 from io import StringIO
 
 import cv2
@@ -223,9 +225,13 @@ def get_scheduler_names():
     return [scheduler.name.replace('Scheduler', '') for scheduler in KarrasDiffusionSchedulers]
 
 def get_scheduler_class(scheduler_name):
-    for scheduler in KarrasDiffusionSchedulers:
-        if scheduler.name.replace('Scheduler', '') == scheduler_name:
-            return scheduler
+    try:
+        # Get the class type by name from the KarrasDiffusionSchedulers enum
+        scheduler_class = getattr(sys.modules["diffusers"], scheduler_name + 'Scheduler')
+    except AttributeError:
+        raise ValueError(f"No scheduler named {scheduler_name} found")
+
+    return scheduler_class
 
 def make_bucket_resolutions(max_resolution, divisible=64) -> List[Tuple[int, int]]:
     aspect_ratios = [(16, 9), (5, 4), (4, 3), (3, 2), (2, 1), (1, 1)]
