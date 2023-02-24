@@ -699,8 +699,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
                                 if save_snapshot:
                                     pbar.set_description("Saving Snapshot")
                                     status.textinfo = f"Saving snapshot at step {args.revision}..."
-                                    if args.stop_text_encoder == 0:
-                                        accelerator.register_for_checkpointing(text_encoder)
                                     accelerator.save_state(os.path.join(args.model_dir, "checkpoints",
                                                                         f"checkpoint-{args.revision}"))
                                     pbar.update()

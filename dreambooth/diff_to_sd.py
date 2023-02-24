@@ -326,18 +326,15 @@ def convert_text_enc_state_dict(text_enc_dict: Dict[str, torch.Tensor]):
     return text_enc_dict
 
 
-def get_model_path(working_dir: str, model_name: str = "", is_tenc=False):
+def get_model_path(working_dir: str, model_name: str = "", file_extra: str = ""):
     model_base = osp.join(working_dir, model_name) if model_name != "" else working_dir
     if os.path.exists(model_base) and os.path.isdir(model_base):
-        if is_tenc:
-            file_name_regex = re.compile(f"(custom_checkpoint_0.pkl|pytorch_model_1.bin)")
-        else:
-            file_name_regex = re.compile(f".*model\\.(safetensors|bin)")
+        file_name_regex = re.compile(f".*model_?{file_extra}\\.(safetensors|bin)")
         for f in os.listdir(model_base):
             if file_name_regex.search(f):
                 print(f"Returning: {f}")
                 return os.path.join(model_base, f)
-    if model_name != "ema_unet":
+    if model_name != "ema_unet" and not file_extra:
         print(f"Unable to find model file: {model_base}")
     return None
 
@@ -393,7 +390,9 @@ def compile_checkpoint(model_name: str, lora_path: str = None, reload_models: bo
     if snap_rev != "" and os.path.exists(new_hotness) and os.path.isdir(new_hotness):
         mytqdm.write(f"Loading snapshot paths from {new_hotness}")
         unet_path = get_model_path(new_hotness)
-        text_enc_path = get_model_path(new_hotness, is_tenc=True)
+        text_enc_path = get_model_path(new_hotness, file_extra="1")
+        if text_enc_path is None:
+            text_enc_path = get_model_path(model_path, "text_encoder")
     else:
         unet_path = get_model_path(model_path, "unet")
         text_enc_path = get_model_path(model_path, "text_encoder")
