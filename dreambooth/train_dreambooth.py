@@ -274,21 +274,16 @@ def main(use_txt2img: bool = True) -> TrainResult:
         if accelerator.unwrap_model(unet).dtype != torch.float32:
             print(f"Unet loaded as datatype {accelerator.unwrap_model(unet).dtype}. {low_precision_error_string}")
 
-        if args.train_text_encoder and accelerator.unwrap_model(text_encoder).dtype != torch.float32:
+        if args.stop_text_encoder != 0 and accelerator.unwrap_model(text_encoder).dtype != torch.float32:
             print(f"Text encoder loaded as datatype {accelerator.unwrap_model(text_encoder).dtype}."
                 f" {low_precision_error_string}"
             )
 
         # Enable TF32 for faster training on Ampere GPUs,
         # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
-        if torch.cuda.is_available() and args.tf32_enable:
-            device = torch.device("cuda")
-            cuda_props = torch.cuda.get_device_properties(device)
-            cuda_version = float('.'.join([cuda_props.major, cuda_props.minor]))
-            if cuda_version >= 11.0 and cuda_props.tf32_support:
-                print("GPU supports TF32, enabling.")
-                torch.backends.cuda.matmul.allow_tf32 = True
-
+        if torch.cuda.is_available() and float(torch.cuda_version) >= 11.0 and args.tf32_enable:
+            print("Attempting to enable TF32.")
+            torch.backends.cuda.matmul.allow_tf32 = True
 
         if args.gradient_checkpointing:
             if args.train_unet:
@@ -1027,7 +1022,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     if profiler is not None:
                         profiler.step()
 
-                    optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
+                    optimizer.zero_grad(set_to_none=args.gradient_set_to_none & args.stop_text_encoder not in (0, 1))
 
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
