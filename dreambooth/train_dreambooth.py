@@ -281,9 +281,13 @@ def main(use_txt2img: bool = True) -> TrainResult:
 
         # Enable TF32 for faster training on Ampere GPUs,
         # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
-        if torch.cuda.is_available() and float(torch.cuda_version) >= 11.0 and args.tf32_enable:
-            print("Attempting to enable TF32.")
-            torch.backends.cuda.matmul.allow_tf32 = True
+        try:
+            # Apparently, some versions of torch don't have a cuda_version flag? IDK, but it breaks my runpod.
+            if torch.cuda.is_available() and float(torch.cuda_version) >= 11.0 and args.tf32_enable:
+                print("Attempting to enable TF32.")
+                torch.backends.cuda.matmul.allow_tf32 = True
+        except:
+            pass
 
         if args.gradient_checkpointing:
             if args.train_unet:
