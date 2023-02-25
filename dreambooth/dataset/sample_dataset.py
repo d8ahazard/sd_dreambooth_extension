@@ -43,6 +43,7 @@ class SampleDataset:
                     prompts = [(line, (config.resolution, config.resolution)) for line in lines if line.strip() != ""]
             else:
                 if "[filewords]" in sample_prompt:
+                    prompts.clear()
                     images = get_images(concept.instance_data_dir)
                     getter = FilenameTextGetter(shuffle_tags)
                     for image in images:
