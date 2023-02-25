@@ -439,7 +439,7 @@ def parse_logs(model_name: str, for_ui: bool = False):
         all_df_lr = pd.concat(out_lr)[columns_order]
         all_df_lr = all_df_lr.sort_values("Wall_time")
         all_df_lr = all_df_lr.reset_index(drop=True)
-        all_df_lr = all_df_lr.rolling(smoothing_window).mean()
+        all_df_lr = all_df_lr.rolling(smoothing_window).mean(numeric_only=True)
         plotted_lr = all_df_lr.plot(x="Step", y="Value", title="Learning Rate")
         lr_img = os.path.join(model_config.model_dir, "logging", f"lr_plot_{model_config.revision}.png")
         plotted_lr.figure.savefig(lr_img)

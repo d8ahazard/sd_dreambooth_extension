@@ -34,33 +34,33 @@ class SampleDataset:
             sample_file = concept.save_sample_template
             seed = concept.sample_seed
             neg = concept.save_sample_negative_prompt
-            # List[Tuple[str,Tuple[int,int]]]
-            prompts = []
             # If no sample file, look for filewords
             if sample_file != "" and sample_file is not None and os.path.exists(sample_file):
                 with open(sample_file, "r") as samples:
                     lines = samples.readlines()
                     prompts = [(line, (config.resolution, config.resolution)) for line in lines if line.strip() != ""]
+            elif "[filewords]" in sample_prompt:
+                prompts = []
+                images = get_images(concept.instance_data_dir)
+                getter = FilenameTextGetter(shuffle_tags)
+                for image in images:
+                    base = getter.read_text(image)
+                    prompt = getter.create_text(
+                        sample_prompt,
+                        base,
+                        concept.instance_token,
+                        concept.class_token,
+                        False
+                    )
+                    if prompt == "[filewords]":
+                        print(f"Invalid prompt generation: {image}/{base}")
+                        continue
+                    img = Image.open(image)
+                    res = img.size
+                    closest = closest_resolution(res[0], res[1], bucket_resos)
+                    prompts.append((prompt, closest))
             else:
-                if "[filewords]" in sample_prompt:
-                    images = get_images(concept.instance_data_dir)
-                    getter = FilenameTextGetter(shuffle_tags)
-                    for image in images:
-                        base = getter.read_text(image)
-                        prompt = getter.create_text(
-                            sample_prompt,
-                            base,
-                            concept.instance_token,
-                            concept.class_token,
-                            False
-                        )
-                        if prompt == "[filewords]":
-                            print(f"Invalid prompt generation: {image}/{base}")
-                            continue
-                        img = Image.open(image)
-                        res = img.size
-                        closest = closest_resolution(res[0], res[1], bucket_resos)
-                        prompts.append((prompt, closest))
+                prompts = [(sample_prompt, (config.resolution, config.resolution))]
             for i in range(required):
                 pi = random.choice(prompts)
                 pd = PromptData(
