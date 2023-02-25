@@ -432,6 +432,7 @@ def on_ui_tabs():
 
                         db_sample_txt2img = gr.Checkbox(label="Use txt2img", value=False)
                 with gr.Tab("Testing", elem_id="TabDebug"):
+                    db_deterministic = gr.Checkbox(label="Deterministic")
                     db_ema_predict = gr.Checkbox(label="Use EMA for prediction.")
                     db_split_loss = gr.Checkbox(label="Calculate Split Loss", value=True)
                     db_tf32_enable = gr.Checkbox(label="Use TensorFloat 32", value=False)
@@ -616,6 +617,7 @@ def on_ui_tabs():
             db_concepts_path,
             db_custom_model_name,
             db_deis_train_scheduler,
+            db_deterministic,
             db_ema_predict,
             db_epochs,
             db_epoch_pause_frequency,

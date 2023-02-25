@@ -34,6 +34,7 @@ class DreamboothConfig(BaseModel):
     concepts_path: str = ""
     custom_model_name: str = ""
     deis_train_scheduler: bool = False
+    deterministic: bool = False
     ema_predict: bool = False
     epoch: int = 0
     epoch_pause_frequency: int = 0

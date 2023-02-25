@@ -137,7 +137,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
     result = TrainResult
     result.config = args
 
-    set_seed(0)
+    if args.deterministic:
+        set_seed(0)
 
     @find_executable_batch_size(starting_batch_size=args.train_batch_size,
                                 starting_grad_size=args.gradient_accumulation_steps,
