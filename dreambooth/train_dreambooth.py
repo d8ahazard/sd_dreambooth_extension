@@ -94,12 +94,15 @@ try:
 except:
     print("Exception monkey-patching DEIS scheduler.")
 
-torch.backends.cudnn.deterministic = True
 
-
-def set_seed(seed: int):
-    set_seed1(seed)
-    set_seed2(seed)
+def set_seed(deterministic: bool):
+    if deterministic:
+        torch.backends.cudnn.deterministic = True
+        seed = 0
+        set_seed1(seed)
+        set_seed2(seed)
+    else:
+        torch.backends.cudnn.deterministic = False
 
 
 def current_prior_loss(args, current_epoch):
@@ -137,8 +140,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
     result = TrainResult
     result.config = args
 
-    if args.deterministic:
-        set_seed(0)
+    set_seed(args.deterministic)
 
     @find_executable_batch_size(starting_batch_size=args.train_batch_size,
                                 starting_grad_size=args.gradient_accumulation_steps,
