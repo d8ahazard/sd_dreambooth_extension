@@ -35,7 +35,7 @@ class SampleDataset:
             seed = concept.sample_seed
             neg = concept.save_sample_negative_prompt
             # List[Tuple[str,Tuple[int,int]]]
-            prompts = [(sample_prompt, (config.resolution, config.resolution))]
+            prompts = []
             # If no sample file, look for filewords
             if sample_file != "" and sample_file is not None and os.path.exists(sample_file):
                 with open(sample_file, "r") as samples:

@@ -27,15 +27,14 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
     from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-    
+
     from extensions.sd_dreambooth_extension.dreambooth import shared
     from extensions.sd_dreambooth_extension.dreambooth.shared import status
 except:
-    from dreambooth.dreambooth.dataclasses.db_concept import Concept # noqa
-    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData # noqa
-    from dreambooth.helpers.mytqdm import mytqdm # noqa
-    from dreambooth.dreambooth.shared import status # noqa
-
+    from dreambooth.dreambooth.dataclasses.db_concept import Concept  # noqa
+    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
+    from dreambooth.helpers.mytqdm import mytqdm  # noqa
+    from dreambooth.dreambooth.shared import status  # noqa
 
 
 def get_dim(filename, max_res):
@@ -60,7 +59,7 @@ def get_dim(filename, max_res):
         return width, height
 
 
-def get_images(image_path:str):
+def get_images(image_path: str):
     pil_features = list_features()
     output = []
     if os.path.exists(image_path):
@@ -99,7 +98,9 @@ def is_image(path: str, feats=None):
     is_img = os.path.isfile(path) and os.path.splitext(path)[1].lower() in feats
     return is_img
 
-def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str, images: List[str], bucket_resos: List[Tuple[int, int]],
+
+def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str, images: List[str],
+                 bucket_resos: List[Tuple[int, int]],
                  concept_index: int, is_class: bool, pbar: mytqdm) -> Dict[Tuple[int, int], PromptData]:
     prompts = {}
     max_dim = 0
@@ -224,6 +225,7 @@ def shuffle_tags(caption: str):
 def get_scheduler_names():
     return [scheduler.name.replace('Scheduler', '') for scheduler in KarrasDiffusionSchedulers]
 
+
 def get_scheduler_class(scheduler_name):
     try:
         # Get the class type by name from the KarrasDiffusionSchedulers enum
@@ -232,6 +234,7 @@ def get_scheduler_class(scheduler_name):
         raise ValueError(f"No scheduler named {scheduler_name} found")
 
     return scheduler_class
+
 
 def make_bucket_resolutions(max_resolution, divisible=64) -> List[Tuple[int, int]]:
     aspect_ratios = [(16, 9), (5, 4), (4, 3), (3, 2), (2, 1), (1, 1)]
@@ -244,8 +247,6 @@ def make_bucket_resolutions(max_resolution, divisible=64) -> List[Tuple[int, int
 
         w = d0
         h = d1
-
-        print(f"RES: {w}, {h}")
 
         resos.add((w, h))
         resos.add((h, w))
@@ -264,6 +265,7 @@ def closest_resolution(width, height, resos) -> Tuple[int, int]:
 
     return min(resos, key=distance)
 
+
 txt2img_available = False
 try:
     from modules import devices, sd_hijack, prompt_parser, lowvram
@@ -272,6 +274,8 @@ try:
     from modules.sd_hijack import model_hijack
 
     txt2img_available = True
+
+
     def process_txt2img(p: StableDiffusionProcessing) -> [Image]:
         """this is the main loop that both txt2img and img2img use; it calls func_init once inside all the scopes and func_sample once per batch"""
 
@@ -310,7 +314,8 @@ try:
             p.all_subseeds = [int(subseed) + x for x in range(len(p.all_prompts))]
 
         def infotext(iteration=0, position_in_batch=0):
-            return create_infotext(p, p.all_prompts, p.all_seeds, p.all_subseeds, comments, iteration, position_in_batch)
+            return create_infotext(p, p.all_prompts, p.all_seeds, p.all_subseeds, comments, iteration,
+                                   position_in_batch)
 
         with open(os.path.join(shared.script_path, "params.txt"), "w", encoding="utf8") as file:
             processed = Processed(p, [], p.seed, "")
@@ -353,11 +358,13 @@ try:
                     status.job = f"Batch {n + 1} out of {p.n_iter}"
 
                 with devices.autocast():
-                    samples_ddim = p.sample(conditioning=c, unconditional_conditioning=uc, seeds=seeds, subseeds=subseeds,
+                    samples_ddim = p.sample(conditioning=c, unconditional_conditioning=uc, seeds=seeds,
+                                            subseeds=subseeds,
                                             subseed_strength=p.subseed_strength, prompts=prompts)
 
-                x_samples_ddim = [decode_first_stage(p.sd_model, samples_ddim[i:i + 1].to(dtype=devices.dtype_vae))[0].cpu()
-                                  for i in range(samples_ddim.size(0))]
+                x_samples_ddim = [
+                    decode_first_stage(p.sd_model, samples_ddim[i:i + 1].to(dtype=devices.dtype_vae))[0].cpu()
+                    for i in range(samples_ddim.size(0))]
                 x_samples_ddim = torch.stack(x_samples_ddim).float()
                 x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
 
@@ -392,6 +399,8 @@ try:
         return output_images
 except:
     print("Oops, no txt2img available. Oh well.")
+
+
     def process_txt2img(p: StableDiffusionProcessing) -> None:
         return None
 
@@ -435,7 +444,6 @@ def open_and_trim(image_path: str, reso: Tuple[int, int], return_pil: bool = Fal
         return np.array(image)
 
 
-
 def db_save_image(image: Image, prompt_data: PromptData = None, save_txt: bool = True, custom_name: str = None):
     image_base = hashlib.sha1(image.tobytes()).hexdigest()
     image_filename = os.path.join(prompt_data.out_dir, f"{image_base}.tmp")
@@ -470,6 +478,7 @@ def db_save_image(image: Image, prompt_data: PromptData = None, save_txt: bool =
             file.write(prompt_data.prompt)
     os.replace(image_filename, image_filename.replace(".tmp", ".png"))
     return image_filename.replace(".tmp", ".png")
+
 
 def image_grid(imgs):
     rows = math.floor(math.sqrt(len(imgs)))

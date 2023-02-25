@@ -736,10 +736,6 @@ def start_crop(src_dir: str, dest_dir: str, max_res: int, bucket_step: int, dry_
     return out_status, out_images
 
 
-
-
-
-
 def create_model(new_model_name: str, ckpt_path: str, from_hub=False, new_model_url="",
                  new_model_token="", extract_ema=False, train_unfrozen=False, is_512=True):
     printm("Extracting model.")
