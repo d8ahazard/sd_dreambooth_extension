@@ -11,6 +11,7 @@ import zipfile
 from pathlib import Path
 from typing import List, Union
 
+import requests
 from PIL import Image
 from fastapi import FastAPI, Response, Query, Body, Form, Header
 from fastapi.encoders import jsonable_encoder
@@ -53,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 
 class InstanceData(BaseModel):
-    data: str = Field(title="File data", description="Base64 representation of the file")
+    data: str = Field(title="File data", description="Base64 representation of the file or URL")
     name: str = Field(title="File name", description="File name to save image as")
     txt: str = Field(title="Prompt", description="Training prompt for image")
 
@@ -811,11 +812,103 @@ def dreambooth_api(_, app: FastAPI):
 
         return status
 
+    @app.post("/dreambooth/upload_url")
+    async def upload_db_images_url(
+            model_name: str = Query(description="The model name to upload images for."),
+            instance_name: str = Query(description="The concept/instance name the images are for."),
+            create_concept: bool = Query(True,
+                                         description="Enable to automatically append the new concept to the model config."),
+            images: DbImagesRequest = Body(description="A dictionary of images, filenames, and prompts to save."),
+            api_key: str = Query("", description="If an API key is set, this must be present.", )
+    ):
+        """
+        Upload images for training.
 
-try:
-    import modules.script_callbacks as script_callbacks
+        Request body should be a JSON Object. Primary key is 'imageList'.
 
-    script_callbacks.on_app_started(dreambooth_api)
-    logger.debug("SD-Webui API layer loaded")
-except:
-    pass
+        'imageList' is a list of objects. Each object should have three values:
+        'data' - A base64-encoded string containing the binary data of the image.
+        'name' - The filename to store the image under.
+        'txt' - The caption for the image. Will be stored in a text file beside the image.
+        """
+        logger.debug("API UPLOAD STARTED.")
+        key_check = check_api_key(api_key)
+        if key_check is not None:
+            logger.debug("NO KEY")
+            return key_check
+
+        root_img_path = os.path.join(shared.script_path, "..", "InstanceImages")
+        if not os.path.exists(root_img_path):
+            logger.debug(f"Creating root instance dir: {root_img_path}")
+            os.makedirs(root_img_path)
+        else:
+            logger.debug(f"Root dir exists already: {root_img_path}")
+
+        image_dir = os.path.join(root_img_path, model_name, instance_name)
+        image_dir = os.path.abspath(image_dir)
+        if not os.path.exists(image_dir):
+            os.makedirs(image_dir)
+            logger.debug(f"Input data: {images}")
+
+        image_paths = []
+        for img_data in images.imageList:
+            img_url = img_data.data
+            name = img_data.name
+            prompt = img_data.txt
+            logger.debug(f"Input prompt for image: {prompt} {name}")
+            image_path = os.path.join(image_dir, name)
+            text_path = os.path.splitext(image_path)[0]
+            text_path = F"{text_path}.txt"
+            logger.debug(f"Saving image to: {image_path}")
+            try:
+                response = requests.get(img_url, stream=True)
+                response.raise_for_status()
+                with open(image_path, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+            except Exception as e:
+                logger.exception(f"Error downloading image from {img_url}: {e}")
+                continue
+            logger.debug(f"Saving prompt ({prompt}) to: {text_path}")
+            with open(text_path, "w") as tx_file:
+                tx_file.writelines(prompt)
+                logger.debug(f"Saved prompt text to: {text_path}")
+            image_paths.append(image_path)
+
+        status = {"Status": f"Saved {len(image_paths)} images.", "Image dir": {image_dir}}
+        if create_concept:
+            config = from_file(model_name)
+            logger.debug(f"Creating concept: {model_name}")
+            if config is None:
+                status["Status"] += " Unable to load model config."
+            new_concept = Concept()
+            new_concept.instance_data_dir = image_dir
+            new_concept.class_prompt = "[filewords]"
+            new_concept.instance_prompt = "[filewords]"
+            new_concept.save_sample_prompt = "[filewords]"
+            new_concept.is_valid = True
+            logger.debug(f"New concept: {new_concept}")
+            new_concepts = []
+            replaced = False
+            for concept in config.concepts():
+                if concept.instance_data_dir == new_concept.instance_data_dir:
+                    new_concepts.append(new_concept.__dict__)
+                    replaced = True
+                else:
+                    new_concepts.append(concept.__dict__)
+            if not replaced:
+                new_concepts.append(new_concept.__dict__)
+            config.concepts_list = new_concepts
+            config.save()
+            logger.debug("Saved concepts.")
+            status["Concepts"] = config.concepts_list
+
+        return status
+
+    try:
+        import modules.script_callbacks as script_callbacks
+
+        script_callbacks.on_app_started(dreambooth_api)
+        logger.debug("SD-Webui API layer loaded")
+    except:
+        pass
