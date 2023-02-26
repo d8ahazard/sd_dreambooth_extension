@@ -329,10 +329,9 @@ def convert_text_enc_state_dict(text_enc_dict: Dict[str, torch.Tensor]):
 def get_model_path(working_dir: str, model_name: str = "", file_extra: str = ""):
     model_base = osp.join(working_dir, model_name) if model_name != "" else working_dir
     if os.path.exists(model_base) and os.path.isdir(model_base):
-        file_name_regex = re.compile(f".*model_?{file_extra}\\.(safetensors|bin)")
+        file_name_regex = re.compile(f"model_?{file_extra}\\.(safetensors|bin)$")
         for f in os.listdir(model_base):
             if file_name_regex.search(f):
-                print(f"Returning: {f}")
                 return os.path.join(model_base, f)
     if model_name != "ema_unet" and not file_extra:
         print(f"Unable to find model file: {model_base}")
@@ -421,7 +420,7 @@ def compile_checkpoint(model_name: str, lora_path: str = None, reload_models: bo
         # Apply LoRA to the unet
         if lora_path is not None and lora_path != "":
             unet_model = UNet2DConditionModel().from_pretrained(os.path.dirname(unet_path))
-            lora_rev = apply_lora(unet_model, lora_path, config.lora_weight, "cpu", True)
+            lora_rev = apply_lora(unet_model, lora_path, config.lora_weight, "cpu", False)
             unet_state_dict = copy.deepcopy(unet_model.state_dict())
             del unet_model
             if lora_rev is not None:
