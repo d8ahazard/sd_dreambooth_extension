@@ -476,5 +476,9 @@ def parse_logs(model_name: str, for_ui: bool = False):
     del out_loss
     del out_lr
     del out_ram
+    try:
+        matplotlib.pyplot.close()
+    except:
+        pass
     printm("Cleanup log parse.")
     return out_images, out_names

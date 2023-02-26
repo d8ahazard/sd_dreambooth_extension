@@ -728,8 +728,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 with accelerator.autocast(), torch.inference_mode():
                     if save_model:
                         # We are saving weights, we need to ensure revision is saved
-                        args.revision = global_step
-                        args.epoch = global_epoch
                         args.save()
                         pbar.set_description("Saving Weights")
                         pbar.reset(4)

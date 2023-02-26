@@ -170,7 +170,6 @@ class DreamboothConfig(BaseModel):
                 if value not in schedulers:
                     sched_swap = True
                     for scheduler in schedulers:
-                        print(f"Check {value.lower()} vs. {scheduler.lower()}")
                         if value.lower() in scheduler.lower():
                             print(f"Updating scheduler name to: {scheduler}")
                             value = scheduler
