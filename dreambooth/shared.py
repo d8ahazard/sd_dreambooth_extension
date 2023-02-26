@@ -73,7 +73,6 @@ def load_auto_settings():
 
 def get_launch_errors():
     errors = os.environ.get("ERRORS", None)
-    print(f"Env errors: {errors}")
     if errors == "":
         launch_error = None
     elif errors is not None:

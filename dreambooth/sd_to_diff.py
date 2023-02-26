@@ -1346,7 +1346,6 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, from_hub=False
            model_dir, \
            revision, \
            epoch, \
-           scheduler, \
            src, \
            "True" if has_ema else "False", \
            "True" if v2 else "False", \
