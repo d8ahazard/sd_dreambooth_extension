@@ -319,7 +319,7 @@ def inject_trainable_lora_extended(
         require_grad_params.append(_module._modules[name].lora_up.parameters())
         require_grad_params.append(_module._modules[name].lora_down.parameters())
 
-        if loras != None:
+        if loras is not None:
             _module._modules[name].lora_up.weight = nn.Parameter(loras.pop(0))
             _module._modules[name].lora_down.weight = nn.Parameter(loras.pop(0))
 
@@ -1136,11 +1136,11 @@ def save_all(
         save_safeloras_with_embeds(loras, embeds, save_path)
 
 def merge_loras_to_pipe(
-        pipline, 
-        lora_path=None, 
-        lora_alpha: float = 1, 
-        lora_txt_alpha: float = 1, 
-        r: int = 4, 
+        pipline,
+        lora_path=None,
+        lora_alpha: float = 1,
+        lora_txt_alpha: float = 1,
+        r: int = 4,
         r_txt: int = 4,
         unet_target_module=None
     ):
@@ -1151,9 +1151,9 @@ def merge_loras_to_pipe(
         )
 
     patch_pipe(
-        pipline, 
-        lora_path, 
-        r=r, 
+        pipline,
+        lora_path,
+        r=r,
         r_txt=r_txt,
         unet_target_replace_module=unet_target_module
         )
