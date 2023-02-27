@@ -329,7 +329,7 @@ def convert_text_enc_state_dict(text_enc_dict: Dict[str, torch.Tensor]):
 def get_model_path(working_dir: str, model_name: str = "", file_extra: str = ""):
     model_base = osp.join(working_dir, model_name) if model_name != "" else working_dir
     if os.path.exists(model_base) and os.path.isdir(model_base):
-        file_name_regex = re.compile(f".*model_?{file_extra}\\.(safetensors|bin)")
+        file_name_regex = re.compile(f"model_?{file_extra}\\.(safetensors|bin)$")
         for f in os.listdir(model_base):
             if file_name_regex.search(f):
                 print(f"Returning: {f}")

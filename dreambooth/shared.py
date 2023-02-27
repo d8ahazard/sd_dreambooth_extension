@@ -50,9 +50,9 @@ def load_auto_settings():
         modules.script_callbacks.on_model_loaded(set_model)
 
         try:
-            dreambooth_models_path = ws.cmd_opts.dreambooth_models_path if ws.cmd_opts.dreambooth_models_path is not None else dreambooth_models_path
-            lora_models_path = ws.cmd_opts.lora_models_path if ws.cmd_opts.lora_models_path is not None else lora_models_path
-            embeddings_dir = ws.cmd_opts.embeddings_dir if ws.cmd_opts.embeddings_dir is not None else embeddings_dir
+            dreambooth_models_path = ws.cmd_opts.dreambooth_models_path or dreambooth_models_path
+            lora_models_path = ws.cmd_opts.lora_models_path or lora_models_path
+            embeddings_dir = ws.cmd_opts.embeddings_dir or embeddings_dir
         except:
             pass
 
@@ -73,7 +73,6 @@ def load_auto_settings():
 
 def get_launch_errors():
     errors = os.environ.get("ERRORS", None)
-    print(f"Env errors: {errors}")
     if errors == "":
         launch_error = None
     elif errors is not None:

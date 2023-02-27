@@ -20,7 +20,7 @@ def replace_unet_cross_attn_to_default():
         batch_size, sequence_length, _ = hidden_states.shape
 
         query = self.to_q(hidden_states)
-        context = context if context is not None else hidden_states
+        context = context or hidden_states
         key = self.to_k(context)
         value = self.to_v(context)
 
@@ -237,7 +237,7 @@ def replace_unet_cross_attn_to_flash_attention():
         h = self.heads
         q = self.to_q(x)
 
-        context = context if context is not None else x
+        context = context or x
         context = context.to(x.dtype)
 
         if hasattr(self, 'hypernetwork') and self.hypernetwork is not None:

@@ -411,7 +411,7 @@ def parse_logs(model_name: str, for_ui: bool = False):
     all_df_loss = all_df_loss.fillna(method="ffill") # since we do not use the standard dreambooth algorithm it's possible to have NaN for instance or prior loss -> forward fill
     all_df_loss = all_df_loss.sort_values("Wall_time")
     all_df_loss = all_df_loss.reset_index(drop=True)
-    sw = smoothing_window if smoothing_window < len(all_df_loss)/3 else len(all_df_loss)/3
+    sw = int(smoothing_window if smoothing_window < len(all_df_loss)/3 else len(all_df_loss)/3)
     all_df_loss = all_df_loss.rolling(sw).mean(numeric_only=True)
 
     out_images = []
@@ -476,5 +476,9 @@ def parse_logs(model_name: str, for_ui: bool = False):
     del out_loss
     del out_lr
     del out_ram
+    try:
+        matplotlib.pyplot.close()
+    except:
+        pass
     printm("Cleanup log parse.")
     return out_images, out_names
