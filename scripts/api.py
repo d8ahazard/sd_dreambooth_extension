@@ -905,10 +905,10 @@ def dreambooth_api(_, app: FastAPI):
 
         return status
 
-    try:
-        import modules.script_callbacks as script_callbacks
+try:
+    import modules.script_callbacks as script_callbacks
 
-        script_callbacks.on_app_started(dreambooth_api)
-        logger.debug("SD-Webui API layer loaded")
-    except:
-        pass
+    script_callbacks.on_app_started(dreambooth_api)
+    logger.debug("SD-Webui API layer loaded")
+except:
+    pass
