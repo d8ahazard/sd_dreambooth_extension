@@ -332,7 +332,6 @@ def get_model_path(working_dir: str, model_name: str = "", file_extra: str = "")
         file_name_regex = re.compile(f"model_?{file_extra}\\.(safetensors|bin)$")
         for f in os.listdir(model_base):
             if file_name_regex.search(f):
-                print(f"Returning: {f}")
                 return os.path.join(model_base, f)
     if model_name != "ema_unet" and not file_extra:
         print(f"Unable to find model file: {model_base}")
