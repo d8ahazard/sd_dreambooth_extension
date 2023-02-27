@@ -607,7 +607,6 @@ def collapse_lora(model, alpha=1.0):
             )
 
         else:
-            print("Collapsing Conv Lora in", name)
             _child_module.conv.weight = nn.Parameter(
                 _child_module.conv.weight.data
                 + alpha
