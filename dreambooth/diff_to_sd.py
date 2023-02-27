@@ -23,7 +23,7 @@ try:
         disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path
     from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-    from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
+    from extensions.sd_dreambooth_extension.lora_diffusion.lora import merge_lora_to_model
 except:
     from dreambooth.dreambooth import shared as shared  # noqa
     from dreambooth.dreambooth.dataclasses.db_config import from_file  # noqa
@@ -32,7 +32,7 @@ except:
         disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path  # noqa
     from dreambooth.dreambooth.utils.utils import printi  # noqa
     from dreambooth.helpers.mytqdm import mytqdm  # noqa
-    from dreambooth.lora_diffusion.lora import weight_apply_lora  # noqa
+    from dreambooth.lora_diffusion.lora import merge_lora_to_model # noqa
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -421,7 +421,7 @@ def compile_checkpoint(model_name: str, lora_path: str = None, reload_models: bo
         # Apply LoRA to the unet
         if lora_path is not None and lora_path != "":
             unet_model = UNet2DConditionModel().from_pretrained(os.path.dirname(unet_path))
-            lora_rev = apply_lora(unet_model, lora_path, config.lora_weight, "cpu", True)
+            lora_rev = apply_lora(unet_model, lora_path, config.lora_unet_rank, config.lora_weight, "cpu", False, config.use_lora_extended)
             unet_state_dict = copy.deepcopy(unet_model.state_dict())
             del unet_model
             if lora_rev is not None:
@@ -460,8 +460,8 @@ def compile_checkpoint(model_name: str, lora_path: str = None, reload_models: bo
                 revision=config.revision,
                 torch_dtype=torch.float32
             )
-
-            apply_lora(text_encoder, lora_txt_path, config.lora_txt_weight, "cpu", True)
+            
+            apply_lora(text_encoder, lora_txt_path, config.lora_txt_rank, config.lora_txt_weight, "cpu", True, config.use_lora_extended)
             text_enc_dict = copy.deepcopy(text_encoder.state_dict())
             del text_encoder
         else:
@@ -550,7 +550,7 @@ def load_model(model_path: str, map_location: str):
         return loaded
 
 
-def apply_lora(model: nn.Module, loras: str, weight: float, device: str, is_tenc: bool):
+def apply_lora(model: nn.Module, loras: str, rank: int, weight: float, device: str, is_tenc: bool, use_extended: bool):
     lora_rev = None
     if loras is not None and loras != "":
         if not os.path.exists(loras):
@@ -564,7 +564,6 @@ def apply_lora(model: nn.Module, loras: str, weight: float, device: str, is_tenc
         if os.path.exists(loras):
             lora_rev = loras.split("_")[-1].replace(".pt", "")
             printi(f"Loading lora from {loras}", log=True)
-            printi(f"Applying lora weight of alpha: {weight} to unet...", log=True)
-            tenc_val = "tenc" if is_tenc else None
-            weight_apply_lora(model, load_model(loras, device), target_replace_module=tenc_val, alpha=weight)
+            merge_lora_to_model(model, load_model(loras, device), is_tenc, use_extended, rank, weight)
+
     return lora_rev

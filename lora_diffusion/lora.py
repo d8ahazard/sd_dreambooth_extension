@@ -623,26 +623,6 @@ def collapse_lora(model, alpha=1.0):
             )
 
 
-def weight_apply_lora(
-    model, loras, target_replace_module=None, alpha=1.0
-):
-
-    if target_replace_module is None:
-        target_replace_module = DEFAULT_TARGET_REPLACE
-    if target_replace_module == "tenc":
-        target_replace_module = TEXT_ENCODER_DEFAULT_TARGET_REPLACE
-    for _m, _n, _child_module in _find_modules(
-        model, target_replace_module, search_class=[nn.Linear]
-    ):
-        weight = _child_module.weight
-
-        up_weight = loras.pop(0).detach().to(weight.device)
-        down_weight = loras.pop(0).detach().to(weight.device)
-
-        # W <- W + U * D
-        weight = weight + alpha * (up_weight @ down_weight).type(weight.dtype)
-        _child_module.weight = nn.Parameter(weight)
-
 def monkeypatch_or_replace_lora(
     model,
     loras,
@@ -1163,6 +1143,22 @@ def merge_loras_to_pipe(
 
     monkeypatch_remove_lora(pipline.unet)
     monkeypatch_remove_lora(pipline.text_encoder)
+
+
+def merge_lora_to_model(
+    model: nn.Module,
+    lora: dict,
+    is_tenc: bool,
+    use_extended: bool,
+    rank: int = 4,
+    weight: float = 1.0
+):
+    target_module = get_target_module("module", use_extended)
+    if (is_tenc):
+        target_module = TEXT_ENCODER_EXTENDED_TARGET_REPLACE if use_extended else TEXT_ENCODER_DEFAULT_TARGET_REPLACE
+    get_target_module("patch", use_extended)(model, lora, target_replace_module=target_module, r=rank)
+    collapse_lora(model, weight)
+    monkeypatch_remove_lora(model)
 
 
 def get_target_module(target_type: str = "injection", use_extended: bool = False):
