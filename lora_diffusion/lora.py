@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from safetensors.torch import safe_open
 from safetensors.torch import save_file as safe_save
+from torch import dtype
 
 try:
     from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import disable_safe_unpickle, \
@@ -355,7 +356,8 @@ def save_lora_weight(
         model,
         path="./lora.pt",
         target_replace_module=None,
-        save_safetensors: bool = False
+        save_safetensors: bool = False,
+        d_type: dtype = torch.float16
 ):
     if target_replace_module is None:
         target_replace_module = DEFAULT_TARGET_REPLACE
@@ -364,8 +366,8 @@ def save_lora_weight(
     for _up, _down in extract_lora_ups_down(
             model, target_replace_module=target_replace_module
     ):
-        weights.append(_up.weight.to("cpu").to(torch.float32))
-        weights.append(_down.weight.to("cpu").to(torch.float32))
+        weights.append(_up.weight.to("cpu", dtype=d_type))
+        weights.append(_down.weight.to("cpu", dtype=d_type))
 
     if save_safetensors:
         path = path.replace(".pt", ".safetensors")
