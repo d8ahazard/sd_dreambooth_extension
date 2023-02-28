@@ -165,6 +165,14 @@ class DreamboothConfig(BaseModel):
         for key, value in params_dict.items():
             if "db_" in key:
                 key = key.replace("db_", "")
+            if key == "attention" and value == "flash_attention":
+                try:
+                    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention
+                except:
+                    from dreambooth.dreambooth.utils.utils import list_attention # noqa
+                value = list_attention()[-1]
+                print(f"Replacing flash attention in config to {value}")
+
             if key == "scheduler":
                 schedulers = get_scheduler_names()
                 if value not in schedulers:
