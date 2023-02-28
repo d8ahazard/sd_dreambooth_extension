@@ -54,6 +54,14 @@ button:disabled, input:disabled {
     margin: 0 auto;
     z-index: 10000;
     border: 1px solid white;
+    overflow-y: scroll;
+    overflow-x: hidden;
+}
+
+#modal_notes * {
+    color: blue;
+    text-align: center;
+    text-decoration: underline;
 }
 
 

@@ -601,6 +601,8 @@ def on_ui_tabs():
                 with gr.Row():
                     modal_title = gr.HTML("<h2>Changelog</h2>", elem_id="modal_title")
                     close_modal = gr.Button(value="X", elem_id="close_modal")
+                with gr.Row():
+                    modal_release_notes = gr.HTML("<h3><a href='https://github.com/d8ahazard/sd_dreambooth_extension/releases/tag/1.0.1'>Release notes</a></h3>", elem_id="modal_notes")
                 with gr.Column():
                     change_log = gr.HTML(format_updates(), elem_id="change_log")
 
