@@ -2,6 +2,7 @@ import filecmp
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -118,14 +119,38 @@ def actual_install():
         #     use_torch2 = False
 
         requirements = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
-        reqs = open(requirements, 'r')
-        lines = reqs.readlines()
+        # Open requirements file and read lines
+        with open(requirements, 'r') as f:
+            lines = f.readlines()
+
+        # Create dictionary to store package names and version numbers
         reqs_dict = {}
+
+        # Regular expression to match package names and version numbers
+        pattern = r'^(?P<package_name>[\w-]+)(\[(?P<extras>[\w\s,-]+)\])?((?P<operator>==|~=)(?P<version>(\d+\.)*\d+([ab]\d+)?)(\.\w+)?(\.\w+(-\d+)?)?)?$'
+
+        # Loop through each line in the requirements file
         for line in lines:
-            splits = line.split("==")
-            if len(splits) == 2:
-                key = splits[0]
-                reqs_dict[key] = splits[1].replace("\n", "").strip()
+            # Strip whitespace and comments
+            line = line.strip()
+            if line.startswith('#'):
+                continue
+            # Use regular expression to extract package name and version number
+            match = re.match(pattern, line)
+            if match:
+                package_name = match.group('package_name')
+                version = match.group('version')
+                # Split version number into three integers
+                if version:
+                    version_list = version.split('.')[:3]
+                    # Remove any non-digit characters from the third version value
+                    version_list[2] = ''.join(filter(str.isdigit, version_list[2]))
+                    version_tuple = tuple(map(int, version_list))
+                else:
+                    version_tuple = None
+                # Add package name and version tuple to dictionary
+                reqs_dict[package_name] = version_tuple
+
 
         checks = ["bitsandbytes", "diffusers", "transformers", "xformers"]
         torch_ver = "1.13.1+cu117"
@@ -180,6 +205,7 @@ def actual_install():
             else:
                 print(f"[+] {module} version {check} installed.")
 
+        # Loop through each required package and check if it is installed
         for check in checks:
             check_ver = "N/A"
             status = "[ ]"
@@ -187,13 +213,16 @@ def actual_install():
                 check_available = importlib.util.find_spec(check) is not None
                 if check_available:
                     check_ver = importlib_metadata.version(check)
+                    check_version = tuple(map(int, check_ver.split('.')[:3]))
+
                     if check in reqs_dict:
                         req_version = reqs_dict[check]
-                        if str(check_ver) == str(req_version):
+                        if req_version is None or check_version >= req_version:
                             status = "[+]"
                         else:
                             status = "[!]"
                             launch_errors.append(f"Incorrect version of {check} installed.")
+
 
             except importlib_metadata.PackageNotFoundError:
                 print(f"No package for {check}")
