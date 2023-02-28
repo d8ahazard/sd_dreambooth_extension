@@ -451,7 +451,7 @@ def db_save_image(image: Image, prompt_data: PromptData = None, save_txt: bool =
     if custom_name is not None:
         file_name = custom_name
     
-    strip_chars = ["(", ")", "/", "\\", ":", "[", "]"]
+    strip_chars = ["(", ")", "/", "\", ":", "[", "]"]
     for s_char in strip_chars:
         file_name = file_name.replace(s_char, "")
     
