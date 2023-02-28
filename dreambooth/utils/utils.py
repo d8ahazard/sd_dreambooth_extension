@@ -25,8 +25,8 @@ try:
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
     from extensions.sd_dreambooth_extension.dreambooth.shared import status
 except:
-    from dreambooth.helpers.mytqdm import mytqdm # noqa
-    from dreambooth.dreambooth.shared import status # noqa
+    from dreambooth.helpers.mytqdm import mytqdm  # noqa
+    from dreambooth.dreambooth.shared import status  # noqa
 
 
 def printi(msg, params=None, log=True):
@@ -176,12 +176,15 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
     else:
         return f"{organization}/{model_id}"
 
+
 from dataclasses import dataclass
+
 
 @dataclass
 class YAxis:
     name: str
     columns: List[str]
+
 
 @dataclass
 class PlotDefinition:
@@ -189,10 +192,11 @@ class PlotDefinition:
     x_axis: str
     y_axis: List[YAxis]
 
+
 def plot_multi_alt(
-    data: pd.DataFrame,
-    plot_definition: PlotDefinition,
-    spacing: float = 0.1,
+        data: pd.DataFrame,
+        plot_definition: PlotDefinition,
+        spacing: float = 0.1,
 ):
     styles = ["-", ":", "--", "-."]
     colors = get_standard_colors(num_colors=7)
@@ -200,14 +204,16 @@ def plot_multi_alt(
     avg_colors = colors[1:]
     for i, yi in enumerate(plot_definition.y_axis):
         if len(yi.columns) > len(styles):
-            raise ValueError(f"Maximum {len(styles)} traces per yaxis allowed. If we want to allow this we need to add some logic.")
+            raise ValueError(
+                f"Maximum {len(styles)} traces per yaxis allowed. If we want to allow this we need to add some logic.")
         if i > len(colors):
-            raise ValueError(f"Maximum {len(colors)} yaxis axis allowed. If we want to allow this we need to add some logic.")
+            raise ValueError(
+                f"Maximum {len(colors)} yaxis axis allowed. If we want to allow this we need to add some logic.")
 
         if i == 0:
             ax = data.plot(
-                x=plot_definition.x_axis, 
-                y=yi.columns, 
+                x=plot_definition.x_axis,
+                y=yi.columns,
                 title=plot_definition.title,
                 color=[loss_color] * len(yi.columns)
             )
@@ -218,8 +224,8 @@ def plot_multi_alt(
             ax_new = ax.twinx()
             ax_new.spines["right"].set_position(("axes", 1 + spacing * (i - 1)))
             data.plot(
-                ax=ax_new, 
-                x=plot_definition.x_axis, 
+                ax=ax_new,
+                x=plot_definition.x_axis,
                 y=yi.columns,
                 color=[avg_colors[yl] for yl in range(len(yi.columns))]
             )
@@ -228,7 +234,6 @@ def plot_multi_alt(
     ax.legend(loc=0)
 
     return ax
-
 
 
 def plot_multi(
@@ -319,6 +324,7 @@ def parse_logs(model_name: str, for_ui: bool = False):
     matplotlib.use("Agg")
     if for_ui:
         status.textinfo = "Generating graphs"
+
     def convert_tfevent(filepath) -> Tuple[DataFrame, DataFrame, DataFrame, bool]:
         loss_events = []
         lr_events = []
@@ -407,10 +413,11 @@ def parse_logs(model_name: str, for_ui: bool = False):
         loss_columns = ['Wall_time', 'Name', 'Step', 'Loss', "LR", "Instance_Loss", "Prior_Loss"]
     # Concatenate (and sort) all partial individual dataframes
     all_df_loss = pd.concat(out_loss)[loss_columns]
-    all_df_loss = all_df_loss.fillna(method="ffill") # since we do not use the standard dreambooth algorithm it's possible to have NaN for instance or prior loss -> forward fill
+    all_df_loss = all_df_loss.fillna(
+        method="ffill")  # since we do not use the standard dreambooth algorithm it's possible to have NaN for instance or prior loss -> forward fill
     all_df_loss = all_df_loss.sort_values("Wall_time")
     all_df_loss = all_df_loss.reset_index(drop=True)
-    sw = int(smoothing_window if smoothing_window < len(all_df_loss)/3 else len(all_df_loss)/3)
+    sw = int(smoothing_window if smoothing_window < len(all_df_loss) / 3 else len(all_df_loss) / 3)
     all_df_loss = all_df_loss.rolling(sw).mean(numeric_only=True)
 
     out_images = []
@@ -421,7 +428,7 @@ def parse_logs(model_name: str, for_ui: bool = False):
     if has_all_lr:
         plotted_loss = plot_multi_alt(
             all_df_loss,
-            plot_definition = PlotDefinition(
+            plot_definition=PlotDefinition(
                 title=f"Loss Average/Learning Rate ({model_config.lr_scheduler})",
                 x_axis="Step",
                 y_axis=[

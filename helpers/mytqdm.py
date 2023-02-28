@@ -79,6 +79,7 @@ class mytqdm(tqdm):
         if self.update_ui:
             shared.status.textinfo = desc
         super().set_description(desc, refresh)
+
     def pause_ui(self):
         self.update_ui = False
 

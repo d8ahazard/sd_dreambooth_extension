@@ -11,8 +11,8 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
     from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
 except:
-    from dreambooth.dreambooth import shared # noqa
-    from dreambooth.dreambooth.dataclasses.db_concept import Concept # noqa
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.dataclasses.db_concept import Concept  # noqa
 
 # Keys to save, replacing our dumb __init__ method
 save_keys = []
@@ -169,7 +169,7 @@ class DreamboothConfig(BaseModel):
                 try:
                     from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention
                 except:
-                    from dreambooth.dreambooth.utils.utils import list_attention # noqa
+                    from dreambooth.dreambooth.utils.utils import list_attention  # noqa
                 value = list_attention()[-1]
                 print(f"Replacing flash attention in config to {value}")
 
@@ -339,6 +339,3 @@ def from_file(model_name):
         print(f"Exception loading config: {e}")
         traceback.print_exc()
         return None
-
-
-

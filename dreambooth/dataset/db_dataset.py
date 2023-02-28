@@ -18,18 +18,19 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import build_strict_tokens
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 except:
-    from dreambooth.dreambooth import shared # noqa
-    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData # noqa
-    from dreambooth.dreambooth.shared import status # noqa
-    from dreambooth.dreambooth.utils.image_utils import make_bucket_resolutions, closest_resolution, open_and_trim # noqa
-    from dreambooth.dreambooth.utils.text_utils import build_strict_tokens # noqa
-    from dreambooth.helpers.mytqdm import mytqdm # noqa
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
+    from dreambooth.dreambooth.shared import status  # noqa
+    from dreambooth.dreambooth.utils.image_utils import make_bucket_resolutions, closest_resolution, open_and_trim  # noqa
+    from dreambooth.dreambooth.utils.text_utils import build_strict_tokens  # noqa
+    from dreambooth.helpers.mytqdm import mytqdm  # noqa
 
 
 class DbDataset(torch.utils.data.Dataset):
     """
     Dataset for handling training data
     """
+
     def __init__(
             self,
             batch_size: int,
@@ -108,8 +109,6 @@ class DbDataset(torch.utils.data.Dataset):
                 ]
             )
 
-
-
     def load_image(self, image_path, caption, res):
         if self.debug_dataset:
             image = os.path.splitext(image_path)
@@ -164,7 +163,6 @@ class DbDataset(torch.utils.data.Dataset):
         # Create a list of resolutions
         bucket_resos = make_bucket_resolutions(self.resolution, min_size)
         self.train_dict = {}
-
 
         def sort_images(img_data: List[PromptData], resos, target_dict, is_class_img):
             for prompt_data in img_data:
@@ -254,7 +252,8 @@ class DbDataset(torch.utils.data.Dataset):
             class_str = str(class_count).rjust(len(str(nc)), " ")
             ex_str = str(example_len).rjust(len(str(ti * 2)), " ")
             # Log both here
-            pbar.write(f"Bucket {bucket_str} {dict_idx} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {ex_str}")
+            pbar.write(
+                f"Bucket {bucket_str} {dict_idx} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {ex_str}")
             bucket_idx += 1
         try:
             if set(self.latents_cache.keys()) != set(latents_cache.keys()):
@@ -269,7 +268,8 @@ class DbDataset(torch.utils.data.Dataset):
         inst_str = str(total_instances).rjust(len(str(ni)), " ")
         class_str = str(total_classes).rjust(len(str(nc)), " ")
         tot_str = str(total_len).rjust(len(str(ti)), " ")
-        pbar.write(f"Total Buckets {bucket_str} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {tot_str}")
+        pbar.write(
+            f"Total Buckets {bucket_str} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {tot_str}")
         self._length = total_len
         print(f"\nTotal images / batch: {self._length}, total examples: {total_len}")
 
@@ -325,7 +325,6 @@ class DbDataset(torch.utils.data.Dataset):
             img_index = 0
             repeats += 1
 
-
         self.image_index = img_index
 
         return image_index, repeats
@@ -349,5 +348,3 @@ class DbDataset(torch.utils.data.Dataset):
             "is_class": is_class_image
         }
         return example
-
-

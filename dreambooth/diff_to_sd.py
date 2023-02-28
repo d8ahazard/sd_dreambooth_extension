@@ -32,7 +32,7 @@ except:
         disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path  # noqa
     from dreambooth.dreambooth.utils.utils import printi  # noqa
     from dreambooth.helpers.mytqdm import mytqdm  # noqa
-    from dreambooth.lora_diffusion.lora import merge_lora_to_model # noqa
+    from dreambooth.lora_diffusion.lora import merge_lora_to_model  # noqa
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -420,7 +420,8 @@ def compile_checkpoint(model_name: str, lora_path: str = None, reload_models: bo
         # Apply LoRA to the unet
         if lora_path is not None and lora_path != "":
             unet_model = UNet2DConditionModel().from_pretrained(os.path.dirname(unet_path))
-            lora_rev = apply_lora(unet_model, lora_path, config.lora_unet_rank, config.lora_weight, "cpu", False, config.use_lora_extended)
+            lora_rev = apply_lora(unet_model, lora_path, config.lora_unet_rank, config.lora_weight, "cpu", False,
+                                  config.use_lora_extended)
             unet_state_dict = copy.deepcopy(unet_model.state_dict())
             del unet_model
             if lora_rev is not None:
@@ -459,8 +460,9 @@ def compile_checkpoint(model_name: str, lora_path: str = None, reload_models: bo
                 revision=config.revision,
                 torch_dtype=torch.float32
             )
-            
-            apply_lora(text_encoder, lora_txt_path, config.lora_txt_rank, config.lora_txt_weight, "cpu", True, config.use_lora_extended)
+
+            apply_lora(text_encoder, lora_txt_path, config.lora_txt_rank, config.lora_txt_weight, "cpu", True,
+                       config.use_lora_extended)
             text_enc_dict = copy.deepcopy(text_encoder.state_dict())
             del text_encoder
         else:

@@ -16,22 +16,21 @@ try:
     from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 except:
-    from dreambooth.dreambooth import shared # noqa
-    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig, from_file # noqa
-    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData # noqa
-    from dreambooth.dreambooth.dataset.class_dataset import ClassDataset # noqa
-    from dreambooth.dreambooth.shared import status # noqa
-    from dreambooth.dreambooth.utils.image_utils import db_save_image # noqa
-    from dreambooth.dreambooth.utils.utils import cleanup # noqa
-    from dreambooth.helpers.image_builder import ImageBuilder # noqa
-    from dreambooth.helpers.mytqdm import mytqdm # noqa
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig, from_file  # noqa
+    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
+    from dreambooth.dreambooth.dataset.class_dataset import ClassDataset  # noqa
+    from dreambooth.dreambooth.shared import status  # noqa
+    from dreambooth.dreambooth.utils.image_utils import db_save_image  # noqa
+    from dreambooth.dreambooth.utils.utils import cleanup  # noqa
+    from dreambooth.helpers.image_builder import ImageBuilder  # noqa
+    from dreambooth.helpers.mytqdm import mytqdm  # noqa
 
 
 def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None, class_prompts: List[PromptData] = None,
-                     batch_size = None, tokenizer=None, vae=None, debug=True, model_dir=""):
+                     batch_size=None, tokenizer=None, vae=None, debug=True, model_dir=""):
     if debug:
         print("Generating dataset.")
-
 
     from extensions.sd_dreambooth_extension.dreambooth.ui_functions import gr_update
     db_gallery = gr_update(value=None)
@@ -54,7 +53,6 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
             revision=args.revision,
             use_fast=False,
         )
-
 
     tokens = []
 
@@ -86,7 +84,7 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
     )
     train_dataset.make_buckets_with_caching(vae, min_bucket_reso)
 
-    #train_dataset = train_dataset.pin_memory()
+    # train_dataset = train_dataset.pin_memory()
     print(f"Total dataset length (steps): {len(train_dataset)}")
     return train_dataset
 
@@ -134,16 +132,16 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     shared.status.job_count = set_len
     shared.status.job_no = 0
     builder = ImageBuilder(
-        args, 
-        use_txt2img=use_txt2img, 
+        args,
+        use_txt2img=use_txt2img,
         lora_model=args.lora_model_name,
         batch_size=args.sample_batch_size,
         accelerator=accelerator,
         lora_unet_rank=args.lora_unet_rank,
         lora_txt_rank=args.lora_txt_rank,
         source_checkpoint=args.src
-        )
-    
+    )
+
     generated = 0
     actual_idx = 0
     for i in range(set_len):

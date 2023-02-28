@@ -30,7 +30,6 @@ class Concept(BaseModel):
         if input_dict is not None:
             self.load_params(input_dict)
 
-
     def to_dict(self):
         return self.dict()
 
@@ -45,4 +44,3 @@ class Concept(BaseModel):
                 self.is_valid = os.path.isdir(self.instance_data_dir)
             else:
                 self.is_valid = False
-

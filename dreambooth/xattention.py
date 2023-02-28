@@ -8,12 +8,12 @@ from torch.optim import Optimizer
 
 
 def get_scheduler(
-    name: Union[str, SchedulerType],
-    optimizer: Optimizer,
-    num_warmup_steps: Optional[int] = None,
-    num_training_steps: Optional[int] = None,
-    num_cycles: int = 1,
-    power: float = 1.0,
+        name: Union[str, SchedulerType],
+        optimizer: Optimizer,
+        num_warmup_steps: Optional[int] = None,
+        num_training_steps: Optional[int] = None,
+        num_cycles: int = 1,
+        power: float = 1.0,
 ):
     """
     Unified API to get any scheduler from its name.

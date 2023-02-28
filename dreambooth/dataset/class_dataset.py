@@ -8,22 +8,23 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
     from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
     from extensions.sd_dreambooth_extension.dreambooth.shared import status
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import FilenameTextGetter, make_bucket_resolutions, \
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import FilenameTextGetter, \
+        make_bucket_resolutions, \
         sort_prompts, get_images
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
 except:
-    from dreambooth.dreambooth import shared # noqa
-    from dreambooth.dreambooth.dataclasses.db_concept import Concept # noqa
-    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData # noqa
-    from dreambooth.dreambooth.shared import status # noqa
-    from dreambooth.dreambooth.utils.image_utils import FilenameTextGetter, make_bucket_resolutions, sort_prompts, get_images # noqa
-    from dreambooth.helpers.mytqdm import mytqdm # noqa
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.dataclasses.db_concept import Concept  # noqa
+    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
+    from dreambooth.dreambooth.shared import status  # noqa
+    from dreambooth.dreambooth.utils.image_utils import FilenameTextGetter, make_bucket_resolutions, sort_prompts, get_images  # noqa
+    from dreambooth.helpers.mytqdm import mytqdm  # noqa
 
 
 class ClassDataset(Dataset):
     """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
 
-    def __init__(self, concepts: [Concept], model_dir: str, max_width:int, shuffle: bool):
+    def __init__(self, concepts: [Concept], model_dir: str, max_width: int, shuffle: bool):
         # Existing training image data
         self.instance_prompts = []
         # Existing class image data
@@ -73,9 +74,11 @@ class ClassDataset(Dataset):
             status.textinfo = "Sorting images..."
             # Sort existing prompts
             class_prompt_datas = {}
-            instance_prompt_datas = sort_prompts(concept, text_getter, instance_dir, i_images[c_idx], bucket_resos, c_idx, False, pbar)
+            instance_prompt_datas = sort_prompts(concept, text_getter, instance_dir, i_images[c_idx], bucket_resos,
+                                                 c_idx, False, pbar)
             if concept.num_class_images_per > 0 and class_dir:
-                class_prompt_datas = sort_prompts(concept, text_getter, class_dir, c_images[c_idx], bucket_resos, c_idx, True, pbar)
+                class_prompt_datas = sort_prompts(concept, text_getter, class_dir, c_images[c_idx], bucket_resos, c_idx,
+                                                  True, pbar)
 
             # Iterate over each resolution of images, per concept
             for res, i_prompt_datas in instance_prompt_datas.items():
@@ -124,7 +127,8 @@ class ClassDataset(Dataset):
                     else:
                         sample_prompt = text_getter.create_text(
                             concept.class_prompt, "", concept.instance_token, concept.class_token, True)
-                        num_to_gen = concept.num_class_images_per * len(i_prompt_datas) - class_prompts.count(sample_prompt)
+                        num_to_gen = concept.num_class_images_per * len(i_prompt_datas) - class_prompts.count(
+                            sample_prompt)
                         for _ in range(num_to_gen):
                             pd = PromptData(
                                 prompt=sample_prompt,
@@ -138,7 +142,6 @@ class ClassDataset(Dataset):
                                 concept_index=c_idx,
                                 resolution=res)
                             new_prompts.append(pd)
-
 
                 # Extend class prompts by the proper amount
                 self.class_prompts.extend(c_prompt_datas)

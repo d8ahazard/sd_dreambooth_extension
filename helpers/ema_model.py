@@ -47,6 +47,7 @@ class EMAModel(object):
 
     def __call__(self, *args, **kwargs):
         return self.model(*args, **kwargs)
+
     def get_model(self):
         return self.model
 
@@ -108,7 +109,7 @@ class EMAModel(object):
                 ema_param.copy_(param)
             else:
                 ema_param.mul_(decay)
-                ema_param.add_(param.to(dtype=ema_param.dtype), alpha=1-decay)
+                ema_param.add_(param.to(dtype=ema_param.dtype), alpha=1 - decay)
             ema_state_dict[key] = ema_param
         self.load(ema_state_dict, build_params=False)
 
@@ -134,5 +135,3 @@ class EMAModel(object):
             unet_config_path = model_config_path.replace("ema_", "")
             if os.path.exists(unet_config_path):
                 shutil.copyfile(unet_config_path, model_config_path)
-
-

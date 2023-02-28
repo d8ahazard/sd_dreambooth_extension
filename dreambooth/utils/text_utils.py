@@ -34,7 +34,6 @@ def encode_hidden_state(text_encoder: CLIPTextModel, input_ids, pad_tokens, b_si
     return encoder_hidden_states
 
 
-
 def prompt_to_tags(src_prompt: str, instance_token: str = None, class_token: str = None) -> List[str]:
     src_tags = src_prompt.split(',')
     if class_token:

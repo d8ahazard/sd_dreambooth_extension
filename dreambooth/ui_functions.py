@@ -26,7 +26,8 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
     from extensions.sd_dreambooth_extension.dreambooth.shared import status, run
     from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_dataset, generate_classifiers
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, db_save_image, make_bucket_resolutions, get_dim, closest_resolution, open_and_trim
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, db_save_image, \
+        make_bucket_resolutions, get_dim, closest_resolution, open_and_trim
     from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
         reload_system_models, \
         get_lora_models, get_checkpoint_match
@@ -541,7 +542,7 @@ def start_training(model_dir: str, use_txt2img: bool = True):
             try:
                 from extensions.sd_dreambooth_extension.dreambooth.train_imagic import train_imagic  # noqa
             except:
-                from dreambooth.dreambooth.train_imagic import train_imagic # noqa
+                from dreambooth.dreambooth.train_imagic import train_imagic  # noqa
 
             result = train_imagic(config)
         else:
@@ -550,7 +551,7 @@ def start_training(model_dir: str, use_txt2img: bool = True):
             try:
                 from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main  # noqa
             except:
-                from dreambooth.dreambooth.train_dreambooth import main # noqa
+                from dreambooth.dreambooth.train_dreambooth import main  # noqa
             result = main(use_txt2img=use_txt2img)
 
         config = result.config
@@ -601,7 +602,7 @@ def reload_extension():
     try:
         from extensions.sd_dreambooth_extension.postinstall import actual_install  # noqa
     except:
-        from dreambooth.postinstall import actual_install # noqa
+        from dreambooth.postinstall import actual_install  # noqa
 
     actual_install()
 

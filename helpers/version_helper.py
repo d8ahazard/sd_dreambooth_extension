@@ -6,17 +6,19 @@ from typing import Union, Dict
 try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
 except:
-    from dreambooth.dreambooth import shared # noqa
+    from dreambooth.dreambooth import shared  # noqa
 
 store_file = os.path.join(shared.dreambooth_models_path, "revision.txt")
 change_file = os.path.join(shared.dreambooth_models_path, "changelog.txt")
+
 
 # Read the current revision from head
 def current_revision() -> Union[str, None]:
     if not os.path.exists(os.path.join(shared.extension_path, '.git')):
         return None
     return subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=shared.extension_path, capture_output=True,
-                                      text=True).stdout.strip()
+                          text=True).stdout.strip()
+
 
 # Read the stored revision from file
 def get_rev() -> Union[str, None]:
@@ -26,6 +28,7 @@ def get_rev() -> Union[str, None]:
             last_rev = sf.readlines()[0].strip()
     return last_rev
 
+
 # Store current revision to file
 def store_rev() -> None:
     current = current_revision()
@@ -33,10 +36,12 @@ def store_rev() -> None:
         with open(store_file, "w") as sf:
             sf.write(current)
 
+
 # Store existing changelog for re-retrieval
-def store_changes(changes:dict):
+def store_changes(changes: dict):
     with open(change_file, "w") as cf:
         json.dump(changes, cf)
+
 
 # Load changes from file
 def load_changes():
@@ -62,10 +67,10 @@ def check_updates(force: bool = False) -> Union[Dict[str, str], None]:
     elif force:
         changes = load_changes()
     return changes
-        
+
 
 # Get differences between current and last rev, make changelog
-def get_changes()-> Union[Dict[str, str], None]:
+def get_changes() -> Union[Dict[str, str], None]:
     # Check if the shared.extension_path has a .git folder
     if not os.path.exists(os.path.join(shared.extension_path, '.git')):
         return None

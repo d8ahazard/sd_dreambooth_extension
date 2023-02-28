@@ -29,8 +29,8 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
     from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup
 except:
-    from dreambooth.dreambooth import shared # noqa
-    from dreambooth.dreambooth.utils.utils import cleanup # noqa
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.utils.utils import cleanup  # noqa
 
 
 def should_reduce_batch_size(exception: Exception) -> bool:
@@ -50,7 +50,10 @@ def should_reduce_batch_size(exception: Exception) -> bool:
         return any(err in exception.args[0] for err in _statements)
     return False
 
+
 profiler = None
+
+
 def find_executable_batch_size(function: callable = None, starting_batch_size: int = 128,
                                starting_grad_size: int = 128, logging_dir: str = ""):
     """
@@ -130,7 +133,5 @@ def find_executable_batch_size(function: callable = None, starting_batch_size: i
                     traceback.print_exc()
                 else:
                     raise
-
-
 
     return decorator

@@ -4,7 +4,8 @@ from typing import Tuple
 try:
     from extensions.sd_dreambooth_extension.dreambooth.dataset.db_dataset import DbDataset
 except:
-    from dreambooth.dreambooth.dataset.db_dataset import DbDataset # noqa
+    from dreambooth.dreambooth.dataset.db_dataset import DbDataset  # noqa
+
 
 class BucketSampler:
     def __init__(self, dataset: DbDataset, batch_size, debug=False):
@@ -38,7 +39,6 @@ class BucketSampler:
 
     def __len__(self):
         return len(self.dataset.active_resolution) * self.batch_size
-
 
     def set_buckets(self):
         # Initialize list of bucket counts if not set
@@ -78,7 +78,7 @@ class BucketSampler:
         while len(batch) < self.batch_size:
             self.dataset.active_resolution = current_res
             img_index, img_repeats = self.dataset.get_example(current_res)
-            #next_item = torch.as_tensor(next_item, device='cpu', dtype=torch.float)
+            # next_item = torch.as_tensor(next_item, device='cpu', dtype=torch.float)
             if img_repeats != 0:
                 self.bucket_counter.count(current_res)
                 repeats += 1
@@ -99,6 +99,7 @@ class BucketSampler:
             print("Well, this is bad. We have no batch data.")
             raise StopIteration
         return self.batch.pop()
+
 
 class BucketCounter:
     def __init__(self, starting_keys=None):
@@ -138,4 +139,3 @@ class BucketCounter:
 
     def print(self):
         print(f"Bucket counts: {self.counts}")
-

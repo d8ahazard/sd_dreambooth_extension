@@ -905,6 +905,7 @@ def dreambooth_api(_, app: FastAPI):
 
         return status
 
+
 try:
     import modules.script_callbacks as script_callbacks
 

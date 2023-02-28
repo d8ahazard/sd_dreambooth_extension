@@ -10,8 +10,8 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
     from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import image_grid
 except:
-    from dreambooth.dreambooth import shared # noqa
-    from dreambooth.dreambooth.utils.image_utils import image_grid # noqa
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.utils.image_utils import image_grid  # noqa
 
 
 class DreamboothWebhookTarget(Enum):
@@ -50,26 +50,28 @@ def save_and_test_webhook(url: str) -> str:
 
     return "Unsupported target."
 
+
 hook_url = get_webhook_url()
 
+
 def send_training_update(
-    imgs: Union[List[str], str],
-    model_name: str,
-    prompt: Union[List[str], str],
-    training_step: Union[str, int],
-    global_step: Union[str, int],
+        imgs: Union[List[str], str],
+        model_name: str,
+        prompt: Union[List[str], str],
+        training_step: Union[str, int],
+        global_step: Union[str, int],
 ):
     global hook_url
     target = __detect_webhook_target(hook_url)
     if target == DreamboothWebhookTarget.UNKNOWN:
-        return # early return
+        return  # early return
 
     # Accept a list, make a grid
     if isinstance(imgs, List):
         out_imgs = [Image.open(img) for img in imgs]
 
         image = image_grid(out_imgs)
-        
+
         for i in out_imgs:
             i.close()
 
@@ -80,13 +82,13 @@ def send_training_update(
     if isinstance(prompt, List):
         _prompts = prompt
         prompt = ""
-        
-        for i,p in enumerate(_prompts,start=1):
+
+        for i, p in enumerate(_prompts, start=1):
             prompt += f"{i}: {p}\r\n"
 
     if target == DreamboothWebhookTarget.DISCORD:
         __send_discord_training_update(hook_url, image, model_name, prompt.strip(), training_step, global_step)
-        
+
     image.close()
 
 
@@ -112,12 +114,12 @@ def __test_discord(url: str) -> str:
 
 
 def __send_discord_training_update(
-    url: str,
-    image,
-    model_name: str,
-    prompt: str,
-    training_step: Union[str, int],
-    global_step: Union[str, int],
+        url: str,
+        image,
+        model_name: str,
+        prompt: str,
+        training_step: Union[str, int],
+        global_step: Union[str, int],
 ):
     discord = discord_webhook.DiscordWebhook(url, username="Dreambooth")
     out = discord_webhook.DiscordEmbed(color="C70039")

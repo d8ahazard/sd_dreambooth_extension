@@ -75,8 +75,9 @@ def check_progress_call():
     """
     active_box = gr.update(value=status.active)
     if not status.active:
-        return active_box, "", gr.update(visible=False, value=None), gr.update(visible=True), gr_show(True), gr_show(True), \
-               gr_show(False)
+        return active_box, "", gr.update(visible=False, value=None), gr.update(visible=True), gr_show(True), gr_show(
+            True), \
+            gr_show(False)
 
     progress = 0
 
@@ -217,7 +218,6 @@ def on_ui_tabs():
                     db_new_model_extract_ema = gr.Checkbox(label='Extract EMA Weights', value=False)
                     db_train_unfrozen = gr.Checkbox(label='Unfreeze Model', value=False)
 
-
             with gr.Column(variant="panel", elem_id="SettingsPanel"):
                 gr.HTML(value="<span class='hh'>Input</span>")
                 with gr.Tab("Settings", elem_id="TabSettings"):
@@ -234,17 +234,24 @@ def on_ui_tabs():
                                                          value=False)
                         with gr.Column():
                             gr.HTML(value="Intervals")
-                            db_num_train_epochs = gr.Slider(label="Training Steps Per Image (Epochs)", value=100, maximum=1000, step=1)
-                            db_epoch_pause_frequency = gr.Slider(label='Pause After N Epochs', value=0, maximum=100, step=1)
-                            db_epoch_pause_time = gr.Slider(label='Amount of time to pause between Epochs (s)', value=60, maximum=3600, step=1)
-                            db_save_embedding_every = gr.Slider(label='Save Model Frequency (Epochs)', value=25, maximum=1000, step=1)
-                            db_save_preview_every = gr.Slider(label='Save Preview(s) Frequency (Epochs)', value=5, maximum=1000, step=1)
+                            db_num_train_epochs = gr.Slider(label="Training Steps Per Image (Epochs)", value=100,
+                                                            maximum=1000, step=1)
+                            db_epoch_pause_frequency = gr.Slider(label='Pause After N Epochs', value=0, maximum=100,
+                                                                 step=1)
+                            db_epoch_pause_time = gr.Slider(label='Amount of time to pause between Epochs (s)',
+                                                            value=60, maximum=3600, step=1)
+                            db_save_embedding_every = gr.Slider(label='Save Model Frequency (Epochs)', value=25,
+                                                                maximum=1000, step=1)
+                            db_save_preview_every = gr.Slider(label='Save Preview(s) Frequency (Epochs)', value=5,
+                                                              maximum=1000, step=1)
 
                         with gr.Column():
                             gr.HTML(value="Batching")
                             db_train_batch_size = gr.Slider(label="Batch Size", value=1, minimum=1, maximum=100, step=1)
-                            db_gradient_accumulation_steps = gr.Slider(label="Gradient Accumulation Steps", value=1, minimum=1, maximum=100, step=1)
-                            db_sample_batch_size = gr.Slider(label="Class Batch Size", minimum=1, maximum=100, value=1, step=1)
+                            db_gradient_accumulation_steps = gr.Slider(label="Gradient Accumulation Steps", value=1,
+                                                                       minimum=1, maximum=100, step=1)
+                            db_sample_batch_size = gr.Slider(label="Class Batch Size", minimum=1, maximum=100, value=1,
+                                                             step=1)
                             db_gradient_set_to_none = gr.Checkbox(label="Set Gradients to None When Zeroing",
                                                                   value=True)
                             db_gradient_checkpointing = gr.Checkbox(label="Gradient Checkpointing", value=True)
@@ -260,26 +267,30 @@ def on_ui_tabs():
                             db_learning_rate = gr.Number(label='Learning Rate', value=2e-6)
                             db_learning_rate_min = gr.Number(label='Min Learning Rate', value=1e-6, visible=False)
                             db_lr_cycles = gr.Number(label="Number of Hard Resets", value=1, precision=0, visible=False)
-                            db_lr_factor = gr.Number(label="Constant/Linear Starting Factor", value=0.5, precision=2, visible=False)
+                            db_lr_factor = gr.Number(label="Constant/Linear Starting Factor", value=0.5, precision=2,
+                                                     visible=False)
                             db_lr_power = gr.Number(label="Polynomial Power", value=1.0, precision=1, visible=False)
-                            db_lr_scale_pos = gr.Slider(label="Scale Position", value=0.5, minimum=0, maximum=1, step=0.05, visible=False)
+                            db_lr_scale_pos = gr.Slider(label="Scale Position", value=0.5, minimum=0, maximum=1,
+                                                        step=0.05, visible=False)
                             with gr.Row(visible=False) as lora_lr_row:
                                 db_lora_learning_rate = gr.Number(label='Lora UNET Learning Rate', value=2e-4)
                                 db_lora_txt_learning_rate = gr.Number(label='Lora Text Encoder Learning Rate',
                                                                       value=2e-4)
-                            db_lr_warmup_steps = gr.Slider(label="Learning Rate Warmup Steps", value=0, step=5, maximum=10000)
-
+                            db_lr_warmup_steps = gr.Slider(label="Learning Rate Warmup Steps", value=0, step=5,
+                                                           maximum=10000)
 
                         with gr.Column():
                             gr.HTML(value="Image Processing")
-                            db_resolution = gr.Slider(label="Max Resolution", step=64, minimum=128, value=512, maximum=4096, elem_id="max_res")
+                            db_resolution = gr.Slider(label="Max Resolution", step=64, minimum=128, value=512,
+                                                      maximum=4096, elem_id="max_res")
                             db_hflip = gr.Checkbox(label="Apply Horizontal Flip", value=False)
                             db_sanity_prompt = gr.Textbox(label="Sanity Sample Prompt", placeholder="A generic prompt "
                                                                                                     "used to generate"
                                                                                                     " a sample image "
                                                                                                     "to verify model "
                                                                                                     "fidelity.")
-                            db_sanity_negative_prompt = gr.Textbox(label="Sanity Sample Negative Prompt", placeholder="A negative prompt for the generic sample image.")
+                            db_sanity_negative_prompt = gr.Textbox(label="Sanity Sample Negative Prompt",
+                                                                   placeholder="A negative prompt for the generic sample image.")
                             db_sanity_seed = gr.Number(label="Sanity Sample Seed", value=420420)
 
                         with gr.Column():
@@ -300,10 +311,9 @@ def on_ui_tabs():
                                 # from DreamboothWebhookTarget enum; for now, Discord is what I use ;)
                                 # Add options to include notifications on training complete and exceptions that halt training
                                 db_notification_webhook_url = gr.Textbox(label="Discord Webhook",
-                                                                      placeholder="https://discord.com/api/webhooks/XXX/XXXX",
-                                                                      value="")
+                                                                         placeholder="https://discord.com/api/webhooks/XXX/XXXX",
+                                                                         value="")
                                 notification_webhook_test_btn = gr.Button(value="Save and Test Webhook")
-
 
                     with gr.Accordion(open=False, label="Advanced"):
                         with gr.Row():
@@ -319,25 +329,31 @@ def on_ui_tabs():
                                         label="Memory Attention", value="default", choices=list_attention())
                                     db_cache_latents = gr.Checkbox(label="Cache Latents", value=True)
                                     db_train_unet = gr.Checkbox(label="Train UNET", value=True)
-                                    db_stop_text_encoder = gr.Slider(label="Step Ratio of Text Encoder Training", minimum=0, maximum=1, step=0.01, value=1, visible=True)
+                                    db_stop_text_encoder = gr.Slider(label="Step Ratio of Text Encoder Training",
+                                                                     minimum=0, maximum=1, step=0.01, value=1,
+                                                                     visible=True)
                                     db_offset_noise = gr.Slider(label="Offset Noise", minimum=0, maximum=1,
-                                                                     step=.01, value=0)
-                                    db_freeze_clip_normalization = gr.Checkbox(label="Freeze CLIP Normalization Layers", visible=True, value=False)
+                                                                step=.01, value=0)
+                                    db_freeze_clip_normalization = gr.Checkbox(label="Freeze CLIP Normalization Layers",
+                                                                               visible=True, value=False)
                                     db_clip_skip = gr.Slider(label="Clip Skip", value=1, minimum=1, maximum=12, step=1)
-                                    db_adamw_weight_decay = gr.Slider(label="AdamW Weight Decay", minimum=0, maximum=1, step=1e-7, value=1e-2, visible=True)
+                                    db_adamw_weight_decay = gr.Slider(label="AdamW Weight Decay", minimum=0, maximum=1,
+                                                                      step=1e-7, value=1e-2, visible=True)
                                     db_pad_tokens = gr.Checkbox(label="Pad Tokens", value=True)
                                     db_strict_tokens = gr.Checkbox(label="Strict Tokens", value=False)
                                     db_shuffle_tags = gr.Checkbox(label="Shuffle Tags", value=True)
-                                    db_max_token_length = gr.Slider(label="Max Token Length", minimum=75, maximum=300, step=75)
+                                    db_max_token_length = gr.Slider(label="Max Token Length", minimum=75, maximum=300,
+                                                                    step=75)
                                 with gr.Column():
                                     gr.HTML(value="Prior Loss")
                                     db_prior_loss_scale = gr.Checkbox(label="Scale Prior Loss", value=False)
                                     db_prior_loss_weight = gr.Slider(label="Prior Loss Weight", minimum=0.01, maximum=1,
                                                                      step=.01, value=0.75)
-                                    db_prior_loss_target = gr.Number(label="Prior Loss Target", value=100, visible=False)
-                                    db_prior_loss_weight_min = gr.Slider(label="Minimum Prior Loss Weight", minimum=0.01,
-                                                                  maximum=1, step=.01, value=0.1, visible=False)
-
+                                    db_prior_loss_target = gr.Number(label="Prior Loss Target", value=100,
+                                                                     visible=False)
+                                    db_prior_loss_weight_min = gr.Slider(label="Minimum Prior Loss Weight",
+                                                                         minimum=0.01,
+                                                                         maximum=1, step=.01, value=0.1, visible=False)
 
                     with gr.Row():
                         with gr.Column(scale=2):
@@ -349,37 +365,38 @@ def on_ui_tabs():
                             db_train_wizard_object = gr.Button(value="Training Wizard (Object/Style)")
                         with gr.Tab("Concept 1"):
                             c1_instance_data_dir, c1_class_data_dir, c1_instance_prompt, \
-                            c1_class_prompt, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token, \
-                            c1_class_token, c1_num_class_images_per, c1_class_negative_prompt, c1_class_guidance_scale, \
-                            c1_class_infer_steps, c1_save_sample_negative_prompt, c1_n_save_sample, c1_sample_seed, \
-                            c1_save_guidance_scale, c1_save_infer_steps = build_concept_panel(1)
+                                c1_class_prompt, c1_save_sample_prompt, c1_save_sample_template, c1_instance_token, \
+                                c1_class_token, c1_num_class_images_per, c1_class_negative_prompt, c1_class_guidance_scale, \
+                                c1_class_infer_steps, c1_save_sample_negative_prompt, c1_n_save_sample, c1_sample_seed, \
+                                c1_save_guidance_scale, c1_save_infer_steps = build_concept_panel(1)
 
                         with gr.Tab("Concept 2"):
                             c2_instance_data_dir, c2_class_data_dir, c2_instance_prompt, \
-                            c2_class_prompt, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token, \
-                            c2_class_token, c2_num_class_images_per, c2_class_negative_prompt, c2_class_guidance_scale, \
-                            c2_class_infer_steps, c2_save_sample_negative_prompt, c2_n_save_sample, c2_sample_seed, \
-                            c2_save_guidance_scale, c2_save_infer_steps = build_concept_panel(2)
+                                c2_class_prompt, c2_save_sample_prompt, c2_save_sample_template, c2_instance_token, \
+                                c2_class_token, c2_num_class_images_per, c2_class_negative_prompt, c2_class_guidance_scale, \
+                                c2_class_infer_steps, c2_save_sample_negative_prompt, c2_n_save_sample, c2_sample_seed, \
+                                c2_save_guidance_scale, c2_save_infer_steps = build_concept_panel(2)
 
                         with gr.Tab("Concept 3"):
                             c3_instance_data_dir, c3_class_data_dir, c3_instance_prompt, \
-                            c3_class_prompt, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token, \
-                            c3_class_token, c3_num_class_images_per, c3_class_negative_prompt, c3_class_guidance_scale, \
-                            c3_class_infer_steps, c3_save_sample_negative_prompt, c3_n_save_sample, c3_sample_seed, \
-                            c3_save_guidance_scale, c3_save_infer_steps = build_concept_panel(3)
-                            
+                                c3_class_prompt, c3_save_sample_prompt, c3_save_sample_template, c3_instance_token, \
+                                c3_class_token, c3_num_class_images_per, c3_class_negative_prompt, c3_class_guidance_scale, \
+                                c3_class_infer_steps, c3_save_sample_negative_prompt, c3_n_save_sample, c3_sample_seed, \
+                                c3_save_guidance_scale, c3_save_infer_steps = build_concept_panel(3)
+
                         with gr.Tab("Concept 4"):
                             c4_instance_data_dir, c4_class_data_dir, c4_instance_prompt, \
-                            c4_class_prompt, c4_save_sample_prompt, c4_save_sample_template, c4_instance_token, \
-                            c4_class_token, c4_num_class_images_per, c4_class_negative_prompt, c4_class_guidance_scale, \
-                            c4_class_infer_steps, c4_save_sample_negative_prompt, c4_n_save_sample, c4_sample_seed, \
-                            c4_save_guidance_scale, c4_save_infer_steps = build_concept_panel(4)
+                                c4_class_prompt, c4_save_sample_prompt, c4_save_sample_template, c4_instance_token, \
+                                c4_class_token, c4_num_class_images_per, c4_class_negative_prompt, c4_class_guidance_scale, \
+                                c4_class_infer_steps, c4_save_sample_negative_prompt, c4_n_save_sample, c4_sample_seed, \
+                                c4_save_guidance_scale, c4_save_infer_steps = build_concept_panel(4)
                 with gr.Tab("Saving", elme_id="TabSave"):
                     with gr.Column():
                         gr.HTML("General")
                         db_custom_model_name = gr.Textbox(label="Custom Model Name", value="",
                                                           placeholder="Enter a model name for saving checkpoints and lora models.")
-                        db_save_safetensors = gr.Checkbox(label="Save in .safetensors format", value=True, visible=False)
+                        db_save_safetensors = gr.Checkbox(label="Save in .safetensors format", value=True,
+                                                          visible=False)
                         db_save_ema = gr.Checkbox(label="Save EMA Weights to Generated Models", value=True)
                         db_infer_ema = gr.Checkbox(label="Use EMA Weights for Inference", value=False)
                     with gr.Column():
@@ -387,17 +404,20 @@ def on_ui_tabs():
                         db_half_model = gr.Checkbox(label="Half Model", value=False)
                         db_use_subdir = gr.Checkbox(label="Save Checkpoint to Subdirectory", value=True)
                         db_save_ckpt_during = gr.Checkbox(label="Generate a .ckpt file when saving during training.")
-                        db_save_ckpt_after = gr.Checkbox(label="Generate a .ckpt file when training completes.", value=True)
+                        db_save_ckpt_after = gr.Checkbox(label="Generate a .ckpt file when training completes.",
+                                                         value=True)
                         db_save_ckpt_cancel = gr.Checkbox(label="Generate a .ckpt file when training is canceled.")
                     with gr.Column(visible=False) as lora_save_col:
                         gr.HTML("Lora")
                         db_lora_unet_rank = gr.Slider(label="Lora UNET Rank", value=4, minimum=2, maximum=128, step=2)
-                        db_lora_txt_rank = gr.Slider(label="Lora Text Encoder Rank", value=4, minimum=2, maximum=768, step=2)
+                        db_lora_txt_rank = gr.Slider(label="Lora Text Encoder Rank", value=4, minimum=2, maximum=768,
+                                                     step=2)
                         db_lora_weight = gr.Slider(label="Lora Weight", value=1, minimum=0.1, maximum=1, step=0.1)
                         db_lora_txt_weight = gr.Slider(label="Lora Text Weight", value=1, minimum=0.1, maximum=1,
                                                        step=0.1)
                         db_save_lora_during = gr.Checkbox(label="Generate lora weights when saving during training.")
-                        db_save_lora_after = gr.Checkbox(label="Generate lora weights when training completes.", value=True)
+                        db_save_lora_after = gr.Checkbox(label="Generate lora weights when training completes.",
+                                                         value=True)
                         db_save_lora_cancel = gr.Checkbox(label="Generate lora weights when training is canceled.")
                     with gr.Column():
                         gr.HTML("Diffusion Weights")
@@ -413,20 +433,25 @@ def on_ui_tabs():
                         db_generate_graph = gr.Button(value="Generate Graph")
                         db_graph_smoothing = gr.Slider(value=50, label="Graph Smoothing Steps", minimum=10, maximum=500)
                         db_debug_buckets = gr.Button(value="Debug Buckets")
-                        db_bucket_epochs = gr.Slider(value=10, step=1, minimum=1, maximum=1000, label="Epochs to Simulate")
-                        db_bucket_batch = gr.Slider(value=1, step=1, minimum=1, maximum=500, label="Batch Size to Simulate")
+                        db_bucket_epochs = gr.Slider(value=10, step=1, minimum=1, maximum=1000,
+                                                     label="Epochs to Simulate")
+                        db_bucket_batch = gr.Slider(value=1, step=1, minimum=1, maximum=500,
+                                                    label="Batch Size to Simulate")
                         db_generate_sample = gr.Button(value="Generate Sample Images")
                         db_sample_prompt = gr.Textbox(label="Sample Prompt")
                         db_sample_prompt_file = gr.Textbox(label="Sample Prompt File")
                         db_sample_negative = gr.Textbox(label="Sample Negative Prompt")
-                        db_sample_width = gr.Slider(label="Sample Width", value=512, step=64,minimum=128, maximum=2048)
-                        db_sample_height = gr.Slider(label="Sample Height", value=512, step=64, minimum=128, maximum=2048)
+                        db_sample_width = gr.Slider(label="Sample Width", value=512, step=64, minimum=128, maximum=2048)
+                        db_sample_height = gr.Slider(label="Sample Height", value=512, step=64, minimum=128,
+                                                     maximum=2048)
                         db_sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
-                        db_num_samples = gr.Slider(label="Number of Samples to Generate", value=1, minimum=1, maximum=1000, step=1)
+                        db_num_samples = gr.Slider(label="Number of Samples to Generate", value=1, minimum=1,
+                                                   maximum=1000, step=1)
                         db_gen_sample_batch_size = gr.Slider(label="Sample Batch Size", value=1, step=1, minimum=1,
-                                                     maximum=100, interactive=True)
+                                                             maximum=100, interactive=True)
                         db_sample_steps = gr.Slider(label="Sample Steps", value=20, minimum=1, maximum=500, step=1)
-                        db_sample_scale = gr.Slider(label="Sample CFG Scale", value=7.5, step=0.1, minimum=1, maximum=20)
+                        db_sample_scale = gr.Slider(label="Sample CFG Scale", value=7.5, step=0.1, minimum=1,
+                                                    maximum=20)
                         db_scheduler = gr.Dropdown(label='Scheduler', choices=get_scheduler_names(),
                                                    value="DEISMultistep")
 
@@ -463,6 +488,7 @@ def on_ui_tabs():
                 db_check_progress = gr.Button("Check Progress", elem_id=f"db_check_progress", visible=False)
                 db_update_params = gr.Button("Update Parameters", elem_id="db_update_params", visible=False)
                 db_launch_error = gr.HTML(elem_id="launch_errors", visible=False, value=get_launch_errors)
+
                 def check_toggles(use_ema, use_lora, lr_scheduler, train_unet, scale_prior):
                     stop_text_encoder = update_stop_tenc(train_unet)
                     show_ema, lora_save, lora_lr, lora_model = disable_ema(use_lora)
@@ -471,16 +497,16 @@ def on_ui_tabs():
                     lr_power, lr_cycles, lr_scale_pos, lr_factor, learning_rate_min, lr_warmup_steps = toggle_lr_min(
                         lr_scheduler)
                     loss_min, loss_tgt = toggle_loss_items(scale_prior)
-                    return stop_text_encoder,\
-                        show_ema,\
-                        lora_save,\
-                        lora_lr,\
-                        lora_model,\
-                        lr_power,\
-                        lr_cycles,\
-                        lr_scale_pos,\
-                        lr_factor,\
-                        learning_rate_min,\
+                    return stop_text_encoder, \
+                        show_ema, \
+                        lora_save, \
+                        lora_lr, \
+                        lora_model, \
+                        lr_power, \
+                        lr_cycles, \
+                        lr_scale_pos, \
+                        lr_factor, \
+                        learning_rate_min, \
                         lr_warmup_steps, \
                         loss_min, \
                         loss_tgt
@@ -538,7 +564,6 @@ def on_ui_tabs():
                     outputs=[db_secret]
                 )
 
-
                 def update_stop_tenc(train_unet):
                     # If train unet enabled, read "hidden" value from stop_tenc and restore
                     if train_unet:
@@ -559,7 +584,8 @@ def on_ui_tabs():
                 )
 
                 # Elements to update when progress changes
-                progress_elements = [db_active, db_progressbar, db_preview, db_gallery, db_status, db_prompt_list, ui_check_progress_initial]
+                progress_elements = [db_active, db_progressbar, db_preview, db_gallery, db_status, db_prompt_list,
+                                     ui_check_progress_initial]
 
                 db_check_progress.click(
                     fn=lambda: check_progress_call(),
@@ -582,7 +608,6 @@ def on_ui_tabs():
                     outputs=progress_elements,
                 )
 
-
             def format_updates():
                 updates = check_updates()
                 strings = []
@@ -602,13 +627,14 @@ def on_ui_tabs():
                     modal_title = gr.HTML("<h2>Changelog</h2>", elem_id="modal_title")
                     close_modal = gr.Button(value="X", elem_id="close_modal")
                 with gr.Row():
-                    modal_release_notes = gr.HTML("<h3><a href='https://github.com/d8ahazard/sd_dreambooth_extension/releases/tag/1.0.1'>Release notes</a></h3>", elem_id="modal_notes")
+                    modal_release_notes = gr.HTML(
+                        "<h3><a href='https://github.com/d8ahazard/sd_dreambooth_extension/releases/tag/1.0.1'>Release notes</a></h3>",
+                        elem_id="modal_notes")
                 with gr.Column():
                     change_log = gr.HTML(format_updates(), elem_id="change_log")
 
         global params_to_save
         global params_to_load
-
 
         # List of all the things that we need to save
         params_to_save = [
@@ -687,7 +713,7 @@ def on_ui_tabs():
             db_tf32_enable,
             db_train_batch_size,
             db_train_imagic_only,
-            db_train_unet,         
+            db_train_unet,
             db_stop_text_encoder,
             db_use_concepts,
             db_train_unfrozen,
@@ -765,7 +791,7 @@ def on_ui_tabs():
             c4_save_sample_template
         ]
         # Do not load these values when 'load settings' is clicked
-        params_to_exclude = [db_model_name,db_epochs,db_model_path,db_revision,db_src]
+        params_to_exclude = [db_model_name, db_epochs, db_model_path, db_revision, db_src]
 
         # Populate by the below method and handed out to other elements
         params_to_load = []
@@ -1095,9 +1121,9 @@ def build_concept_panel(concept: int):
         sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
         save_guidance_scale = gr.Slider(label="Sample CFG Scale", value=7.5, maximum=12, minimum=1, step=0.1)
         save_infer_steps = gr.Slider(label="Sample Steps", value=20, minimum=10, maximum=200, step=1)
-    return [instance_data_dir, class_data_dir, instance_prompt, class_prompt,save_sample_prompt, sample_template,
+    return [instance_data_dir, class_data_dir, instance_prompt, class_prompt, save_sample_prompt, sample_template,
             instance_token, class_token, num_class_images_per, class_negative_prompt, class_guidance_scale,
-            class_infer_steps, save_sample_negative_prompt, n_save_sample, sample_seed,save_guidance_scale,
+            class_infer_steps, save_sample_negative_prompt, n_save_sample, sample_seed, save_guidance_scale,
             save_infer_steps]
 
 

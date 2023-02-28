@@ -19,10 +19,12 @@ def run(command, desc=None, errdesc=None, custom_env=None, live=True):
     if live:
         result = subprocess.run(command, shell=True, env=custom_env or os.environ)
         if result.returncode:
-            raise RuntimeError(f"{errdesc or 'Error running command'}. Command: {command} Error code: {result.returncode}")
+            raise RuntimeError(
+                f"{errdesc or 'Error running command'}. Command: {command} Error code: {result.returncode}")
         return ""
 
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, env=custom_env or os.environ)
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True,
+                            env=custom_env or os.environ)
 
     if result.returncode:
         message = f"{errdesc or 'Error running command'}. Command: {command} Error code: {result.returncode}\n"
@@ -39,7 +41,7 @@ def actual_install():
         try:
             from extensions.sd_dreambooth_extension.dreambooth import shared
         except:
-            from dreambooth.dreambooth import shared # noqa
+            from dreambooth.dreambooth import shared  # noqa
         shared.launch_error = None
         return
     if sys.version_info < (3, 8):
@@ -48,7 +50,6 @@ def actual_install():
         import importlib.metadata as importlib_metadata
 
     req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
-
 
     def install_torch(torch_command, use_torch2):
         try:
@@ -85,7 +86,8 @@ def actual_install():
         os_string = "win_amd64" if os.name == "nt" else "linux_x86_64"
         torch_ver = f"2.0.0.dev{torch_version}+{cuda_version}"
         torch_vis_ver = f"0.15.0.dev{torch_version}+{cuda_version}"
-        xformers_url = f"{resolved_url}/{xformers_ver}-{python_version}-{python_version}-{os_string}.whl".replace("/tag/", "/download/")
+        xformers_url = f"{resolved_url}/{xformers_ver}-{python_version}-{python_version}-{os_string}.whl".replace(
+            "/tag/", "/download/")
         torch2_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}/torch-2.0.0.dev{torch_version}%2B{cuda_version}-{python_version}-{python_version}-{os_string}.whl"
         torchvision2_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}/torchvision-0.15.0.dev{torch_version}%2B{cuda_version}-{python_version}-{python_version}-{os_string}.whl"
         triton_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}/pytorch_triton-2.0.0%2B0d7e753227-{python_version}-{python_version}-linux_x86_64.whl"
@@ -151,7 +153,6 @@ def actual_install():
                 # Add package name and version tuple to dictionary
                 reqs_dict[package_name] = version_tuple
 
-
         checks = ["bitsandbytes", "diffusers", "transformers", "xformers"]
         torch_ver = "1.13.1+cu117"
         torch_vis_ver = "0.14.1+cu117"
@@ -170,7 +171,6 @@ def actual_install():
         #     torch_cmd = "pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117"
         #     xformers_cmd = "pip install xformers==0.0.17.dev464"
 
-
         # # Check/install xformers
         # has_xformers = importlib.util.find_spec("xformers") is not None
         # xformers_check = str(importlib_metadata.version("xformers")) if has_xformers else None
@@ -188,11 +188,11 @@ def actual_install():
         torch_vision_check = str(importlib_metadata.version("torchvision")) if has_torch_vision else None
         # xformers_check = str(importlib_metadata.version("xformers")) if has_xformers else None
 
-
         # if torch_check != torch_ver or torch_vision_check != torch_vis_ver:
         #     torch_ver, torch_vis_ver = install_torch(torch_cmd, use_torch2)
 
-        for check, ver, module in [(torch_check, torch_ver, "torch"), (torch_vision_check, torch_vis_ver, "torchvision")]:
+        for check, ver, module in [(torch_check, torch_ver, "torch"),
+                                   (torch_vision_check, torch_vis_ver, "torchvision")]:
 
             if check != ver:
                 if not check:
@@ -243,7 +243,6 @@ def actual_install():
                 launch_errors.append(error)
         except:
             pass
-
 
         if len(launch_errors):
             print(f"Launch errors detected: {launch_errors}")

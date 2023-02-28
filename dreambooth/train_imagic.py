@@ -19,10 +19,10 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.shared import status
     from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import list_features, is_image
 except:
-    from dreambooth.dreambooth import shared # noqa
-    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig # noqa
-    from dreambooth.dreambooth.shared import status # noqa
-    from dreambooth.dreambooth.utils.image_utils import list_features, is_image # noqa
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
+    from dreambooth.dreambooth.shared import status  # noqa
+    from dreambooth.dreambooth.utils.image_utils import list_features, is_image  # noqa
 
 logger = get_logger(__name__)
 

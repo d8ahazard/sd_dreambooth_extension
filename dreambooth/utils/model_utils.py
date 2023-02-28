@@ -6,11 +6,11 @@ import os
 from transformers import PretrainedConfig
 
 try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared # noqa
+    from extensions.sd_dreambooth_extension.dreambooth import shared  # noqa
     from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup  # noqa
 except:
-    from dreambooth.dreambooth import shared # noqa
-    from dreambooth.dreambooth.utils.utils import cleanup # noqa
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.utils.utils import cleanup  # noqa
 
 checkpoints_list = {}
 checkpoint_alisases = {}
@@ -18,6 +18,7 @@ checkpoints_loaded = collections.OrderedDict()
 
 model_dir = "Stable-diffusion"
 model_path = os.path.abspath(os.path.join(shared.models_path, model_dir))
+
 
 def model_hash(filename):
     """old hash that only looks at a small part of the file and is prone to collisions"""
@@ -59,7 +60,8 @@ class CheckpointInfo:
 
         self.title = name if self.shorthash is None else f'{name} [{self.shorthash}]'
 
-        self.ids = [self.hash, self.model_name, self.title, name, f'{name} [{self.hash}]'] + ([self.shorthash, self.sha256, f'{self.name} [{self.shorthash}]'] if self.shorthash else [])
+        self.ids = [self.hash, self.model_name, self.title, name, f'{name} [{self.hash}]'] + (
+            [self.shorthash, self.sha256, f'{self.name} [{self.shorthash}]'] if self.shorthash else [])
 
     def register(self):
         checkpoints_list[self.title] = self
@@ -82,10 +84,12 @@ class CheckpointInfo:
 
         return self.shorthash
 
+
 def list_models():
     checkpoints_list.clear()
     checkpoint_alisases.clear()
-    model_list = modelloader.load_models(model_path=model_path, command_path=shared.cmd_opts.ckpt_dir, ext_filter=[".ckpt", ".safetensors"], ext_blacklist=[".vae.safetensors"])
+    model_list = modelloader.load_models(model_path=model_path, command_path=shared.cmd_opts.ckpt_dir,
+                                         ext_filter=[".ckpt", ".safetensors"], ext_blacklist=[".vae.safetensors"])
 
     cmd_ckpt = shared.cmd_opts.ckpt
     if os.path.exists(cmd_ckpt):
@@ -94,17 +98,19 @@ def list_models():
 
         shared.opts.data['sd_model_checkpoint'] = checkpoint_info.title
     elif cmd_ckpt is not None and cmd_ckpt != shared.default_sd_model_file:
-        print(f"Checkpoint in --ckpt argument not found (Possible it was moved to {model_path}: {cmd_ckpt}", file=sys.stderr)
+        print(f"Checkpoint in --ckpt argument not found (Possible it was moved to {model_path}: {cmd_ckpt}",
+              file=sys.stderr)
 
     for filename in model_list:
         checkpoint_info = CheckpointInfo(filename)
         checkpoint_info.register()
 
+
 def get_model_snapshots(model_name: str):
     try:
         from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
     except:
-        from dreambooth.dreambooth.dataclasses.db_config import from_file # noqa
+        from dreambooth.dreambooth.dataclasses.db_config import from_file  # noqa
 
     result = None
     try:
@@ -139,6 +145,7 @@ def get_db_models():
                 output.append(found)
     return output
 
+
 def get_lora_models():
     model_dir = shared.lora_models_path
     out_dir = model_dir
@@ -166,6 +173,7 @@ def unload_system_models():
     except:
         pass
 
+
 def reload_system_models():
     try:
         import modules.shared
@@ -174,7 +182,6 @@ def reload_system_models():
         print("Restored system models.")
     except:
         pass
-
 
 
 def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision):
@@ -196,7 +203,8 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
     else:
         raise ValueError(f"{model_class} is not supported.")
 
-#from modules.sd_models import CheckpointInfo
+
+# from modules.sd_models import CheckpointInfo
 
 def get_checkpoint_match(search_string):
     try:
@@ -207,6 +215,7 @@ def get_checkpoint_match(search_string):
     except:
         pass
     return None
+
 
 def disable_safe_unpickle():
     try:
@@ -222,4 +231,3 @@ def enable_safe_unpickle():
         auto_shared.cmd_opts.disable_safe_unpickle = False
     except:
         pass
-

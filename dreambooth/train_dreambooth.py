@@ -275,8 +275,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
 
         if args.stop_text_encoder != 0 and accelerator.unwrap_model(text_encoder).dtype != torch.float32:
             print(f"Text encoder loaded as datatype {accelerator.unwrap_model(text_encoder).dtype}."
-                f" {low_precision_error_string}"
-            )
+                  f" {low_precision_error_string}"
+                  )
 
         # Enable TF32 for faster training on Ampere GPUs,
         # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices

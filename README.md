@@ -24,9 +24,10 @@ We also need a newer version of diffusers, as SD-WebUI uses version 0.3.0, while
 having the right diffusers version is the cause of the 'UNet2DConditionModel' object has no attribute '
 enable_gradient_checkpointing' error message, as well as safety checker warnings.
 
-## IF YOU ARE HAVING ISSUES WITH REQUIREMENTS AFTER INSTALLING, LOOK BELOW 
+## IF YOU ARE HAVING ISSUES WITH REQUIREMENTS AFTER INSTALLING, LOOK BELOW
 
-To force sd-web-ui to *only* install one set of requirements and resolve many issues on install, we can specify the command line argument:
+To force sd-web-ui to *only* install one set of requirements and resolve many issues on install, we can specify the
+command line argument:
 
 set/export REQS_FILE=.\extensions\sd_dreambooth_extension\requirements.txt
 
@@ -85,20 +86,20 @@ Generate Samples* - Click this while training to generate samples before the nex
 
 *Model* - The model to use. Training parameters will not be automatically loaded to the UI when changing models.
 
-*Lora Model* - An existing lora checkpoint to load if resuming training, or to merge with the base model if generating a checkpoint.
+*Lora Model* - An existing lora checkpoint to load if resuming training, or to merge with the base model if generating a
+checkpoint.
 
 *Half Model* - Enable this to save the model using half precision. Results in a smaller checkpoint with little
 noticeable difference in image output.
 
 *Save Checkpoint to Subdirectory* - Save the checkpoint to a subdirectory using the model name.
 
-
 ## Training Parameters
 
-*Performance Wizard (WIP)* - Tries to set the optimal training parameters based on the amount of VRAM for your GPU and number of instance images.
+*Performance Wizard (WIP)* - Tries to set the optimal training parameters based on the amount of VRAM for your GPU and
+number of instance images.
 
 Probably not perfect, but at least a good starting point.
-
 
 ### Intervals
 
@@ -126,14 +127,14 @@ in seconds.
 *Class batch size* - How many classification images to generate simultaneously. Set this to whatever you can safely
 process at once using Txt2Image, or just leave it alone.
 
-*Set Gradients to None When Zeroing* -  instead of setting to zero, set the grads to None. This will in general have lower memory footprint, and can modestly improve performance.
+*Set Gradients to None When Zeroing* - instead of setting to zero, set the grads to None. This will in general have
+lower memory footprint, and can modestly improve performance.
 https://pytorch.org/docs/stable/generated/torch.optim.Optimizer.zero_grad.html
 
 *Gradient Checkpointing* - Enable this to save VRAM at the cost of a bit of speed.
 https://arxiv.org/abs/1604.06174v2
 
 *Max Grad Norms* - The maximum number of gradient normalizati
-
 
 ### Learning Rate
 
@@ -215,7 +216,9 @@ to better editability.
 
 *Max Token Length* - raise the tokenizer's default limit above 75. Requires Pad Tokens for > 75.
 
-*AdamW Weight Decay* - The weight decay of the AdamW Optimizer used for training. Values closer to 0 closely match your training dataset, and values closer to 1 generalize more and deviate from your training dataset. Default is 1e-2, values lower than 0.1 are recommended.
+*AdamW Weight Decay* - The weight decay of the AdamW Optimizer used for training. Values closer to 0 closely match your
+training dataset, and values closer to 1 generalize more and deviate from your training dataset. Default is 1e-2, values
+lower than 0.1 are recommended.
 
 ## Concepts
 

@@ -55,72 +55,72 @@ function toggleComponents(enable, disableAll) {
 
 // Disconnect a gradio mutation observer, update the element value, and reconnect the observer?
 function updateInputValue(elements, newValue) {
-  const savedListeners = [];
-  const savedObservers = [];
+    const savedListeners = [];
+    const savedObservers = [];
 
-  elements.forEach((element) => {
-    // Save any existing listeners and remove them
-    const listeners = [];
-    const events = ['change', 'input'];
-    events.forEach((event) => {
-      if (element['on' + event]) {
-        listeners.push({
-          event,
-          listener: element['on' + event],
+    elements.forEach((element) => {
+        // Save any existing listeners and remove them
+        const listeners = [];
+        const events = ['change', 'input'];
+        events.forEach((event) => {
+            if (element['on' + event]) {
+                listeners.push({
+                    event,
+                    listener: element['on' + event],
+                });
+                element['on' + event] = null;
+            }
+            const eventListeners = element.getEventListeners?.(event);
+            if (eventListeners) {
+                eventListeners.forEach(({listener}) => {
+                    listeners.push({
+                        event,
+                        listener,
+                    });
+                    element.removeEventListener(event, listener);
+                });
+            }
         });
-        element['on' + event] = null;
-      }
-      const eventListeners = element.getEventListeners?.(event);
-      if (eventListeners) {
-        eventListeners.forEach(({ listener }) => {
-          listeners.push({
-            event,
-            listener,
-          });
-          element.removeEventListener(event, listener);
+        savedListeners.push(listeners);
+
+        // Save any existing MutationObservers and disconnect them
+        const observer = new MutationObserver(() => {
         });
-      }
+        if (observer && element.tagName === 'INPUT') {
+            observer.observe(element, {
+                attributes: true,
+                attributeFilter: ['value'],
+            });
+            savedObservers.push(observer);
+            observer.disconnect();
+        } else {
+            savedObservers.push(null);
+        }
+
+        // Update the value of the element
+        element.value = newValue;
     });
-    savedListeners.push(listeners);
 
-    // Save any existing MutationObservers and disconnect them
-    const observer = new MutationObserver(() => {});
-    if (observer && element.tagName === 'INPUT') {
-      observer.observe(element, {
-        attributes: true,
-        attributeFilter: ['value'],
-      });
-      savedObservers.push(observer);
-      observer.disconnect();
-    } else {
-      savedObservers.push(null);
-    }
-
-    // Update the value of the element
-    element.value = newValue;
-  });
-
-  // Restore any saved listeners and MutationObservers
-  savedListeners.forEach((listeners, i) => {
-    const element = elements[i];
-    listeners.forEach(({ event, listener }) => {
-      if (listener) {
-        element.addEventListener(event, listener);
-      }
+    // Restore any saved listeners and MutationObservers
+    savedListeners.forEach((listeners, i) => {
+        const element = elements[i];
+        listeners.forEach(({event, listener}) => {
+            if (listener) {
+                element.addEventListener(event, listener);
+            }
+        });
     });
-  });
 
-  savedObservers.forEach((observer, i) => {
-    const element = elements[i];
-    if (observer) {
-      observer.observe(element, {
-        attributes: true,
-        attributeFilter: ['value'],
-      });
-    }
-  });
+    savedObservers.forEach((observer, i) => {
+        const element = elements[i];
+        if (observer) {
+            observer.observe(element, {
+                attributes: true,
+                attributeFilter: ['value'],
+            });
+        }
+    });
 }
-
 
 
 // Fix steps on sliders. God this is a lot of work for one stupid thing...

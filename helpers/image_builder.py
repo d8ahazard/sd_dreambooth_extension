@@ -22,28 +22,28 @@ try:
     from extensions.sd_dreambooth_extension.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, \
         get_target_module
 except:
-    from dreambooth.dreambooth import shared # noqa
-    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig # noqa
-    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData # noqa
-    from dreambooth.dreambooth.shared import disable_safe_unpickle # noqa
-    from dreambooth.dreambooth.utils import image_utils # noqa
-    from dreambooth.dreambooth.utils.image_utils import process_txt2img, get_scheduler_class # noqa
-    from dreambooth.dreambooth.utils.model_utils import get_checkpoint_match, reload_system_models, enable_safe_unpickle, disable_safe_unpickle, unload_system_models # noqa
-    from dreambooth.helpers.mytqdm import mytqdm # noqa
-    from dreambooth.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, get_target_module # noqa
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
+    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
+    from dreambooth.dreambooth.shared import disable_safe_unpickle  # noqa
+    from dreambooth.dreambooth.utils import image_utils  # noqa
+    from dreambooth.dreambooth.utils.image_utils import process_txt2img, get_scheduler_class  # noqa
+    from dreambooth.dreambooth.utils.model_utils import get_checkpoint_match, reload_system_models, enable_safe_unpickle, disable_safe_unpickle, unload_system_models  # noqa
+    from dreambooth.helpers.mytqdm import mytqdm  # noqa
+    from dreambooth.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, get_target_module  # noqa
 
 
 class ImageBuilder:
     def __init__(
-            self, config: DreamboothConfig, 
-            use_txt2img: bool, 
-            lora_model: str = None, 
-            batch_size: int = 1, 
+            self, config: DreamboothConfig,
+            use_txt2img: bool,
+            lora_model: str = None,
+            batch_size: int = 1,
             accelerator: Accelerator = None,
             source_checkpoint: str = None,
             lora_unet_rank: int = 4,
             lora_txt_rank: int = 4
-        ):
+    ):
         self.image_pipe = None
         self.txt_pipe = None
         self.resolution = config.resolution
@@ -58,8 +58,7 @@ class ImageBuilder:
         if (source_checkpoint is None or not os.path.isfile(source_checkpoint)) and use_txt2img:
             print("Unable to find source model, can't use txt2img.")
             use_txt2img = False
-           
-        
+
         self.use_txt2img = use_txt2img
         self.del_accelerator = False
 
@@ -86,7 +85,8 @@ class ImageBuilder:
             disable_safe_unpickle()
             unet_path = os.path.join(config.pretrained_model_name_or_path, "unet")
             if config.infer_ema:
-                ema_path = os.path.join(config.pretrained_model_name_or_path, "ema_unet", "diffusion_pytorch_model.safetensors")
+                ema_path = os.path.join(config.pretrained_model_name_or_path, "ema_unet",
+                                        "diffusion_pytorch_model.safetensors")
                 if os.path.isfile(ema_path):
                     unet_path = os.path.join(config.pretrained_model_name_or_path, "ema_unet")
 
@@ -134,7 +134,7 @@ class ImageBuilder:
                     r_txt=lora_txt_rank
                 )
                 tune_lora_scale(self.image_pipe.unet, config.lora_weight)
-                
+
                 lora_txt_path = _text_lora_path_ui(lora_model_path)
                 if os.path.exists(lora_txt_path):
                     tune_lora_scale(self.image_pipe.text_encoder, config.lora_txt_weight)
@@ -153,7 +153,6 @@ class ImageBuilder:
                     reload_system_models()
             except:
                 pass
-
 
     def progress_bar(self, iterable=None, total=None):
         if not hasattr(self, "_progress_bar_config"):
