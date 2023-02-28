@@ -6,12 +6,9 @@ import os
 import random
 import re
 import sys
-
 from io import StringIO
 
-import cv2
 from diffusers.schedulers import KarrasDiffusionSchedulers
-from numpy import ndarray
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from PIL import features, PngImagePlugin, Image

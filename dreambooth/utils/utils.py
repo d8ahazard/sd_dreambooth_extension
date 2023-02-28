@@ -14,7 +14,6 @@ import pandas as pd
 from packaging import version
 from pandas.plotting._matplotlib.style import get_standard_colors
 
-
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import torch
 from PIL import Image

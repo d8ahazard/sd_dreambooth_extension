@@ -4,11 +4,8 @@ import random
 import traceback
 from typing import List, Tuple, Union
 
-import cv2
-import numpy as np
 import safetensors.torch
 import torch.utils.data
-from PIL import Image
 from torchvision.transforms import transforms
 from transformers import CLIPTokenizer
 

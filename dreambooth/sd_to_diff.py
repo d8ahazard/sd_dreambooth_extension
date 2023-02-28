@@ -13,21 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ Conversion script for the LDM checkpoints. """
+import glob
 import json
 import os
 import re
 import shutil
 import traceback
-import glob
 
 import huggingface_hub.utils.tqdm
 import importlib_metadata
 import safetensors.torch
 import torch
-from omegaconf import OmegaConf
-
 from diffusers.pipelines.paint_by_example import PaintByExampleImageEncoder
 from huggingface_hub import HfApi, hf_hub_download
+from omegaconf import OmegaConf
 
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_class
 
@@ -48,12 +47,6 @@ except:
 from diffusers import (
     AutoencoderKL,
     DDIMScheduler,
-    DPMSolverMultistepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    HeunDiscreteScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
     UNet2DConditionModel)
 
 from diffusers.pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBertConfig, LDMBertModel

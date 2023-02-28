@@ -12,8 +12,8 @@ from pathlib import Path
 
 import importlib_metadata
 import torch
-import torch.backends.cudnn
 import torch.backends.cuda
+import torch.backends.cudnn
 import torch.utils.checkpoint
 from accelerate import Accelerator
 from accelerate.utils.random import set_seed as set_seed2
