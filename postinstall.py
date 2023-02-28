@@ -213,7 +213,7 @@ def actual_install():
                 check_available = importlib.util.find_spec(check) is not None
                 if check_available:
                     check_ver = importlib_metadata.version(check)
-                    check_version = tuple(map(int, check_ver.split('.')[:3]))
+                    check_version = tuple(map(int, re.split(r"[\.\+]", check_ver)[:3]))
 
                     if check in reqs_dict:
                         req_version = reqs_dict[check]

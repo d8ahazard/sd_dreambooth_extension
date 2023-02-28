@@ -447,10 +447,8 @@ def db_save_image(image: Image, prompt_data: PromptData = None, save_txt: bool =
     file_name = image_base
     if custom_name is not None:
         file_name = custom_name
-    
-    strip_chars = ["(", ")", "/", "\", ":", "[", "]"]
-    for s_char in strip_chars:
-        file_name = file_name.replace(s_char, "")
+
+    file_name = re.sub(r"[^\w \-_.]", "", file_name)
     
     image_filename = os.path.join(prompt_data.out_dir, f"{file_name}.tmp")
     pnginfo_data = PngImagePlugin.PngInfo()
