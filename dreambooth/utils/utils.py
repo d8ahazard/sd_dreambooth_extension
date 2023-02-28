@@ -119,9 +119,9 @@ def list_attention():
     import diffusers.utils
     diffusers.utils.is_xformers_available = xformers_check
     if has_xformers:
-        return ["default", "xformers", "flash_attention"]
+        return ["default", "xformers"]
     else:
-        return ["default", "flash_attention"]
+        return ["default"]
 
 
 def list_floats():

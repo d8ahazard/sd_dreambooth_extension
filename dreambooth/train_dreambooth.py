@@ -254,7 +254,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
             "Please make sure to always have all model weights in full float32 precision when starting training - even if"
             " doing mixed precision training. copy of the weights should still be float32."
         )
-
+        has_xformers = False
         if args.attention == "xformers" and not shared.force_cpu:
             if is_xformers_available():
                 import xformers
@@ -266,13 +266,9 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     )
                 unet.enable_xformers_memory_efficient_attention()
                 vae.enable_xformers_memory_efficient_attention()
+                has_xformers = True
             else:
                 raise ValueError("xformers is not available. Make sure it is installed correctly")
-        elif args.attention == "flash_attention":
-            xattention.replace_unet_cross_attn_to_flash_attention()
-        # skip for torch2
-        elif int(str(importlib_metadata.version("torch")).split('.')[0]) <= 1:
-            xattention.replace_unet_cross_attn_to_default()
 
         if accelerator.unwrap_model(unet).dtype != torch.float32:
             print(f"Unet loaded as datatype {accelerator.unwrap_model(unet).dtype}. {low_precision_error_string}")
@@ -312,8 +308,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     revision=args.revision,
                     torch_dtype=torch.float32
                 )
-                if args.attention == "xformers" and not shared.force_cpu:
-                    xattention.set_diffusers_xformers_flag(ema_unet, True)
+                if has_xformers:
+                    ema_unet.enable_xformers_memory_efficient_attention()
 
                 ema_model = EMAModel(ema_unet, device=accelerator.device, dtype=weight_dtype)
                 del ema_unet
