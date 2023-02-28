@@ -482,10 +482,16 @@ def parse_logs(model_name: str, for_ui: bool = False):
 
 def db_save_image(image: Image, prompt_data: PromptData=None, seed=None, save_txt: bool = True, custom_name: str = None):
     image_base = hashlib.sha1(image.tobytes()).hexdigest()
-    image_filename = os.path.join(prompt_data.out_dir, f"{image_base}.tmp")
+        
+    file_name = image_base
     if custom_name is not None:
-        image_filename = os.path.join(prompt_data.out_dir, f"{custom_name}.tmp")
-
+        file_name = custom_name
+    
+    strip_chars = ["(", ")", "/", "\\", ":", "[", "]"]
+    for s_char in strip_chars:
+        file_name = file_name.replace(s_char, "")
+    
+    image_filename = os.path.join(prompt_data.out_dir, f"{file_name}.tmp")
     pnginfo_data = PngImagePlugin.PngInfo()
     if prompt_data is not None:
         size = prompt_data.resolution
