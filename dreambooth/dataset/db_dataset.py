@@ -259,12 +259,15 @@ class DbDataset(torch.utils.data.Dataset):
             # Log both here
             pbar.write(f"Bucket {bucket_str} {dict_idx} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {ex_str}")
             bucket_idx += 1
-        if set(self.latents_cache.keys()) != set(latents_cache.keys()):
-            print("Saving cache!")
-            del latents_cache
-            if os.path.exists(image_cache_file):
-                os.remove(image_cache_file)
-            safetensors.torch.save_file(copy.deepcopy(self.latents_cache), image_cache_file)
+        try:
+            if set(self.latents_cache.keys()) != set(latents_cache.keys()):
+                print("Saving cache!")
+                del latents_cache
+                if os.path.exists(image_cache_file):
+                    os.remove(image_cache_file)
+                safetensors.torch.save_file(copy.deepcopy(self.latents_cache), image_cache_file)
+        except:
+            pass
         bucket_str = str(bucket_idx).rjust(max_idx_chars, " ")
         inst_str = str(total_instances).rjust(len(str(ni)), " ")
         class_str = str(total_classes).rjust(len(str(nc)), " ")
