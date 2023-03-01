@@ -439,8 +439,8 @@ def on_ui_tabs():
                                                     label="Batch Size to Simulate")
                         db_generate_sample = gr.Button(value="Generate Sample Images")
                         db_sample_prompt = gr.Textbox(label="Sample Prompt")
-                        db_sample_prompt_file = gr.Textbox(label="Sample Prompt File")
                         db_sample_negative = gr.Textbox(label="Sample Negative Prompt")
+                        db_sample_prompt_file = gr.Textbox(label="Sample Prompt File")
                         db_sample_width = gr.Slider(label="Sample Width", value=512, step=64, minimum=128, maximum=2048)
                         db_sample_height = gr.Slider(label="Sample Height", value=512, step=64, minimum=128,
                                                      maximum=2048)
