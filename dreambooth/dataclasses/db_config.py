@@ -5,8 +5,14 @@ from typing import List, Dict
 
 from pydantic import BaseModel
 
-from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared, db_shared
-from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_names
+
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
+except:
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.dataclasses.db_concept import Concept  # noqa
 
 # Keys to save, replacing our dumb __init__ method
 save_keys = []
@@ -21,32 +27,36 @@ def sanitize_name(name):
 
 class DreamboothConfig(BaseModel):
     adamw_weight_decay: float = 0.01
-    attention: str = "default"
+    attention: str = "xformers"
     cache_latents: bool = True
-    center_crop: bool = True
-    freeze_clip_normalization: bool = False
     clip_skip: int = 1
     concepts_list: List[Dict] = []
     concepts_path: str = ""
     custom_model_name: str = ""
+    deis_train_scheduler: bool = False
+    deterministic: bool = False
+    ema_predict: bool = False
     epoch: int = 0
     epoch_pause_frequency: int = 0
     epoch_pause_time: int = 0
+    freeze_clip_normalization: bool = True
     gradient_accumulation_steps: int = 1
     gradient_checkpointing: bool = True
     gradient_set_to_none: bool = True
     graph_smoothing: int = 50
     half_model: bool = False
-    train_unfrozen: bool = False
+    train_unfrozen: bool = True
     has_ema: bool = False
     hflip: bool = False
+    infer_ema: bool = False
     initial_revision: int = 0
     learning_rate: float = 5e-6
     learning_rate_min: float = 1e-6
     lifetime_revision: int = 0
     lora_learning_rate: float = 1e-4
     lora_model_name: str = ""
-    lora_rank: int = 4
+    lora_unet_rank: int = 4
+    lora_txt_rank: int = 4
     lora_txt_learning_rate: float = 5e-5
     lora_txt_weight: float = 1.0
     lora_weight: float = 1.0
@@ -62,12 +72,14 @@ class DreamboothConfig(BaseModel):
     model_dir: str = ""
     model_path: str = ""
     num_train_epochs: int = 100
+    offset_noise: float = 0
+    optimizer: str = "8Bit Adam"
     pad_tokens: bool = True
     pretrained_model_name_or_path: str = ""
     pretrained_vae_name_or_path: str = ""
     prior_loss_scale: bool = False
     prior_loss_target: int = 100
-    prior_loss_weight: float = 1.0
+    prior_loss_weight: float = 0.75
     prior_loss_weight_min: float = 0.1
     resolution: int = 512
     revision: int = 0
@@ -77,31 +89,35 @@ class DreamboothConfig(BaseModel):
     save_ckpt_after: bool = True
     save_ckpt_cancel: bool = False
     save_ckpt_during: bool = True
+    save_ema: bool = True
     save_embedding_every: int = 25
     save_lora_after: bool = True
     save_lora_cancel: bool = False
     save_lora_during: bool = True
     save_preview_every: int = 5
-    save_safetensors: bool = False
+    save_safetensors: bool = True
     save_state_after: bool = False
     save_state_cancel: bool = False
     save_state_during: bool = False
     scheduler: str = "ddim"
-    shuffle_tags: bool = False
+    shuffle_tags: bool = True
     snapshot: str = ""
+    split_loss: bool = True
     src: str = ""
     stop_text_encoder: float = 1.0
+    strict_tokens: bool = False
+    tf32_enable: bool = False
     train_batch_size: int = 1
     train_imagic: bool = False
     train_unet: bool = True
-    use_8bit_adam: bool = True
     use_concepts: bool = False
     use_ema: bool = True
     use_lora: bool = False
+    use_lora_extended: bool = False
     use_subdir: bool = False
     v2: bool = False
 
-    def __init__(self, model_name: str = "", scheduler: str = "ddim", v2: bool = False, src: str = "",
+    def __init__(self, model_name: str = "", v2: bool = False, src: str = "",
                  resolution: int = 512, **kwargs):
 
         super().__init__(**kwargs)
@@ -109,7 +125,13 @@ class DreamboothConfig(BaseModel):
         models_path = shared.dreambooth_models_path
         if models_path == "" or models_path is None:
             models_path = os.path.join(shared.models_path, "dreambooth")
+
+        # If we're using the new UI, this should be populated, so load models from here.
+        if len(shared.paths):
+            models_path = os.path.join(shared.paths["models"], "dreambooth")
+
         model_dir = os.path.join(models_path, model_name)
+        print(f"Model dir set to: {model_dir}")
         working_dir = os.path.join(model_dir, "working")
 
         if not os.path.exists(working_dir):
@@ -120,7 +142,7 @@ class DreamboothConfig(BaseModel):
         self.pretrained_model_name_or_path = working_dir
         self.resolution = resolution
         self.src = src
-        self.scheduler = scheduler
+        self.scheduler = "ddim"
         self.v2 = v2
 
     # Actually save as a file
@@ -139,11 +161,32 @@ class DreamboothConfig(BaseModel):
             json.dump(self.__dict__, outfile, indent=4)
 
     def load_params(self, params_dict):
+        sched_swap = False
         for key, value in params_dict.items():
             if "db_" in key:
                 key = key.replace("db_", "")
+            if key == "attention" and value == "flash_attention":
+                try:
+                    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention
+                except:
+                    from dreambooth.dreambooth.utils.utils import list_attention  # noqa
+                value = list_attention()[-1]
+                print(f"Replacing flash attention in config to {value}")
+
+            if key == "scheduler":
+                schedulers = get_scheduler_names()
+                if value not in schedulers:
+                    sched_swap = True
+                    for scheduler in schedulers:
+                        if value.lower() in scheduler.lower():
+                            print(f"Updating scheduler name to: {scheduler}")
+                            value = scheduler
+                            break
+
             if hasattr(self, key):
                 setattr(self, key, value)
+        if sched_swap:
+            self.save()
 
     # Pass a dict and return a list of Concept objects
     def concepts(self, required: int = -1):
@@ -190,12 +233,32 @@ class DreamboothConfig(BaseModel):
             self.model_dir = model_dir
             self.pretrained_model_name_or_path = working_dir
 
+    def refresh(self):
+        """
+        Reload self from file
+
+        """
+        models_path = shared.dreambooth_models_path
+        if models_path == "" or models_path is None:
+            models_path = os.path.join(shared.models_path, "dreambooth")
+        config_file = os.path.join(models_path, self.model_name, "db_config.json")
+        try:
+            with open(config_file, 'r') as openfile:
+                config_dict = json.load(openfile)
+
+            self.load_params(config_dict)
+            shared.db_model_config = self
+        except Exception as e:
+            print(f"Exception loading config: {e}")
+            traceback.print_exc()
+            return None
+
 
 def concepts_from_file(concepts_path: str):
     concepts = []
     if os.path.exists(concepts_path) and os.path.isfile(concepts_path):
         try:
-            with open(concepts_path,"r") as concepts_file:
+            with open(concepts_path, "r") as concepts_file:
                 concepts_str = concepts_file.read()
         except Exception as e:
             print(f"Exception opening concepts file: {e}")
@@ -243,6 +306,7 @@ def save_config(*args):
             params_dict["concepts_list"] = concepts_list
 
     config.load_params(params_dict)
+    shared.db_model_config = config
     config.save()
 
 
@@ -259,9 +323,9 @@ def from_file(model_name):
         return None
 
     model_name = sanitize_name(model_name)
-    models_path = db_shared.dreambooth_models_path
+    models_path = shared.dreambooth_models_path
     if models_path == "" or models_path is None:
-        models_path = os.path.join(db_shared.models_path, "dreambooth")
+        models_path = os.path.join(shared.models_path, "dreambooth")
     config_file = os.path.join(models_path, model_name, "db_config.json")
     try:
         with open(config_file, 'r') as openfile:
@@ -269,6 +333,7 @@ def from_file(model_name):
 
         config = DreamboothConfig(model_name)
         config.load_params(config_dict)
+        shared.db_model_config = config
         return config
     except Exception as e:
         print(f"Exception loading config: {e}")

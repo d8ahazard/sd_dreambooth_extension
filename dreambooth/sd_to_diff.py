@@ -13,50 +13,45 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ Conversion script for the LDM checkpoints. """
+import glob
+import json
 import os
 import re
 import shutil
 import traceback
-import zipfile
 
-import gradio as gr
 import huggingface_hub.utils.tqdm
+import importlib_metadata
 import safetensors.torch
 import torch
 from diffusers.pipelines.paint_by_example import PaintByExampleImageEncoder
-from huggingface_hub import snapshot_download, HfApi, hf_hub_download
+from huggingface_hub import HfApi, hf_hub_download
+from omegaconf import OmegaConf
 
-from extensions.sd_dreambooth_extension.dreambooth import db_shared
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import stop_safe_unpickle
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import mytqdm
-from extensions.sd_dreambooth_extension.dreambooth.utils import printi, get_db_models
-from modules import shared
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_class
 
 try:
-    from omegaconf import OmegaConf
-except ImportError:
-    raise ImportError(
-        "OmegaConf is required to convert the LDM checkpoints. Please install it with `pip install OmegaConf`."
-    )
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, disable_safe_unpickle, \
+        enable_safe_unpickle
+    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+except:
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
+    from dreambooth.dreambooth.utils.model_utils import get_db_models, disable_safe_unpickle, enable_safe_unpickle  # noqa
+    from dreambooth.dreambooth.utils.utils import printi  # noqa
+    from dreambooth.helpers.mytqdm import mytqdm  # noqa
 
 from diffusers import (
     AutoencoderKL,
     DDIMScheduler,
-    DiffusionPipeline,
-    DPMSolverMultistepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    HeunDiscreteScheduler,
-    LDMTextToImagePipeline,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    StableDiffusionPipeline,
-    UNet2DConditionModel, PaintByExamplePipeline,
-)
+    UNet2DConditionModel)
+
 from diffusers.pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBertConfig, LDMBertModel
-from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
-from transformers import AutoFeatureExtractor, BertTokenizerFast, CLIPTextModel, CLIPTokenizer, CLIPVisionConfig
+from transformers import BertTokenizerFast, CLIPTextModel, CLIPTokenizer, CLIPVisionConfig
+
 
 def shave_segments(path, n_shave_prefix_segments=1):
     """
@@ -305,39 +300,39 @@ def create_ldm_bert_config(original_config):
     return config
 
 
-def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False):
+def convert_ldm_unet_checkpoint(checkpoint, config, path=None):
     """
     Takes a state dict and a config, and returns a converted checkpoint.
     """
 
     # extract state_dict for UNet
     unet_state_dict = {}
+    ema_state_dict = {}
     keys = list(checkpoint.keys())
     has_ema = False
     unet_key = "model.diffusion_model."
     # at least a 100 parameters have to start with `model_ema` in order for the checkpoint to be EMA
     if sum(k.startswith("model_ema") for k in keys) > 100:
         print(f"Checkpoint {path} has both EMA and non-EMA weights.")
-        if extract_ema:
-            has_ema = True
-            print(
-                "In this conversion only the EMA weights are extracted. If you want to instead extract the non-EMA"
-                " weights (useful to continue fine-tuning), please make sure to remove the `--extract_ema` flag."
-            )
-            for key in keys:
-                if key.startswith("model.diffusion_model"):
-                    flat_ema_key = "model_ema." + "".join(key.split(".")[1:])
-                    unet_state_dict[key.replace(unet_key, "")] = checkpoint.pop(flat_ema_key)
-        else:
-            print(
-                "In this conversion only the non-EMA weights are extracted. If you want to instead extract the EMA"
-                " weights (usually better for inference), please make sure to add the `--extract_ema` flag."
-            )
-
+        has_ema = True
+        for key in keys:
+            if key.startswith("model.diffusion_model"):
+                flat_ema_key = "model_ema." + "".join(key.split(".")[1:])
+                ema_state_dict[key.replace(unet_key, "")] = checkpoint.pop(flat_ema_key)
+    ema_checkpoint = None
     for key in keys:
         if key.startswith(unet_key):
             unet_state_dict[key.replace(unet_key, "")] = checkpoint.pop(key)
+            if has_ema:
+                ema_state_dict[key.replace(unet_key, "")] = unet_state_dict[key.replace(unet_key, "")]
 
+    if has_ema:
+        ema_checkpoint = unet_dict_to_checkpoint(ema_state_dict, config)
+    new_checkpoint = unet_dict_to_checkpoint(unet_state_dict, config)
+    return new_checkpoint, ema_checkpoint
+
+
+def unet_dict_to_checkpoint(unet_state_dict, config):
     new_checkpoint = {"time_embedding.linear_1.weight": unet_state_dict["time_embed.0.weight"],
                       "time_embedding.linear_1.bias": unet_state_dict["time_embed.0.bias"],
                       "time_embedding.linear_2.weight": unet_state_dict["time_embed.2.weight"],
@@ -433,7 +428,6 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
             resnets = [key for key in output_blocks[i] if f"output_blocks.{i}.0" in key]
             attentions = [key for key in output_blocks[i] if f"output_blocks.{i}.1" in key]
 
-            resnet_0_paths = renew_resnet_paths(resnets)
             paths = renew_resnet_paths(resnets)
 
             meta_path = {"old": f"output_blocks.{i}.0", "new": f"up_blocks.{block_id}.resnets.{layer_in_block_id}"}
@@ -471,11 +465,7 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
                 new_path = ".".join(["up_blocks", str(block_id), "resnets", str(layer_in_block_id), path["new"]])
 
                 new_checkpoint[new_path] = unet_state_dict[old_path]
-
-    # From Bmalthais
-    # if v2:
-    # linear_transformer_to_conv(new_checkpoint)
-    return new_checkpoint, has_ema
+    return new_checkpoint
 
 
 def convert_ldm_vae_checkpoint(checkpoint, config):
@@ -686,19 +676,19 @@ def convert_paint_by_example_checkpoint(checkpoint):
 
     for key in keys:
         if key.startswith("cond_stage_model.transformer"):
-            text_model_dict[key[len("cond_stage_model.transformer.") :]] = checkpoint[key]
+            text_model_dict[key[len("cond_stage_model.transformer."):]] = checkpoint[key]
 
     # load clip vision
     model.model.load_state_dict(text_model_dict)
 
     # load mapper
     keys_mapper = {
-        k[len("cond_stage_model.mapper.res") :]: v
+        k[len("cond_stage_model.mapper.res"):]: v
         for k, v in checkpoint.items()
         if k.startswith("cond_stage_model.mapper")
     }
 
-    MAPPING = {
+    mapping = {
         "attn.c_qkv": ["attn1.to_q", "attn1.to_k", "attn1.to_v"],
         "attn.c_proj": ["attn1.to_out.0"],
         "ln_1": ["norm1"],
@@ -712,13 +702,13 @@ def convert_paint_by_example_checkpoint(checkpoint):
         prefix = key[: len("blocks.i")]
         suffix = key.split(prefix)[-1].split(".")[-1]
         name = key.split(prefix)[-1].split(suffix)[0][1:-1]
-        mapped_names = MAPPING[name]
+        mapped_names = mapping[name]
 
         num_splits = len(mapped_names)
         for i, mapped_name in enumerate(mapped_names):
             new_name = ".".join([prefix, mapped_name, suffix])
             shape = value.shape[0] // num_splits
-            mapped_weights[new_name] = value[i * shape : (i + 1) * shape]
+            mapped_weights[new_name] = value[i * shape: (i + 1) * shape]
 
     model.mapper.load_state_dict(mapped_weights)
 
@@ -761,19 +751,19 @@ def convert_open_clip_checkpoint(checkpoint):
         if key in textenc_conversion_map:
             text_model_dict[textenc_conversion_map[key]] = checkpoint[key]
         if key.startswith("cond_stage_model.model.transformer."):
-            new_key = key[len("cond_stage_model.model.transformer.") :]
+            new_key = key[len("cond_stage_model.model.transformer."):]
             if new_key.endswith(".in_proj_weight"):
                 new_key = new_key[: -len(".in_proj_weight")]
                 new_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], new_key)
                 text_model_dict[new_key + ".q_proj.weight"] = checkpoint[key][:d_model, :]
-                text_model_dict[new_key + ".k_proj.weight"] = checkpoint[key][d_model : d_model * 2, :]
-                text_model_dict[new_key + ".v_proj.weight"] = checkpoint[key][d_model * 2 :, :]
+                text_model_dict[new_key + ".k_proj.weight"] = checkpoint[key][d_model: d_model * 2, :]
+                text_model_dict[new_key + ".v_proj.weight"] = checkpoint[key][d_model * 2:, :]
             elif new_key.endswith(".in_proj_bias"):
                 new_key = new_key[: -len(".in_proj_bias")]
                 new_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], new_key)
                 text_model_dict[new_key + ".q_proj.bias"] = checkpoint[key][:d_model]
-                text_model_dict[new_key + ".k_proj.bias"] = checkpoint[key][d_model : d_model * 2]
-                text_model_dict[new_key + ".v_proj.bias"] = checkpoint[key][d_model * 2 :]
+                text_model_dict[new_key + ".k_proj.bias"] = checkpoint[key][d_model: d_model * 2]
+                text_model_dict[new_key + ".v_proj.bias"] = checkpoint[key][d_model * 2:]
             else:
                 new_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], new_key)
 
@@ -814,27 +804,33 @@ def replace_symlinks(path, base):
         for subpath in os.listdir(path):
             replace_symlinks(os.path.join(path, subpath), base)
 
-def download_model(db_config: DreamboothConfig, token):
+
+def download_model(db_config: DreamboothConfig, token, extract_ema: bool = False):
     tmp_dir = os.path.join(db_config.model_dir, "src")
-    working_dir = db_config.pretrained_model_name_or_path
 
     hub_url = db_config.src
     if "http" in hub_url or "huggingface.co" in hub_url:
         hub_url = "/".join(hub_url.split("/")[-2:])
 
-    api = HfApi()
-    repo_info = api.repo_info(
-        repo_id=hub_url,
-        repo_type="model",
-        revision="main",
-        token=token,
-    )
+    repo_info = None
+    local_repo = False
+    if not os.path.isdir(hub_url):
+        api = HfApi()
+        repo_info = api.repo_info(
+            repo_id=hub_url,
+            repo_type="model",
+            revision="main",
+            token=token,
+        )
 
-    if repo_info.sha is None:
-        print("Unable to fetch repo?")
-        return None, None
+        if repo_info.sha is None:
+            print("Unable to fetch repo?")
+            return None, None
 
-    siblings = repo_info.siblings
+        siblings = [sibling.rfilename for sibling in repo_info.siblings]
+    else:
+        local_repo = True
+        siblings = [os.path.relpath(file, hub_url) for file in glob.glob(f'{hub_url}/**/*', recursive=True)]
 
     diffusion_dirs = ["text_encoder", "unet", "vae", "tokenizer", "scheduler", "feature_extractor", "safety_checker"]
     config_file = None
@@ -842,20 +838,24 @@ def download_model(db_config: DreamboothConfig, token):
     model_files = []
     diffusion_files = []
 
-    for sibling in siblings:
-        name = sibling.rfilename
+    for name in siblings:
+        local_name = name if not local_repo else os.path.join(hub_url, name)
         if "inference.yaml" in name:
-            config_file = name
+            print(f'Found inference file: {name}')
+            config_file = local_name
             continue
         if "model_index.json" in name:
-            model_index = name
+            print(f'Found model index: {name}')
+            model_index = local_name
             continue
         if (".ckpt" in name or ".safetensors" in name) and not "/" in name:
-            model_files.append(name)
+            print(f'Found model: {name}')
+            model_files.append(local_name)
             continue
         for diffusion_dir in diffusion_dirs:
             if f"{diffusion_dir}/" in name:
-                diffusion_files.append(name)
+                print(f'Found diffusion file: {name}')
+                diffusion_files.append(local_name)
 
     for diffusion_dir in diffusion_dirs:
         safe_model = None
@@ -869,17 +869,36 @@ def download_model(db_config: DreamboothConfig, token):
         if safe_model and bin_model:
             diffusion_files.remove(bin_model)
 
-    model_file = next((x for x in model_files if ".safetensors" in x and "nonema" in x), next((x for x in model_files if "nonema" in x), next((x for x in model_files if ".safetensors" in x), model_files[0] if model_files else None)))
-
+    print(f'Diffusion files: {diffusion_files}')
+    model_file = next((x for x in model_files if ".safetensors" in x and "nonema" in x),
+                      next((x for x in model_files if "nonema" in x),
+                           next((x for x in model_files if ".safetensors" in x),
+                                model_files[0] if model_files else None)))
+    model_file_alt = None
+    if "nonema" in model_file:
+        ema_file = model_file.replace("nonema", "ema")
+        if ema_file in model_file and extract_ema:
+            model_file_alt = ema_file
     files_to_fetch = None
 
     cache_dir = tmp_dir
     if model_file is not None:
         files_to_fetch = [model_file]
+        if model_file_alt is not None:
+            files_to_fetch.append(model_file_alt)
     elif len(diffusion_files):
         files_to_fetch = diffusion_files
         if model_index is not None:
             files_to_fetch.append(model_index)
+
+    if local_repo:
+        files_to_fetch = [model_file]
+        if model_file_alt is not None:
+            files_to_fetch.append(model_file_alt)
+        if len(diffusion_files):
+            files_to_fetch += diffusion_files
+            if model_index is not None:
+                files_to_fetch.append(model_index)
 
     if files_to_fetch and config_file:
         files_to_fetch.append(config_file)
@@ -890,19 +909,21 @@ def download_model(db_config: DreamboothConfig, token):
         print("Nothing to fetch!")
         return None, None
 
-
     huggingface_hub.utils.tqdm.tqdm = mytqdm
     out_model = None
     for repo_file in mytqdm(files_to_fetch, desc=f"Fetching {len(files_to_fetch)} files"):
-        out = hf_hub_download(
-            hub_url,
-            filename=repo_file,
-            repo_type="model",
-            revision=repo_info.sha,
-            cache_dir=cache_dir,
-            token=token
-        )
-        replace_symlinks(out, db_config.model_dir)
+        if not os.path.exists(repo_file):
+            out = hf_hub_download(
+                hub_url,
+                filename=repo_file,
+                repo_type="model",
+                revision=repo_info.sha,
+                cache_dir=cache_dir,
+                token=token
+            )
+            replace_symlinks(out, db_config.model_dir)
+        else:
+            out = repo_file
         dest = None
         file_name = os.path.basename(out)
         if "yaml" in repo_file:
@@ -913,11 +934,15 @@ def download_model(db_config: DreamboothConfig, token):
             for diffusion_dir in diffusion_dirs:
                 if diffusion_dir in out:
                     out_model = db_config.pretrained_model_name_or_path
-                    dest = os.path.join(db_config.pretrained_model_name_or_path,diffusion_dir)
+                    dest = os.path.join(db_config.pretrained_model_name_or_path, diffusion_dir)
         if not dest:
             if ".ckpt" in out or ".safetensors" in out:
-                dest = os.path.join(db_config.model_dir, "src")
-                out_model = dest
+                if model_file_alt is not None and "nonema" in out:
+                    dest = os.path.join(db_config.model_dir, "src")
+                    out_model = dest
+                else:
+                    dest = os.path.join(db_config.model_dir, "src")
+                    out_model = dest
 
         if dest is not None:
             if not os.path.exists(dest):
@@ -929,23 +954,24 @@ def download_model(db_config: DreamboothConfig, token):
 
     return out_model, config_file
 
+
 def get_config_path(
-        model_version: str = "v1", 
-        train_type: str = "default", 
+        model_version: str = "v1",
+        train_type: str = "default",
         config_base_name: str = "training",
         prediction_type: str = "epsilon"
-    ):
+):
     train_type = f"{train_type}" if not prediction_type == "v_prediction" else f"{train_type}-v"
 
     return os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), 
-        "..", 
-        "configs", 
+        os.path.dirname(os.path.realpath(__file__)),
+        "..",
+        "configs",
         f"{model_version}-{config_base_name}-{train_type}.yaml"
     )
 
-def get_config_file(train_unfrozen=False, v2=False, prediction_type="epsilon"):
 
+def get_config_file(train_unfrozen=False, v2=False, prediction_type="epsilon"):
     config_base_name = "training"
 
     model_versions = {
@@ -962,29 +988,42 @@ def get_config_file(train_unfrozen=False, v2=False, prediction_type="epsilon"):
 
     if train_unfrozen:
         model_train_type = train_types["unfrozen"]
-    else:
-        model_train_type = train_types["default"]
 
     return get_config_path(model_version_name, model_train_type, config_base_name, prediction_type)
 
-    print("Could not find valid config. Returning default v1 config.")
-    return get_config_path(model_versions["v1"], train_types["default"], config_base_name, prediction_type="epsilon")
-        
 
-def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type="ddim", from_hub=False, new_model_url="",
+def load_checkpoint(checkpoint_file: str, map_location: str):
+    _, extension = os.path.splitext(checkpoint_file)
+    if extension.lower() == ".safetensors":
+        os.environ["SAFETENSORS_FAST_GPU"] = "1"
+        try:
+            print("Loading safetensors...")
+            checkpoint = safetensors.torch.load_file(checkpoint_file, device="cpu")
+        except Exception:
+            checkpoint = torch.jit.load(checkpoint_file)
+    else:
+        disable_safe_unpickle()
+        print("Loading ckpt...")
+        checkpoint = torch.load(checkpoint_file, map_location=map_location)
+        checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
+        enable_safe_unpickle()
+    return checkpoint
+
+
+def extract_checkpoint(new_model_name: str, checkpoint_file: str, from_hub=False, new_model_url="",
                        new_model_token="", extract_ema=False, train_unfrozen=False, is_512=True):
     """
 
     @param new_model_name: The name of the new model
     @param checkpoint_file: The source checkpoint to use, if not from hub. Needs full path
-    @param scheduler_type: The target scheduler type
     @param from_hub: Are we making this model from the hub?
     @param new_model_url: The URL to pull. Should be formatted like compviz/stable-diffusion-2, not a full URL.
     @param new_model_token: Your huggingface.co token.
     @param extract_ema: Whether to extract EMA weights if present.
+    @param train_unfrozen: Set the model to unfrozen
     @param is_512: Is it a 512 model?
     @return:
-        db_new_model_name: Gr.dropdown populated with our model name, if applicable.
+        db_new_model_name: Gradio dropdown populated with our model name, if applicable.
         db_config.model_dir: The directory where our model was created.
         db_config.revision: Model revision
         db_config.epoch: Model epoch
@@ -1006,20 +1045,20 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
     upcast_attention = False
     msg = None
 
-    if from_hub and (new_model_url == "" or new_model_url is None) and (new_model_token is None or new_model_token == ""):
+    if from_hub and (new_model_url == "" or new_model_url is None) and (
+            new_model_token is None or new_model_token == ""):
         msg = "Please provide a URL and token for huggingface models."
     if msg is not None:
         return "", "", 0, 0, "", "", "", "", image_size, "", msg
 
     # Create empty config
-    db_config = DreamboothConfig(model_name=new_model_name, scheduler=scheduler_type,
-                                 src=checkpoint_file if not from_hub else new_model_url)
+    db_config = DreamboothConfig(model_name=new_model_name, src=checkpoint_file if not from_hub else new_model_url)
 
     original_config_file = None
 
     # Okay then. So, if it's from the hub, try to download it
     if from_hub:
-        model_info, config = download_model(db_config, new_model_token)
+        model_info, config = download_model(db_config, new_model_token, extract_ema)
         if db_config is not None:
             original_config_file = config
         if model_info is not None:
@@ -1034,15 +1073,14 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
             print(msg)
             return "", "", 0, 0, "", "", "", "", image_size, "", msg
 
-    reset_safe = False
-    db_shared.status.job_count = 11
+    shared.status.job_count = 11
 
     try:
-        db_shared.status.job_no = 0
+        shared.status.job_no = 0
         checkpoint = None
         map_location = shared.device
         try:
-            if db_shared.ckptfix or db_shared.medvram or db_shared.lowvram:
+            if shared.ckptfix or shared.medvram or shared.lowvram:
                 print(f"Using CPU for extraction.")
                 map_location = torch.device('cpu')
         except:
@@ -1052,19 +1090,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
         # Try to determine if v1 or v2 model if we have a ckpt
         if not from_hub:
             printi("Loading model from checkpoint.")
-            _, extension = os.path.splitext(checkpoint_file)
-            if extension.lower() == ".safetensors":
-                os.environ["SAFETENSORS_FAST_GPU"] = "1"
-                try:
-                    print("Loading safetensors...")
-                    checkpoint = safetensors.torch.load_file(checkpoint_file, device="cpu")
-                except Exception as e:
-                    checkpoint = torch.jit.load(checkpoint_file)
-            else:
-                reset_safe = stop_safe_unpickle()
-                print("Loading ckpt...")
-                checkpoint = torch.load(checkpoint_file, map_location=map_location or shared.weight_load_location)
-                checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
+            checkpoint = load_checkpoint(checkpoint_file, map_location)
 
             rev_keys = ["db_global_step", "global_step"]
             epoch_keys = ["db_epoch", "epoch"]
@@ -1089,6 +1115,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
                 v2 = False
         else:
             unet_dir = os.path.join(db_config.pretrained_model_name_or_path, "unet")
+            print(f'Loading UNet from {unet_dir}')
             try:
                 unet = UNet2DConditionModel.from_pretrained(unet_dir)
                 print("Loaded unet.")
@@ -1117,7 +1144,11 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
         if from_hub:
             result_status = "Model fetched from hub."
             db_config.save()
-            return gr.Dropdown.update(choices=sorted(get_db_models()), value=new_model_name), \
+            try:
+                from extensions.sd_dreambooth_extension.dreambooth.ui_functions import gr_update
+            except:
+                from dreambooth.dreambooth.ui_functions import gr_update  # noqa
+            return gr_update(choices=sorted(get_db_models()), value=new_model_name), \
                 db_config.model_dir, \
                 revision, \
                 epoch, \
@@ -1132,7 +1163,9 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
 
         # Use existing YAML if present
         if checkpoint_file is not None:
-            config_check = checkpoint_file.replace(".ckpt", ".yaml") if ".ckpt" in checkpoint_file else checkpoint_file.replace(".safetensors", ".yaml")
+            config_check = checkpoint_file.replace(".ckpt",
+                                                   ".yaml") if ".ckpt" in checkpoint_file else checkpoint_file.replace(
+                ".safetensors", ".yaml")
             if os.path.exists(config_check):
                 original_config_file = config_check
 
@@ -1159,25 +1192,10 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
         )
         # make sure scheduler works correctly with DDIM
         scheduler.register_to_config(clip_sample=False)
-        if scheduler_type == "pndm":
-            config = dict(scheduler.config)
-            config["skip_prk_steps"] = True
-            scheduler = PNDMScheduler.from_config(config)
-        elif scheduler_type == "lms":
-            scheduler = LMSDiscreteScheduler.from_config(scheduler.config)
-        elif scheduler_type == "heun":
-            scheduler = HeunDiscreteScheduler.from_config(scheduler.config)
-        elif scheduler_type == "euler":
-            scheduler = EulerDiscreteScheduler.from_config(scheduler.config)
-        elif scheduler_type == "euler-ancestral":
-            scheduler = EulerAncestralDiscreteScheduler.from_config(scheduler.config)
-        elif scheduler_type == "dpm":
-            scheduler = DPMSolverMultistepScheduler.from_config(scheduler.config)
-        elif scheduler_type == "ddim":
-            scheduler = scheduler
-        else:
-            raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
+        scheduler = get_scheduler_class("DEISMultistep").from_config(scheduler.config)
 
+        scheduler_type = scheduler.__class__.__name__
+        scheduler.save_pretrained(os.path.join(db_config.pretrained_model_name_or_path, "scheduler"))
 
         printi("Converting unet...")
         # Convert the UNet2DConditionModel model.
@@ -1185,12 +1203,24 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
         unet_config["upcast_attention"] = upcast_attention
         unet = UNet2DConditionModel(**unet_config)
 
-        converted_unet_checkpoint, has_ema = convert_ldm_unet_checkpoint(
-            checkpoint, unet_config, path=checkpoint_file, extract_ema=extract_ema
+        converted_unet_checkpoint, converted_ema_checkpoint = convert_ldm_unet_checkpoint(
+            checkpoint, unet_config, path=checkpoint_file
         )
-        db_config.has_ema = has_ema
-        db_config.save()
         unet.load_state_dict(converted_unet_checkpoint)
+        unet.save_pretrained(os.path.join(db_config.pretrained_model_name_or_path, "unet"), safe_serialization=True)
+        del unet
+
+        if converted_ema_checkpoint is not None:
+            print("Saving EMA unet.")
+            ema_unet = UNet2DConditionModel(**unet_config)
+            ema_unet.load_state_dict(converted_ema_checkpoint)
+            ema_unet.save_pretrained(os.path.join(db_config.pretrained_model_name_or_path, "ema_unet"),
+                                     safe_serialization=True)
+
+            del ema_unet
+            db_config.has_ema = has_ema
+
+        db_config.save()
         printi("Converting vae...")
         # Convert the VAE model.
         vae_config = create_vae_diffusers_config(original_config, image_size=image_size)
@@ -1198,108 +1228,125 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, scheduler_type
 
         vae = AutoencoderKL(**vae_config)
         vae.load_state_dict(converted_vae_checkpoint)
+        vae.save_pretrained(os.path.join(db_config.pretrained_model_name_or_path, "vae"), safe_serialization=True)
+        del vae
+
         printi("Converting text encoder...")
         # Convert the text model.
         text_model_type = original_config.model.params.cond_stage_config.target.split(".")[-1]
+        tokenizer_type = "CLIPTokenizer"
         if text_model_type == "FrozenOpenCLIPEmbedder":
             text_model = convert_open_clip_checkpoint(checkpoint)
             tokenizer = CLIPTokenizer.from_pretrained("stabilityai/stable-diffusion-2", subfolder="tokenizer")
-            pipe = StableDiffusionPipeline(
-                vae=vae,
-                text_encoder=text_model,
-                tokenizer=tokenizer,
-                unet=unet,
-                scheduler=scheduler,
-                safety_checker=None,
-                feature_extractor=None,
-                requires_safety_checker=False,
-            )
-        elif text_model_type == "PaintByExample":
-            vision_model = convert_paint_by_example_checkpoint(checkpoint)
-            tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
-            feature_extractor = AutoFeatureExtractor.from_pretrained("CompVis/stable-diffusion-safety-checker")
-            pipe = PaintByExamplePipeline(
-                vae=vae,
-                image_encoder=vision_model,
-                unet=unet,
-                scheduler=scheduler,
-                safety_checker=None,
-                feature_extractor=feature_extractor,
-            )
         elif text_model_type == "FrozenCLIPEmbedder":
             text_model = convert_ldm_clip_checkpoint(checkpoint)
             tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
-            safety_checker = StableDiffusionSafetyChecker.from_pretrained("CompVis/stable-diffusion-safety-checker")
-            feature_extractor = AutoFeatureExtractor.from_pretrained("CompVis/stable-diffusion-safety-checker")
-            pipe = StableDiffusionPipeline(
-                vae=vae,
-                text_encoder=text_model,
-                tokenizer=tokenizer,
-                unet=unet,
-                scheduler=scheduler,
-                safety_checker=safety_checker,
-                feature_extractor=feature_extractor
-            )
         else:
             text_config = create_ldm_bert_config(original_config)
             text_model = convert_ldm_bert_checkpoint(checkpoint, text_config)
             tokenizer = BertTokenizerFast.from_pretrained("bert-base-uncased")
-            pipe = LDMTextToImagePipeline(vqvae=vae, bert=text_model, tokenizer=tokenizer, unet=unet,
-                                          scheduler=scheduler)
+            tokenizer_type = "BertTokenizerFast"
+
+        to_save = {"text_encoder": text_model, "tokenizer": tokenizer}
+
+        for name, model in to_save.items():
+            if model is None:
+                continue
+            print(f"Saving {name}")
+            model.save_pretrained(os.path.join(db_config.pretrained_model_name_or_path, name), safe_serialization=True)
+            del model
+
+        del checkpoint
+
+        if "nonema" in checkpoint_file and extract_ema:
+            ema_checkpoint_file = checkpoint_file.replace("nonema", "ema")
+            if os.path.exists(ema_checkpoint_file):
+                printi("Extracting secondary checkpoint for EMA weights.")
+                checkpoint = load_checkpoint(ema_checkpoint_file, map_location)
+                unet = UNet2DConditionModel(**unet_config)
+
+                converted_unet_checkpoint, _ = convert_ldm_unet_checkpoint(
+                    checkpoint, unet_config, path=checkpoint_file
+                )
+
+                unet.load_state_dict(converted_unet_checkpoint)
+                unet.save_pretrained(os.path.join(db_config.pretrained_model_name_or_path, "ema_unet"),
+                                     safe_serialization=True)
+                del unet
+                db_config.has_ema = has_ema
+
+                db_config.save()
+
+        try:
+            diff_ver = importlib_metadata.version("diffusers")
+        except:
+            diff_ver = "0.10.2"
+
+        ckpt_config = {
+            "_class_name": "StableDiffusionPipeline",
+            "_diffusers_version": diff_ver,
+            "feature_extractor": [None, None],
+            "requires_safety_checker": None,
+            "safety_checker": [None, None],
+            "scheduler": ["diffusers", scheduler_type],
+            "text_encoder": ["transformers", "CLIPTextModel"],
+            "tokenizer": ["transformers", tokenizer_type],
+            "unet": ["diffusers", "UNet2DConditionModel"],
+            "vae": ["diffusers", "AutoencoderKL"]
+        }
+        if db_config.has_ema:
+            ckpt_config["ema_unet"] = ["diffusers", "UNet2DConditionModel"]
+
+        idx_file = os.path.join(db_config.pretrained_model_name_or_path, "model_index.json")
+        with open(idx_file, "w") as iof:
+            json.dump(ckpt_config, iof, indent=4)
+
     except Exception as e:
         print(f"Exception setting up output: {e}")
-        pipe = None
         traceback.print_exc()
 
-    if pipe is None or db_config is None:
-        msg = "Pipeline or config is not set, unable to continue."
-        print(msg)
-        return "", "", 0, 0, "", "", "", "", image_size, "", msg
-    else:
-        resolution = db_config.resolution
-        printi("Saving diffusion model...")
-        pipe.save_pretrained(db_config.pretrained_model_name_or_path)
-        result_status = f"Checkpoint successfully extracted to {db_config.pretrained_model_name_or_path}"
-        model_dir = db_config.model_dir
-        revision = db_config.revision
-        scheduler = db_config.scheduler
-        src = db_config.src
-        required_dirs = ["unet", "vae", "text_encoder", "scheduler", "tokenizer"]
-        if original_config_file is not None and os.path.exists(original_config_file):
-            shutil.copy(original_config_file, db_config.model_dir)
-            basename = os.path.basename(original_config_file)
-            new_ex_path = os.path.join(db_config.model_dir, basename)
-            new_name = os.path.join(db_config.model_dir, f"{db_config.model_name}.yaml")
-            if os.path.exists(new_name):
-                os.remove(new_name)
-            os.rename(new_ex_path, new_name)
+    result_status = f"Checkpoint successfully extracted to {db_config.pretrained_model_name_or_path}"
+    model_dir = db_config.model_dir
+    revision = db_config.revision
+    src = db_config.src
+    required_dirs = ["unet", "vae", "text_encoder", "scheduler", "tokenizer"]
+    if original_config_file is not None and os.path.exists(original_config_file):
+        shutil.copy(original_config_file, db_config.model_dir)
+        basename = os.path.basename(original_config_file)
+        new_ex_path = os.path.join(db_config.model_dir, basename)
+        new_name = os.path.join(db_config.model_dir, f"{db_config.model_name}.yaml")
+        if os.path.exists(new_name):
+            os.remove(new_name)
+        os.rename(new_ex_path, new_name)
 
-        for req_dir in required_dirs:
-            full_path = os.path.join(db_config.pretrained_model_name_or_path, req_dir)
-            if not os.path.exists(full_path):
-                result_status = f"Missing model directory, removing model: {full_path}"
-                shutil.rmtree(db_config.model_dir, ignore_errors=False, onerror=None)
-                break
-        remove_dirs = ["logging", "samples"]
-        for rd in remove_dirs:
-            rem_dir = os.path.join(db_config.model_dir, rd)
-            if os.path.exists(rem_dir):
-                shutil.rmtree(rem_dir, True)
-                if not os.path.exists(rem_dir):
-                    os.makedirs(rem_dir)
+    for req_dir in required_dirs:
+        full_path = os.path.join(db_config.pretrained_model_name_or_path, req_dir)
+        if not os.path.exists(full_path):
+            result_status = f"Missing model directory, removing model: {full_path}"
+            shutil.rmtree(db_config.model_dir, ignore_errors=False, onerror=None)
+            break
+    remove_dirs = ["logging", "samples"]
+    for rd in remove_dirs:
+        rem_dir = os.path.join(db_config.model_dir, rd)
+        if os.path.exists(rem_dir):
+            shutil.rmtree(rem_dir, True)
+            if not os.path.exists(rem_dir):
+                os.makedirs(rem_dir)
 
-
-    if reset_safe:
-        db_shared.start_safe_unpickle()
+    enable_safe_unpickle()
     printi(result_status)
 
-    return gr.Dropdown.update(choices=sorted(get_db_models()), value=new_model_name), \
-           model_dir, \
-           revision, \
-           epoch, \
-           scheduler, \
-           src, \
-           "True" if has_ema else "False", \
-           "True" if v2 else "False", \
-           resolution, \
-           result_status
+    try:
+        from extensions.sd_dreambooth_extension.dreambooth.ui_functions import gr_update
+    except:
+        from dreambooth.dreambooth.ui_functions import gr_update  # noqa
+
+    return gr_update(choices=sorted(get_db_models()), value=new_model_name), \
+        model_dir, \
+        revision, \
+        epoch, \
+        src, \
+        "True" if has_ema else "False", \
+        "True" if v2 else "False", \
+        db_config.resolution, \
+        result_status

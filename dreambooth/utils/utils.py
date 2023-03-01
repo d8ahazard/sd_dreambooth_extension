@@ -1,44 +1,32 @@
 from __future__ import annotations
 
 import gc
-import hashlib
 import html
+import importlib.util
 import os
 import sys
 import traceback
-from io import StringIO
-from pathlib import Path
 from typing import Optional, Union, Tuple, List
 
-import gradio
+import importlib_metadata
 import matplotlib
 import pandas as pd
+from packaging import version
 from pandas.plotting._matplotlib.style import get_standard_colors
-from tqdm.auto import tqdm
-from transformers import PretrainedConfig
-
-from extensions.sd_dreambooth_extension.dreambooth.prompt_data import PromptData
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-import tensorflow
 import torch
-from PIL import features, Image, PngImagePlugin
+from PIL import Image
 from huggingface_hub import HfFolder, whoami
 from pandas import DataFrame
 from tensorboard.compat.proto import event_pb2
 
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from modules import shared, paths, sd_models
-
 try:
-    cmd_dreambooth_models_path = shared.cmd_opts.dreambooth_models_path
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+    from extensions.sd_dreambooth_extension.dreambooth.shared import status
 except:
-    cmd_dreambooth_models_path = None
-
-try:
-    cmd_lora_models_path = shared.cmd_opts.lora_models_path
-except:
-    cmd_lora_models_path = None
+    from dreambooth.helpers.mytqdm import mytqdm  # noqa
+    from dreambooth.dreambooth.shared import status  # noqa
 
 
 def printi(msg, params=None, log=True):
@@ -47,66 +35,9 @@ def printi(msg, params=None, log=True):
         if status.job_count > status.job_no:
             status.job_no += 1
         if params:
-            tqdm.write(msg, params)
+            mytqdm.write(msg, params)
         else:
-            tqdm.write(msg)
-
-
-def get_db_models():
-    model_dir = os.path.dirname(cmd_dreambooth_models_path) if cmd_dreambooth_models_path else paths.models_path
-    out_dir = os.path.join(model_dir, "dreambooth")
-    output = []
-    if os.path.exists(out_dir):
-        dirs = os.listdir(out_dir)
-        for found in dirs:
-            if os.path.isdir(os.path.join(out_dir, found)):
-                output.append(found)
-    return output
-
-
-def get_lora_models():
-    model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else paths.models_path
-    out_dir = os.path.join(model_dir, "lora")
-    output = [""]
-    if os.path.exists(out_dir):
-        dirs = os.listdir(out_dir)
-        for found in dirs:
-            if os.path.isfile(os.path.join(out_dir, found)):
-                if "_txt.pt" not in found and ".pt" in found:
-                    output.append(found)
-    return output
-
-
-def get_model_snapshots(model_name: str):
-    from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
-    result = gradio.update(visible=True)
-    if model_name == "" or model_name is None:
-        return result
-    config = from_file(model_name)
-    snaps_path = os.path.join(config.model_dir, "snapshots")
-    snaps = []
-    if os.path.exists(snaps_path):
-        for dir in os.listdir(snaps_path):
-            if "checkpoint_" in dir:
-                fullpath = os.path.join(snaps_path, dir)
-                snaps.append(fullpath)
-    return snaps
-
-
-def get_images(image_path):
-    pil_features = list_features()
-    output = []
-    if isinstance(image_path, str):
-        image_path = Path(image_path)
-    if image_path.exists():
-        for file in image_path.iterdir():
-            if is_image(file, pil_features):
-                output.append(file)
-            if file.is_dir():
-                sub_images = get_images(file)
-                for image in sub_images:
-                    output.append(image)
-    return output
+            mytqdm.write(msg)
 
 
 def sanitize_tags(name):
@@ -123,12 +54,9 @@ def sanitize_name(name):
     return "".join(x for x in name if (x.isalnum() or x in "._-"))
 
 
-mem_record = {}
-
-
 def printm(msg=""):
-    from extensions.sd_dreambooth_extension.dreambooth import db_shared
-    if db_shared.debug:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    if shared.debug:
         allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
         cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
         print(f"{msg}({allocated}/{cached})")
@@ -141,38 +69,58 @@ def cleanup(do_print: bool = False):
             torch.cuda.ipc_collect()
         gc.collect()
     except:
-        pass
+        print('cleanup exception')
     if do_print:
         print("Cleanup completed.")
 
 
-def unload_system_models():
-    if shared.sd_model is not None:
-        shared.sd_model.to("cpu")
-    for former in shared.face_restorers:
-        try:
-            former.send_model_to("cpu")
-        except:
-            pass
-    cleanup()
+def xformers_check():
+    ENV_VARS_TRUE_VALUES = {"1", "ON", "YES", "TRUE"}
+    ENV_VARS_TRUE_AND_AUTO_VALUES = ENV_VARS_TRUE_VALUES.union({"AUTO"})
+
+    USE_TF = os.environ.get("USE_TF", "AUTO").upper()
+    USE_TORCH = os.environ.get("USE_TORCH", "AUTO").upper()
+    if USE_TORCH in ENV_VARS_TRUE_AND_AUTO_VALUES and USE_TF not in ENV_VARS_TRUE_VALUES:
+        _torch_available = importlib.util.find_spec("torch") is not None
+
+        if _torch_available:
+            try:
+                _torch_version = importlib_metadata.version("torch")
+            except importlib_metadata.PackageNotFoundError:
+                print("No metadatapackage")
+                _torch_available = False
+    else:
+        _torch_available = False
+
+    try:
+        _xformers_version = importlib_metadata.version("xformers")
+        if _torch_available:
+            import torch
+            if version.Version(torch.__version__) < version.Version("1.12"):
+                raise ValueError("PyTorch should be >= 1.12")
+        has_xformers = True
+    except Exception as e:
+        print(f"Exception importing xformers: {e}")
+        has_xformers = False
+    return has_xformers
+
+
+def list_optimizer():
+    try:
+        from lion_pytorch import Lion
+        return ["8Bit Adam", "Lion"]
+    except:
+        return ["8Bit Adam"]
 
 
 def list_attention():
-    has_xformers = False
-    try:
-        import xformers
-        import xformers.ops
-        has_xformers = True
-    except:
-        pass
-    pass
-
+    has_xformers = xformers_check()
+    import diffusers.utils
+    diffusers.utils.is_xformers_available = xformers_check
     if has_xformers:
-        # return ["default", "xformers", "sub_quad", "flash_attention"]
-        return ["default", "xformers", "flash_attention"]
+        return ["default", "xformers"]
     else:
-        # return ["default", "sub_quad", "flash_attention"]
-        return ["default", "flash_attention"]
+        return ["default"]
 
 
 def list_floats():
@@ -185,12 +133,6 @@ def list_floats():
         return ["no", "fp16", "bf16"]
     else:
         return ["no", "fp16"]
-
-
-def reload_system_models():
-    if shared.sd_model is not None:
-        shared.sd_model.to(shared.device)
-    print("Restored system models.")
 
 
 def wrap_gpu_call(func, extra_outputs=None):
@@ -225,41 +167,6 @@ def wrap_gpu_call(func, extra_outputs=None):
     return f
 
 
-def isset(val: Union[str | None]):
-    return val is not None and val != "" and val != "*"
-
-
-def list_features():
-    # Create buffer for pilinfo() to write into rather than stdout
-    buffer = StringIO()
-    features.pilinfo(out=buffer)
-    pil_features = []
-    # Parse and analyse lines
-    for line in buffer.getvalue().splitlines():
-        if "Extensions:" in line:
-            ext_list = line.split(": ")[1]
-            extensions = ext_list.split(", ")
-            for extension in extensions:
-                if extension not in pil_features:
-                    pil_features.append(extension)
-    return pil_features
-
-def is_image(path: Path, feats=None):
-    if feats is None:
-        feats = []
-    if not len(feats):
-        feats = list_features()
-    is_img = path.is_file() and path.suffix.lower() in feats
-    return is_img
-
-
-def get_checkpoint_match(search_string):
-    for info in sd_models.checkpoints_list.values():
-        if search_string in info.title or search_string in info.model_name or search_string in info.filename:
-            return info
-    return None
-
-
 def get_full_repo_name(model_id: str, organization: Optional[str] = None, token: Optional[str] = None):
     if token is None:
         token = HfFolder.get_token()
@@ -268,6 +175,65 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{username}/{model_id}"
     else:
         return f"{organization}/{model_id}"
+
+
+from dataclasses import dataclass
+
+
+@dataclass
+class YAxis:
+    name: str
+    columns: List[str]
+
+
+@dataclass
+class PlotDefinition:
+    title: str
+    x_axis: str
+    y_axis: List[YAxis]
+
+
+def plot_multi_alt(
+        data: pd.DataFrame,
+        plot_definition: PlotDefinition,
+        spacing: float = 0.1,
+):
+    styles = ["-", ":", "--", "-."]
+    colors = get_standard_colors(num_colors=7)
+    loss_color = colors[0]
+    avg_colors = colors[1:]
+    for i, yi in enumerate(plot_definition.y_axis):
+        if len(yi.columns) > len(styles):
+            raise ValueError(
+                f"Maximum {len(styles)} traces per yaxis allowed. If we want to allow this we need to add some logic.")
+        if i > len(colors):
+            raise ValueError(
+                f"Maximum {len(colors)} yaxis axis allowed. If we want to allow this we need to add some logic.")
+
+        if i == 0:
+            ax = data.plot(
+                x=plot_definition.x_axis,
+                y=yi.columns,
+                title=plot_definition.title,
+                color=[loss_color] * len(yi.columns)
+            )
+            ax.set_ylabel(ylabel=yi.name)
+
+        else:
+            # Multiple y-axes
+            ax_new = ax.twinx()
+            ax_new.spines["right"].set_position(("axes", 1 + spacing * (i - 1)))
+            data.plot(
+                ax=ax_new,
+                x=plot_definition.x_axis,
+                y=yi.columns,
+                color=[avg_colors[yl] for yl in range(len(yi.columns))]
+            )
+            ax_new.set_ylabel(ylabel=yi.name)
+
+    ax.legend(loc=0)
+
+    return ax
 
 
 def plot_multi(
@@ -356,11 +322,24 @@ def parse_logs(model_name: str, for_ui: bool = False):
 
     """
     matplotlib.use("Agg")
+    if for_ui:
+        status.textinfo = "Generating graphs"
+
     def convert_tfevent(filepath) -> Tuple[DataFrame, DataFrame, DataFrame, bool]:
         loss_events = []
         lr_events = []
         ram_events = []
+        instance_loss_events = []
+        prior_loss_events = []
+        has_all = False
+        try:
+            import tensorflow
+        except:
+            print("Unable to import tensorflow")
+            return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events), has_all
+
         serialized_examples = tensorflow.data.TFRecordDataset(filepath)
+
         for serialized_example in serialized_examples:
             e = event_pb2.Event.FromString(serialized_example.numpy())
             if len(e.summary.value):
@@ -369,17 +348,25 @@ def parse_logs(model_name: str, for_ui: bool = False):
                     lr_events.append(parsed)
                 elif parsed["Name"] == "loss":
                     loss_events.append(parsed)
-                elif parsed["Name"] == "vram_usage":
+                elif parsed["Name"] == "vram_usage" or parsed["Name"] == "vram":
                     ram_events.append(parsed)
+                elif parsed["Name"] == "instance_loss" or parsed["Name"] == "inst_loss":
+                    instance_loss_events.append(parsed)
+                elif parsed["Name"] == "prior_loss":
+                    prior_loss_events.append(parsed)
 
         merged_events = []
 
         has_all = True
         for le in loss_events:
             lr = next((item for item in lr_events if item["Step"] == le["Step"]), None)
-            if lr is not None:
+            instance_loss = next((item for item in instance_loss_events if item["Step"] == le["Step"]), None)
+            prior_loss = next((item for item in prior_loss_events if item["Step"] == le["Step"]), None)
+            if lr is not None and instance_loss is not None and prior_loss is not None:
                 le["LR"] = lr["Value"]
                 le["Loss"] = le["Value"]
+                le["Instance_Loss"] = instance_loss["Value"]
+                le["Prior_Loss"] = prior_loss["Value"]
                 merged_events.append(le)
             else:
                 has_all = False
@@ -396,7 +383,7 @@ def parse_logs(model_name: str, for_ui: bool = False):
             "Value": float(tfevent.summary.value[0].simple_value),
         }
 
-    from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
     model_config = from_file(model_name)
     if model_config is None:
         print("Unable to load model config!")
@@ -423,17 +410,34 @@ def parse_logs(model_name: str, for_ui: bool = False):
 
     loss_columns = columns_order
     if has_all_lr:
-        loss_columns = ['Wall_time', 'Name', 'Step', 'Loss', "LR"]
+        loss_columns = ['Wall_time', 'Name', 'Step', 'Loss', "LR", "Instance_Loss", "Prior_Loss"]
     # Concatenate (and sort) all partial individual dataframes
     all_df_loss = pd.concat(out_loss)[loss_columns]
+    all_df_loss = all_df_loss.fillna(
+        method="ffill")  # since we do not use the standard dreambooth algorithm it's possible to have NaN for instance or prior loss -> forward fill
     all_df_loss = all_df_loss.sort_values("Wall_time")
     all_df_loss = all_df_loss.reset_index(drop=True)
-    all_df_loss = all_df_loss.rolling(smoothing_window).mean(numeric_only=True)
+    sw = int(smoothing_window if smoothing_window < len(all_df_loss) / 3 else len(all_df_loss) / 3)
+    all_df_loss = all_df_loss.rolling(sw).mean(numeric_only=True)
+
     out_images = []
     out_names = []
+    status.job_count = 2
+    status.job_no = 1
+    status.textinfo = "Plotting data..."
     if has_all_lr:
-        plotted_loss = plot_multi(all_df_loss, "Step", ["Loss", "LR"],
-                                  title=f"Loss Average/Learning Rate ({model_config.lr_scheduler})")
+        plotted_loss = plot_multi_alt(
+            all_df_loss,
+            plot_definition=PlotDefinition(
+                title=f"Loss Average/Learning Rate ({model_config.lr_scheduler})",
+                x_axis="Step",
+                y_axis=[
+                    YAxis(name="LR", columns=["LR"]),
+                    YAxis(name="Loss", columns=["Instance_Loss", "Prior_Loss", "Loss"]),
+
+                ]
+            )
+        )
         loss_name = "Loss Average/Learning Rate"
     else:
         plotted_loss = all_df_loss.plot(x="Step", y="Value", title="Loss Averages")
@@ -441,7 +445,7 @@ def parse_logs(model_name: str, for_ui: bool = False):
         all_df_lr = pd.concat(out_lr)[columns_order]
         all_df_lr = all_df_lr.sort_values("Wall_time")
         all_df_lr = all_df_lr.reset_index(drop=True)
-        all_df_lr = all_df_lr.rolling(smoothing_window).mean()
+        all_df_lr = all_df_lr.rolling(smoothing_window).mean(numeric_only=True)
         plotted_lr = all_df_lr.plot(x="Step", y="Value", title="Learning Rate")
         lr_img = os.path.join(model_config.model_dir, "logging", f"lr_plot_{model_config.revision}.png")
         plotted_lr.figure.savefig(lr_img)
@@ -449,6 +453,8 @@ def parse_logs(model_name: str, for_ui: bool = False):
         out_images.append(log_lr)
         out_names.append("Learning Rate")
 
+    status.job_no = 2
+    status.textinfo = "Saving graph data..."
     loss_img = os.path.join(model_config.model_dir, "logging", f"loss_plot_{model_config.revision}.png")
     printm(f"Saving {loss_img}")
     plotted_loss.figure.savefig(loss_img)
@@ -472,65 +478,13 @@ def parse_logs(model_name: str, for_ui: bool = False):
             out_names = "<br>".join(out_names)
     except:
         pass
-    
+
     del out_loss
     del out_lr
     del out_ram
+    try:
+        matplotlib.pyplot.close()
+    except:
+        pass
     printm("Cleanup log parse.")
     return out_images, out_names
-
-
-def db_save_image(image: Image, prompt_data: PromptData=None, seed=None, save_txt: bool = True, custom_name: str = None):
-    image_base = hashlib.sha1(image.tobytes()).hexdigest()
-    image_filename = os.path.join(prompt_data.out_dir, f"{image_base}.tmp")
-    if custom_name is not None:
-        image_filename = os.path.join(prompt_data.out_dir, f"{custom_name}.tmp")
-
-    pnginfo_data = PngImagePlugin.PngInfo()
-    if prompt_data is not None:
-        size = prompt_data.resolution
-        generation_params = {
-            "Steps": prompt_data.steps,
-            "CFG scale": prompt_data.scale,
-            "Seed": prompt_data.seed,
-            "Size": f"{size[0]}x{size[1]}"
-        }
-
-        generation_params_text = ", ".join(
-            [k if k == v else f'{k}: {f"{v}" if "," in str(v) else v}' for k, v in generation_params.items()
-             if v is not None])
-
-
-        prompt_string = f"{prompt_data.prompt}\nNegative prompt: {prompt_data.negative_prompt}\n{generation_params_text}".strip()
-        pnginfo_data.add_text("parameters", prompt_string)
-
-    image_format = Image.registered_extensions()[".png"]
-
-    image.save(image_filename, format=image_format, pnginfo=pnginfo_data)
-
-    if save_txt and prompt_data is not None:
-        os.replace(image_filename, image_filename)
-        txt_filename = image_filename.replace(".tmp", ".txt")
-        with open(txt_filename, "w", encoding="utf8") as file:
-            file.write(prompt_data.prompt)
-    os.replace(image_filename, image_filename.replace(".tmp", ".png"))
-    return image_filename.replace(".tmp", ".png")
-
-def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision):
-    text_encoder_config = PretrainedConfig.from_pretrained(
-        pretrained_model_name_or_path,
-        subfolder="text_encoder",
-        revision=revision,
-    )
-    model_class = text_encoder_config.architectures[0]
-
-    if model_class == "CLIPTextModel":
-        from transformers import CLIPTextModel
-
-        return CLIPTextModel
-    elif model_class == "RobertaSeriesModelWithTransformation":
-        from diffusers.pipelines.alt_diffusion.modeling_roberta_series import RobertaSeriesModelWithTransformation
-
-        return RobertaSeriesModelWithTransformation
-    else:
-        raise ValueError(f"{model_class} is not supported.")

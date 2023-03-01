@@ -1,12 +1,14 @@
 import random
 from typing import Tuple
 
-from extensions.sd_dreambooth_extension.dreambooth.finetuning_dataset import DbDataset
-from extensions.sd_dreambooth_extension.dreambooth.utils import printm
+try:
+    from extensions.sd_dreambooth_extension.dreambooth.dataset.db_dataset import DbDataset
+except:
+    from dreambooth.dreambooth.dataset.db_dataset import DbDataset  # noqa
 
 
 class BucketSampler:
-    def __init__(self, dataset: DbDataset, batch_size):
+    def __init__(self, dataset: DbDataset, batch_size, debug=False):
         self.dataset = dataset
         self.batch_size = batch_size
         self.resolutions = dataset.resolutions
@@ -16,7 +18,7 @@ class BucketSampler:
         self.current_bucket = 0
         self.current_index = 0
         self.total_samples = 0
-        self.prior_loss_weight = 1.0
+        self.debug = debug
         self.set_buckets()
 
     def __iter__(self):
@@ -37,10 +39,6 @@ class BucketSampler:
 
     def __len__(self):
         return len(self.dataset.active_resolution) * self.batch_size
-
-
-    def set_prior_loss(self, loss):
-        self.prior_loss_weight = loss
 
     def set_buckets(self):
         # Initialize list of bucket counts if not set
@@ -67,7 +65,8 @@ class BucketSampler:
                         pop_index = 0
         else:
             resos_to_use = all_resos.copy()
-        random.shuffle(resos_to_use)
+        if not self.debug:
+            random.shuffle(resos_to_use)
         self.active_resos = resos_to_use
         self.current_bucket = 0
 
@@ -76,12 +75,10 @@ class BucketSampler:
         self.dataset.shuffle_buckets()
         batch = []
         repeats = 0
-        self.dataset.prior_loss_weight = self.prior_loss_weight
-        printm(f"Prior loss: {self.dataset.prior_loss_weight}")
         while len(batch) < self.batch_size:
             self.dataset.active_resolution = current_res
             img_index, img_repeats = self.dataset.get_example(current_res)
-            #next_item = torch.as_tensor(next_item, device='cpu', dtype=torch.float)
+            # next_item = torch.as_tensor(next_item, device='cpu', dtype=torch.float)
             if img_repeats != 0:
                 self.bucket_counter.count(current_res)
                 repeats += 1
@@ -102,6 +99,7 @@ class BucketSampler:
             print("Well, this is bad. We have no batch data.")
             raise StopIteration
         return self.batch.pop()
+
 
 class BucketCounter:
     def __init__(self, starting_keys=None):
@@ -141,4 +139,3 @@ class BucketCounter:
 
     def print(self):
         print(f"Bucket counts: {self.counts}")
-

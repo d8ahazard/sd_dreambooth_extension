@@ -1,8 +1,9 @@
 # One wrapper we're going to use to not depend so much on the main app.
 import datetime
-import math
+import json
 import os
 import pathlib
+import subprocess
 import time
 
 import PIL
@@ -11,68 +12,15 @@ import torch
 from PIL import Image
 from packaging import version
 
-dreambooth_models_path = ""
-models_path = ""
-script_path = os.path.dirname(os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
-ckpt_dir = ""
-lora_models_path = ""
-show_progress_every_n_steps = 10
-parallel_processing_allowed = True
-dataset_filename_word_regex = ""
-dataset_filename_join_string = " "
-device_id = None
-state = None
-disable_safe_unpickle = True
-ckptfix = False
-medvram = False
-lowvram = False
-debug = False
-profile_db = False
-sub_quad_q_chunk_size = 1024
-sub_quad_kv_chunk_size = None
-sub_quad_chunk_threshold = None
-CLIP_stop_at_last_layers = 2
-config = os.path.join(script_path, "configs", "v1-inference.yaml")
-force_cpu = False
-
-device = torch.device("cpu")
-if torch.cuda.is_available():
-    device = torch.device("cuda")
-
-if getattr(torch, 'has_mps', False):
-    try:
-        torch.zeros(1).to(torch.device("mps"))
-        device = torch.device("mps")
-    except Exception:
-        pass
-
-def image_grid(imgs, batch_size=1, rows=None):
-    if rows is None:
-        rows = math.floor(math.sqrt(len(imgs)))
-        while len(imgs) % rows != 0:
-            rows -= 1
-        else:
-            rows = math.sqrt(len(imgs))
-            rows = round(rows)
-
-    cols = math.ceil(len(imgs) / rows)
-
-    w, h = imgs[0].size
-    grid = Image.new('RGB', size=(cols * w, rows * h), color='black')
-
-    for i, img in enumerate(imgs):
-        grid.paste(img, box=(i % cols * w, i // cols * h))
-
-    return grid
-
 
 def load_auto_settings():
     global models_path, script_path, ckpt_dir, device_id, disable_safe_unpickle, dataset_filename_word_regex, \
         dataset_filename_join_string, show_progress_every_n_steps, parallel_processing_allowed, state, ckptfix, medvram, \
-        lowvram, dreambooth_models_path, lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config, device, force_cpu
+        lowvram, dreambooth_models_path, lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config, device, \
+        force_cpu, embeddings_dir, sd_model
     try:
-        from modules import shared as ws, devices, images
-        from modules import paths
+        import modules.script_callbacks
+        from modules import shared as ws
         from modules.paths import models_path as mp, script_path as sp, sd_path as sdp
         models_path = mp
         script_path = sp
@@ -92,13 +40,21 @@ def load_auto_settings():
         lowvram = ws.cmd_opts.lowvram
         config = ws.cmd_opts.config
         device = ws.device
+        sd_model = ws.sd_model
+
+        def set_model(new_model):
+            global sd_model
+            sd_model = new_model
+
+        # Keep a reference to loaded script
+        modules.script_callbacks.on_model_loaded(set_model)
+
         try:
-            dreambooth_models_path = ws.cmd_opts.dreambooth_models_path
-            lora_models_path = ws.cmd_opts.lora_models_path
+            dreambooth_models_path = ws.cmd_opts.dreambooth_models_path or dreambooth_models_path
+            lora_models_path = ws.cmd_opts.lora_models_path or lora_models_path
+            embeddings_dir = ws.cmd_opts.embeddings_dir or embeddings_dir
         except:
             pass
-        if dreambooth_models_path == "" or dreambooth_models_path is None:
-            dreambooth_models_path = os.path.join(models_path, "dreambooth")
 
         try:
             force_cpu = ws.cmd_opts.force_cpu
@@ -106,10 +62,32 @@ def load_auto_settings():
                 device = torch.device("cpu")
         except:
             pass
-
-    except:
-        print("Exception importing SD-WebUI module.")
+        return True
+    except Exception as e:
+        print("Exception importing SD-WebUI module:")
+        # print(f"{type(e).__name__} at line {e.__traceback__.tb_lineno} of {__file__}: {e}")
+        # traceback.print_exc()
+        return False
         pass
+
+
+def get_launch_errors():
+    errors = os.environ.get("ERRORS", None)
+    if errors == "":
+        launch_error = None
+    elif errors is not None:
+        errors = json.loads(errors)
+        launch_error = errors
+    else:
+        launch_error = None
+    launch_errors = ""
+    if launch_error is not None:
+        launch_errors = "The Dreambooth extension has been disabled because the following error(s) were detected on launch.<br>" \
+                        " Please completely restart the Auto1111 web-UI.<br>" \
+                        "If this error persists, please consult the <a href='https://github.com/d8ahazard/sd_dreambooth_extension/wiki'> wiki</a> for more information.<br>"
+        launch_strings = "<br>".join(launch_error)
+        launch_errors += f"<b>{launch_strings}</b>"
+    return launch_errors
 
 
 def get_cuda_device_string():
@@ -117,6 +95,34 @@ def get_cuda_device_string():
         return f"cuda:{device_id}"
 
     return "cuda"
+
+
+def run(command, desc=None, errdesc=None, custom_env=None, live=False):
+    if desc is not None:
+        print(desc)
+
+    if live:
+        result = subprocess.run(command, shell=True, env=os.environ if custom_env is None else custom_env)
+        if result.returncode != 0:
+            raise RuntimeError(f"""{errdesc or 'Error running command'}.
+Command: {command}
+Error code: {result.returncode}""")
+
+        return ""
+
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True,
+                            env=os.environ if custom_env is None else custom_env)
+
+    if result.returncode != 0:
+        message = f"""{errdesc or 'Error running command'}.
+Command: {command}
+Error code: {result.returncode}
+stdout: {result.stdout.decode(encoding="utf8", errors="ignore") if len(result.stdout) > 0 else '<empty>'}
+stderr: {result.stderr.decode(encoding="utf8", errors="ignore") if len(result.stderr) > 0 else '<empty>'}
+"""
+        raise RuntimeError(message)
+
+    return result.stdout.decode(encoding="utf8", errors="ignore")
 
 
 def torch_gc():
@@ -246,38 +252,20 @@ class DreamState:
             for check in to_check:
                 if isinstance(check, (numpy.ndarray, PIL.Image.Image, pathlib.Path, str)):
                     real_images.append(check)
-            self.current_image = real_images if len(real_images) > 2 else real_images[0] if len (real_images) == 1 else None
+            self.current_image = real_images if len(real_images) > 2 else real_images[0] if len(
+                real_images) == 1 else None
 
 
-def stop_safe_unpickle():
-    enabled = False
-    try:
-        from modules import shared as ws
-        enabled = not ws.cmd_opts.disable_safe_unpickle
-        if enabled:
-            ws.cmd_opts.disable_safe_unpickle = True
-    except:
-        pass
-    return enabled
-
-
-def start_safe_unpickle():
-    try:
-        from modules import shared as ws
-        ws.cmd_opts.disable_safe_unpickle = False
-    except:
-        pass
-
-orig_tensor_to = torch.Tensor.to
 def tensor_to_fix(self, *args, **kwargs):
     if self.device.type != 'mps' and \
-       ((len(args) > 0 and isinstance(args[0], torch.device) and args[0].type == 'mps') or \
-       (isinstance(kwargs.get('device'), torch.device) and kwargs['device'].type == 'mps')):
+            ((len(args) > 0 and isinstance(args[0], torch.device) and args[0].type == 'mps') or
+             (isinstance(kwargs.get('device'), torch.device) and kwargs['device'].type == 'mps')):
         self = self.contiguous()
     return orig_tensor_to(self, *args, **kwargs)
 
+
 # MPS workaround for https://github.com/pytorch/pytorch/issues/80800
-orig_layer_norm = torch.nn.functional.layer_norm
+
 def layer_norm_fix(*args, **kwargs):
     if len(args) > 0 and isinstance(args[0], torch.Tensor) and args[0].device.type == 'mps':
         args = list(args)
@@ -285,18 +273,12 @@ def layer_norm_fix(*args, **kwargs):
     return orig_layer_norm(*args, **kwargs)
 
 
-# MPS workaround for https://github.com/pytorch/pytorch/issues/90532
-orig_tensor_numpy = torch.Tensor.numpy
 def numpy_fix(self, *args, **kwargs):
     if self.requires_grad:
         self = self.detach()
     return orig_tensor_numpy(self, *args, **kwargs)
 
 
-load_auto_settings()
-
-orig_cumsum = torch.cumsum
-orig_Tensor_cumsum = torch.Tensor.cumsum
 def cumsum_fix(input, cumsum_func, *args, **kwargs):
     if input.device.type == 'mps':
         output_dtype = kwargs.get('dtype', input.dtype)
@@ -305,6 +287,57 @@ def cumsum_fix(input, cumsum_func, *args, **kwargs):
     return cumsum_func(input, *args, **kwargs)
 
 
+script_path = '\\'.join(__file__.split('\\')[0:-4])
+print(f"Script path is {script_path}")
+models_path = os.path.join(script_path, "models")
+embeddings_dir = os.path.join(script_path, "embeddings")
+dreambooth_models_path = os.path.join(models_path, "dreambooth")
+ckpt_dir = os.path.join(models_path, "Stable-diffusion")
+lora_models_path = os.path.join(models_path, "lora")
+db_model_config = None
+data_path = os.path.join(script_path, ".cache")
+show_progress_every_n_steps = 10
+parallel_processing_allowed = True
+dataset_filename_word_regex = ""
+dataset_filename_join_string = " "
+device_id = None
+state = None
+disable_safe_unpickle = True
+ckptfix = False
+medvram = False
+lowvram = False
+debug = False
+profile_db = False
+sub_quad_q_chunk_size = 1024
+sub_quad_kv_chunk_size = None
+sub_quad_chunk_threshold = None
+CLIP_stop_at_last_layers = 2
+sd_model = None
+config = os.path.join(script_path, "configs", "v1-inference.yaml")
+force_cpu = False
+paths = []
+is_auto = load_auto_settings()
+
+device = torch.device("cpu")
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+
+if getattr(torch, 'has_mps', False):
+    try:
+        torch.zeros(1).to(torch.device("mps"))
+        device = torch.device("mps")
+    except Exception:
+        pass
+
+orig_tensor_to = torch.Tensor.to
+orig_layer_norm = torch.nn.functional.layer_norm
+# MPS workaround for https://github.com/pytorch/pytorch/issues/90532
+orig_tensor_numpy = torch.Tensor.numpy
+extension_path = os.path.join(script_path, "extensions", "sd_dreambooth_extension")
+
+orig_cumsum = torch.cumsum
+orig_Tensor_cumsum = torch.Tensor.cumsum
+
 if device.type == "mps":
     if version.parse(torch.__version__) < version.parse("1.13"):
         # PyTorch 1.13 doesn't need these fixes but unfortunately is slower and has regressions that prevent training from working
@@ -312,12 +345,14 @@ if device.type == "mps":
         torch.nn.functional.layer_norm = layer_norm_fix
         torch.Tensor.numpy = numpy_fix
     elif version.parse(torch.__version__) > version.parse("1.13.1"):
-        if not torch.Tensor([1,2]).to(torch.device("mps")).equal(torch.Tensor([1,1]).to(torch.device("mps")).cumsum(0, dtype=torch.int16)):
-            torch.cumsum = lambda input, *args, **kwargs: ( cumsum_fix(input, orig_cumsum, *args, **kwargs) )
-            torch.Tensor.cumsum = lambda self, *args, **kwargs: ( cumsum_fix(self, orig_Tensor_cumsum, *args, **kwargs) )
+        if not torch.Tensor([1, 2]).to(torch.device("mps")).equal(
+                torch.Tensor([1, 1]).to(torch.device("mps")).cumsum(0, dtype=torch.int16)):
+            torch.cumsum = lambda input, *args, **kwargs: (cumsum_fix(input, orig_cumsum, *args, **kwargs))
+            torch.Tensor.cumsum = lambda self, *args, **kwargs: (cumsum_fix(self, orig_Tensor_cumsum, *args, **kwargs))
         orig_narrow = torch.narrow
-        torch.narrow = lambda *args, **kwargs: ( orig_narrow(*args, **kwargs).clone() )
+        torch.narrow = lambda *args, **kwargs: (orig_narrow(*args, **kwargs).clone())
 
 status = DreamState()
+
 if state is None:
     state = status

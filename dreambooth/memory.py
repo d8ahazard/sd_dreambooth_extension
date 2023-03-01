@@ -20,15 +20,17 @@ A collection of utilities for ensuring that training can always occur. Heavily i
 import functools
 import gc
 import inspect
-import os.path
 import traceback
-from datetime import datetime
 
 import torch
 import torch.backends.cudnn
 
-from extensions.sd_dreambooth_extension.dreambooth import db_shared
-from extensions.sd_dreambooth_extension.dreambooth.utils import cleanup
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup
+except:
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.utils.utils import cleanup  # noqa
 
 
 def should_reduce_batch_size(exception: Exception) -> bool:
@@ -48,7 +50,10 @@ def should_reduce_batch_size(exception: Exception) -> bool:
         return any(err in exception.args[0] for err in _statements)
     return False
 
+
 profiler = None
+
+
 def find_executable_batch_size(function: callable = None, starting_batch_size: int = 128,
                                starting_grad_size: int = 128, logging_dir: str = ""):
     """
@@ -69,7 +74,7 @@ def find_executable_batch_size(function: callable = None, starting_batch_size: i
     """
     global profiler
     try:
-        profile_memory = db_shared.profile_db
+        profile_memory = shared.profile_db
     except Exception:
         profile_memory = False
 
@@ -112,21 +117,12 @@ def find_executable_batch_size(function: callable = None, starting_batch_size: i
                 f"Remove this as the decorator already does so: `{function.__name__}({arg_str})`"
             )
         while True:
-            log_file = "db_log_{}.log".format(datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
-            log_file = os.path.join(logging_dir, log_file)
-
             if batch_size == 0:
                 raise RuntimeError("No executable batch size found, reached zero.")
             try:
-                return function(batch_size, grad_size, prof, log_file, *args, **kwargs)
+                return function(batch_size, grad_size, prof, *args, **kwargs)
             except Exception as e:
                 if should_reduce_batch_size(e):
-                    try:
-                        if os.path.exists(log_file):
-                            print(f"Removing log: {log_file}")
-                            os.remove(log_file)
-                    except:
-                        pass
                     gc.collect()
                     torch.cuda.empty_cache()
                     batch_size //= 2
@@ -137,7 +133,5 @@ def find_executable_batch_size(function: callable = None, starting_batch_size: i
                     traceback.print_exc()
                 else:
                     raise
-
-
 
     return decorator

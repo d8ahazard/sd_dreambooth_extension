@@ -1,7 +1,10 @@
 import os
 import secrets
 
-from modules import shared
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+except:
+    from dreambooth.dreambooth import shared  # noqa
 
 db_path = os.path.join(shared.models_path, "dreambooth")
 secret_file = os.path.join(db_path, "secret.txt")
@@ -12,6 +15,9 @@ if not os.path.exists(db_path):
 
 def get_secret():
     secret = ""
+    user_key = os.environ.get("API_KEY", None)
+    if user_key is not None:
+        return user_key
     if not os.path.exists(secret_file):
         return secret
     with open(secret_file, 'r') as file:

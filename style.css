@@ -7,8 +7,88 @@
     max-height: 20px;
 }
 
+button:disabled, input:disabled {
+    background: #4444 !important;
+    color: #6666 !important;
+    border: 1px #6666 solid !important;
+    pointer-events: none;
+}
+
+.\!cursor-not-allowed, .\!cursor-not-allowed > span, .\!cursor-not-allowed > option {
+    color: #6666 !important;
+    border: 1px #6666 solid !important;
+    pointer-events: none;
+}
+
+#hint_row {
+    text-align: center;
+    font-size: 22px;
+}
+
+
+#change_modal {
+    display: none;
+}
+
+#modal_title {
+    height: 20px;
+    min-height: 36px;
+    font-size: 1.5rem;
+    text-align: center;
+}
+
+.commitDiv {
+    border: 1px grey solid;
+}
+
+#change_modal.active {
+    display: block;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 50%;
+    height: 50%;
+    min-width: 50vw;
+    max-width: 75vw;
+    margin: 0 auto;
+    z-index: 10000;
+    border: 1px solid white;
+    overflow-y: scroll;
+    overflow-x: hidden;
+}
+
+#modal_notes * {
+    color: blue;
+    text-align: center;
+    text-decoration: underline;
+}
+
+
+#close_modal {
+    min-width: 10px;
+    max-width: 10px;
+    min-height: 10px;
+    max-height: 35px;
+    position: absolute;
+    right: 11px;
+}
+
+
+#change_log {
+
+}
+
+.changeTitle {
+
+}
+
+.changeSpan {
+
+}
+
 .min-h-\[6rem\] {
-    min-height: 0!important;
+    min-height: 0 !important;
 }
 
 #db_progress_row {

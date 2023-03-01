@@ -1,7 +1,7 @@
 # Script for converting Diffusers saved pipeline to a Stable Diffusion checkpoint.
 # *Only* converts the UNet, VAE, and Text Encoder.
 # Does not convert optimizer state or any other thing.
-
+import copy
 import os
 import os.path as osp
 import re
@@ -10,18 +10,29 @@ import traceback
 from typing import Dict
 
 import safetensors.torch
-from torch import Tensor
-from tqdm.auto import tqdm
 import torch
-from diffusers import DiffusionPipeline
+from diffusers import UNet2DConditionModel
+from torch import Tensor, nn
 
-from extensions.sd_dreambooth_extension.dreambooth import db_shared as shared
-from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import mytqdm
-from extensions.sd_dreambooth_extension.dreambooth.utils import printi, unload_system_models, \
-    reload_system_models
-from extensions.sd_dreambooth_extension.lora_diffusion.lora import weight_apply_lora
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared as shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
+    from extensions.sd_dreambooth_extension.dreambooth.shared import status
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
+        reload_system_models, \
+        disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path
+    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
+    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+    from extensions.sd_dreambooth_extension.lora_diffusion.lora import merge_lora_to_model
+except:
+    from dreambooth.dreambooth import shared as shared  # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import from_file  # noqa
+    from dreambooth.dreambooth.shared import status  # noqa
+    from dreambooth.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
+        disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path  # noqa
+    from dreambooth.dreambooth.utils.utils import printi  # noqa
+    from dreambooth.helpers.mytqdm import mytqdm  # noqa
+    from dreambooth.lora_diffusion.lora import merge_lora_to_model  # noqa
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -216,6 +227,7 @@ textenc_pattern = re.compile("|".join(protected.keys()))
 # Ordering is from https://github.com/pytorch/pytorch/blob/master/test/cpp/api/modules.cpp
 code2idx = {'q': 0, 'k': 1, 'v': 2}
 
+
 def conv_fp16(t: Tensor):
     return t.half()
 
@@ -234,6 +246,7 @@ _g_precision_func = {
     "bf16": conv_bf16,
 }
 
+
 def check_weight_type(k: str) -> str:
     if k.startswith("model.diffusion_model"):
         return "unet"
@@ -242,6 +255,7 @@ def check_weight_type(k: str) -> str:
     elif k.startswith("cond_stage_model"):
         return "clip"
     return "other"
+
 
 def split_dict(state_dict):
     ok = {}
@@ -260,11 +274,11 @@ def split_dict(state_dict):
                 ok.update(moar_ok)
                 json_dict.update(moar_json)
 
-    
     for k, v in mytqdm(state_dict.items()):
         _hf(k, v)
 
     return ok, json_dict
+
 
 def convert_text_enc_state_dict_v20(text_enc_dict: Dict[str, torch.Tensor]):
     new_state_dict = {}
@@ -312,7 +326,20 @@ def convert_text_enc_state_dict(text_enc_dict: Dict[str, torch.Tensor]):
     return text_enc_dict
 
 
-def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool = True, log:bool =True, snap_rev: str=""):
+def get_model_path(working_dir: str, model_name: str = "", file_extra: str = ""):
+    model_base = osp.join(working_dir, model_name) if model_name != "" else working_dir
+    if os.path.exists(model_base) and os.path.isdir(model_base):
+        file_name_regex = re.compile(f"model_?{file_extra}\\.(safetensors|bin)$")
+        for f in os.listdir(model_base):
+            if file_name_regex.search(f):
+                return os.path.join(model_base, f)
+    if model_name != "ema_unet" and not file_extra:
+        print(f"Unable to find model file: {model_base}")
+    return None
+
+
+def compile_checkpoint(model_name: str, lora_path: str = None, reload_models: bool = True, log: bool = True,
+                       snap_rev: str = ""):
     """
 
     @param model_name: The model name to compile
@@ -357,86 +384,102 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
     checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}{checkpoint_ext}")
 
     model_path = config.pretrained_model_name_or_path
-    unet_path = None
-    text_enc_path = None
-    if snap_rev != "":
-        new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{snap_rev}")
-        if os.path.exists(new_hotness):
-            tqdm.write(f"Loading snapshot paths from {new_hotness}")
-            u_path = osp.join(new_hotness, "pytorch_model.bin")
-            text_path = osp.join(new_hotness, "pytorch_model_1.bin")
-            if os.path.exists(u_path):
-                unet_path = u_path
-            if os.path.exists(text_path):
-                text_enc_path = text_path
 
-    if unet_path is None:
-        unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")
+    new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{snap_rev}")
+    if snap_rev != "" and os.path.exists(new_hotness) and os.path.isdir(new_hotness):
+        mytqdm.write(f"Loading snapshot paths from {new_hotness}")
+        unet_path = get_model_path(new_hotness)
+        text_enc_path = get_model_path(new_hotness, file_extra="1")
+        if text_enc_path is None:
+            text_enc_path = get_model_path(model_path, "text_encoder")
+    else:
+        unet_path = get_model_path(model_path, "unet")
+        text_enc_path = get_model_path(model_path, "text_encoder")
 
-    if text_enc_path is None:
-        text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
+    ema_unet_path = get_model_path(model_path, "ema_unet")
+    vae_path = get_model_path(model_path, "vae")
 
-    vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.bin")
-
+    ema_state_dict = {}
     try:
-        printi("Converting unet...", log=log)
-        if isinstance(lora_path, list) and len(lora_path) == 0:
-            lora_path = ""
-        if lora_path is not None and lora_path != "":
-            loaded_pipeline = DiffusionPipeline.from_pretrained(model_path).to("cpu")
-            lora_diffusers = config.pretrained_model_name_or_path + "_lora"
-            os.makedirs(lora_diffusers, exist_ok=True)
-            if not os.path.exists(lora_path):
-                try:
-                    cmd_lora_models_path = shared.lora_models_path
-                except:
-                    cmd_lora_models_path = None
-                model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else shared.models_path
-                lora_path = os.path.join(model_dir, "lora", lora_path)
-            printi(f"Loading lora from {lora_path}", log=log)
-            if os.path.exists(lora_path):
-                checkpoint_path = checkpoint_path.replace(checkpoint_ext, f"_lora{checkpoint_ext}")
-                printi(f"Applying lora weight of alpha: {config.lora_weight} to unet...", log=log)
-                weight_apply_lora(loaded_pipeline.unet, torch.load(lora_path), alpha=config.lora_weight)
-                printi("Saving lora unet...", log=log)
-                loaded_pipeline.unet.save_pretrained(os.path.join(config.pretrained_model_name_or_path, "unet_lora"))
-                unet_path = osp.join(config.pretrained_model_name_or_path, "unet_lora", "diffusion_pytorch_model.bin")
-            lora_txt = lora_path.replace(".pt", "_txt.pt")
-            if os.path.exists(lora_txt):
-                printi(f"Applying lora weight of alpha: {config.lora_txt_weight} to text encoder...", log=log)
-                weight_apply_lora(loaded_pipeline.text_encoder, torch.load(lora_txt), target_replace_module=["CLIPAttention"], alpha=config.lora_weight)
-                printi("Saving lora text encoder...", log=log)
-                loaded_pipeline.text_encoder.save_pretrained(
-                    os.path.join(config.pretrained_model_name_or_path, "text_encoder_lora"))
-                text_enc_path = osp.join(config.pretrained_model_name_or_path, "text_encoder_lora", "pytorch_model.bin")
-            del loaded_pipeline
+        if ema_unet_path is not None and (config.save_ema or config.infer_ema):
+            printi("Converting ema unet...", log=log)
+            try:
+                if config.infer_ema:
+                    print("Replacing unet with ema unet.")
+                    unet_path = ema_unet_path
+                else:
+                    ema_unet_state_dict = load_model(ema_unet_path, map_location="cpu")
+                    ema_state_dict = convert_unet_state_dict(ema_unet_state_dict)
+                    ema_state_dict = {"model_ema." + "".join(k.split(".")): v for k, v in ema_state_dict.items()}
+                    del ema_unet_state_dict
+            except Exception as e:
+                print(f"Exception: {e}")
+                traceback.print_exc()
+                pass
 
-        # Convert the UNet model
-        unet_state_dict = torch.load(unet_path, map_location="cpu")
+        # Apply LoRA to the unet
+        if lora_path is not None and lora_path != "":
+            unet_model = UNet2DConditionModel().from_pretrained(os.path.dirname(unet_path))
+            lora_rev = apply_lora(unet_model, lora_path, config.lora_unet_rank, config.lora_weight, "cpu", False,
+                                  config.use_lora_extended)
+            unet_state_dict = copy.deepcopy(unet_model.state_dict())
+            del unet_model
+            if lora_rev is not None:
+                checkpoint_path = os.path.join(models_path, f"{save_model_name}_{lora_rev}_lora{checkpoint_ext}")
+        else:
+            unet_state_dict = load_model(unet_path, map_location="cpu")
+
         unet_state_dict = convert_unet_state_dict(unet_state_dict)
-        # unet_state_dict = convert_unet_state_dict_to_sd(v2, unet_state_dict)
         unet_state_dict = {"model.diffusion_model." + k: v for k, v in unet_state_dict.items()}
+
+        # We should really be appending "ema" to the checkpoint name only if using the ema unet
+        if config.infer_ema and ema_unet_path == unet_path:
+            checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}_ema{checkpoint_ext}")
+
+        for key, value in ema_state_dict.items():
+            unet_state_dict[key] = value
+
         printi("Converting vae...", log=log)
         # Convert the VAE model
-        vae_state_dict = torch.load(vae_path, map_location="cpu")
+        vae_state_dict = load_model(vae_path, map_location="cpu")
         vae_state_dict = convert_vae_state_dict(vae_state_dict)
         vae_state_dict = {"first_stage_model." + k: v for k, v in vae_state_dict.items()}
-        printi("Converting text encoder...", log=log)
-        # Convert the text encoder model
-        text_enc_dict = torch.load(text_enc_path, map_location="cpu")
 
+        printi("Converting text encoder...", log=log)
+
+        # Apply lora weights to the tenc
+        if lora_path is not None and lora_path != "":
+            lora_paths = lora_path.split(".")
+            lora_txt_path = f"{lora_paths[0]}_txt.{lora_paths[1]}"
+            text_encoder_cls = import_model_class_from_model_name_or_path(config.pretrained_model_name_or_path,
+                                                                          config.revision)
+
+            text_encoder = text_encoder_cls.from_pretrained(
+                config.pretrained_model_name_or_path,
+                subfolder="text_encoder",
+                revision=config.revision,
+                torch_dtype=torch.float32
+            )
+
+            apply_lora(text_encoder, lora_txt_path, config.lora_txt_rank, config.lora_txt_weight, "cpu", True,
+                       config.use_lora_extended)
+            text_enc_dict = copy.deepcopy(text_encoder.state_dict())
+            del text_encoder
+        else:
+            text_enc_dict = load_model(text_enc_path, map_location="cpu")
+
+        # Convert the text encoder model
         if v2:
             printi("Converting text enc dict for V2 model.", log=log)
             # Need to add the tag 'transformer' in advance, so we can knock it out from the final layer-norm
             text_enc_dict = {"transformer." + k: v for k, v in text_enc_dict.items()}
             text_enc_dict = convert_text_enc_state_dict_v20(text_enc_dict)
             text_enc_dict = {"cond_stage_model.model." + k: v for k, v in text_enc_dict.items()}
-            
+
         else:
             printi("Converting text enc dict for V1 model.", log=log)
             text_enc_dict = convert_text_enc_state_dict(text_enc_dict)
             text_enc_dict = {"cond_stage_model.transformer." + k: v for k, v in text_enc_dict.items()}
-            
 
         # Put together new checkpoint
         state_dict = {**unet_state_dict, **vae_state_dict, **text_enc_dict}
@@ -453,8 +496,6 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
         cfg_file = None
         new_name = os.path.join(config.model_dir, f"{config.model_name}.yaml")
         if os.path.exists(new_name):
-
-            cfg_file = new_name
             config_version = "v1-inference"
 
             if config.resolution >= 768 and v2:
@@ -466,9 +507,9 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
                 config_version = "v2-inference"
 
             cfg_file = os.path.join(
-                os.path.dirname(os.path.realpath(__file__)), 
-                "..", 
-                "configs", 
+                os.path.dirname(os.path.realpath(__file__)),
+                "..",
+                "configs",
                 f"{config_version}.yaml"
             )
 
@@ -498,3 +539,32 @@ def compile_checkpoint(model_name: str, lora_path: str=None, reload_models: bool
     msg = f"Checkpoint compiled successfully: {checkpoint_path}"
     printi(msg, log=log)
     return msg
+
+
+def load_model(model_path: str, map_location: str):
+    if ".safetensors" in model_path:
+        return safetensors.torch.load_file(model_path, device=map_location)
+    else:
+        disable_safe_unpickle()
+        loaded = torch.load(model_path, map_location=map_location)
+        enable_safe_unpickle()
+        return loaded
+
+
+def apply_lora(model: nn.Module, loras: str, rank: int, weight: float, device: str, is_tenc: bool, use_extended: bool):
+    lora_rev = None
+    if loras is not None and loras != "":
+        if not os.path.exists(loras):
+            try:
+                cmd_lora_models_path = shared.lora_models_path
+            except:
+                cmd_lora_models_path = None
+            model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else shared.models_path
+            loras = os.path.join(model_dir, "lora", loras)
+
+        if os.path.exists(loras):
+            lora_rev = loras.split("_")[-1].replace(".pt", "")
+            printi(f"Loading lora from {loras}", log=True)
+            merge_lora_to_model(model, load_model(loras, device), is_tenc, use_extended, rank, weight)
+
+    return lora_rev

@@ -3,38 +3,60 @@ import functools
 import hashlib
 import io
 import json
+import logging
 import os
 import shutil
 import traceback
 import zipfile
 from pathlib import Path
-from typing import Dict, Any
+from typing import List, Union
 
-import gradio as gr
+import requests
 from PIL import Image
 from fastapi import FastAPI, Response, Query, Body, Form, Header
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
-from pydantic.dataclasses import Union
-from pydantic.types import List
+from starlette import status
+from starlette.requests import Request
 
-from extensions.sd_dreambooth_extension.dreambooth import db_shared
-from extensions.sd_dreambooth_extension.dreambooth.db_concept import Concept
-from extensions.sd_dreambooth_extension.dreambooth.db_config import from_file, DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import DreamState
-from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.finetune_utils import generate_classifiers, PromptDataset
-from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
-from extensions.sd_dreambooth_extension.dreambooth.utils import get_db_models, get_lora_models
-from extensions.sd_dreambooth_extension.scripts import dreambooth
-from extensions.sd_dreambooth_extension.scripts.dreambooth import ui_samples, create_model
-from modules import sd_models
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig
+    from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
+    from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
+    from extensions.sd_dreambooth_extension.dreambooth.shared import DreamState
+    from extensions.sd_dreambooth_extension.dreambooth.ui_functions import create_model, generate_samples, \
+        start_training
+    from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
+except:
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.dataclasses.db_concept import Concept  # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import from_file, DreamboothConfig  # noqa
+    from dreambooth.dreambooth.diff_to_sd import compile_checkpoint  # noqa
+    from dreambooth.dreambooth.secret import get_secret  # noqa
+    from dreambooth.dreambooth.shared import DreamState  # noqa
+    from dreambooth.dreambooth.ui_functions import create_model, generate_samples, start_training  # noqa
+    from dreambooth.dreambooth.utils.gen_utils import generate_classifiers  # noqa
+    from dreambooth.dreambooth.utils.image_utils import get_images  # noqa
+    from dreambooth.dreambooth.utils.model_utils import get_db_models, get_lora_models  # noqa
+
+    pass
+
+if os.environ.get("DEBUG_API", False):
+    logging.basicConfig(level=logging.DEBUG)
+
+logger = logging.getLogger(__name__)
 
 
 class InstanceData(BaseModel):
-    data: str = Field(title="File data", description="Base64 representation of the file")
-    name: str = Field(title="File name")
-    txt: str = Field(title="Prompt")
+    data: str = Field(title="File data", description="Base64 representation of the file or URL")
+    name: str = Field(title="File name", description="File name to save image as")
+    txt: str = Field(title="Prompt", description="Training prompt for image")
 
 
 class ImageData:
@@ -62,9 +84,6 @@ active = False
 
 
 def is_running():
-    if active:
-        print("Something is already running.")
-        return JSONResponse(content={"message": "Job already in progress.", "status": db_shared.status.dict()})
     return False
 
 
@@ -88,13 +107,13 @@ def zip_files(db_model_name, files, name_part=""):
                          zipfile.ZIP_DEFLATED, False) as zip_file:
         for file in files:
             if isinstance(file, str):
-                print(f"Zipping img: {file}")
+                logger.debug(f"Zipping img: {file}")
                 if os.path.exists(file) and os.path.isfile(file):
                     parent_path = os.path.join(Path(file).parent, Path(file).name)
                     zip_file.write(file, arcname=parent_path)
                     check_txt = os.path.join(os.path.splitext(file)[0], ".txt")
                     if os.path.exists(check_txt):
-                        print(f"Zipping txt: {check_txt}")
+                        logger.debug(f"Zipping txt: {check_txt}")
                         parent_path = os.path.join(Path(check_txt).parent, Path(check_txt).name)
                         zip_file.write(check_txt, arcname=parent_path)
             else:
@@ -136,11 +155,18 @@ def file_to_base64(file_path) -> str:
         return str(im_b64, 'utf-8')
 
 
-def dreambooth_api(_: gr.Blocks, app: FastAPI):
+def dreambooth_api(_, app: FastAPI):
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"detail": exc.errors(), "body": exc.body}),
+        )
+
     @app.get("/dreambooth/cancel")
     async def cancel_jobs(
             api_key: str = Query("", description="If an API key is set, this must be present.", )) -> \
-            Union[DreamState, JSONResponse]:
+            JSONResponse:
         """
         Check the current state of Dreambooth processes.
         @return:
@@ -148,9 +174,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if db_shared.status.job_count == 0:
+        if shared.status.job_count == 0:
             return JSONResponse(content={"message": "Nothing to cancel."})
-        db_shared.status.interrupted = True
+        shared.status.interrupted = True
         return JSONResponse(content={"message": f"Processes cancelled."})
 
     @app.get("/dreambooth/checkpoint")
@@ -180,8 +206,8 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if config.custom_model_name:
             save_model_name = config.custom_model_name
         if skip_build:
-            ckpt_dir = db_shared.ckpt_dir
-            models_path = os.path.join(db_shared.models_path, "Stable-diffusion")
+            ckpt_dir = shared.ckpt_dir
+            models_path = os.path.join(shared.models_path, "Stable-diffusion")
             if ckpt_dir is not None:
                 models_path = ckpt_dir
             use_subdir = False
@@ -194,25 +220,25 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
                 checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}.ckpt")
             if config.save_safetensors:
                 checkpoint_path = checkpoint_path.replace(".ckpt", ".safetensors")
-            print(f"Looking for checkpoint at {checkpoint_path}")
+            logger.debug(f"Looking for checkpoint at {checkpoint_path}")
             if os.path.exists(checkpoint_path):
-                print("Existing checkpoint found, returning.")
+                logger.debug("Existing checkpoint found, returning.")
                 path = checkpoint_path
             else:
                 skip_build = False
         if not skip_build:
             global active
-            db_shared.status.begin()
+            shared.status.begin()
             active = True
             ckpt_result = compile_checkpoint(model_name, reload_models=False, log=False)
             active = False
-            db_shared.status.end()
+            shared.status.end()
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()
-                print(f"Checkpoint aved to path: {path}")
+                logger.debug(f"Checkpoint aved to path: {path}")
 
         if path is not None and os.path.exists(path):
-            print(f"Returning file response: {path}-{os.path.splitext(path)}")
+            logger.debug(f"Returning file response: {path}-{os.path.splitext(path)}")
             return FileResponse(path)
 
         return {"exception": f"Unable to find or compile checkpoint."}
@@ -227,8 +253,15 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        sd_models.list_models()
-        ckpt_list = sd_models.checkpoints_list
+
+        ckpt_list = {}
+        try:
+            from modules import sd_models
+
+            sd_models.list_models()
+            ckpt_list = sd_models.checkpoints_list
+        except:
+            pass
         models = []
         for key, _ in ckpt_list.items():
             models.append(key)
@@ -257,7 +290,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             return status
         global active
         active = True
-        db_shared.status.begin()
+        shared.status.begin()
         run_in_background(
             generate_classifiers,
             config,
@@ -285,7 +318,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         out_images = []
         if concept_idx >= 0:
             if len(concepts) - 1 >= concept_idx:
-                print(f"Returning class images for concept {concept_idx}")
+                logger.debug(f"Returning class images for concept {concept_idx}")
                 concept_dict[concept_idx] = concepts[concept_idx]
             else:
                 return {"Exception": f"Concept index {concept_idx} out of range."}
@@ -297,11 +330,10 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         for concept_key in concept_dict:
             concept = concept_dict[concept_key]
             class_images_dir = concept["class_data_dir"]
-            if class_images_dir == "" or class_images_dir is None or class_images_dir == db_shared.script_path:
+            if class_images_dir == "" or class_images_dir is None or class_images_dir == shared.script_path:
                 class_images_dir = os.path.join(config.model_dir, f"classifiers_{concept_key}")
-                print(f"Class image dir is not set, defaulting to {class_images_dir}")
+                logger.debug(f"Class image dir is not set, defaulting to {class_images_dir}")
             if os.path.exists(class_images_dir):
-                from extensions.sd_dreambooth_extension.dreambooth.utils import get_images
                 class_images = get_images(class_images_dir)
                 for image in class_images:
                     out_images.append(str(image))
@@ -319,7 +351,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             class_token: str = Form("", description="The class token to use."),
             api_key: str = Form("", description="If an API key is set, this must be present."),
             concept: Union[Concept, None] = Body(None, description="A concept to update or add to the model.")
-    ) -> Union[List[Concept], JSONResponse]:
+    ) -> JSONResponse:
         """
         Add or update a concept. Provide either a full json concept or path to instance dir.
         """
@@ -360,7 +392,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
     async def get_model_concepts(
             model_name: str = Query(description="The model name to fetch config for."),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
-    ) -> Union[List[Concept], JSONResponse]:
+    ) -> JSONResponse:
         """
         Get a model's concepts.
         """
@@ -380,7 +412,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             model_name: str = Form(description="The model name to fetch config for."),
             api_key: str = Form("", description="If an API key is set, this must be present."),
             concepts: List[Concept] = Body()
-    ) -> Union[List[Concept], JSONResponse]:
+    ) -> JSONResponse:
         """
         Replace a full concepts list.
         """
@@ -401,15 +433,19 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
 
     @app.post("/dreambooth/createModel")
     async def create_db_model(
-            new_model_name: str = Form(description="The name of the model to create.", ),
-            new_model_src: str = Form(description="The source checkpoint to extract to create this model.", ),
-            new_model_scheduler: str = Form("ddim", description="The scheduler to use. V2+ models ignore this.", ),
-            create_from_hub: bool = Form(False, description="Create this model from the hub", ),
-            new_model_url: str = Form(None,
+            new_model_name: str = Query(description="The name of the model to create.", ),
+            new_model_src: str = Query(description="The source checkpoint to extract to create this model.", ),
+            new_model_scheduler: str = Query("ddim", description="The scheduler to use. V2+ models ignore this.", ),
+            create_from_hub: bool = Query(False, description="Create this model from the hub", ),
+            new_model_url: str = Query(None,
                                        description="The hub URL to use for this model. Must contain diffusers model.", ),
-            new_model_token: str = Form(None, description="Your huggingface hub token.", ),
-            new_model_extract_ema: bool = Form(False, description="Whether to extract EMA weights if present.", ),
-            api_key: str = Form("", description="If an API key is set, this must be present.", ),
+            is_512: bool = Query(False,
+                                 description="Whether or not the model is 512x resolution.", ),
+            train_unfrozen: bool = Query(True,
+                                         description="Un-freeze the model.", ),
+            new_model_token: str = Query(None, description="Your huggingface hub token.", ),
+            new_model_extract_ema: bool = Query(False, description="Whether to extract EMA weights if present.", ),
+            api_key: str = Query("", description="If an API key is set, this must be present.", ),
     ):
         """
         Create a new Dreambooth model.
@@ -425,14 +461,15 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if status:
             return status
 
-        print("Creating new Checkpoint: " + new_model_name)
+        logger.debug("Creating new Checkpoint: " + new_model_name)
         res = create_model(new_model_name,
-                         new_model_src,
-                         new_model_scheduler,
-                         create_from_hub,
-                         new_model_url,
-                         new_model_token,
-                         new_model_extract_ema)
+                           new_model_src,
+                           create_from_hub,
+                           new_model_url,
+                           new_model_token,
+                           new_model_extract_ema,
+                           train_unfrozen,
+                           is_512)
 
         return JSONResponse(res[-1])
 
@@ -457,7 +494,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
     async def get_model_config(
             model_name: str = Query(description="The model name to fetch config for."),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
-    ) -> Union[DreamboothConfig, JSONResponse]:
+    ) -> JSONResponse:
         """
         Get a specified model config.
         """
@@ -484,13 +521,13 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if key_check is not None:
             return key_check
         try:
-            print("Create config")
+            logger.debug("Create config")
             config = DreamboothConfig()
             for key in model_cfg.dict():
                 if key in config.__dict__:
                     config.__dict__[key] = model_cfg.dict()[key]
             config.save()
-            print("Saved?")
+            logger.debug("Saved?")
             return JSONResponse(content=config.__dict__)
         except Exception as e:
             traceback.print_exc()
@@ -498,9 +535,9 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
 
     @app.post("/dreambooth/model_params")
     async def set_model_params(
-            model_name: str = Form(description="The model name to update params for."),
-            api_key: str = Form("", description="If an API key is set, this must be present."),
-            params: str = Body(description="A json string representing a dictionary of parameters to set.")
+            model_name: str = Query(description="The model name to update params for."),
+            api_key: str = Query("", description="If an API key is set, this must be present."),
+            params: str = Query(description="A json string representing a dictionary of parameters to set.")
     ) -> JSONResponse:
         """
         Update an existing model configuration's parameters from a dictionary of values.
@@ -514,11 +551,10 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
-        print(f"Loading new params: {params}")
+        logger.debug(f"Loading new params: {params}")
         config.load_params(params)
         config.save()
         return JSONResponse(content=config.__dict__)
-
 
     @app.get("/dreambooth/models")
     async def get_models(
@@ -537,7 +573,6 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             return key_check
         models = get_db_models()
         return JSONResponse(models)
-
 
     @app.get("/dreambooth/models_lora")
     async def get_models_lora(
@@ -558,15 +593,19 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         return JSONResponse(models)
 
     @app.get("/dreambooth/samples")
-    async def generate_samples(
+    async def api_generate_samples(
             model_name: str = Query(description="The model name to use for generating samples."),
             sample_prompt: str = Query("", description="The prompt to use to generate sample images."),
+            sample_prompt_file: str = Query("", description="A file of pre-generated sample prompts."),
+            negative_prompt: str = Query("", description="An optional negative prompt to use when generating images."),
+            width: int = Query(512, description="Sample width"),
+            height: int = Query(512, description="Sample height"),
             num_images: int = Query(1, description="The number of sample images to generate."),
             batch_size: int = Query(1, description="How many images to generate at once."),
-            negative_prompt: str = Query("", description="An optional negative prompt to use when generating images."),
             seed: int = Query(-1, description="The seed to use when generating samples"),
             steps: int = Query(60, description="Number of sampling steps to use when generating images."),
             scale: float = Query(7.5, description="CFG scale to use when generating images."),
+            use_txt2img: bool = Query(True, description="Use txt2img to generate samples"),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ):
         """
@@ -580,50 +619,41 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if status:
             return status
 
-        db_shared.status.begin()
+        shared.status.begin()
         config = from_file(model_name)
         if config is None:
             return JSONResponse("Config not found")
 
-        prompts = []
-        if sample_prompt == "":
-            pd = PromptDataset(config.concepts(),config.model_dir, config.resolution)
-            for p, prompt_list in pd.new_prompts.items:
-                prompts.extend(pdi.prompt for pdi in prompt_list)
-        else:
-            prompts = [sample_prompt]
-        images = []
-        for prompt in prompts:
-            new_images, msg, status = ui_samples(
-                model_dir=model_name,
-                save_sample_prompt=sample_prompt,
-                num_samples=1,
-                sample_batch_size=1,
-                lora_model_path=config.lora_model_name,
-                lora_rank=config.lora_rank,
-                lora_weight=config.lora_rank,
-                lora_txt_weight=config.lora_txt_weight,
-                negative_prompt=negative_prompt,
-                seed=seed,
-                steps=steps,
-                scale=scale
-            )
-            images.extend(new_images)
-        db_shared.status.end()
+        images, prompts, status = generate_samples(
+            model_name,
+            prompt=sample_prompt,
+            prompt_file=sample_prompt_file,
+            negative_prompt=negative_prompt,
+            width=width,
+            height=height,
+            num_samples=num_images,
+            batch_size=batch_size,
+            seed=seed,
+            scale=scale,
+            steps=steps,
+            use_txt2img=use_txt2img
+        )
+
+        shared.status.end()
+
         if len(images) > 1:
             return zip_files(model_name, images, "_sample")
         else:
-            img_byte_arr = io.BytesIO()
             file = images[0]
-            file.save(img_byte_arr, format='PNG')
-            img_byte_arr = img_byte_arr.getvalue()
+            image = Image.open(file)
+            img_byte_arr = image.tobytes()
 
         return Response(content=img_byte_arr, media_type="image/png")
 
     @app.get("/dreambooth/status")
     async def check_status(
             api_key: str = Query("", description="If an API key is set, this must be present.", )) -> \
-            Union[DreamState, JSONResponse]:
+            JSONResponse:
         """
         Check the current state of Dreambooth processes.
         @return:
@@ -631,7 +661,8 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        return JSONResponse(content={"current_state": f"{json.dumps(db_shared.status.dict())}"})
+        return JSONResponse(content={"current_state": f"{json.dumps(shared.status.dict())}"})
+
     @app.get("/dreambooth/status_images")
     async def check_status_images(
             api_key: str = Query("", description="If an API key is set, this must be present.", )) -> JSONResponse:
@@ -646,8 +677,8 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        db_shared.status.set_current_image()
-        images = db_shared.status.current_image
+        shared.status.set_current_image()
+        images = shared.status.current_image
         if not isinstance(images, List):
             if images is not None:
                 images = [images]
@@ -668,11 +699,11 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         return Response(content=img_byte_arr, media_type="image/png")
 
     @app.post("/dreambooth/start_training")
-    async def start_training(
-            model_name: str = Form(None,
+    async def train(
+            model_name: str = Query(None,
                                     description="The model name to load params for.", ),
-            use_tx2img: bool = Form(True, description="Use txt2img to generate class images."),
-            api_key: str = Form("", description="If an API key is set, this must be present.")
+            use_tx2img: bool = Query(True, description="Use txt2img to generate class images."),
+            api_key: str = Query("", description="If an API key is set, this must be present.")
     ):
         """
         Start training dreambooth.
@@ -691,16 +722,17 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         if status:
             return status
 
-        print("Starting Training")
-        db_shared.status.begin()
-        run_in_background(dreambooth.start_training, model_name, use_tx2img)
+        logger.debug("Starting Training")
+        shared.status.begin()
+        run_in_background(start_training, model_name, use_tx2img)
         return {"Status": "Training started."}
 
     @app.post("/dreambooth/upload")
     async def upload_db_images(
             model_name: str = Query(description="The model name to upload images for."),
             instance_name: str = Query(description="The concept/instance name the images are for."),
-            create_concept: bool = Query(True, description="Enable to automatically append the new concept to the model config."),
+            create_concept: bool = Query(True,
+                                         description="Enable to automatically append the new concept to the model config."),
             images: DbImagesRequest = Body(description="A dictionary of images, filenames, and prompts to save."),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ):
@@ -714,38 +746,46 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
         'name' - The filename to store the image under.
         'txt' - The caption for the image. Will be stored in a text file beside the image.
         """
+        logger.debug("API UPLOAD STARTED.")
         key_check = check_api_key(api_key)
         if key_check is not None:
+            logger.debug("NO KEY")
             return key_check
 
-        root_img_path = os.path.join(db_shared.script_path, "..", "InstanceImages")
+        root_img_path = os.path.join(shared.script_path, "..", "InstanceImages")
         if not os.path.exists(root_img_path):
-            print(f"Creating root instance dir: {root_img_path}")
+            logger.debug(f"Creating root instance dir: {root_img_path}")
             os.makedirs(root_img_path)
+        else:
+            logger.debug(f"Root dir exists already: {root_img_path}")
 
         image_dir = os.path.join(root_img_path, model_name, instance_name)
         image_dir = os.path.abspath(image_dir)
         if not os.path.exists(image_dir):
             os.makedirs(image_dir)
+            logger.debug(f"Input data: {images}")
 
         image_paths = []
         for img_data in images.imageList:
             img = base64_to_pil(img_data.data)
             name = img_data.name
             prompt = img_data.txt
+            logger.debug(f"Input prompt for image: {prompt} {name}")
             image_path = os.path.join(image_dir, name)
             text_path = os.path.splitext(image_path)[0]
             text_path = F"{text_path}.txt"
-            print(f"Saving image to: {image_path}")
+            logger.debug(f"Saving image to: {image_path}")
             img.save(image_path)
-            print(f"Saving prompt to: {text_path}")
+            logger.debug(f"Saving prompt ({prompt}) to: {text_path}")
             with open(text_path, "w") as tx_file:
                 tx_file.writelines(prompt)
+                logger.debug(f"Saved prompt text to: {text_path}")
             image_paths.append(image_path)
 
         status = {"Status": f"Saved {len(image_paths)} images.", "Image dir": {image_dir}}
         if create_concept:
             config = from_file(model_name)
+            logger.debug(f"Creating concept: {model_name}")
             if config is None:
                 status["Status"] += " Unable to load model config."
             new_concept = Concept()
@@ -754,7 +794,7 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
             new_concept.instance_prompt = "[filewords]"
             new_concept.save_sample_prompt = "[filewords]"
             new_concept.is_valid = True
-            print(f"New concept: {new_concept}")
+            logger.debug(f"New concept: {new_concept}")
             new_concepts = []
             replaced = False
             for concept in config.concepts():
@@ -767,6 +807,100 @@ def dreambooth_api(_: gr.Blocks, app: FastAPI):
                 new_concepts.append(new_concept.__dict__)
             config.concepts_list = new_concepts
             config.save()
+            logger.debug("Saved concepts.")
+            status["Concepts"] = config.concepts_list
+
+        return status
+
+    @app.post("/dreambooth/upload_url")
+    async def upload_db_images_url(
+            model_name: str = Query(description="The model name to upload images for."),
+            instance_name: str = Query(description="The concept/instance name the images are for."),
+            create_concept: bool = Query(True,
+                                         description="Enable to automatically append the new concept to the model config."),
+            images: DbImagesRequest = Body(description="A dictionary of images, filenames, and prompts to save."),
+            api_key: str = Query("", description="If an API key is set, this must be present.", )
+    ):
+        """
+        Upload images for training.
+
+        Request body should be a JSON Object. Primary key is 'imageList'.
+
+        'imageList' is a list of objects. Each object should have three values:
+        'data' - A base64-encoded string containing the binary data of the image.
+        'name' - The filename to store the image under.
+        'txt' - The caption for the image. Will be stored in a text file beside the image.
+        """
+        logger.debug("API UPLOAD STARTED.")
+        key_check = check_api_key(api_key)
+        if key_check is not None:
+            logger.debug("NO KEY")
+            return key_check
+
+        root_img_path = os.path.join(shared.script_path, "..", "InstanceImages")
+        if not os.path.exists(root_img_path):
+            logger.debug(f"Creating root instance dir: {root_img_path}")
+            os.makedirs(root_img_path)
+        else:
+            logger.debug(f"Root dir exists already: {root_img_path}")
+
+        image_dir = os.path.join(root_img_path, model_name, instance_name)
+        image_dir = os.path.abspath(image_dir)
+        if not os.path.exists(image_dir):
+            os.makedirs(image_dir)
+            logger.debug(f"Input data: {images}")
+
+        image_paths = []
+        for img_data in images.imageList:
+            img_url = img_data.data
+            name = img_data.name
+            prompt = img_data.txt
+            logger.debug(f"Input prompt for image: {prompt} {name}")
+            image_path = os.path.join(image_dir, name)
+            text_path = os.path.splitext(image_path)[0]
+            text_path = F"{text_path}.txt"
+            logger.debug(f"Saving image to: {image_path}")
+            try:
+                response = requests.get(img_url, stream=True)
+                response.raise_for_status()
+                with open(image_path, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+            except Exception as e:
+                logger.exception(f"Error downloading image from {img_url}: {e}")
+                continue
+            logger.debug(f"Saving prompt ({prompt}) to: {text_path}")
+            with open(text_path, "w") as tx_file:
+                tx_file.writelines(prompt)
+                logger.debug(f"Saved prompt text to: {text_path}")
+            image_paths.append(image_path)
+
+        status = {"Status": f"Saved {len(image_paths)} images.", "Image dir": {image_dir}}
+        if create_concept:
+            config = from_file(model_name)
+            logger.debug(f"Creating concept: {model_name}")
+            if config is None:
+                status["Status"] += " Unable to load model config."
+            new_concept = Concept()
+            new_concept.instance_data_dir = image_dir
+            new_concept.class_prompt = "[filewords]"
+            new_concept.instance_prompt = "[filewords]"
+            new_concept.save_sample_prompt = "[filewords]"
+            new_concept.is_valid = True
+            logger.debug(f"New concept: {new_concept}")
+            new_concepts = []
+            replaced = False
+            for concept in config.concepts():
+                if concept.instance_data_dir == new_concept.instance_data_dir:
+                    new_concepts.append(new_concept.__dict__)
+                    replaced = True
+                else:
+                    new_concepts.append(concept.__dict__)
+            if not replaced:
+                new_concepts.append(new_concept.__dict__)
+            config.concepts_list = new_concepts
+            config.save()
+            logger.debug("Saved concepts.")
             status["Concepts"] = config.concepts_list
 
         return status
@@ -776,6 +910,6 @@ try:
     import modules.script_callbacks as script_callbacks
 
     script_callbacks.on_app_started(dreambooth_api)
-    print("SD-Webui API layer loaded")
+    logger.debug("SD-Webui API layer loaded")
 except:
     pass

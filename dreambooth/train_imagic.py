@@ -1,6 +1,5 @@
 import argparse
 import os
-from pathlib import Path
 from typing import List
 
 import torch
@@ -14,10 +13,16 @@ from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
-from extensions.sd_dreambooth_extension.dreambooth.db_config import DreamboothConfig
-from extensions.sd_dreambooth_extension.dreambooth.db_shared import status
-from extensions.sd_dreambooth_extension.dreambooth.utils import list_features, is_image
-from modules import shared
+try:
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
+    from extensions.sd_dreambooth_extension.dreambooth.shared import status
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import list_features, is_image
+except:
+    from dreambooth.dreambooth import shared  # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
+    from dreambooth.dreambooth.shared import status  # noqa
+    from dreambooth.dreambooth.utils.image_utils import list_features, is_image  # noqa
 
 logger = get_logger(__name__)
 
@@ -180,7 +185,7 @@ def train_imagic(args: DreamboothConfig):
 
     # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
     optimizer_class = torch.optim.Adam
-    if args.use_8bit_adam:
+    if args.optimizer == "8Bit Adam":
         try:
             import bitsandbytes as bnb
             optimizer_class = bnb.optim.Adam8bit
@@ -210,7 +215,9 @@ def train_imagic(args: DreamboothConfig):
     instance_dir = concept.instance_data_dir
     input_image = None
 
-    for check in Path(instance_dir).iterdir():
+    instance_dir = os.path.abspath(instance_dir)
+    for file in os.listdir(instance_dir):
+        check = os.path.join(instance_dir, file)
         if is_image(check, pil_features):
             input_image = Image.open(check).convert("RGB")
             break
@@ -219,7 +226,7 @@ def train_imagic(args: DreamboothConfig):
     image_transforms = transforms.Compose(
         [
             transforms.Resize(args.resolution, interpolation=transforms.InterpolationMode.BILINEAR),
-            transforms.CenterCrop(args.resolution) if args.center_crop else transforms.RandomCrop(args.resolution),
+            transforms.RandomCrop(args.resolution),
             transforms.ToTensor(),
             transforms.Normalize([0.5], [0.5]),
         ]
@@ -315,7 +322,7 @@ def train_imagic(args: DreamboothConfig):
     if accelerator.is_main_process:
         status.textinfo = "Saving embedding(s)."
         print(status.textinfo)
-        emb_dir = shared.cmd_opts.embeddings_dir
+        emb_dir = shared.embeddings_dir
         torch.save(target_embeddings.cpu(), os.path.join(emb_dir, f"{args.model_name}.pt"))
         torch.save(optimized_embeddings.cpu(), os.path.join(emb_dir, f"{args.model_name}_optimized.pt"))
 
@@ -343,7 +350,7 @@ def train_imagic(args: DreamboothConfig):
             unet=accelerator.unwrap_model(unet),
             use_auth_token=True
         )
-        pipeline.save_pretrained(args.pretrained_model_name_or_path)
+        pipeline.save_pretrained(args.pretrained_model_name_or_path, safe_serialization=True)
 
     accelerator.end_training()
     print("Training complete")
