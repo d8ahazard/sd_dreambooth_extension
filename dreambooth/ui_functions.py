@@ -384,7 +384,7 @@ def generate_samples(model_name: str,
                      steps: int,
                      scale: float,
                      use_txt2img: bool,
-                     sampler: str = "UniPCMultistep",
+                     scheduler: str = "UniPCMultistep",
                      swap_faces:bool = False,
                      swap_prompt: str = "",
                      swap_negative: str = "",
@@ -453,7 +453,7 @@ def generate_samples(model_name: str,
                 lora_unet_rank=config.lora_unet_rank,
                 lora_txt_rank=config.lora_txt_rank,
                 source_checkpoint=source_model,
-                sampler=sampler
+                scheduler=scheduler
             )
 
             prompt_data = []

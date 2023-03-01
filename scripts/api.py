@@ -507,7 +507,7 @@ def dreambooth_api(_, app: FastAPI):
             shutil.rmtree(model_dir,True)
         except:
             pass
-        
+
         return JSONResponse(f"Model {model_name} has been deleted.")
 
     @app.get("/dreambooth/model_config")
@@ -626,7 +626,7 @@ def dreambooth_api(_, app: FastAPI):
             steps: int = Query(60, description="Number of sampling steps to use when generating images."),
             scale: float = Query(7.5, description="CFG scale to use when generating images."),
             use_txt2img: bool = Query(True, description="Use txt2img to generate samples"),
-            sampler: str = Query("DEISMultistep", description="Sampler to use if not using txt2img"),
+            scheduler: str = Query("DEISMultistep", description="Sampler to use if not using txt2img"),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ):
         """
@@ -658,7 +658,7 @@ def dreambooth_api(_, app: FastAPI):
             scale=scale,
             steps=steps,
             use_txt2img=use_txt2img,
-            sampler=sampler
+            scheduler=scheduler
         )
 
         shared.status.end()
