@@ -487,7 +487,27 @@ def dreambooth_api(_, app: FastAPI):
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
         model_dir = config.model_dir
-        shutil.rmtree(model_dir, True)
+        models_path = os.path.join(shared.models_path, "stable-diffusion")
+        model_base = config.custom_model_name if config.custom_model_name != "" else config.model_name
+        if config.use_subdir:
+            models_path = os.path.join(models_path, model_base)
+
+        model_files = os.listdir(models_path)
+        for mf in model_files:
+            rev = mf.split("_")[-1]
+            try:
+                revision = int(rev)
+                if mf == f"{model_base}_{revision}.safetensors":
+                    full_file = os.path.join(models_path, mf)
+                    print(f"Removing model: {full_file}")
+                    os.remove(full_file)
+            except:
+                pass
+        try:
+            shutil.rmtree(model_dir,True)
+        except:
+            pass
+        
         return JSONResponse(f"Model {model_name} has been deleted.")
 
     @app.get("/dreambooth/model_config")
