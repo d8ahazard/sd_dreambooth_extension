@@ -419,6 +419,7 @@ def on_ui_tabs():
                         db_save_lora_after = gr.Checkbox(label="Generate lora weights when training completes.",
                                                          value=True)
                         db_save_lora_cancel = gr.Checkbox(label="Generate lora weights when training is canceled.")
+                        db_save_lora_for_extra_net = gr.Checkbox(label="Generate lora weights for extra networks.")
                     with gr.Column():
                         gr.HTML("Diffusion Weights")
                         db_save_state_during = gr.Checkbox(
@@ -699,6 +700,7 @@ def on_ui_tabs():
             db_save_lora_after,
             db_save_lora_cancel,
             db_save_lora_during,
+            db_save_lora_for_extra_net,
             db_save_preview_every,
             db_save_safetensors,
             db_save_state_after,

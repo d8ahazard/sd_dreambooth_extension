@@ -147,7 +147,7 @@ def get_db_models():
 
 
 def get_lora_models():
-    model_dir = shared.lora_models_path
+    model_dir = shared.db_lora_models_path
     out_dir = model_dir
     output = [""]
     if os.path.exists(out_dir):

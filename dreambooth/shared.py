@@ -16,7 +16,7 @@ from packaging import version
 def load_auto_settings():
     global models_path, script_path, ckpt_dir, device_id, disable_safe_unpickle, dataset_filename_word_regex, \
         dataset_filename_join_string, show_progress_every_n_steps, parallel_processing_allowed, state, ckptfix, medvram, \
-        lowvram, dreambooth_models_path, lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config, device, \
+        lowvram, dreambooth_models_path, ui_lora_models_path, db_lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config, device, \
         force_cpu, embeddings_dir, sd_model
     try:
         import modules.script_callbacks
@@ -51,7 +51,7 @@ def load_auto_settings():
 
         try:
             dreambooth_models_path = ws.cmd_opts.dreambooth_models_path or dreambooth_models_path
-            lora_models_path = ws.cmd_opts.lora_models_path or lora_models_path
+            ui_lora_models_path = ws.cmd_opts.lora_models_path or ui_lora_models_path
             embeddings_dir = ws.cmd_opts.embeddings_dir or embeddings_dir
         except:
             pass
@@ -293,7 +293,8 @@ models_path = os.path.join(script_path, "models")
 embeddings_dir = os.path.join(script_path, "embeddings")
 dreambooth_models_path = os.path.join(models_path, "dreambooth")
 ckpt_dir = os.path.join(models_path, "Stable-diffusion")
-lora_models_path = os.path.join(models_path, "lora")
+ui_lora_models_path = os.path.join(models_path, "lora")
+db_lora_models_path = os.path.join(models_path, "db_lora")
 db_model_config = None
 data_path = os.path.join(script_path, ".cache")
 show_progress_every_n_steps = 10

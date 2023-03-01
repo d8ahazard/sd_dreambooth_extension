@@ -556,7 +556,7 @@ def apply_lora(model: nn.Module, loras: str, rank: int, weight: float, device: s
     if loras is not None and loras != "":
         if not os.path.exists(loras):
             try:
-                cmd_lora_models_path = shared.lora_models_path
+                cmd_lora_models_path = shared.db_lora_models_path
             except:
                 cmd_lora_models_path = None
             model_dir = os.path.dirname(cmd_lora_models_path) if cmd_lora_models_path else shared.models_path

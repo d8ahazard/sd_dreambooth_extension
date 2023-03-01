@@ -45,6 +45,7 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
     from extensions.sd_dreambooth_extension.helpers.ema_model import EMAModel
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+    from extensions.sd_dreambooth_extension.lora_diffusion.extra_networks import save_extra_networks
     from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, \
         TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
     from extensions.sd_dreambooth_extension.dreambooth.deis_velocity import get_velocity
@@ -67,6 +68,7 @@ except:
     from dreambooth.dreambooth.xattention import optim_to  # noqa
     from dreambooth.helpers.ema_model import EMAModel  # noqa
     from dreambooth.helpers.mytqdm import mytqdm  # noqa
+    from dreambooth.lora_diffusion.extra_networks import save_extra_networks  # noqa
     from dreambooth.lora_diffusion.lora import save_lora_weight, TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module  # noqa
 
 logger = logging.getLogger(__name__)
@@ -324,7 +326,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
         if args.use_lora:
             unet.requires_grad_(False)
             if args.lora_model_name:
-                lora_path = os.path.join(shared.models_path, "lora", args.lora_model_name)
+                lora_path = os.path.join(shared.models_path, "db_lora", args.lora_model_name)
                 lora_txt = lora_path.replace(".pt", "_txt.pt")
 
                 if not os.path.exists(lora_path) or not os.path.isfile(lora_path):
@@ -752,20 +754,29 @@ def main(use_txt2img: bool = True) -> TrainResult:
                             elif save_lora:
                                 pbar.set_description("Saving Lora Weights...")
                                 lora_model_name = args.model_name if args.custom_model_name == "" else args.custom_model_name
-                                model_dir = os.path.dirname(shared.lora_models_path)
-                                out_file = os.path.join(model_dir, "lora")
-                                os.makedirs(out_file, exist_ok=True)
-                                out_file = os.path.join(out_file, f"{lora_model_name}_{args.revision}.pt")
+                                os.makedirs(shared.db_lora_models_path, exist_ok=True)
+                                lora_file_prefix =  f"{lora_model_name}_{args.revision}"
+                                out_file = os.path.join(shared.db_lora_models_path, f"{lora_file_prefix}.pt")
 
+                                modelmap = {}
                                 tgt_module = get_target_module("module", args.use_lora_extended)
+                                modelmap["unet"] = (s_pipeline.unet, tgt_module)
                                 save_lora_weight(s_pipeline.unet, out_file, tgt_module)
                                 if stop_text_percentage != 0:
                                     out_txt = out_file.replace(".pt", "_txt.pt")
+                                    modelmap["text_encoder"] = (s_pipeline.text_encoder, TEXT_ENCODER_DEFAULT_TARGET_REPLACE)
                                     save_lora_weight(s_pipeline.text_encoder,
                                                      out_txt,
                                                      target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
                                                      )
                                     pbar.update()
+                                if args.save_lora_for_extra_net:
+                                    if args.use_lora_extended:
+                                        print("Saving extra networks lora does not work with use_lora_extended. Skipping save.")
+                                    else:
+                                        os.makedirs(shared.ui_lora_models_path, exist_ok=True)
+                                        out_safe = os.path.join(shared.ui_lora_models_path, f"{lora_file_prefix}.safetensors")
+                                        save_extra_networks(modelmap, out_safe)
 
                             if save_checkpoint:
                                 pbar.set_description("Compiling Checkpoint")

@@ -94,6 +94,7 @@ class DreamboothConfig(BaseModel):
     save_lora_after: bool = True
     save_lora_cancel: bool = False
     save_lora_during: bool = True
+    save_lora_for_extra_net: bool = True
     save_preview_every: int = 5
     save_safetensors: bool = True
     save_state_after: bool = False
