@@ -1,7 +1,7 @@
 import os
 import random
 import traceback
-from typing import List
+from typing import List, Union
 
 import torch
 from PIL import Image
@@ -42,7 +42,8 @@ class ImageBuilder:
             accelerator: Accelerator = None,
             source_checkpoint: str = None,
             lora_unet_rank: int = 4,
-            lora_txt_rank: int = 4
+            lora_txt_rank: int = 4,
+            scheduler: Union[str, None] = None
     ):
         self.image_pipe = None
         self.txt_pipe = None
@@ -107,9 +108,14 @@ class ImageBuilder:
             self.image_pipe.enable_attention_slicing()
             self.image_pipe.set_use_memory_efficient_attention_xformers(True)
             self.image_pipe.progress_bar = self.progress_bar
-            print(f"Using scheduler: {config.scheduler}")
-            scheduler_class = get_scheduler_class(config.scheduler)
-            print(f"Got scheduler: {scheduler_class}")
+
+            if scheduler is not None:
+                print(f"Using scheduler: {scheduler}")
+                scheduler_class = get_scheduler_class(scheduler)
+            else:
+                print(f"Using scheduler: {config.scheduler}")
+                scheduler_class = get_scheduler_class(config.scheduler)
+
             self.image_pipe.scheduler = scheduler_class.from_config(self.image_pipe.scheduler.config)
 
             if "UniPC" in config.scheduler:
