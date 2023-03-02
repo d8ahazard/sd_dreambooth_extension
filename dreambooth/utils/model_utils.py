@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections
 import os
+import re
 
 from transformers import PretrainedConfig
 
@@ -146,17 +147,42 @@ def get_db_models():
     return output
 
 
-def get_lora_models():
-    model_dir = shared.lora_models_path
-    out_dir = model_dir
-    output = [""]
-    if os.path.exists(out_dir):
-        dirs = os.listdir(out_dir)
-        for found in dirs:
-            if os.path.isfile(os.path.join(out_dir, found)):
+def get_sorted_lora_models(loras_path: str):
+    loras = [""]
+    if os.path.exists(loras_path):
+        files = os.listdir(loras_path)
+        for found in files:
+            if os.path.isfile(os.path.join(loras_path, found)):
                 if "_txt.pt" not in found and ".pt" in found:
-                    output.append(found)
-    return output
+                    loras.append(found)
+
+    def get_iteration(name: str):
+        r = re.compile(r'.*_(\d+)\.pt')
+        m=r.search(name)
+        return int(m.group(1)) if m else 0
+
+    return sorted(loras, key=lambda x: get_iteration(x))
+
+
+def get_lora_models(model_name: str):
+    try:
+        from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
+    except:
+        from dreambooth.dreambooth.dataclasses.db_config import from_file  # noqa
+
+    result = None
+    try:
+        import gradio
+        result = gradio.update(visible=True)
+    except:
+        pass
+
+    if model_name == "" or model_name is None:
+        return result
+    config = from_file(model_name)
+
+    return get_sorted_lora_models(config.lora_dir)
+
 
 
 def unload_system_models():

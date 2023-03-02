@@ -123,7 +123,7 @@ class ImageBuilder:
                 accelerator.load_state(new_hotness)
                 enable_safe_unpickle()
 
-            lora_model_path = os.path.join(shared.models_path, "lora", lora_model)
+            lora_model_path = os.path.join(config.lora_dir, lora_model)
             if config.use_lora and os.path.exists(lora_model_path) and lora_model != "":
                 patch_pipe(
                     pipe=self.image_pipe,

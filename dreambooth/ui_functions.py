@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import random
+import re
 import sys
 import traceback
 
@@ -30,7 +31,7 @@ try:
         make_bucket_resolutions, get_dim, closest_resolution, open_and_trim
     from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
         reload_system_models, \
-        get_lora_models, get_checkpoint_match
+        get_lora_models, get_checkpoint_match, get_sorted_lora_models
     from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printm, cleanup
     from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
@@ -46,7 +47,7 @@ except:
     from dreambooth.dreambooth.shared import status, run  # noqa
     from dreambooth.dreambooth.utils.gen_utils import generate_dataset, generate_classifiers  # noqa
     from dreambooth.dreambooth.utils.image_utils import get_images, db_save_image, make_bucket_resolutions, get_dim, closest_resolution, open_and_trim  # noqa
-    from dreambooth.dreambooth.utils.model_utils import unload_system_models, reload_system_models, get_lora_models, get_checkpoint_match  # noqa
+    from dreambooth.dreambooth.utils.model_utils import unload_system_models, reload_system_models, get_lora_models, get_checkpoint_match, get_sorted_lora_models  # noqa
     from dreambooth.dreambooth.utils.utils import printm, cleanup  # noqa
     from dreambooth.helpers.image_builder import ImageBuilder  # noqa
     from dreambooth.helpers.mytqdm import mytqdm  # noqa
@@ -77,6 +78,10 @@ def get_model_snapshot(config: DreamboothConfig):
                 if rev_parts[0] == "checkpoint" and len(rev_parts) == 2:
                     snaps.append(rev_parts[1])
     return snaps
+
+
+def get_model_loras(config: DreamboothConfig):
+    return get_sorted_lora_models(config.lora_dir)
 
 
 def training_wizard_person(model_dir):
@@ -462,19 +467,27 @@ def load_model_params(model_name):
     db_src: The source checkpoint that weights were extracted from or hub URL
     db_scheduler: Scheduler used for this model
     db_model_snapshots: A gradio dropdown containing the available snapshots for the model
+    db_lora_model_name: A gradio dropdown containing the available loras for the model
     db_outcome: The result of loading model params
     """
     data = from_file(model_name)
     db_model_snapshots = gr_update(choices=[], value="")
+    db_lora_model_name = gr_update(choices=[], value="")
     if data is None:
         print("Can't load config!")
         msg = f"Error loading model params: '{model_name}'."
-        return "", "", "", "", "", db_model_snapshots, msg
+        return "", "", "", "", "", db_model_snapshots, db_lora_model_name, msg
     else:
         snaps = get_model_snapshot(data)
         snap_selection = data.revision if str(data.revision) in snaps else ""
         snaps.insert(0, "")
         db_model_snapshots = gr_update(choices=snaps, value=snap_selection)
+
+        loras = get_model_loras(data)
+        lora_model_name_selection = data.lora_model_name if str(data.lora_model_name) in loras else ""
+        loras.insert(0, "")
+        print(loras)
+        db_lora_model_name = gr_update(choices=loras, value=lora_model_name_selection)
 
         msg = f"Selected model: '{model_name}'."
         return data.model_dir, \
@@ -484,6 +497,7 @@ def load_model_params(model_name):
             "True" if data.has_ema else "False", \
             data.src, \
             db_model_snapshots, \
+            db_lora_model_name, \
             msg
 
 
@@ -579,8 +593,8 @@ def start_training(model_dir: str, use_txt2img: bool = True):
     lora_model_name = ""
     if config.lora_model_name != "" and config.lora_model_name is not None:
         lora_model_name = f"{config.model_name}_{total_steps}.pt"
-    dirs = get_lora_models()
-    lora_model_name = gr_update(choices=sorted(dirs), value=lora_model_name)
+    dirs = get_lora_models(config.model_name)
+    lora_model_name = gr_update(choices=dirs, value=lora_model_name)
     return lora_model_name, total_steps, config.epoch, images, res
 
 

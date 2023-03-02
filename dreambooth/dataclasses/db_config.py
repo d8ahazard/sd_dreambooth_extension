@@ -53,6 +53,7 @@ class DreamboothConfig(BaseModel):
     learning_rate: float = 5e-6
     learning_rate_min: float = 1e-6
     lifetime_revision: int = 0
+    lora_dir: str = ""
     lora_learning_rate: float = 1e-4
     lora_model_name: str = ""
     lora_unet_rank: int = 4
@@ -137,6 +138,7 @@ class DreamboothConfig(BaseModel):
         if not os.path.exists(working_dir):
             os.makedirs(working_dir)
 
+        self.lora_dir = os.path.join(model_dir, "lora")
         self.model_name = model_name
         self.model_dir = model_dir
         self.pretrained_model_name_or_path = working_dir
@@ -144,6 +146,7 @@ class DreamboothConfig(BaseModel):
         self.src = src
         self.scheduler = "ddim"
         self.v2 = v2
+        
 
     # Actually save as a file
     def save(self, backup=False):
@@ -230,6 +233,7 @@ class DreamboothConfig(BaseModel):
             working_dir = os.path.join(model_dir, "working")
             if not os.path.exists(working_dir):
                 os.makedirs(working_dir)
+            self.lora_dir = os.path.join(model_dir, "lora")
             self.model_dir = model_dir
             self.pretrained_model_name_or_path = working_dir
 

@@ -589,7 +589,8 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        models = get_lora_models()
+        models = []
+        #get_lora_models()
         return JSONResponse(models)
 
     @app.get("/dreambooth/samples")

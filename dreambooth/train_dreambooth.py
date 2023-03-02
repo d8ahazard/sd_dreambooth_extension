@@ -324,7 +324,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
         if args.use_lora:
             unet.requires_grad_(False)
             if args.lora_model_name:
-                lora_path = os.path.join(shared.models_path, "lora", args.lora_model_name)
+
+                lora_path = os.path.join(args.lora_dir, args.lora_model_name)
                 lora_txt = lora_path.replace(".pt", "_txt.pt")
 
                 if not os.path.exists(lora_path) or not os.path.isfile(lora_path):
@@ -752,12 +753,13 @@ def main(use_txt2img: bool = True) -> TrainResult:
                             elif save_lora:
                                 pbar.set_description("Saving Lora Weights...")
                                 lora_model_name = args.model_name if args.custom_model_name == "" else args.custom_model_name
-                                model_dir = os.path.dirname(shared.lora_models_path)
+                                model_dir = args.model_dir
                                 out_file = os.path.join(model_dir, "lora")
                                 os.makedirs(out_file, exist_ok=True)
                                 out_file = os.path.join(out_file, f"{lora_model_name}_{args.revision}.pt")
 
                                 tgt_module = get_target_module("module", args.use_lora_extended)
+                                print(f"Saving Lora to {out_file}")
                                 save_lora_weight(s_pipeline.unet, out_file, tgt_module)
                                 if stop_text_percentage != 0:
                                     out_txt = out_file.replace(".pt", "_txt.pt")

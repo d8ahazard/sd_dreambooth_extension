@@ -174,10 +174,10 @@ def on_ui_tabs():
                     with gr.Row():
                         db_snapshot = gr.Dropdown(label="Snapshot to Resume")
                     with gr.Row(visible=False) as lora_model_row:
-                        db_lora_model_name = gr.Dropdown(label='Lora Model', choices=sorted(get_lora_models()))
-                        create_refresh_button(db_lora_model_name, get_lora_models, lambda: {
-                            "choices": sorted(get_lora_models())},
-                                              "refresh_lora_models")
+                        db_lora_model_name = gr.Dropdown(label='Lora Model')
+                    #    create_refresh_button(db_lora_model_name, get_lora_models, lambda: {
+                   #         "choices": sorted(get_lora_models())},
+                    #                          "refresh_lora_models")
 
                     with gr.Row():
                         gr.HTML(value="Loaded Model:")
@@ -899,6 +899,7 @@ def on_ui_tabs():
                 db_has_ema,
                 db_src,
                 db_snapshot,
+                db_lora_model_name,
                 db_status
             ]
         )
