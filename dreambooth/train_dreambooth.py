@@ -874,6 +874,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
         progress_bar = mytqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
         progress_bar.set_description("Steps")
         progress_bar.set_postfix(refresh=True)
+        args.revision = args.revision if isinstance(args.revision,int) else int(args.revision) if str.strip(args.revision) != "" else 0
         lifetime_step = args.revision
         lifetime_epoch = args.epoch
         status.job_count = max_train_steps
