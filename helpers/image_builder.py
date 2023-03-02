@@ -116,16 +116,15 @@ class ImageBuilder:
 
             self.image_pipe.progress_bar = self.progress_bar
 
-            if scheduler is not None:
-                print(f"Using scheduler: {scheduler}")
-                scheduler_class = get_scheduler_class(scheduler)
-            else:
-                print(f"Using scheduler: {config.scheduler}")
-                scheduler_class = get_scheduler_class(config.scheduler)
+            if scheduler is None:
+                scheduler = config.scheduler
+
+            print(f"Using scheduler: {scheduler}")
+            scheduler_class = get_scheduler_class(scheduler)
 
             self.image_pipe.scheduler = scheduler_class.from_config(self.image_pipe.scheduler.config)
 
-            if "UniPC" in config.scheduler:
+            if "UniPC" in scheduler:
                 self.image_pipe.scheduler.config.solver_type = "bh2"
 
             self.image_pipe.to(accelerator.device)
