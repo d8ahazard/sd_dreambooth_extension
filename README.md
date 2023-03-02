@@ -194,7 +194,7 @@ seems to have a minimal effect on training results. Uses more VRAM.
 GPUs, and enabled/disabled by default.
 
 *Memory Attention* - Type of attention to use. Choices are: 'default': usually fastest, but use most VRAM; 'xformers':
-slower, uses less VRAM, can only be used with *Mixed Precision* = 'fp16'; 'flash_attention': slowest, requires lowest
+slower, uses less VRAM, can only be used with *Mixed Precision* = 'fp16' (no impact on Apple Silicon); 'flash_attention': slowest, requires lowest
 VRAM.
 
 *Don't Cache Latents* - Why is this not just called "cache" latents? Because that's what the original script uses, and
@@ -359,4 +359,3 @@ optimizations.
 [Bmalthais](https://github.com/bmaltais/kohya_ss) - Optimizations, Features
 
 [Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) - Base app
-
