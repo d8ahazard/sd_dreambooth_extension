@@ -61,6 +61,9 @@ def get_images(image_path: str):
     output = []
     if os.path.exists(image_path):
         for file in os.listdir(image_path):
+            # Mac creates metadata files for every image with name `._{filename}`, so we skip it
+            if sys.platform == 'darwin' and file.startswith('._'):
+                continue
             file_path = os.path.join(image_path, file)
             if is_image(file_path, pil_features):
                 output.append(file_path)

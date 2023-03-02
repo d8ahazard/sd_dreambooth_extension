@@ -209,7 +209,7 @@ def performance_wizard(model_name):
     save_samples_every = gr_update(config.save_preview_every)
     save_weights_every = gr_update(config.save_embedding_every)
 
-    if torch.cuda.is_bf16_supported():
+    if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
         mixed_precision = 'bf16'
     if config is not None:
         total_images = 0
