@@ -26,7 +26,7 @@ enable_gradient_checkpointing' error message, as well as safety checker warnings
 
 ## IF YOU ARE HAVING ISSUES WITH REQUIREMENTS AFTER INSTALLING, LOOK BELOW
 
-To force sd-web-ui to *only* install one set of requirements and resolve many issues on install, we can specify the
+To force sd-web-ui to _only_ install one set of requirements and resolve many issues on install, we can specify the
 command line argument:
 
 set/export REQS_FILE=.\extensions\sd_dreambooth_extension\requirements.txt
@@ -62,41 +62,41 @@ Stable-diffusion-webui, not just reload it.
    If you want to use a model from the HF Hub instead, specify the model URL and token. URL format should be '
    runwayml/stable-diffusion-v1-5'
 
-   The source checkpoint will be extracted to models\dreambooth\MODELNAME\working.
+    The source checkpoint will be extracted to models\dreambooth\MODELNAME\working.
 
 3. Click "Create". This will take a minute or two, but when done, the UI should indicate that a new model directory has
    been set up.
 
 ## Various Top Buttons
 
-*Save Params* - Save current training parameters for the current model.
+_Save Params_ - Save current training parameters for the current model.
 
-*Load Params* - Load training parameters from the currently selected model. Use this to copy params from one model to
+_Load Params_ - Load training parameters from the currently selected model. Use this to copy params from one model to
 another.
 
-*Generate Ckpt* - Generate a checkpoint from the currently saved weights at the current revision.
+_Generate Ckpt_ - Generate a checkpoint from the currently saved weights at the current revision.
 
-Generate Samples* - Click this while training to generate samples before the next interval.
+Generate Samples\* - Click this while training to generate samples before the next interval.
 
-*Cancel* - Cancels training after the current step.
+_Cancel_ - Cancels training after the current step.
 
-*Train* - Starts training.
+_Train_ - Starts training.
 
 ## Model Section
 
-*Model* - The model to use. Training parameters will not be automatically loaded to the UI when changing models.
+_Model_ - The model to use. Training parameters will not be automatically loaded to the UI when changing models.
 
-*Lora Model* - An existing lora checkpoint to load if resuming training, or to merge with the base model if generating a
+_Lora Model_ - An existing lora checkpoint to load if resuming training, or to merge with the base model if generating a
 checkpoint.
 
-*Half Model* - Enable this to save the model using half precision. Results in a smaller checkpoint with little
+_Half Model_ - Enable this to save the model using half precision. Results in a smaller checkpoint with little
 noticeable difference in image output.
 
-*Save Checkpoint to Subdirectory* - Save the checkpoint to a subdirectory using the model name.
+_Save Checkpoint to Subdirectory_ - Save the checkpoint to a subdirectory using the model name.
 
 ## Training Parameters
 
-*Performance Wizard (WIP)* - Tries to set the optimal training parameters based on the amount of VRAM for your GPU and
+_Performance Wizard (WIP)_ - Tries to set the optimal training parameters based on the amount of VRAM for your GPU and
 number of instance images.
 
 Probably not perfect, but at least a good starting point.
@@ -105,61 +105,61 @@ Probably not perfect, but at least a good starting point.
 
 This section contains parameters related to when things happen during training.
 
-*Training Steps Per Image (Epochs)* - As the name would imply, an epoch is one training run over the entire set of
+_Training Steps Per Image (Epochs)_ - As the name would imply, an epoch is one training run over the entire set of
 instance images.
 So, if we want to train 100 steps per image, we can set this value to 100 and we're ready to go. No math required.
 
-*Pause After N Epochs* - When set to a value higher than 0, training will pause for the time specified.
+_Pause After N Epochs_ - When set to a value higher than 0, training will pause for the time specified.
 
-*Amount of time to pause between Epochs, in Seconds* - How long to pause between "N" epochs when N is greater than zero,
+_Amount of time to pause between Epochs, in Seconds_ - How long to pause between "N" epochs when N is greater than zero,
 in seconds.
 
-*Use Concepts* - Whether to use a JSON file or string with multiple concepts, or the individual settings below.
+_Use Concepts_ - Whether to use a JSON file or string with multiple concepts, or the individual settings below.
 
-*Save Model/Preview Frequency (Epochs)* - The save checkpoint and preview frequencies will be per epoch, not steps.
+_Save Model/Preview Frequency (Epochs)_ - The save checkpoint and preview frequencies will be per epoch, not steps.
 
 ### Batching
 
-*Batch size* - How many training steps to process simultaneously. You probably want to leave this at 1.
+_Batch size_ - How many training steps to process simultaneously. You probably want to leave this at 1.
 
-*Gradient Accumulation Steps* - This should probably be set to the same value as the training batch size.
+_Gradient Accumulation Steps_ - This should probably be set to the same value as the training batch size.
 
-*Class batch size* - How many classification images to generate simultaneously. Set this to whatever you can safely
+_Class batch size_ - How many classification images to generate simultaneously. Set this to whatever you can safely
 process at once using Txt2Image, or just leave it alone.
 
-*Set Gradients to None When Zeroing* - instead of setting to zero, set the grads to None. This will in general have
+_Set Gradients to None When Zeroing_ - instead of setting to zero, set the grads to None. This will in general have
 lower memory footprint, and can modestly improve performance.
 https://pytorch.org/docs/stable/generated/torch.optim.Optimizer.zero_grad.html
 
-*Gradient Checkpointing* - Enable this to save VRAM at the cost of a bit of speed.
+_Gradient Checkpointing_ - Enable this to save VRAM at the cost of a bit of speed.
 https://arxiv.org/abs/1604.06174v2
 
-*Max Grad Norms* - The maximum number of gradient normalizati
+_Max Grad Norms_ - The maximum number of gradient normalizati
 
 ### Learning Rate
 
 This section contains parameters related to the learning rate.
 
-*Learning rate* - The strength at which training impacts the new model. A higher learning rate requires less training
+_Learning rate_ - The strength at which training impacts the new model. A higher learning rate requires less training
 steps, but can cause over-fitting more easily. Recommended between .000006 and .00000175
 
-*Scale Learning Rate* - Adjusts the learning rate over time.
+_Scale Learning Rate_ - Adjusts the learning rate over time.
 
-*Learning Rate Scheduler* - The scheduler used with the learning rate.
+_Learning Rate Scheduler_ - The scheduler used with the learning rate.
 
-*Learning Rate Warmup Steps* - How many steps to run before scaling the learning rate. I think.
+_Learning Rate Warmup Steps_ - How many steps to run before scaling the learning rate. I think.
 
 ### Image Processing
 
 Here, you'll find settings related to the handling of images.
 
-*Resolution* - The resolution your instance images are set to. This should probably be 512 or 768. Using a resolution
+_Resolution_ - The resolution your instance images are set to. This should probably be 512 or 768. Using a resolution
 higher than 512 will result in more vram usage.
 
-*Center Crop* - Enable this to automatically use "dumb cropping" when input images are larger than the specified
+_Center Crop_ - Enable this to automatically use "dumb cropping" when input images are larger than the specified
 resolution.
 
-*Apply Horizontal Flip* - When enabled, instance images will be randomly flipped horizontally during training. This can
+_Apply Horizontal Flip_ - When enabled, instance images will be randomly flipped horizontally during training. This can
 allow for better editability, but may require a larger number of training steps, as we're effectively increasing our
 dataset size.
 
@@ -167,12 +167,12 @@ dataset size.
 
 Other random stuff that doesn't fit well into any other category.
 
-*Pretrained VAE Name or Path* - Enter the full path to an existing vae .bin file, and it will be used instead of the VAE
+_Pretrained VAE Name or Path_ - Enter the full path to an existing vae .bin file, and it will be used instead of the VAE
 from the source checkpoint.
 
-*Use Concepts List* - Enable this to ignore the concepts tab and load training data from a JSON file instead.
+_Use Concepts List_ - Enable this to ignore the concepts tab and load training data from a JSON file instead.
 
-*Concepts List* - The path to a json file containing the concepts to train.
+_Concepts List_ - The path to a json file containing the concepts to train.
 
 ## Advanced Settings
 
@@ -181,42 +181,42 @@ training.
 
 ### Tuning
 
-*Use CPU Only* - As indicated, this is more of a last resort if you can't get it to train with any other settings. Also,
+_Use CPU Only_ - As indicated, this is more of a last resort if you can't get it to train with any other settings. Also,
 as indicated, it will be abysmally slow.
-Also, you *cannot* use 8Bit-Adam with CPU Training, or you'll have a bad time.
+Also, you _cannot_ use 8Bit-Adam with CPU Training, or you'll have a bad time.
 
-*Use EMA* - Use estimated moving averages when training the unet. Purportedly, this is better for generating images, but
+_Use EMA_ - Use estimated moving averages when training the unet. Purportedly, this is better for generating images, but
 seems to have a minimal effect on training results. Uses more VRAM.
 
-*Use 8Bit Adam* - Enable this to save VRAM. Should now work on both windows and Linux without needing WSL.
+_Use 8Bit Adam_ - Enable this to save VRAM. Should now work on both windows and Linux without needing WSL.
 
-*Mixed Precision* - When using 8Bit Adam, you *must* set this to fp16 or bf16. Bf16 precision is only supported by newer
+_Mixed Precision_ - When using 8Bit Adam, you _must_ set this to fp16 or bf16. Bf16 precision is only supported by newer
 GPUs, and enabled/disabled by default.
 
-*Memory Attention* - Type of attention to use. Choices are: 'default': usually fastest, but use most VRAM; 'xformers':
-slower, uses less VRAM, can only be used with *Mixed Precision* = 'fp16'; 'flash_attention': slowest, requires lowest
+_Memory Attention_ - Type of attention to use. Choices are: 'default': usually fastest, but use most VRAM; 'xformers':
+slower, uses less VRAM, can only be used with _Mixed Precision_ = 'fp16' (no impact on Apple Silicon); 'flash_attention': slowest, requires lowest
 VRAM.
 
-*Don't Cache Latents* - Why is this not just called "cache" latents? Because that's what the original script uses, and
-I'm trying to maintain the ability to update this as easily as possible. Anyway...when this box is *checked* latents
+_Don't Cache Latents_ - Why is this not just called "cache" latents? Because that's what the original script uses, and
+I'm trying to maintain the ability to update this as easily as possible. Anyway...when this box is _checked_ latents
 will not be cached. When latents are not cached, you will save a bit of VRAM, but train slightly slower.
 
-*Train Text Encoder* - Not required, but recommended. Requires more VRAM, may not work on <12 GB GPUs. Drastically
+_Train Text Encoder_ - Not required, but recommended. Requires more VRAM, may not work on <12 GB GPUs. Drastically
 improves output results.
 
-*Prior Loss Weight* - The weight to use when calculating prior loss. You probably want to leave this at 1.
+_Prior Loss Weight_ - The weight to use when calculating prior loss. You probably want to leave this at 1.
 
-*Center Crop* - Crop images if they aren't the right dimensions? I don't use this, and I recommend you just crop your
+_Center Crop_ - Crop images if they aren't the right dimensions? I don't use this, and I recommend you just crop your
 images "right".
 
-*Pad Tokens* - Pads the text tokens to a longer length for some reason.
+_Pad Tokens_ - Pads the text tokens to a longer length for some reason.
 
-*Shuffle Tags* - Enable this to treat input prompts as a comma-separated list, and to shuffle that list, which can lead
+_Shuffle Tags_ - Enable this to treat input prompts as a comma-separated list, and to shuffle that list, which can lead
 to better editability.
 
-*Max Token Length* - raise the tokenizer's default limit above 75. Requires Pad Tokens for > 75.
+_Max Token Length_ - raise the tokenizer's default limit above 75. Requires Pad Tokens for > 75.
 
-*AdamW Weight Decay* - The weight decay of the AdamW Optimizer used for training. Values closer to 0 closely match your
+_AdamW Weight Decay_ - The weight decay of the AdamW Optimizer used for training. Values closer to 0 closely match your
 training dataset, and values closer to 1 generalize more and deviate from your training dataset. Default is 1e-2, values
 lower than 0.1 are recommended.
 
@@ -235,12 +235,12 @@ for a sample of the JSON format. You can theoretically use any number of concept
 
 Below is a list of the various parameters that can be used to train a concept.
 
-*Maximum Training Steps* - The total number of lifetime training steps to train the concept until. Leave at -1 to use
+_Maximum Training Steps_ - The total number of lifetime training steps to train the concept until. Leave at -1 to use
 the global value.
 
-*Dataset Directory* - The directory in which the instance images are located.
+_Dataset Directory_ - The directory in which the instance images are located.
 
-*Classification Dataset Directory* The directory in which class images are stored. Leave empty to save to model
+_Classification Dataset Directory_ The directory in which class images are stored. Leave empty to save to model
 directory.
 
 #### Filewords
@@ -248,42 +248,42 @@ directory.
 The below values will be used in conjunction with the [filewords] tag in prompts to append/remove tags. See the
 'Using [filewords]' section below for more information.
 
-*Instance Token* The unique identifier for your subject. (sks, xyz). Leave blank for fine-tuning.
+_Instance Token_ The unique identifier for your subject. (sks, xyz). Leave blank for fine-tuning.
 
-*Class Token* What your subject is. If a xyz is a person, this could be person/man/woman.
+_Class Token_ What your subject is. If a xyz is a person, this could be person/man/woman.
 
 ### Prompts
 
-*Instance Prompt* - A prompt used for your instance images. Use [filewords] to insert or combine existing tags with
+_Instance Prompt_ - A prompt used for your instance images. Use [filewords] to insert or combine existing tags with
 tokens.
 
-*Class Prompt* - A prompt used for generating and training class images. Use [filewords] to insert or combine existing
+_Class Prompt_ - A prompt used for generating and training class images. Use [filewords] to insert or combine existing
 tags with tokens.
 
-*Classification Image Negative Prompt* - When generating class images, this is the negative prompt that will be used to
+_Classification Image Negative Prompt_ - When generating class images, this is the negative prompt that will be used to
 guide image generation.
 
-*Sample Image Prompt* - A prompt used when generating sample images. Use [filewords] to insert or combine existing tags
+_Sample Image Prompt_ - A prompt used when generating sample images. Use [filewords] to insert or combine existing tags
 with tokens.
 
-*Sample Prompt Template File* - An existing txt file used to generate sample images. [filewords] and [names] will be
+_Sample Prompt Template File_ - An existing txt file used to generate sample images. [filewords] and [names] will be
 replaced with the instance token.
 
-*Sample Image Negative Prompt* - When generating sample images, this is the negative prompt that will be used to guide
+_Sample Image Negative Prompt_ - When generating sample images, this is the negative prompt that will be used to guide
 image generation.
 
 ### Image Generation
 
-*Total Number of Class/Reg Images* - How many classification images will be generated. Leave at 0 to disable prior
+_Total Number of Class/Reg Images_ - How many classification images will be generated. Leave at 0 to disable prior
 preservation.
 
-*Classification/Sample CFG Scale* - The Classifier Free Guidance scale to use when generating images.
+_Classification/Sample CFG Scale_ - The Classifier Free Guidance scale to use when generating images.
 
-*Classification/Sample Steps* - The number of steps to use when generating respective images.
+_Classification/Sample Steps_ - The number of steps to use when generating respective images.
 
-*Number of Samples to Generate* - How many sample images to generate.
+_Number of Samples to Generate_ - How many sample images to generate.
 
-*Sample Seed* - A seed to use for consistent sample generation. Set to -1 to use a random seed.
+_Sample Seed_ - A seed to use for consistent sample generation. Set to -1 to use a random seed.
 
 #### Using [filewords]
 
@@ -304,16 +304,16 @@ Now, when building your respective prompts, the subject and class can be inserte
 
 Here's a bunch of random stuff I added that seemed useful, but didn't seem to fit anywhere else.
 
-*Preview Prompts* - Return a JSON string of the prompts that will be used for training. It's not pretty, but you can
+_Preview Prompts_ - Return a JSON string of the prompts that will be used for training. It's not pretty, but you can
 tell if things are going to work right.
 
-*Generate Sample Image* - Generate a sample using the specified seed and prompt below.
+_Generate Sample Image_ - Generate a sample using the specified seed and prompt below.
 
-*Sample Prompt* - What the sample should be.
+_Sample Prompt_ - What the sample should be.
 
-*Sample Seed* - The seed to use for your sample. Leave at -1 to use a random seed.
+_Sample Seed_ - The seed to use for your sample. Leave at -1 to use a random seed.
 
-*Train Imagic Only* - Imagic is basically dreambooth, but uses only one image and is significantly faster.
+_Train Imagic Only_ - Imagic is basically dreambooth, but uses only one image and is significantly faster.
 
 If using Imagic, the first image in the first concept's Instance Data Dir will be used for training.
 
@@ -359,4 +359,3 @@ optimizations.
 [Bmalthais](https://github.com/bmaltais/kohya_ss) - Optimizations, Features
 
 [Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) - Base app
-
