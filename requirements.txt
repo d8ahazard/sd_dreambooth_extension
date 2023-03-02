@@ -9,6 +9,8 @@ modelcards~=0.1.6
 tensorboard
 tensorflow==2.11.0; sys_platform != 'darwin' or platform_machine != 'arm64'
 tensorflow-macos==2.11.0; sys_platform == 'darwin' and platform_machine == 'arm64'
+mediapipe-silicon; sys_platform == 'darwin'
+mediapipe; sys_platform != 'darwin'
 tqdm~=4.64.1
 transformers~=4.26.1
 discord-webhook~=1.1.0

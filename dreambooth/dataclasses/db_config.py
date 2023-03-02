@@ -44,6 +44,7 @@ class DreamboothConfig(BaseModel):
     gradient_checkpointing: bool = True
     gradient_set_to_none: bool = True
     graph_smoothing: int = 50
+    half_lora: bool = False
     half_model: bool = False
     train_unfrozen: bool = True
     has_ema: bool = False

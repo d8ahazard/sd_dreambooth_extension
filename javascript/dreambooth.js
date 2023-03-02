@@ -239,7 +239,7 @@ function db_start(numArgs, save, startProgress, args) {
 }
 
 function db_start_sample() {
-    return db_start(12, false, true, arguments);
+    return db_start(18, false, true, arguments);
 }
 
 function db_start_crop() {

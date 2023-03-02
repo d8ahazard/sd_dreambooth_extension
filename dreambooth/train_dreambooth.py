@@ -296,7 +296,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 if args.use_lora:
                     text_encoder.text_model.embeddings.requires_grad_(True)
             else:
-                text_encoder.to(accelerator.device, dtype=weight_dtype)
+                text_encoder.to(accelerator.device)
 
         ema_model = None
         if args.use_ema:
@@ -551,7 +551,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
             vae.to(accelerator.device, dtype=weight_dtype)
 
         if stop_text_percentage == 0:
-            text_encoder.to(accelerator.device, dtype=weight_dtype)
+            text_encoder.to(accelerator.device)
         # Afterwards we recalculate our number of training epochs
         # We need to initialize the trackers we use, and also store our configuration.
         # The trackers will initialize automatically on the main process.
@@ -753,20 +753,20 @@ def main(use_txt2img: bool = True) -> TrainResult:
                             elif save_lora:
                                 pbar.set_description("Saving Lora Weights...")
                                 lora_model_name = args.model_name if args.custom_model_name == "" else args.custom_model_name
-                                model_dir = args.model_dir
+                                model_dir = os.path.dirname(shared.lora_models_path)
                                 out_file = os.path.join(model_dir, "lora")
                                 os.makedirs(out_file, exist_ok=True)
                                 out_file = os.path.join(out_file, f"{lora_model_name}_{args.revision}.pt")
-
                                 tgt_module = get_target_module("module", args.use_lora_extended)
-                                print(f"Saving Lora to {out_file}")
-                                save_lora_weight(s_pipeline.unet, out_file, tgt_module)
+                                d_type = torch.float16 if args.half_lora else torch.float32
+
+                                save_lora_weight(s_pipeline.unet, out_file, tgt_module, d_type=d_type)
                                 if stop_text_percentage != 0:
                                     out_txt = out_file.replace(".pt", "_txt.pt")
                                     save_lora_weight(s_pipeline.text_encoder,
                                                      out_txt,
                                                      target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
-                                                     )
+                                                     d_type=d_type)
                                     pbar.update()
 
                             if save_checkpoint:

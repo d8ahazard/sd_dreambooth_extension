@@ -1,7 +1,7 @@
 import os
 import random
 import traceback
-from typing import List
+from typing import List, Union
 
 import torch
 from PIL import Image
@@ -42,7 +42,8 @@ class ImageBuilder:
             accelerator: Accelerator = None,
             source_checkpoint: str = None,
             lora_unet_rank: int = 4,
-            lora_txt_rank: int = 4
+            lora_txt_rank: int = 4,
+            scheduler: Union[str, None] = None
     ):
         self.image_pipe = None
         self.txt_pipe = None
@@ -105,14 +106,25 @@ class ImageBuilder:
                 revision=config.revision
             )
             self.image_pipe.enable_attention_slicing()
-            self.image_pipe.set_use_memory_efficient_attention_xformers(True)
+            
+            # xformers does not support mps'
+            # better to say sorry that ask for permission =)
+            try:
+                self.image_pipe.set_use_memory_efficient_attention_xformers(True)
+            except ModuleNotFoundError:
+                print("xformers not found, using default attention")
+
             self.image_pipe.progress_bar = self.progress_bar
-            print(f"Using scheduler: {config.scheduler}")
-            scheduler_class = get_scheduler_class(config.scheduler)
-            print(f"Got scheduler: {scheduler_class}")
+
+            if scheduler is None:
+                scheduler = config.scheduler
+
+            print(f"Using scheduler: {scheduler}")
+            scheduler_class = get_scheduler_class(scheduler)
+
             self.image_pipe.scheduler = scheduler_class.from_config(self.image_pipe.scheduler.config)
 
-            if "UniPC" in config.scheduler:
+            if "UniPC" in scheduler:
                 self.image_pipe.scheduler.config.solver_type = "bh2"
 
             self.image_pipe.to(accelerator.device)
