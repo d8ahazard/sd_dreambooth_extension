@@ -106,7 +106,14 @@ class ImageBuilder:
                 revision=config.revision
             )
             self.image_pipe.enable_attention_slicing()
-            self.image_pipe.set_use_memory_efficient_attention_xformers(True)
+            
+            # xformers does not support mps'
+            # better to say sorry that ask for permission =)
+            try:
+                self.image_pipe.set_use_memory_efficient_attention_xformers(True)
+            except ModuleNotFoundError:
+                print("xformers not found, using default attention")
+
             self.image_pipe.progress_bar = self.progress_bar
 
             if scheduler is not None:
