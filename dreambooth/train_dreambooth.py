@@ -241,12 +241,20 @@ def main(use_txt2img: bool = True) -> TrainResult:
         vae = create_vae()
         printm("Created vae")
 
-        unet = UNet2DConditionModel.from_pretrained(
-            args.pretrained_model_name_or_path,
-            subfolder="unet",
-            revision=args.revision,
-            torch_dtype=torch.float32
-        )
+        try:
+            unet = UNet2DConditionModel.from_pretrained(
+                args.pretrained_model_name_or_path,
+                subfolder="unet",
+                revision=args.revision,
+                torch_dtype=torch.float32
+            )
+        except:
+            unet = UNet2DConditionModel.from_pretrained(
+                args.pretrained_model_name_or_path,
+                subfolder="unet",
+                revision=args.revision,
+                torch_dtype=torch.float16
+            )
         unet = torch2ify(unet)
 
         # Check that all trainable models are in full precision
@@ -254,21 +262,18 @@ def main(use_txt2img: bool = True) -> TrainResult:
             "Please make sure to always have all model weights in full float32 precision when starting training - even if"
             " doing mixed precision training. copy of the weights should still be float32."
         )
-        has_xformers = False
         if args.attention == "xformers" and not shared.force_cpu:
             if is_xformers_available():
                 import xformers
-
                 xformers_version = version.parse(xformers.__version__)
                 if xformers_version == version.parse("0.0.16"):
                     logger.warning(
                         "xFormers 0.0.16 cannot be used for training in some GPUs. If you observe problems during training, please update xFormers to at least 0.0.17. See https://huggingface.co/docs/diffusers/main/en/optimization/xformers for more details."
                     )
-                unet.enable_xformers_memory_efficient_attention()
-                vae.enable_xformers_memory_efficient_attention()
-                has_xformers = True
             else:
                 raise ValueError("xformers is not available. Make sure it is installed correctly")
+            unet = xformerify(unet)
+            vae = xformerify(vae)
 
         if accelerator.unwrap_model(unet).dtype != torch.float32:
             print(f"Unet loaded as datatype {accelerator.unwrap_model(unet).dtype}. {low_precision_error_string}")
@@ -308,8 +313,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     revision=args.revision,
                     torch_dtype=torch.float32
                 )
-                if has_xformers:
-                    ema_unet.enable_xformers_memory_efficient_attention()
+                ema_unet = xformerify(ema_unet)
 
                 ema_model = EMAModel(ema_unet, device=accelerator.device, dtype=weight_dtype)
                 del ema_unet
@@ -713,7 +717,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 scheduler_class = get_scheduler_class(args.scheduler)
                 s_pipeline.unet = torch2ify(s_pipeline.unet)
                 s_pipeline.enable_attention_slicing()
-                s_pipeline.set_use_memory_efficient_attention_xformers(True)
+                s_pipeline = xformerify(s_pipeline)
 
                 s_pipeline.scheduler = scheduler_class.from_config(s_pipeline.scheduler.config)
                 if "UniPC" in args.scheduler:
@@ -1133,6 +1137,15 @@ def main(use_txt2img: bool = True) -> TrainResult:
         return result
 
     return inner_loop()
+
+
+def xformerify(obj):
+    if is_xformers_available():
+        try:
+            obj = obj.set_use_memory_efficient_attention_xformers(True)
+        except ModuleNotFoundError:
+            print("xformers not found, using default attention")
+    return obj
 
 
 def torch2ify(unet):
