@@ -282,7 +282,7 @@ def actual_install():
 
     if not dreambooth_skip_install:
         name = "Dreambooth"
-        run(f'"{sys.executable}" -m pip install -r "{req_file}"', f"Checking {name} requirements...",
+        run(f'"{sys.executable}" -m pip install -r "{req_file}" | grep -v "already satisfied"', f"Checking {name} requirements...",
             f"Couldn't install {name} requirements.")
 
     python = sys.executable

@@ -273,8 +273,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     )
             else:
                 raise ValueError("xformers is not available. Make sure it is installed correctly")
-            unet = xformerify(unet)
-            vae = xformerify(vae)
+            xformerify(unet)
+            xformerify(vae)
 
         if accelerator.unwrap_model(unet).dtype != torch.float32:
             print(f"Unet loaded as datatype {accelerator.unwrap_model(unet).dtype}. {low_precision_error_string}")
@@ -314,7 +314,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     revision=args.revision,
                     torch_dtype=torch.float32
                 )
-                ema_unet = xformerify(ema_unet)
+                xformerify(ema_unet)
 
                 ema_model = EMAModel(ema_unet, device=accelerator.device, dtype=weight_dtype)
                 del ema_unet
@@ -718,7 +718,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 scheduler_class = get_scheduler_class(args.scheduler)
                 s_pipeline.unet = torch2ify(s_pipeline.unet)
                 s_pipeline.enable_attention_slicing()
-                s_pipeline = xformerify(s_pipeline)
+                xformerify(s_pipeline)
 
                 s_pipeline.scheduler = scheduler_class.from_config(s_pipeline.scheduler.config)
                 if "UniPC" in args.scheduler:
@@ -1143,10 +1143,9 @@ def main(use_txt2img: bool = True) -> TrainResult:
 def xformerify(obj):
     if is_xformers_available():
         try:
-            obj = obj.enable_xformers_memory_efficient_attention()
+            obj.enable_xformers_memory_efficient_attention()
         except ModuleNotFoundError:
             print("xformers not found, using default attention")
-    return obj
 
 
 def torch2ify(unet):
