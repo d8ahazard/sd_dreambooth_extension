@@ -282,8 +282,7 @@ def actual_install():
 
     if not dreambooth_skip_install:
         name = "Dreambooth"
-        run(f'"{sys.executable}" -m pip install -r "{req_file}" | grep -v "already satisfied"', f"Checking {name} requirements...",
-            f"Couldn't install {name} requirements.")
+        install_requirements(req_file, name)
 
     python = sys.executable
 
@@ -314,3 +313,14 @@ def actual_install():
         torch.load = safe.unsafe_torch_load
     except:
         pass
+
+
+def install_requirements(req_file, package_name):
+    try:
+        print(f"Checking {package_name} requirements...")
+        output = subprocess.check_output([sys.executable, "-m", "pip", "install", "-r", req_file], universal_newlines=True)
+        pattern = re.compile(r'^((?!already satisfied).)*$', re.MULTILINE)
+        filtered_output = pattern.findall(output)
+        print(filtered_output)
+    except subprocess.CalledProcessError:
+        print(f"Failed to install {package_name} requirements.")
