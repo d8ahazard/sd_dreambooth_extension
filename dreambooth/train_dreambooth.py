@@ -302,7 +302,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 if args.use_lora:
                     text_encoder.text_model.embeddings.requires_grad_(True)
             else:
-                text_encoder.to(accelerator.device)
+                text_encoder.to(accelerator.device, dtype=weight_dtype)
 
         ema_model = None
         if args.use_ema:
@@ -555,7 +555,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
             vae.to(accelerator.device, dtype=weight_dtype)
 
         if stop_text_percentage == 0:
-            text_encoder.to(accelerator.device)
+            text_encoder.to(accelerator.device, dtype=weight_dtype)
         # Afterwards we recalculate our number of training epochs
         # We need to initialize the trackers we use, and also store our configuration.
         # The trackers will initialize automatically on the main process.
