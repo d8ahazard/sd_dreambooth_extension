@@ -255,6 +255,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 revision=args.revision,
                 torch_dtype=torch.float16
             )
+            unet = unet.to(dtype=torch.float32)
         unet = torch2ify(unet)
 
         # Check that all trainable models are in full precision
