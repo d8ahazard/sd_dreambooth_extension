@@ -1143,7 +1143,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
 def xformerify(obj):
     if is_xformers_available():
         try:
-            obj = obj.set_use_memory_efficient_attention_xformers(True)
+            obj = obj.enable_xformers_memory_efficient_attention()
         except ModuleNotFoundError:
             print("xformers not found, using default attention")
     return obj
