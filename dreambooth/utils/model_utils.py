@@ -3,7 +3,10 @@ from __future__ import annotations
 import collections
 import os
 
+import torch
+from diffusers.utils import is_xformers_available
 from transformers import PretrainedConfig
+
 
 try:
     from extensions.sd_dreambooth_extension.dreambooth import shared  # noqa
@@ -231,3 +234,20 @@ def enable_safe_unpickle():
         auto_shared.cmd_opts.disable_safe_unpickle = False
     except:
         pass
+
+
+def xformerify(obj):
+    if is_xformers_available():
+        try:
+            obj.enable_xformers_memory_efficient_attention()
+        except ModuleNotFoundError:
+            print("xformers not found, using default attention")
+
+
+def torch2ify(unet):
+    if hasattr(torch, 'compile'):
+        try:
+            unet = torch.compile(unet, mode="max-autotune", fullgraph=False)
+        except:
+            pass
+    return unet
