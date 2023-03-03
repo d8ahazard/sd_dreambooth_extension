@@ -216,7 +216,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
             )
             enable_safe_unpickle()
             new_vae.requires_grad_(False)
-            new_vae.to(accelerator.device, dtype=weight_dtype)
+            new_vae.to(accelerator.device)
             return new_vae
 
         disable_safe_unpickle()
@@ -302,7 +302,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 if args.use_lora:
                     text_encoder.text_model.embeddings.requires_grad_(True)
             else:
-                text_encoder.to(accelerator.device, dtype=weight_dtype)
+                text_encoder.to(accelerator.device)
 
         ema_model = None
         if args.use_ema:
@@ -316,10 +316,10 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 )
                 xformerify(ema_unet)
 
-                ema_model = EMAModel(ema_unet, device=accelerator.device, dtype=weight_dtype)
+                ema_model = EMAModel(ema_unet, device=accelerator.device)
                 del ema_unet
             else:
-                ema_model = EMAModel(unet, device=accelerator.device, dtype=weight_dtype)
+                ema_model = EMAModel(unet, device=accelerator.device)
 
         unet_lora_params = None
         text_encoder_lora_params = None
@@ -437,7 +437,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
             cleanup(True)
 
         if args.cache_latents:
-            vae.to(accelerator.device, dtype=weight_dtype)
+            vae.to(accelerator.device)
             vae.requires_grad_(False)
             vae.eval()
 
@@ -552,10 +552,10 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 )
 
         if not args.cache_latents and vae is not None:
-            vae.to(accelerator.device, dtype=weight_dtype)
+            vae.to(accelerator.device)
 
         if stop_text_percentage == 0:
-            text_encoder.to(accelerator.device, dtype=weight_dtype)
+            text_encoder.to(accelerator.device)
         # Afterwards we recalculate our number of training epochs
         # We need to initialize the trackers we use, and also store our configuration.
         # The trackers will initialize automatically on the main process.
