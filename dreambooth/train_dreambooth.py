@@ -86,11 +86,11 @@ try:
     major_version = int(version_string[0])
     minor_version = int(version_string[1])
     patch_version = int(version_string[2])
-    if minor_version < 13 or (minor_version == 13 and patch_version <= 1):
-        print("The version of diffusers is less than or equal to 0.13.1. Performing monkey-patch...")
+    if minor_version < 14 or (minor_version == 14 and patch_version <= 0):
+        print("The version of diffusers is less than or equal to 0.14.0. Performing monkey-patch...")
         DEISMultistepScheduler.get_velocity = get_velocity
     else:
-        print("The version of diffusers is greater than 0.13.1, hopefully they merged the PR by now")
+        print("The version of diffusers is greater than 0.14.0, hopefully they merged the PR by now")
 except:
     print("Exception monkey-patching DEIS scheduler.")
 
