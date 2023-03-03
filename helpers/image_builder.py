@@ -16,8 +16,8 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.utils import image_utils
     from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import process_txt2img, get_scheduler_class
     from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_checkpoint_match, \
-        reload_system_models, \
-        enable_safe_unpickle, disable_safe_unpickle, unload_system_models
+    reload_system_models, \
+    enable_safe_unpickle, disable_safe_unpickle, unload_system_models, xformerify
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
     from extensions.sd_dreambooth_extension.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, \
         get_target_module
@@ -109,10 +109,7 @@ class ImageBuilder:
             
             # xformers does not support mps'
             # better to say sorry that ask for permission =)
-            try:
-                self.image_pipe.enable_xformers_memory_efficient_attention()
-            except ModuleNotFoundError:
-                print("xformers not found, using default attention")
+            xformerify(self.image_pipe)
 
             self.image_pipe.progress_bar = self.progress_bar
 

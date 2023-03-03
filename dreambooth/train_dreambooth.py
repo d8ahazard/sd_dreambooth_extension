@@ -38,7 +38,7 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
     from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image, get_scheduler_class
     from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
-        import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle
+    import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle, xformerify, torch2ify
     from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import encode_hidden_state
     from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup, parse_logs, printm
     from extensions.sd_dreambooth_extension.dreambooth.webhook import send_training_update
@@ -1138,20 +1138,3 @@ def main(use_txt2img: bool = True) -> TrainResult:
         return result
 
     return inner_loop()
-
-
-def xformerify(obj):
-    if is_xformers_available():
-        try:
-            obj.enable_xformers_memory_efficient_attention()
-        except ModuleNotFoundError:
-            print("xformers not found, using default attention")
-
-
-def torch2ify(unet):
-    if hasattr(torch, 'compile'):
-        try:
-            unet = torch.compile(unet, mode="max-autotune", fullgraph=False)
-        except:
-            pass
-    return unet
