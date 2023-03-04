@@ -16,8 +16,8 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.utils import image_utils
     from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import process_txt2img, get_scheduler_class
     from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_checkpoint_match, \
-        reload_system_models, \
-        enable_safe_unpickle, disable_safe_unpickle, unload_system_models
+    reload_system_models, \
+    enable_safe_unpickle, disable_safe_unpickle, unload_system_models, xformerify
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
     from extensions.sd_dreambooth_extension.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, \
         get_target_module
@@ -109,10 +109,7 @@ class ImageBuilder:
             
             # xformers does not support mps'
             # better to say sorry that ask for permission =)
-            try:
-                self.image_pipe.set_use_memory_efficient_attention_xformers(True)
-            except ModuleNotFoundError:
-                print("xformers not found, using default attention")
+            xformerify(self.image_pipe)
 
             self.image_pipe.progress_bar = self.progress_bar
 
@@ -135,21 +132,22 @@ class ImageBuilder:
                 accelerator.load_state(new_hotness)
                 enable_safe_unpickle()
 
-            lora_model_path = os.path.join(config.lora_dir, lora_model)
-            if config.use_lora and os.path.exists(lora_model_path) and lora_model != "":
-                patch_pipe(
-                    pipe=self.image_pipe,
-                    maybe_unet_path=lora_model_path,
-                    unet_target_replace_module=get_target_module("module", config.use_lora_extended),
-                    token=None,
-                    r=lora_unet_rank,
-                    r_txt=lora_txt_rank
-                )
-                tune_lora_scale(self.image_pipe.unet, config.lora_weight)
+            if config.use_lora and lora_model != "":
+                lora_model_path = os.path.join(config.lora_dir, lora_model)
+                if os.path.exists(lora_model_path):
+                    patch_pipe(
+                        pipe=self.image_pipe,
+                        maybe_unet_path=lora_model_path,
+                        unet_target_replace_module=get_target_module("module", config.use_lora_extended),
+                        token=None,
+                        r=lora_unet_rank,
+                        r_txt=lora_txt_rank
+                    )
+                    tune_lora_scale(self.image_pipe.unet, config.lora_weight)
 
-                lora_txt_path = _text_lora_path_ui(lora_model_path)
-                if os.path.exists(lora_txt_path):
-                    tune_lora_scale(self.image_pipe.text_encoder, config.lora_txt_weight)
+                    lora_txt_path = _text_lora_path_ui(lora_model_path)
+                    if os.path.exists(lora_txt_path):
+                        tune_lora_scale(self.image_pipe.text_encoder, config.lora_txt_weight)
 
         else:
             try:
