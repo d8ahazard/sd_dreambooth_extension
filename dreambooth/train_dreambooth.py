@@ -768,8 +768,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                                     modelmap["text_encoder"] = (s_pipeline.text_encoder, TEXT_ENCODER_DEFAULT_TARGET_REPLACE)
                                     save_lora_weight(s_pipeline.text_encoder,
                                                      out_txt,
-                                                     target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
-                                                     d_type=d_type)
+                                                     target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE)
                                     pbar.update()
                                 # save extra_net
                                 if args.save_lora_for_extra_net:

@@ -553,9 +553,7 @@ def apply_lora(config: DreamboothConfig, model: nn.Module, lora_file_name: str, 
     lora_rev = None
     if lora_file_name is not None and lora_file_name != "":
         if not os.path.exists(lora_file_name):
-            lora_dir = os.path.join(config.model_dir, "loras")
-            lora_file_name = os.path.join(lora_dir, "lora", lora_file_name)
-
+            lora_file_name = os.path.join(config.model_dir, "loras", lora_file_name)
         if os.path.exists(lora_file_name):
             lora_rev = lora_file_name.split("_")[-1].replace(".pt", "")
             printi(f"Loading lora from {lora_file_name}", log=True)
