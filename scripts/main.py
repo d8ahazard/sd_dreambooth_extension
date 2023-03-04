@@ -433,7 +433,6 @@ def on_ui_tabs():
                     with gr.Column():
                         gr.HTML("Checkpoints")
                         db_half_model = gr.Checkbox(label="Half Model", value=False)
-                        db_half_lora = gr.Checkbox(label="Half Lora", value=False)
                         db_use_subdir = gr.Checkbox(label="Save Checkpoint to Subdirectory", value=True)
                         db_save_ckpt_during = gr.Checkbox(label="Generate a .ckpt file when saving during training.")
                         db_save_ckpt_after = gr.Checkbox(label="Generate a .ckpt file when training completes.",
@@ -695,7 +694,6 @@ def on_ui_tabs():
             db_gradient_checkpointing,
             db_gradient_set_to_none,
             db_graph_smoothing,
-            db_half_lora,
             db_half_model,
             db_hflip,
             db_infer_ema,

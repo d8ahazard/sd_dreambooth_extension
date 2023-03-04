@@ -243,21 +243,12 @@ def main(use_txt2img: bool = True) -> TrainResult:
         vae = create_vae()
         printm("Created vae")
 
-        try:
-            unet = UNet2DConditionModel.from_pretrained(
-                args.pretrained_model_name_or_path,
-                subfolder="unet",
-                revision=args.revision,
-                torch_dtype=torch.float32
-            )
-        except:
-            unet = UNet2DConditionModel.from_pretrained(
-                args.pretrained_model_name_or_path,
-                subfolder="unet",
-                revision=args.revision,
-                torch_dtype=torch.float16
-            )
-            unet = unet.to(dtype=torch.float32)
+        unet = UNet2DConditionModel.from_pretrained(
+            args.pretrained_model_name_or_path,
+            subfolder="unet",
+            revision=args.revision,
+            torch_dtype=torch.float32
+        )
         unet = torch2ify(unet)
 
         # Check that all trainable models are in full precision
@@ -768,8 +759,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                                 out_file = os.path.join(loras_dir, f"{lora_file_prefix}.pt")
                                 # create pt
                                 tgt_module = get_target_module("module", args.use_lora_extended)
-                                d_type = torch.float16 if args.half_lora else torch.float32
-                                save_lora_weight(s_pipeline.unet, out_file, tgt_module, d_type=d_type)
+                                save_lora_weight(s_pipeline.unet, out_file, tgt_module)
 
                                 modelmap = {"unet": (s_pipeline.unet, tgt_module)}
                                 # save text_encoder
