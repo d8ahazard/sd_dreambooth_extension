@@ -184,7 +184,7 @@ def get_lora_models(model_name: str):
         return result
     config = from_file(model_name)
 
-    return get_sorted_lora_models(config.lora_dir)
+    return get_sorted_lora_models(config.get_lora_dir())
 
 
 

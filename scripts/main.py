@@ -1,6 +1,7 @@
 import importlib
 import time
 from typing import List
+import os
 
 import gradio as gr
 
@@ -162,7 +163,7 @@ def ui_gen_ckpt(model_name: str):
         return "Please select a model."
     config = from_file(model_name)
     printm("Config loaded")
-    lora_path = config.lora_model_name
+    lora_path = os.path.join(config.get_lora_dir(), config.lora_model_name)
     print(f"Lora path: {lora_path}")
     res = compile_checkpoint(model_name, lora_path, True, True, config.snapshot)
     return res

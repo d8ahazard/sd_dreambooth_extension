@@ -82,7 +82,7 @@ def get_model_snapshot(config: DreamboothConfig):
 
 
 def get_model_loras(config: DreamboothConfig):
-    return get_sorted_lora_models(config.lora_dir)
+    return get_sorted_lora_models(config.get_lora_dir())
 
 
 def training_wizard_person(model_dir):
