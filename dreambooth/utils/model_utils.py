@@ -187,7 +187,6 @@ def get_lora_models(model_name: str):
     return get_sorted_lora_models(config.get_lora_dir())
 
 
-
 def unload_system_models():
     try:
         import modules.shared

@@ -145,7 +145,6 @@ class DreamboothConfig(BaseModel):
         self.src = src
         self.scheduler = "ddim"
         self.v2 = v2
-        
 
     # Actually save as a file
     def save(self, backup=False):
