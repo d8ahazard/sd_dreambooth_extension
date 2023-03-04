@@ -597,11 +597,9 @@ def load_model_params(model_name):
     else:
         snaps = get_model_snapshots(config)
         snap_selection = config.revision if str(config.revision) in snaps else ""
-        snaps.insert(0, "")
         db_model_snapshots = gr_update(choices=snaps, value=snap_selection)
 
         loras = get_lora_models(config)
-        loras.insert(0, "")
         db_lora_models = gr_update(choices=loras)
 
         msg = f"Selected model: '{model_name}'."

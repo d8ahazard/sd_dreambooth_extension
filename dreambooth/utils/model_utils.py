@@ -123,7 +123,7 @@ def get_db_models():
 
 
 def get_lora_models(config: DreamboothConfig = None):
-    output = []
+    output = [""]
     if config is None:
         config = shared.db_model_config
     if config is not None:
@@ -149,7 +149,7 @@ def get_sorted_lora_models(config: DreamboothConfig = None):
 
 
 def get_model_snapshots(config: DreamboothConfig = None):
-    snaps = []
+    snaps = [""]
     if config is None:
         config = shared.db_model_config
     if config is not None:
