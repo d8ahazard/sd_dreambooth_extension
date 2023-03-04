@@ -114,12 +114,6 @@ def list_models():
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
-def get_iteration(name: str):
-    regex = re.compile(r'.*_(\d+)\.pt')
-    match = regex.search(name)
-    return int(match.group(1)) if match else 0
-
-
 def get_db_models():
     output = [""]
     out_dir = shared.dreambooth_models_path
@@ -145,6 +139,12 @@ def get_lora_models(config: DreamboothConfig = None):
 
 def get_sorted_lora_models(config: DreamboothConfig = None):
     models = get_lora_models(config)
+
+    def get_iteration(name: str):
+        regex = re.compile(r'.*_(\d+)\.(pt|safetensors|ckpt)')
+        match = regex.search(name)
+        return int(match.group(1)) if match else 0
+
     return sorted(models, key=lambda x: get_iteration(x))
 
 
@@ -161,11 +161,6 @@ def get_model_snapshots(config: DreamboothConfig = None):
                     if rev_parts[0] == "checkpoint" and len(rev_parts) == 2:
                         snaps.append(rev_parts[1])
     return snaps
-
-
-def get_sorted_model_snapshots(config: DreamboothConfig = None):
-    models = get_model_snapshots(config)
-    return sorted(models, key=lambda x: get_iteration(x))
 
 
 def unload_system_models():

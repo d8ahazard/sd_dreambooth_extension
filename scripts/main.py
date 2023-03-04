@@ -195,11 +195,11 @@ def on_ui_tabs():
                             "refresh_db_models"
                         )
                     with gr.Row():
-                        db_snapshot = gr.Dropdown(label="Snapshot to Resume", choices=get_sorted_model_snapshots())
+                        db_snapshot = gr.Dropdown(label="Snapshot to Resume", choices=sorted(get_model_snapshots()))
                         create_refresh_button(
                             db_snapshot,
-                            get_sorted_model_snapshots,
-                            lambda: {"choices": get_sorted_model_snapshots()},
+                            get_model_snapshots,
+                            lambda: {"choices": sorted(get_model_snapshots())},
                             "refresh_db_snapshots"
                         )
                     with gr.Row(visible=False) as lora_model_row:
