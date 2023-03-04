@@ -321,7 +321,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 ema_model = EMAModel(ema_unet, device=accelerator.device, dtype=weight_dtype)
                 del ema_unet
             else:
-                ema_model = EMAModel(unet, device=accelerator.device, dtype=weight_dtype)
+                ema_model = EMAModel(unet, device=accelerator.device)
 
         unet_lora_params = None
         text_encoder_lora_params = None
@@ -737,6 +737,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                         pbar.update()
                         try:
                             out_file = None
+                            # Loras resume from pt
                             if not args.use_lora:
                                 if save_snapshot:
                                     pbar.set_description("Saving Snapshot")
@@ -758,18 +759,20 @@ def main(use_txt2img: bool = True) -> TrainResult:
 
                             elif save_lora:
                                 pbar.set_description("Saving Lora Weights...")
+                                # setup directory
+                                loras_dir = os.path.join(args.model_dir, "loras")
+                                os.makedirs(loras_dir, exist_ok=True)
+                                # setup pt path
                                 lora_model_name = args.model_name if args.custom_model_name == "" else args.custom_model_name
-                                os.makedirs(shared.db_lora_models_path, exist_ok=True)
                                 lora_file_prefix = f"{lora_model_name}_{args.revision}"
-                                out_file = os.path.join(shared.db_lora_models_path, f"{lora_file_prefix}.pt")
+                                out_file = os.path.join(loras_dir, f"{lora_file_prefix}.pt")
+                                # create pt
                                 tgt_module = get_target_module("module", args.use_lora_extended)
                                 d_type = torch.float16 if args.half_lora else torch.float32
-
                                 save_lora_weight(s_pipeline.unet, out_file, tgt_module, d_type=d_type)
 
-                                modelmap = {}
-                                modelmap["unet"] = (s_pipeline.unet, tgt_module)
-
+                                modelmap = {"unet": (s_pipeline.unet, tgt_module)}
+                                # save text_encoder
                                 if stop_text_percentage != 0:
                                     out_txt = out_file.replace(".pt", "_txt.pt")
                                     modelmap["text_encoder"] = (s_pipeline.text_encoder, TEXT_ENCODER_DEFAULT_TARGET_REPLACE)
@@ -778,6 +781,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                                                      target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
                                                      d_type=d_type)
                                     pbar.update()
+                                # save extra_net
                                 if args.save_lora_for_extra_net:
                                     if args.use_lora_extended:
                                         print("Saving extra networks lora does not work with use_lora_extended. Skipping save.")
@@ -785,11 +789,11 @@ def main(use_txt2img: bool = True) -> TrainResult:
                                         os.makedirs(shared.ui_lora_models_path, exist_ok=True)
                                         out_safe = os.path.join(shared.ui_lora_models_path, f"{lora_file_prefix}.safetensors")
                                         save_extra_networks(modelmap, out_safe)
-
+                            # package pt into checkpoint
                             if save_checkpoint:
                                 pbar.set_description("Compiling Checkpoint")
                                 snap_rev = str(args.revision) if save_snapshot else ""
-                                compile_checkpoint(args.model_name, reload_models=False, lora_path=out_file, log=False,
+                                compile_checkpoint(args.model_name, reload_models=False, lora_file_name=out_file, log=False,
                                                    snap_rev=snap_rev)
                                 pbar.update()
                                 printm("Restored, moved to acc.device.")

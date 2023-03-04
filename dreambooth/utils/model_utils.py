@@ -7,6 +7,7 @@ import torch
 from diffusers.utils import is_xformers_available
 from transformers import PretrainedConfig
 
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
 
 try:
     from extensions.sd_dreambooth_extension.dreambooth import shared  # noqa
@@ -109,57 +110,83 @@ def list_models():
         checkpoint_info.register()
 
 
-def get_model_snapshots(model_name: str):
-    try:
-        from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
-    except:
-        from dreambooth.dreambooth.dataclasses.db_config import from_file  # noqa
-
-    result = None
-    try:
-        import gradio
-        result = gradio.update(visible=True)
-    except:
-        pass
-    if model_name == "" or model_name is None:
-        return result
-    config = from_file(model_name)
-    snaps_path = os.path.join(config.model_dir, "snapshots")
-    snaps = []
-    if os.path.exists(snaps_path):
-        for directory in os.listdir(snaps_path):
-            if "checkpoint_" in directory:
-                fullpath = os.path.join(snaps_path, directory)
-                snaps.append(fullpath)
-    return snaps
+# def get_model_snapshots(model_name: str):
+#     try:
+#         from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
+#     except:
+#         from dreambooth.dreambooth.dataclasses.db_config import from_file  # noqa
+#
+#     result = None
+#     try:
+#         import gradio
+#         result = gradio.update(visible=True)
+#     except:
+#         pass
+#     if model_name == "" or model_name is None:
+#         return result
+#     config = from_file(model_name)
+#     snaps_path = os.path.join(config.model_dir, "snapshots")
+#     snaps = []
+#     if os.path.exists(snaps_path):
+#         for directory in os.listdir(snaps_path):
+#             if "checkpoint_" in directory:
+#                 fullpath = os.path.join(snaps_path, directory)
+#                 snaps.append(fullpath)
+#     return snaps
 
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
 def get_db_models():
-    model_dir = shared.models_path
-    out_dir = os.path.join(model_dir, "dreambooth")
     output = []
+    out_dir = os.path.join(shared.models_path, "dreambooth")
     if os.path.exists(out_dir):
-        dirs = os.listdir(out_dir)
-        for found in dirs:
-            if os.path.isdir(os.path.join(out_dir, found)):
-                output.append(found)
+        output = os.listdir(out_dir)
     return output
 
 
 def get_lora_models():
-    model_dir = shared.db_lora_models_path
-    out_dir = model_dir
-    output = [""]
+    output = []
+    out_dir = os.path.join(shared.models_path, "dreambooth")
     if os.path.exists(out_dir):
-        dirs = os.listdir(out_dir)
-        for found in dirs:
-            if os.path.isfile(os.path.join(out_dir, found)):
-                if "_txt.pt" not in found and ".pt" in found:
-                    output.append(found)
+        for db_model_dir in os.listdir(out_dir):
+            if os.path.isdir(os.path.join(out_dir, db_model_dir, "loras")):
+                output.append(db_model_dir)
     return output
+
+
+def get_model_snapshots(config: DreamboothConfig = None):
+    snaps = []
+    if config is None:
+        config = shared.db_model_config
+    if config is not None:
+        snaps_dir = os.path.join(config.model_dir, "checkpoints")
+        if os.path.exists(snaps_dir):
+            for file in os.listdir(snaps_dir):
+                if os.path.isdir(os.path.join(snaps_dir, file)):
+                    rev_parts = file.split("-")
+                    if rev_parts[0] == "checkpoint" and len(rev_parts) == 2:
+                        snaps.append(rev_parts[1])
+    return snaps
+
+
+def get_db_models_for_dropdown():
+    models = get_db_models()
+    models.append('')
+    return models
+
+
+def get_lora_models_for_dropdown():
+    models = get_lora_models()
+    models.append('')
+    return models
+
+
+def get_model_snapshots_for_dropdown(config: DreamboothConfig = None):
+    snaps = get_model_snapshots(config)
+    snaps.append('')
+    return snaps
 
 
 def unload_system_models():

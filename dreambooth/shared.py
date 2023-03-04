@@ -16,7 +16,7 @@ from packaging import version
 def load_auto_settings():
     global models_path, script_path, ckpt_dir, device_id, disable_safe_unpickle, dataset_filename_word_regex, \
         dataset_filename_join_string, show_progress_every_n_steps, parallel_processing_allowed, state, ckptfix, medvram, \
-        lowvram, dreambooth_models_path, ui_lora_models_path, db_lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config, device, \
+        lowvram, dreambooth_models_path, ui_lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config, device, \
         force_cpu, embeddings_dir, sd_model
     try:
         import modules.script_callbacks
@@ -294,7 +294,6 @@ embeddings_dir = os.path.join(script_path, "embeddings")
 dreambooth_models_path = os.path.join(models_path, "dreambooth")
 ckpt_dir = os.path.join(models_path, "Stable-diffusion")
 ui_lora_models_path = os.path.join(models_path, "lora")
-db_lora_models_path = os.path.join(models_path, "db_lora")
 db_model_config = None
 data_path = os.path.join(script_path, ".cache")
 show_progress_every_n_steps = 10
