@@ -283,6 +283,40 @@ def performance_wizard(model_name):
         sample_batch_size, train_batch_size, stop_text_encoder, optimizer, use_lora, use_ema, \
         save_samples_every, save_weights_every, msg
 
+# p,
+# overrideDenoising,
+# overrideMaskBlur,
+# path,
+# searchSubdir,
+# divider,
+# howSplit,
+# saveMask,
+# pathToSave,
+# viewResults,
+# saveNoFace,
+# onlyMask,
+# invertMask,
+# singleMaskPerImage,
+# countFaces,
+# maskSize,
+# keepOriginalName,
+# pathExisting,
+# pathMasksExisting,
+# pathToSaveExisting,
+# selectedTab,
+# faceDetectMode,
+# face_x_scale,
+# face_y_scale,
+# minFace,
+# multiScale,
+# multiScale2,
+# multiScale3,
+# minNeighbors,
+# mpconfidence,
+# mpcount,
+# debugSave,
+# optimizeDetect
+
 
 def get_swap_parameters():
     return OrderedDict([
