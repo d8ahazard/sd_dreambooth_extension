@@ -32,7 +32,7 @@ try:
         start_training
     from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers
     from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images
-    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_sorted_lora_models
 except:
     from dreambooth.dreambooth import shared  # noqa
     from dreambooth.dreambooth.dataclasses.db_concept import Concept  # noqa
@@ -43,7 +43,7 @@ except:
     from dreambooth.dreambooth.ui_functions import create_model, generate_samples, start_training  # noqa
     from dreambooth.dreambooth.utils.gen_utils import generate_classifiers  # noqa
     from dreambooth.dreambooth.utils.image_utils import get_images  # noqa
-    from dreambooth.dreambooth.utils.model_utils import get_db_models, get_lora_models  # noqa
+    from dreambooth.dreambooth.utils.model_utils import get_db_models, get_sorted_lora_models  # noqa
 
     pass
 
@@ -597,11 +597,13 @@ def dreambooth_api(_, app: FastAPI):
     @app.get("/dreambooth/models_lora")
     async def get_models_lora(
             api_key: str = Query("", description="If an API key is set, this must be present."),
+            model_name: str = Query(description="The model name to query for lora files."),
     ) -> JSONResponse:
         """
 
         Args:
             api_key: API Key.
+            model_name: The model name to query for lora files.
 
         Returns: A list of LoRA Models.
 
@@ -609,8 +611,11 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        models = []
-        #get_lora_models()
+        config = from_file(model_name)
+        if config is None:
+            return JSONResponse("Config not found")
+
+        models = get_sorted_lora_models(config.get_lora_dir())
         return JSONResponse(models)
 
     @app.get("/dreambooth/samples")
