@@ -941,6 +941,7 @@ def on_ui_tabs():
                 db_has_ema,
                 db_src,
                 db_snapshot,
+                db_lora_model_name,
                 db_status
             ]
         )

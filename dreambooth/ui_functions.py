@@ -600,6 +600,10 @@ def load_model_params(model_name):
         snaps.insert(0, "")
         db_model_snapshots = gr_update(choices=snaps, value=snap_selection)
 
+        loras = get_lora_models(config)
+        loras.insert(0, "")
+        db_lora_models = gr_update(choices=loras)
+
         msg = f"Selected model: '{model_name}'."
         return config.model_dir, \
             config.revision, \
@@ -608,6 +612,7 @@ def load_model_params(model_name):
             "True" if config.has_ema else "False", \
             config.src, \
             db_model_snapshots, \
+            db_lora_models, \
             msg
 
 
