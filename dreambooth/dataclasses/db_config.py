@@ -146,6 +146,14 @@ class DreamboothConfig(BaseModel):
         self.scheduler = "ddim"
         self.v2 = v2
 
+        # Naive fixes for bad types
+        if not isinstance(self.lora_model_name, str):
+            print("Bad lora_model_name found, setting to ''")
+            self.lora_model_name = ''
+        if not isinstance(self.stop_text_encoder, float):
+            print("Bad stop_text_encoder found, setting to 0.0")
+            self.stop_text_encoder = 0.0
+
     # Actually save as a file
     def save(self, backup=False):
         """
