@@ -141,7 +141,7 @@ def get_sorted_lora_models(config: DreamboothConfig = None):
     models = get_lora_models(config)
 
     def get_iteration(name: str):
-        regex = re.compile(r'.*_(\d+)\.(pt|safetensors|ckpt)')
+        regex = re.compile(r'.*_(\d+)\.pt$')
         match = regex.search(name)
         return int(match.group(1)) if match else 0
 
