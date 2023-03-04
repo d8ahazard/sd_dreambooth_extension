@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections
 import os
+import re
 
 import torch
 from diffusers.utils import is_xformers_available
@@ -110,54 +111,45 @@ def list_models():
         checkpoint_info.register()
 
 
-# def get_model_snapshots(model_name: str):
-#     try:
-#         from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
-#     except:
-#         from dreambooth.dreambooth.dataclasses.db_config import from_file  # noqa
-#
-#     result = None
-#     try:
-#         import gradio
-#         result = gradio.update(visible=True)
-#     except:
-#         pass
-#     if model_name == "" or model_name is None:
-#         return result
-#     config = from_file(model_name)
-#     snaps_path = os.path.join(config.model_dir, "snapshots")
-#     snaps = []
-#     if os.path.exists(snaps_path):
-#         for directory in os.listdir(snaps_path):
-#             if "checkpoint_" in directory:
-#                 fullpath = os.path.join(snaps_path, directory)
-#                 snaps.append(fullpath)
-#     return snaps
-
-
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
+def get_iteration(name: str):
+    regex = re.compile(r'.*_(\d+)\.pt')
+    match = regex.search(name)
+    return int(match.group(1)) if match else 0
+
+
 def get_db_models():
-    output = []
-    out_dir = os.path.join(shared.models_path, "dreambooth")
+    output = [""]
+    out_dir = shared.dreambooth_models_path
     if os.path.exists(out_dir):
-        output = os.listdir(out_dir)
+        output.extend(os.listdir(out_dir))
     return output
 
 
-def get_lora_models():
-    output = []
-    out_dir = os.path.join(shared.models_path, "dreambooth")
-    if os.path.exists(out_dir):
-        for db_model_dir in os.listdir(out_dir):
-            if os.path.isdir(os.path.join(out_dir, db_model_dir, "loras")):
-                output.append(db_model_dir)
+def get_lora_models(config: DreamboothConfig = None):
+    output = [""]
+    if config is None:
+        config = shared.db_model_config
+    if config is not None:
+        lora_dir = os.path.join(config.model_dir, "loras")
+        if os.path.exists(lora_dir):
+            files = os.listdir(lora_dir)
+            for file in files:
+                if os.path.isfile(os.path.join(lora_dir, file)):
+                    if ".pt" in file and "_txt.pt" not in file:
+                        output.append(file)
     return output
+
+
+def get_sorted_lora_models(config: DreamboothConfig = None):
+    models = get_lora_models(config)
+    return sorted(models, key=lambda x: get_iteration(x))
 
 
 def get_model_snapshots(config: DreamboothConfig = None):
-    snaps = []
+    snaps = [""]
     if config is None:
         config = shared.db_model_config
     if config is not None:
@@ -171,22 +163,9 @@ def get_model_snapshots(config: DreamboothConfig = None):
     return snaps
 
 
-def get_db_models_for_dropdown():
-    models = get_db_models()
-    models.append('')
-    return models
-
-
-def get_lora_models_for_dropdown():
-    models = get_lora_models()
-    models.append('')
-    return models
-
-
-def get_model_snapshots_for_dropdown(config: DreamboothConfig = None):
-    snaps = get_model_snapshots(config)
-    snaps.append('')
-    return snaps
+def get_sorted_model_snapshots(config: DreamboothConfig = None):
+    models = get_model_snapshots(config)
+    return sorted(models, key=lambda x: get_iteration(x))
 
 
 def unload_system_models():

@@ -12,8 +12,8 @@ from extensions.sd_dreambooth_extension.dreambooth.ui_functions import performan
     training_wizard, training_wizard_person, load_model_params, ui_classifiers, debug_buckets, create_model, \
     generate_samples, load_params, start_training, update_extension, start_crop
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_names
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models_for_dropdown, \
-    get_lora_models_for_dropdown, get_model_snapshots_for_dropdown
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, \
+    get_sorted_lora_models, get_model_snapshots
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention, \
     list_floats, wrap_gpu_call, parse_logs, printm, list_optimizer
 from extensions.sd_dreambooth_extension.dreambooth.webhook import save_and_test_webhook
@@ -187,27 +187,27 @@ def on_ui_tabs():
                 gr.HTML(value="<span class='hh'>Model</span>")
                 with gr.Tab("Select"):
                     with gr.Row():
-                        db_model_name = gr.Dropdown(label='Model', choices=sorted(get_db_models_for_dropdown()))
+                        db_model_name = gr.Dropdown(label='Model', choices=sorted(get_db_models()))
                         create_refresh_button(
                             db_model_name,
-                            get_db_models_for_dropdown,
-                            lambda: {"choices": sorted(get_db_models_for_dropdown())},
+                            get_db_models,
+                            lambda: {"choices": sorted(get_db_models())},
                             "refresh_db_models"
                         )
                     with gr.Row():
-                        db_snapshot = gr.Dropdown(label="Snapshot to Resume", choices=sorted(get_model_snapshots_for_dropdown()))
+                        db_snapshot = gr.Dropdown(label="Snapshot to Resume", choices=get_sorted_model_snapshots())
                         create_refresh_button(
                             db_snapshot,
-                            get_model_snapshots_for_dropdown,
-                            lambda: {"choices": sorted(get_model_snapshots_for_dropdown())},
+                            get_sorted_model_snapshots,
+                            lambda: {"choices": get_sorted_model_snapshots()},
                             "refresh_db_snapshots"
                         )
                     with gr.Row(visible=False) as lora_model_row:
-                        db_lora_model_name = gr.Dropdown(label='Lora Model', choices=sorted(get_lora_models_for_dropdown()))
+                        db_lora_model_name = gr.Dropdown(label='Lora Model', choices=get_sorted_lora_models())
                         create_refresh_button(
                             db_lora_model_name,
-                            get_lora_models_for_dropdown,
-                            lambda: {"choices": sorted(get_lora_models_for_dropdown())},
+                            get_sorted_lora_models,
+                            lambda: {"choices": get_sorted_lora_models()},
                             "refresh_lora_models"
                         )
                     with gr.Row():

@@ -331,7 +331,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
         if args.use_lora:
             unet.requires_grad_(False)
             if args.lora_model_name:
-                lora_path = os.path.join(shared.models_path, "db_lora", args.lora_model_name)
+                lora_path = os.path.join(args.model_dir, "loras", args.lora_model_name)
                 lora_txt = lora_path.replace(".pt", "_txt.pt")
 
                 if not os.path.exists(lora_path) or not os.path.isfile(lora_path):
@@ -718,8 +718,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     requires_safety_checker=None
                 )
                 scheduler_class = get_scheduler_class(args.scheduler)
-                s_pipeline.unet = torch2ify(s_pipeline.unet)
                 s_pipeline.enable_attention_slicing()
+                s_pipeline.unet = torch2ify(s_pipeline.unet)
                 xformerify(s_pipeline)
 
                 s_pipeline.scheduler = scheduler_class.from_config(s_pipeline.scheduler.config)
