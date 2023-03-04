@@ -7,6 +7,7 @@ import os
 import random
 import sys
 import traceback
+from collections import OrderedDict
 
 import torch
 import torch.utils.checkpoint
@@ -208,7 +209,7 @@ def performance_wizard(model_name):
     save_samples_every = gr_update(config.save_preview_every)
     save_weights_every = gr_update(config.save_embedding_every)
 
-    if torch.cuda.is_bf16_supported():
+    if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
         mixed_precision = 'bf16'
     if config is not None:
         total_images = 0
@@ -282,6 +283,95 @@ def performance_wizard(model_name):
         sample_batch_size, train_batch_size, stop_text_encoder, optimizer, use_lora, use_ema, \
         save_samples_every, save_weights_every, msg
 
+# p,
+# overrideDenoising,
+# overrideMaskBlur,
+# path,
+# searchSubdir,
+# divider,
+# howSplit,
+# saveMask,
+# pathToSave,
+# viewResults,
+# saveNoFace,
+# onlyMask,
+# invertMask,
+# singleMaskPerImage,
+# countFaces,
+# maskSize,
+# keepOriginalName,
+# pathExisting,
+# pathMasksExisting,
+# pathToSaveExisting,
+# selectedTab,
+# faceDetectMode,
+# face_x_scale,
+# face_y_scale,
+# minFace,
+# multiScale,
+# multiScale2,
+# multiScale3,
+# minNeighbors,
+# mpconfidence,
+# mpcount,
+# debugSave,
+# optimizeDetect
+
+
+def get_swap_parameters():
+    return OrderedDict([
+        ("overrideDenoising", True),
+        ("overrideMaskBlur", True),
+        ("path", "./"),
+        ("searchSubdir", False),
+        ("divider", 1),
+        ("howSplit", "Both ▦"),
+        ("saveMask", False),
+        ("pathToSave", "./"),
+        ("viewResults", False),
+        ("saveNoFace", False),
+        ("onlyMask", False),
+        ("invertMask", False),
+        ("singleMaskPerImage", False),
+        ("countFaces", False),
+        ("maskSize", 0),
+        ("keepOriginalName", False),
+        ("pathExisting", ""),
+        ("pathMasksExisting", ""),
+        ("pathToSaveExisting", ""),
+        ("selectedTab", "generateMasksTab"),
+        ("faceDetectMode", "Normal (OpenCV + FaceMesh)"),
+        ("face_x_scale", 1.0),
+        ("face_y_scale", 1.0),
+        ("minFace", 50),
+        ("multiScale", 1.03),
+        ("multiScale2", 1.0),
+        ("multiScale3", 1.0),
+        ("minNeighbors", 5),
+        ("mpconfidence", 0.5),
+        ("mpcount", 1),
+        ("debugSave", False),
+        ("optimizeDetect", True)
+    ])
+
+
+def get_script_class():
+    script_class = None
+    try:
+        from modules.scripts import list_scripts
+        scripts = list_scripts("scripts", ".py")
+        for script_file in scripts:
+            if script_file.filename == "batch_face_swap.py":
+                path = script_file.path
+                module_name = "batch_face_swap"
+                spec = importlib.util.spec_from_file_location(module_name, path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                script_class = module.Script()
+                break
+    except Exception as f:
+        print(f"Can't check face swap: {f}")
+    return script_class
 
 def generate_samples(model_name: str,
                      prompt: str,
@@ -294,7 +384,13 @@ def generate_samples(model_name: str,
                      seed: int,
                      steps: int,
                      scale: float,
-                     use_txt2img: bool
+                     use_txt2img: bool,
+                     scheduler: str = "UniPCMultistep",
+                     swap_faces:bool = False,
+                     swap_prompt: str = "",
+                     swap_negative: str = "",
+                     swap_steps: int = 40,
+                     swap_batch: int = 1
                      ):
     if batch_size > num_samples:
         batch_size = num_samples
@@ -357,7 +453,8 @@ def generate_samples(model_name: str,
                 batch_size=batch_size,
                 lora_unet_rank=config.lora_unet_rank,
                 lora_txt_rank=config.lora_txt_rank,
-                source_checkpoint=source_model
+                source_checkpoint=source_model,
+                scheduler=scheduler
             )
 
             prompt_data = []
@@ -410,6 +507,45 @@ def generate_samples(model_name: str,
             else:
                 print(msg)
                 traceback.print_exc()
+
+        try:
+            swap_class = get_script_class()
+            # if swap_faces and swap_class is not None:
+            #     # Get the parent directory of the first image in the list
+            #     parent_dir = os.path.dirname(images[0])
+            #
+            #     # Create the subdirectory called "temp" in the parent directory
+            #     temp_dir = os.path.join(parent_dir, "temp")
+            #     temp_out = os.path.join(parent_dir, "temp_out")
+            #     if not os.path.exists(temp_dir):
+            #         os.mkdir(temp_dir)
+            #
+            #     # Move all images to the "temp" subdirectory
+            #     for img_path in images:
+            #         img_name = os.path.basename(img_path)
+            #         new_path = os.path.join(temp_dir, img_name)
+            #         os.rename(img_path, new_path)
+            #
+            #     # Save the full path of the parent directory + temp as a string to a variable called temp_dir
+            #     temp_dir = os.path.abspath(temp_dir)
+            #     temp_out = os.path.abspath(temp_out)
+            #
+            #     from modules.processing import StableDiffusionProcessingImg2Img
+            #     p = StableDiffusionProcessingImg2Img(prompt=swap_prompt, negative_prompt=swap_negative, steps=swap_steps, batch_size=swap_batch, sampler_name="Euler a", width=width, height=height, inpaint_full_res=1, inpainting_fill=1)
+            #     # p, overrideDenoising, overrideMaskBlur, path, searchSubdir, divider, howSplit, saveMask, pathToSave, viewResults, saveNoFace, onlyMask, invertMask, singleMaskPerImage, countFaces, maskSize, keepOriginalName, pathExisting, pathMasksExisting, pathToSaveExisting, selectedTab, faceDetectMode, face_x_scale, face_y_scale, minFace, multiScale, multiScale2, multiScale3, minNeighbors, mpconfidence, mpcount, debugSave, optimizeDetect
+            #     params = get_swap_parameters()
+            #     params["path"] = temp_dir
+            #     params["pathToSave"] = temp_out
+            #
+            #     param_list = list(params.values())
+            #
+            #     foo = swap_class.run(p, *param_list)
+            #     print("DO FACE SWAP HERE")
+        except Exception as p:
+            print(f"Exception face swapping: {p}")
+            traceback.print_exc()
+            pass
+
         reload_system_models()
         msg = f"Generated {len(images)} samples."
         print()
@@ -724,7 +860,7 @@ def start_crop(src_dir: str, dest_dir: str, max_res: int, bucket_step: int, dry_
     for res, images in out_paths.items():
         for image in images:
             pbar.update()
-            out_img = os.path.join(dest_dir, os.path.basename(image))
+            out_img = os.path.join(dest_dir, os.path.splitext(os.path.basename(image))[0] + ".png")
             cropped = open_and_trim(image, res, True)
             if not dry_run:
                 print(f"\nSaving to {out_img}")

@@ -38,7 +38,7 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
     from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image, get_scheduler_class
     from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
-        import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle
+    import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle, xformerify, torch2ify
     from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import encode_hidden_state
     from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup, parse_logs, printm
     from extensions.sd_dreambooth_extension.dreambooth.webhook import send_training_update
@@ -88,11 +88,11 @@ try:
     major_version = int(version_string[0])
     minor_version = int(version_string[1])
     patch_version = int(version_string[2])
-    if minor_version < 13 or (minor_version == 13 and patch_version <= 1):
-        print("The version of diffusers is less than or equal to 0.13.1. Performing monkey-patch...")
+    if minor_version < 14 or (minor_version == 14 and patch_version <= 0):
+        print("The version of diffusers is less than or equal to 0.14.0. Performing monkey-patch...")
         DEISMultistepScheduler.get_velocity = get_velocity
     else:
-        print("The version of diffusers is greater than 0.13.1, hopefully they merged the PR by now")
+        print("The version of diffusers is greater than 0.14.0, hopefully they merged the PR by now")
 except:
     print("Exception monkey-patching DEIS scheduler.")
 
@@ -243,12 +243,21 @@ def main(use_txt2img: bool = True) -> TrainResult:
         vae = create_vae()
         printm("Created vae")
 
-        unet = UNet2DConditionModel.from_pretrained(
-            args.pretrained_model_name_or_path,
-            subfolder="unet",
-            revision=args.revision,
-            torch_dtype=torch.float32
-        )
+        try:
+            unet = UNet2DConditionModel.from_pretrained(
+                args.pretrained_model_name_or_path,
+                subfolder="unet",
+                revision=args.revision,
+                torch_dtype=torch.float32
+            )
+        except:
+            unet = UNet2DConditionModel.from_pretrained(
+                args.pretrained_model_name_or_path,
+                subfolder="unet",
+                revision=args.revision,
+                torch_dtype=torch.float16
+            )
+            unet = unet.to(dtype=torch.float32)
         unet = torch2ify(unet)
 
         # Check that all trainable models are in full precision
@@ -256,21 +265,18 @@ def main(use_txt2img: bool = True) -> TrainResult:
             "Please make sure to always have all model weights in full float32 precision when starting training - even if"
             " doing mixed precision training. copy of the weights should still be float32."
         )
-        has_xformers = False
         if args.attention == "xformers" and not shared.force_cpu:
             if is_xformers_available():
                 import xformers
-
                 xformers_version = version.parse(xformers.__version__)
                 if xformers_version == version.parse("0.0.16"):
                     logger.warning(
                         "xFormers 0.0.16 cannot be used for training in some GPUs. If you observe problems during training, please update xFormers to at least 0.0.17. See https://huggingface.co/docs/diffusers/main/en/optimization/xformers for more details."
                     )
-                unet.enable_xformers_memory_efficient_attention()
-                vae.enable_xformers_memory_efficient_attention()
-                has_xformers = True
             else:
                 raise ValueError("xformers is not available. Make sure it is installed correctly")
+            xformerify(unet)
+            xformerify(vae)
 
         if accelerator.unwrap_model(unet).dtype != torch.float32:
             print(f"Unet loaded as datatype {accelerator.unwrap_model(unet).dtype}. {low_precision_error_string}")
@@ -310,8 +316,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     revision=args.revision,
                     torch_dtype=torch.float32
                 )
-                if has_xformers:
-                    ema_unet.enable_xformers_memory_efficient_attention()
+                xformerify(ema_unet)
 
                 ema_model = EMAModel(ema_unet, device=accelerator.device, dtype=weight_dtype)
                 del ema_unet
@@ -563,7 +568,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
         total_batch_size = train_batch_size * accelerator.num_processes * gradient_accumulation_steps
         max_train_epochs = args.num_train_epochs
         # we calculate our number of tenc training epochs
-        text_encoder_epochs = round(args.num_train_epochs * stop_text_percentage)
+        text_encoder_epochs = round(max_train_epochs * stop_text_percentage)
         global_step = 0
         global_epoch = 0
         session_epoch = 0
@@ -715,7 +720,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 scheduler_class = get_scheduler_class(args.scheduler)
                 s_pipeline.unet = torch2ify(s_pipeline.unet)
                 s_pipeline.enable_attention_slicing()
-                s_pipeline.set_use_memory_efficient_attention_xformers(True)
+                xformerify(s_pipeline)
 
                 s_pipeline.scheduler = scheduler_class.from_config(s_pipeline.scheduler.config)
                 if "UniPC" in args.scheduler:
@@ -755,20 +760,23 @@ def main(use_txt2img: bool = True) -> TrainResult:
                                 pbar.set_description("Saving Lora Weights...")
                                 lora_model_name = args.model_name if args.custom_model_name == "" else args.custom_model_name
                                 os.makedirs(shared.db_lora_models_path, exist_ok=True)
-                                lora_file_prefix =  f"{lora_model_name}_{args.revision}"
+                                lora_file_prefix = f"{lora_model_name}_{args.revision}"
                                 out_file = os.path.join(shared.db_lora_models_path, f"{lora_file_prefix}.pt")
+                                tgt_module = get_target_module("module", args.use_lora_extended)
+                                d_type = torch.float16 if args.half_lora else torch.float32
+
+                                save_lora_weight(s_pipeline.unet, out_file, tgt_module, d_type=d_type)
 
                                 modelmap = {}
-                                tgt_module = get_target_module("module", args.use_lora_extended)
                                 modelmap["unet"] = (s_pipeline.unet, tgt_module)
-                                save_lora_weight(s_pipeline.unet, out_file, tgt_module)
+
                                 if stop_text_percentage != 0:
                                     out_txt = out_file.replace(".pt", "_txt.pt")
                                     modelmap["text_encoder"] = (s_pipeline.text_encoder, TEXT_ENCODER_DEFAULT_TARGET_REPLACE)
                                     save_lora_weight(s_pipeline.text_encoder,
                                                      out_txt,
                                                      target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
-                                                     )
+                                                     d_type=d_type)
                                     pbar.update()
                                 if args.save_lora_for_extra_net:
                                     if args.use_lora_extended:
@@ -884,6 +892,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
         progress_bar = mytqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
         progress_bar.set_description("Steps")
         progress_bar.set_postfix(refresh=True)
+        args.revision = args.revision if isinstance(args.revision,int) else int(args.revision) if str.strip(args.revision) != "" else 0
         lifetime_step = args.revision
         lifetime_epoch = args.epoch
         status.job_count = max_train_steps
@@ -1142,12 +1151,3 @@ def main(use_txt2img: bool = True) -> TrainResult:
         return result
 
     return inner_loop()
-
-
-def torch2ify(unet):
-    if hasattr(torch, 'compile'):
-        try:
-            unet = torch.compile(unet, mode="max-autotune", fullgraph=False)
-        except:
-            pass
-    return unet

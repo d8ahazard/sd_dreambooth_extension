@@ -1,3 +1,4 @@
+import importlib
 import time
 from typing import List
 
@@ -60,6 +61,24 @@ def calc_time_left(progress, threshold, label, force_display):
         else:
             return ""
 
+
+def has_face_swap():
+    script_class = None
+    try:
+        from modules.scripts import list_scripts
+        scripts = list_scripts("scripts", ".py")
+        for script_file in scripts:
+            if script_file.filename == "batch_face_swap.py":
+                path = script_file.path
+                module_name = "batch_face_swap"
+                spec = importlib.util.spec_from_file_location(module_name, path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                script_class = module.Script
+                break
+    except Exception as f:
+        print(f"Can't check face swap: {f}")
+    return script_class is not None
 
 def check_progress_call():
     """
@@ -402,6 +421,7 @@ def on_ui_tabs():
                     with gr.Column():
                         gr.HTML("Checkpoints")
                         db_half_model = gr.Checkbox(label="Half Model", value=False)
+                        db_half_lora = gr.Checkbox(label="Half Lora", value=False)
                         db_use_subdir = gr.Checkbox(label="Save Checkpoint to Subdirectory", value=True)
                         db_save_ckpt_during = gr.Checkbox(label="Generate a .ckpt file when saving during training.")
                         db_save_ckpt_after = gr.Checkbox(label="Generate a .ckpt file when training completes.",
@@ -455,6 +475,12 @@ def on_ui_tabs():
                                                     maximum=20)
                         db_scheduler = gr.Dropdown(label='Scheduler', choices=get_scheduler_names(),
                                                    value="DEISMultistep")
+                        with gr.Column(variant="panel", visible=has_face_swap()):
+                            db_swap_faces = gr.Checkbox(label="Swap Sample Faces")
+                            db_swap_prompt = gr.Textbox(label="Swap Prompt")
+                            db_swap_negative = gr.Textbox(label="Swap Negative Prompt")
+                            db_swap_steps = gr.Slider(label="Swap Steps", value=40)
+                            db_swap_batch = gr.Slider(label="Swap Batch", value=40)
 
                         db_sample_txt2img = gr.Checkbox(label="Use txt2img", value=False)
                 with gr.Tab("Testing", elem_id="TabDebug"):
@@ -464,6 +490,7 @@ def on_ui_tabs():
                     db_tf32_enable = gr.Checkbox(label="Use TensorFloat 32", value=False)
                     db_deis_train_scheduler = gr.Checkbox(label="Use DEIS for noise scheduler", value=False)
                     db_update_extension = gr.Button(value="Update Extension and Restart")
+
                     with gr.Column(variant="panel"):
                         gr.HTML(value="Bucket Cropping")
                         db_crop_src_path = gr.Textbox(label="Source Path")
@@ -656,6 +683,7 @@ def on_ui_tabs():
             db_gradient_checkpointing,
             db_gradient_set_to_none,
             db_graph_smoothing,
+            db_half_lora,
             db_half_model,
             db_hflip,
             db_infer_ema,
@@ -997,7 +1025,13 @@ def on_ui_tabs():
                     db_sample_seed,
                     db_sample_steps,
                     db_sample_scale,
-                    db_sample_txt2img
+                    db_sample_txt2img,
+                    db_scheduler,
+                    db_swap_faces,
+                    db_swap_prompt,
+                    db_swap_negative,
+                    db_swap_steps,
+                    db_swap_batch
                     ],
             outputs=[db_gallery, db_prompt_list, db_status]
         )
