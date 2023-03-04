@@ -312,7 +312,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 ema_model = EMAModel(ema_unet, device=accelerator.device, dtype=weight_dtype)
                 del ema_unet
             else:
-                ema_model = EMAModel(unet, device=accelerator.device)
+                ema_model = EMAModel(unet, device=accelerator.device, dtype=weight_dtype)
 
         unet_lora_params = None
         text_encoder_lora_params = None
