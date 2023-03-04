@@ -106,9 +106,7 @@ class ImageBuilder:
                 revision=config.revision
             )
             self.image_pipe.enable_attention_slicing()
-            
-            # xformers does not support mps'
-            # better to say sorry that ask for permission =)
+
             xformerify(self.image_pipe)
 
             self.image_pipe.progress_bar = self.progress_bar
