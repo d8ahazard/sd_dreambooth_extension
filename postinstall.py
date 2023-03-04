@@ -314,11 +314,13 @@ def actual_install():
     except:
         pass
 
+
 def install_requirements(req_file, package_name):
     try:
+        print(f"Checking {package_name} requirements...")
         output = subprocess.check_output([sys.executable, "-m", "pip", "install", "-r", req_file], universal_newlines=True)
         pattern = re.compile(r'^((?!already satisfied).)*$', re.MULTILINE)
         filtered_output = pattern.findall(output)
-        print(f"Checking {package_name} requirements...")
+        print(filtered_output)
     except subprocess.CalledProcessError:
         print(f"Failed to install {package_name} requirements.")

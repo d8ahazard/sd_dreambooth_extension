@@ -566,7 +566,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
         total_batch_size = train_batch_size * accelerator.num_processes * gradient_accumulation_steps
         max_train_epochs = args.num_train_epochs
         # we calculate our number of tenc training epochs
-        text_encoder_epochs = round(args.num_train_epochs * stop_text_percentage)
+        text_encoder_epochs = round(max_train_epochs * stop_text_percentage)
         global_step = 0
         global_epoch = 0
         session_epoch = 0
