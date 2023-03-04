@@ -30,8 +30,7 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, db_save_image, \
         make_bucket_resolutions, get_dim, closest_resolution, open_and_trim
     from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
-    reload_system_models, \
-    get_lora_models, get_checkpoint_match, get_model_snapshots
+        reload_system_models, get_lora_models, get_checkpoint_match, get_model_snapshots
     from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printm, cleanup
     from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
