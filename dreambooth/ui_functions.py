@@ -30,8 +30,7 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, db_save_image, \
         make_bucket_resolutions, get_dim, closest_resolution, open_and_trim
     from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
-        reload_system_models, \
-        get_lora_models, get_checkpoint_match
+        reload_system_models, get_lora_models, get_checkpoint_match, get_model_snapshots
     from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printm, cleanup
     from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
@@ -66,18 +65,6 @@ def gr_update(default=None, **kwargs):
         return gradio.update(visible=True, **kwargs)
     except:
         return kwargs["value"] if "value" in kwargs else default
-
-
-def get_model_snapshot(config: DreamboothConfig):
-    snaps_dir = os.path.join(config.model_dir, "checkpoints")
-    snaps = []
-    if os.path.exists(snaps_dir):
-        for file in os.listdir(snaps_dir):
-            if os.path.isdir(os.path.join(snaps_dir, file)):
-                rev_parts = file.split("-")
-                if rev_parts[0] == "checkpoint" and len(rev_parts) == 2:
-                    snaps.append(rev_parts[1])
-    return snaps
 
 
 def training_wizard_person(model_dir):
@@ -600,26 +587,29 @@ def load_model_params(model_name):
     db_model_snapshots: A gradio dropdown containing the available snapshots for the model
     db_outcome: The result of loading model params
     """
-    data = from_file(model_name)
+    config = from_file(model_name)
     db_model_snapshots = gr_update(choices=[], value="")
-    if data is None:
+    if config is None:
         print("Can't load config!")
         msg = f"Error loading model params: '{model_name}'."
         return "", "", "", "", "", db_model_snapshots, msg
     else:
-        snaps = get_model_snapshot(data)
-        snap_selection = data.revision if str(data.revision) in snaps else ""
-        snaps.insert(0, "")
+        snaps = get_model_snapshots(config)
+        snap_selection = config.revision if str(config.revision) in snaps else ""
         db_model_snapshots = gr_update(choices=snaps, value=snap_selection)
 
+        loras = get_lora_models(config)
+        db_lora_models = gr_update(choices=loras)
+
         msg = f"Selected model: '{model_name}'."
-        return data.model_dir, \
-            data.revision, \
-            data.epoch, \
-            "True" if data.v2 else "False", \
-            "True" if data.has_ema else "False", \
-            data.src, \
+        return config.model_dir, \
+            config.revision, \
+            config.epoch, \
+            "True" if config.v2 else "False", \
+            "True" if config.has_ema else "False", \
+            config.src, \
             db_model_snapshots, \
+            db_lora_models, \
             msg
 
 

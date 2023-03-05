@@ -153,7 +153,7 @@ def actual_install():
                 # Add package name and version tuple to dictionary
                 reqs_dict[package_name] = version_tuple
 
-        checks = ["bitsandbytes", "diffusers", "transformers", "xformers"]
+        checks = ["accelerate", "bitsandbytes", "diffusers", "transformers", "xformers"]
         torch_ver = "1.13.1+cu117"
         torch_vis_ver = "0.14.1+cu117"
         xformers_ver = "0.0.17.dev464"

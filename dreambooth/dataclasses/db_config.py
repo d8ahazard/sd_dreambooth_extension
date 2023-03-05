@@ -44,7 +44,6 @@ class DreamboothConfig(BaseModel):
     gradient_checkpointing: bool = True
     gradient_set_to_none: bool = True
     graph_smoothing: int = 50
-    half_lora: bool = False
     half_model: bool = False
     train_unfrozen: bool = True
     has_ema: bool = False
@@ -95,6 +94,7 @@ class DreamboothConfig(BaseModel):
     save_lora_after: bool = True
     save_lora_cancel: bool = False
     save_lora_during: bool = True
+    save_lora_for_extra_net: bool = True
     save_preview_every: int = 5
     save_safetensors: bool = True
     save_state_after: bool = False

@@ -12,7 +12,8 @@ from extensions.sd_dreambooth_extension.dreambooth.ui_functions import performan
     training_wizard, training_wizard_person, load_model_params, ui_classifiers, debug_buckets, create_model, \
     generate_samples, load_params, start_training, update_extension, start_crop
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_names
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, \
+    get_sorted_lora_models, get_model_snapshots
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention, \
     list_floats, wrap_gpu_call, parse_logs, printm, list_optimizer
 from extensions.sd_dreambooth_extension.dreambooth.webhook import save_and_test_webhook
@@ -187,17 +188,28 @@ def on_ui_tabs():
                 with gr.Tab("Select"):
                     with gr.Row():
                         db_model_name = gr.Dropdown(label='Model', choices=sorted(get_db_models()))
-                        create_refresh_button(db_model_name, get_db_models, lambda: {
-                            "choices": sorted(get_db_models())},
-                                              "refresh_db_models")
+                        create_refresh_button(
+                            db_model_name,
+                            get_db_models,
+                            lambda: {"choices": sorted(get_db_models())},
+                            "refresh_db_models"
+                        )
                     with gr.Row():
-                        db_snapshot = gr.Dropdown(label="Snapshot to Resume")
+                        db_snapshot = gr.Dropdown(label="Snapshot to Resume", choices=sorted(get_model_snapshots()))
+                        create_refresh_button(
+                            db_snapshot,
+                            get_model_snapshots,
+                            lambda: {"choices": sorted(get_model_snapshots())},
+                            "refresh_db_snapshots"
+                        )
                     with gr.Row(visible=False) as lora_model_row:
-                        db_lora_model_name = gr.Dropdown(label='Lora Model', choices=sorted(get_lora_models()))
-                        create_refresh_button(db_lora_model_name, get_lora_models, lambda: {
-                            "choices": sorted(get_lora_models())},
-                                              "refresh_lora_models")
-
+                        db_lora_model_name = gr.Dropdown(label='Lora Model', choices=get_sorted_lora_models())
+                        create_refresh_button(
+                            db_lora_model_name,
+                            get_sorted_lora_models,
+                            lambda: {"choices": get_sorted_lora_models()},
+                            "refresh_lora_models"
+                        )
                     with gr.Row():
                         gr.HTML(value="Loaded Model:")
                         db_model_path = gr.HTML()
@@ -421,7 +433,6 @@ def on_ui_tabs():
                     with gr.Column():
                         gr.HTML("Checkpoints")
                         db_half_model = gr.Checkbox(label="Half Model", value=False)
-                        db_half_lora = gr.Checkbox(label="Half Lora", value=False)
                         db_use_subdir = gr.Checkbox(label="Save Checkpoint to Subdirectory", value=True)
                         db_save_ckpt_during = gr.Checkbox(label="Generate a .ckpt file when saving during training.")
                         db_save_ckpt_after = gr.Checkbox(label="Generate a .ckpt file when training completes.",
@@ -439,6 +450,7 @@ def on_ui_tabs():
                         db_save_lora_after = gr.Checkbox(label="Generate lora weights when training completes.",
                                                          value=True)
                         db_save_lora_cancel = gr.Checkbox(label="Generate lora weights when training is canceled.")
+                        db_save_lora_for_extra_net = gr.Checkbox(label="Generate lora weights for extra networks.")
                     with gr.Column():
                         gr.HTML("Diffusion Weights")
                         db_save_state_during = gr.Checkbox(
@@ -682,7 +694,6 @@ def on_ui_tabs():
             db_gradient_checkpointing,
             db_gradient_set_to_none,
             db_graph_smoothing,
-            db_half_lora,
             db_half_model,
             db_hflip,
             db_infer_ema,
@@ -727,6 +738,7 @@ def on_ui_tabs():
             db_save_lora_after,
             db_save_lora_cancel,
             db_save_lora_during,
+            db_save_lora_for_extra_net,
             db_save_preview_every,
             db_save_safetensors,
             db_save_state_after,
@@ -927,6 +939,7 @@ def on_ui_tabs():
                 db_has_ema,
                 db_src,
                 db_snapshot,
+                db_lora_model_name,
                 db_status
             ]
         )
