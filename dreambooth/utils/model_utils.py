@@ -8,12 +8,13 @@ import torch
 from diffusers.utils import is_xformers_available
 from transformers import PretrainedConfig
 
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
 
 try:
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
     from extensions.sd_dreambooth_extension.dreambooth import shared  # noqa
     from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup  # noqa
 except:
+    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
     from dreambooth.dreambooth import shared  # noqa
     from dreambooth.dreambooth.utils.utils import cleanup  # noqa
 
