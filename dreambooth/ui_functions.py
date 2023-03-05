@@ -267,7 +267,7 @@ def performance_wizard(model_name):
     for key in log_dict:
         msg += f"<br>{key}: {log_dict[key]}"
     return attention, gradient_checkpointing, gradient_accumulation_steps, mixed_precision, cache_latents, \
-        sample_batch_size, train_batch_size, stop_text_encoder, optimizer, use_lora, use_ema, \
+        optimizer, sample_batch_size, train_batch_size, stop_text_encoder, use_lora, use_ema, \
         save_samples_every, save_weights_every, msg
 
 # p,
