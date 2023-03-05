@@ -8,7 +8,6 @@ import torch
 from diffusers.utils import is_xformers_available
 from transformers import PretrainedConfig
 
-
 try:
     from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
     from extensions.sd_dreambooth_extension.dreambooth import shared  # noqa
