@@ -319,8 +319,8 @@ def install_requirements(req_file, package_name):
     try:
         print(f"Checking {package_name} requirements...")
         output = subprocess.check_output([sys.executable, "-m", "pip", "install", "-r", req_file], universal_newlines=True)
-        pattern = re.compile(r'^((?!already satisfied).)*$', re.MULTILINE)
-        filtered_output = pattern.findall(output)
-        print(filtered_output)
+        for line in output.split('\n'):
+            if 'already satisfied' not in line:
+                print(line)
     except subprocess.CalledProcessError:
         print(f"Failed to install {package_name} requirements.")
