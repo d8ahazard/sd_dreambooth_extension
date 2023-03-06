@@ -773,11 +773,15 @@ def main(use_txt2img: bool = True) -> TrainResult:
                                 # save extra_net
                                 if args.save_lora_for_extra_net:
                                     if args.use_lora_extended:
-                                        print("Saving extra networks lora does not work with use_lora_extended. Skipping save.")
-                                    else:
-                                        os.makedirs(shared.ui_lora_models_path, exist_ok=True)
-                                        out_safe = os.path.join(shared.ui_lora_models_path, f"{lora_file_prefix}.safetensors")
-                                        save_extra_networks(modelmap, out_safe)
+                                        import sys
+                                        has_locon = len([path for path in sys.path if 'a1111-sd-webui-locon' in path]) > 0
+                                        if not has_locon:
+                                            raise Exception(r"a1111-sd-webui-locon extension is required to save "
+                                                            r"extra net for extended lora. Please install "
+                                                            r"https://github.com/KohakuBlueleaf/a1111-sd-webui-locon")
+                                    os.makedirs(shared.ui_lora_models_path, exist_ok=True)
+                                    out_safe = os.path.join(shared.ui_lora_models_path, f"{lora_file_prefix}.safetensors")
+                                    save_extra_networks(modelmap, out_safe)
                             # package pt into checkpoint
                             if save_checkpoint:
                                 pbar.set_description("Compiling Checkpoint")
