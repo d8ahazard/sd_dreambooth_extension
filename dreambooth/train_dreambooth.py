@@ -773,9 +773,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                                 # save extra_net
                                 if args.save_lora_for_extra_net:
                                     if args.use_lora_extended:
-                                        import sys
-                                        has_locon = len([path for path in sys.path if 'a1111-sd-webui-locon' in path]) > 0
-                                        if not has_locon:
+                                        if not os.path.exists(os.path.join(shared.script_path, "extensions", "a1111-sd-webui-locon")):
                                             raise Exception(r"a1111-sd-webui-locon extension is required to save "
                                                             r"extra net for extended lora. Please install "
                                                             r"https://github.com/KohakuBlueleaf/a1111-sd-webui-locon")
