@@ -28,7 +28,6 @@ from diffusers.pipelines.paint_by_example import PaintByExampleImageEncoder
 from huggingface_hub import HfApi, hf_hub_download
 from omegaconf import OmegaConf
 
-from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_class
 
 try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
@@ -37,12 +36,15 @@ try:
         enable_safe_unpickle
     from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_class
+
 except:
     from dreambooth.dreambooth import shared  # noqa
     from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
     from dreambooth.dreambooth.utils.model_utils import get_db_models, disable_safe_unpickle, enable_safe_unpickle  # noqa
     from dreambooth.dreambooth.utils.utils import printi  # noqa
     from dreambooth.helpers.mytqdm import mytqdm  # noqa
+    from dreambooth.dreambooth.utils.image_utils import get_scheduler_class # noqa
 
 from diffusers import (
     AutoencoderKL,

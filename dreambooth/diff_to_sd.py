@@ -26,7 +26,7 @@ try:
     from extensions.sd_dreambooth_extension.lora_diffusion.lora import merge_lora_to_model
 except:
     from dreambooth.dreambooth import shared as shared  # noqa
-    from dreambooth.dreambooth.dataclasses.db_config import from_file  # noqa
+    from dreambooth.dreambooth.dataclasses.db_config import from_file, DreamboothConfig  # noqa
     from dreambooth.dreambooth.shared import status  # noqa
     from dreambooth.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
         disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path  # noqa
