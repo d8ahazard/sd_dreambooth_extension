@@ -5,14 +5,15 @@ from typing import List, Dict
 
 from pydantic import BaseModel
 
-from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_names
-
 try:
     from extensions.sd_dreambooth_extension.dreambooth import shared
     from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_names
+
 except:
     from dreambooth.dreambooth import shared  # noqa
     from dreambooth.dreambooth.dataclasses.db_concept import Concept  # noqa
+    from dreambooth.dreambooth.utils.image_utils import get_scheduler_names # noqa
 
 # Keys to save, replacing our dumb __init__ method
 save_keys = []
@@ -44,7 +45,6 @@ class DreamboothConfig(BaseModel):
     gradient_checkpointing: bool = True
     gradient_set_to_none: bool = True
     graph_smoothing: int = 50
-    half_lora: bool = False
     half_model: bool = False
     train_unfrozen: bool = True
     has_ema: bool = False
@@ -95,6 +95,7 @@ class DreamboothConfig(BaseModel):
     save_lora_after: bool = True
     save_lora_cancel: bool = False
     save_lora_during: bool = True
+    save_lora_for_extra_net: bool = True
     save_preview_every: int = 5
     save_safetensors: bool = True
     save_state_after: bool = False
@@ -145,14 +146,6 @@ class DreamboothConfig(BaseModel):
         self.src = src
         self.scheduler = "ddim"
         self.v2 = v2
-
-        # Naive fixes for bad types
-        if not isinstance(self.lora_model_name, str):
-            print("Bad lora_model_name found, setting to ''")
-            self.lora_model_name = ''
-        if not isinstance(self.stop_text_encoder, float):
-            print("Bad stop_text_encoder found, setting to 0.0")
-            self.stop_text_encoder = 0.0
 
     # Actually save as a file
     def save(self, backup=False):

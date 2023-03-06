@@ -32,14 +32,12 @@ class ClassDataset(Dataset):
         # Data for new prompts to generate
         self.new_prompts = {}
         self.required_prompts = 0
-        # Calculate minimum width
-        min_width = (int(max_width * 0.28125) // 64) * 64
 
         # Thingy to build prompts
         text_getter = FilenameTextGetter(shuffle)
 
         # Create available resolutions
-        bucket_resos = make_bucket_resolutions(max_width, min_width)
+        bucket_resos = make_bucket_resolutions(max_width)
         c_idx = 0
         c_images = {}
         i_images = {}

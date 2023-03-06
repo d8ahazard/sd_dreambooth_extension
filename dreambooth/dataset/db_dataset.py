@@ -153,7 +153,7 @@ class DbDataset(torch.utils.data.Dataset):
                 self.caption_cache[image_path] = input_ids
         return caption, input_ids
 
-    def make_buckets_with_caching(self, vae, min_size):
+    def make_buckets_with_caching(self, vae):
         self.vae = vae
         self.cache_latents = vae is not None
         state = f"Preparing Dataset ({'With Caching' if self.cache_latents else 'Without Caching'})"
@@ -161,7 +161,7 @@ class DbDataset(torch.utils.data.Dataset):
         status.textinfo = state
 
         # Create a list of resolutions
-        bucket_resos = make_bucket_resolutions(self.resolution, min_size)
+        bucket_resos = make_bucket_resolutions(self.resolution)
         self.train_dict = {}
 
         def sort_images(img_data: List[PromptData], resos, target_dict, is_class_img):

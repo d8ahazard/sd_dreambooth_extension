@@ -45,6 +45,7 @@ try:
     from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
     from extensions.sd_dreambooth_extension.helpers.ema_model import EMAModel
     from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+    from extensions.sd_dreambooth_extension.lora_diffusion.extra_networks import save_extra_networks
     from extensions.sd_dreambooth_extension.lora_diffusion.lora import save_lora_weight, \
         TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
     from extensions.sd_dreambooth_extension.dreambooth.deis_velocity import get_velocity
@@ -67,6 +68,7 @@ except:
     from dreambooth.dreambooth.xattention import optim_to  # noqa
     from dreambooth.helpers.ema_model import EMAModel  # noqa
     from dreambooth.helpers.mytqdm import mytqdm  # noqa
+    from dreambooth.lora_diffusion.extra_networks import save_extra_networks  # noqa
     from dreambooth.lora_diffusion.lora import save_lora_weight, TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module  # noqa
 
 logger = logging.getLogger(__name__)
@@ -241,21 +243,12 @@ def main(use_txt2img: bool = True) -> TrainResult:
         vae = create_vae()
         printm("Created vae")
 
-        try:
-            unet = UNet2DConditionModel.from_pretrained(
-                args.pretrained_model_name_or_path,
-                subfolder="unet",
-                revision=args.revision,
-                torch_dtype=torch.float32
-            )
-        except:
-            unet = UNet2DConditionModel.from_pretrained(
-                args.pretrained_model_name_or_path,
-                subfolder="unet",
-                revision=args.revision,
-                torch_dtype=torch.float16
-            )
-            unet = unet.to(dtype=torch.float32)
+        unet = UNet2DConditionModel.from_pretrained(
+            args.pretrained_model_name_or_path,
+            subfolder="unet",
+            revision=args.revision,
+            torch_dtype=torch.float32
+        )
         unet = torch2ify(unet)
 
         # Check that all trainable models are in full precision
@@ -329,7 +322,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
         if args.use_lora:
             unet.requires_grad_(False)
             if args.lora_model_name:
-                lora_path = os.path.join(shared.models_path, "lora", args.lora_model_name)
+                lora_path = os.path.join(args.model_dir, "loras", args.lora_model_name)
                 lora_txt = lora_path.replace(".pt", "_txt.pt")
 
                 if not os.path.exists(lora_path) or not os.path.isfile(lora_path):
@@ -716,8 +709,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     requires_safety_checker=None
                 )
                 scheduler_class = get_scheduler_class(args.scheduler)
-                s_pipeline.unet = torch2ify(s_pipeline.unet)
                 s_pipeline.enable_attention_slicing()
+                s_pipeline.unet = torch2ify(s_pipeline.unet)
                 xformerify(s_pipeline)
 
                 s_pipeline.scheduler = scheduler_class.from_config(s_pipeline.scheduler.config)
@@ -735,6 +728,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                         pbar.update()
                         try:
                             out_file = None
+                            # Loras resume from pt
                             if not args.use_lora:
                                 if save_snapshot:
                                     pbar.set_description("Saving Snapshot")
@@ -756,27 +750,43 @@ def main(use_txt2img: bool = True) -> TrainResult:
 
                             elif save_lora:
                                 pbar.set_description("Saving Lora Weights...")
+                                # setup directory
+                                loras_dir = os.path.join(args.model_dir, "loras")
+                                os.makedirs(loras_dir, exist_ok=True)
+                                # setup pt path
                                 lora_model_name = args.model_name if args.custom_model_name == "" else args.custom_model_name
-                                model_dir = os.path.dirname(shared.lora_models_path)
-                                out_file = os.path.join(model_dir, "lora")
-                                os.makedirs(out_file, exist_ok=True)
-                                out_file = os.path.join(out_file, f"{lora_model_name}_{args.revision}.pt")
+                                lora_file_prefix = f"{lora_model_name}_{args.revision}"
+                                out_file = os.path.join(loras_dir, f"{lora_file_prefix}.pt")
+                                # create pt
                                 tgt_module = get_target_module("module", args.use_lora_extended)
-                                d_type = torch.float16 if args.half_lora else torch.float32
+                                save_lora_weight(s_pipeline.unet, out_file, tgt_module)
 
-                                save_lora_weight(s_pipeline.unet, out_file, tgt_module, d_type=d_type)
+                                modelmap = {"unet": (s_pipeline.unet, tgt_module)}
+                                # save text_encoder
                                 if stop_text_percentage != 0:
                                     out_txt = out_file.replace(".pt", "_txt.pt")
+                                    modelmap["text_encoder"] = (s_pipeline.text_encoder, TEXT_ENCODER_DEFAULT_TARGET_REPLACE)
                                     save_lora_weight(s_pipeline.text_encoder,
                                                      out_txt,
-                                                     target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
-                                                     d_type=d_type)
+                                                     target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE)
                                     pbar.update()
-
+                                # save extra_net
+                                if args.save_lora_for_extra_net:
+                                    if args.use_lora_extended:
+                                        import sys
+                                        has_locon = len([path for path in sys.path if 'a1111-sd-webui-locon' in path]) > 0
+                                        if not has_locon:
+                                            raise Exception(r"a1111-sd-webui-locon extension is required to save "
+                                                            r"extra net for extended lora. Please install "
+                                                            r"https://github.com/KohakuBlueleaf/a1111-sd-webui-locon")
+                                    os.makedirs(shared.ui_lora_models_path, exist_ok=True)
+                                    out_safe = os.path.join(shared.ui_lora_models_path, f"{lora_file_prefix}.safetensors")
+                                    save_extra_networks(modelmap, out_safe)
+                            # package pt into checkpoint
                             if save_checkpoint:
                                 pbar.set_description("Compiling Checkpoint")
                                 snap_rev = str(args.revision) if save_snapshot else ""
-                                compile_checkpoint(args.model_name, reload_models=False, lora_path=out_file, log=False,
+                                compile_checkpoint(args.model_name, reload_models=False, lora_file_name=out_file, log=False,
                                                    snap_rev=snap_rev)
                                 pbar.update()
                                 printm("Restored, moved to acc.device.")

@@ -347,6 +347,7 @@ let db_titles = {
     "Generate a .ckpt file when saving during training.": "When enabled, a checkpoint will be generated at the specified epoch intervals while training is active. This also controls manual generation using the 'save weights' button while training is active.",
     "Generate a .ckpt file when training completes.": "When enabled, a checkpoint will be generated when training completes successfully.",
     "Generate a .ckpt file when training is cancelled.": "When enabled, a checkpoint will be generated when training is cancelled by the user.",
+    "Generate lora weights Generate lora weights for additional networks.": "When enabled, a lora .safetensors file will be generated in the ui lora model directory that is compatible with additional networks. Not compatible with extended lora.",
     "Generate lora weights when saving during training.": "When enabled, lora .pt files will be generated at each specified epoch interval during training. This also affects whether .pt files will be generated when manually clicking the 'Save Weights' button.",
     "Generate lora weights when training completes.": "When enabled, lora .pt files will be generated when training completes.",
     "Generate lora weights when training is canceled.": "When enabled, lora .pt files will be generated when training is cancelled by the user.",

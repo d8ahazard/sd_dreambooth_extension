@@ -357,7 +357,7 @@ def save_lora_weight(
         path="./lora.pt",
         target_replace_module=None,
         save_safetensors: bool = False,
-        d_type: dtype = torch.float16
+        d_type: dtype = torch.float32
 ):
     if target_replace_module is None:
         target_replace_module = DEFAULT_TARGET_REPLACE

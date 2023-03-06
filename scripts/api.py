@@ -597,11 +597,13 @@ def dreambooth_api(_, app: FastAPI):
     @app.get("/dreambooth/models_lora")
     async def get_models_lora(
             api_key: str = Query("", description="If an API key is set, this must be present."),
+            model_name: str = Query(description="The model name to query for lora files."),
     ) -> JSONResponse:
         """
 
         Args:
             api_key: API Key.
+            model_name: The model name to query for lora files.
 
         Returns: A list of LoRA Models.
 
@@ -609,7 +611,12 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        models = get_lora_models()
+
+        config = from_file(model_name)
+        if model_name and config is None:
+            return JSONResponse("Config not found")
+
+        models = get_lora_models(config)
         return JSONResponse(models)
 
     @app.get("/dreambooth/samples")
