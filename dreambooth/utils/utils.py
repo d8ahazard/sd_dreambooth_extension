@@ -14,7 +14,7 @@ import pandas as pd
 from packaging import version
 from pandas.plotting._matplotlib.style import get_standard_colors
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import torch
 from PIL import Image
 from huggingface_hub import HfFolder, whoami
@@ -56,9 +56,10 @@ def sanitize_name(name):
 
 def printm(msg=""):
     from extensions.sd_dreambooth_extension.dreambooth import shared
+
     if shared.debug:
-        allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
-        cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
+        allocated = round(torch.cuda.memory_allocated(0) / 1024**3, 1)
+        cached = round(torch.cuda.memory_reserved(0) / 1024**3, 1)
         print(f"{msg}({allocated}/{cached})")
 
 
@@ -69,7 +70,7 @@ def cleanup(do_print: bool = False):
             torch.cuda.ipc_collect()
         gc.collect()
     except:
-        print('cleanup exception')
+        print("cleanup exception")
     if do_print:
         print("Cleanup completed.")
 
@@ -80,7 +81,10 @@ def xformers_check():
 
     USE_TF = os.environ.get("USE_TF", "AUTO").upper()
     USE_TORCH = os.environ.get("USE_TORCH", "AUTO").upper()
-    if USE_TORCH in ENV_VARS_TRUE_AND_AUTO_VALUES and USE_TF not in ENV_VARS_TRUE_VALUES:
+    if (
+        USE_TORCH in ENV_VARS_TRUE_AND_AUTO_VALUES
+        and USE_TF not in ENV_VARS_TRUE_VALUES
+    ):
         _torch_available = importlib.util.find_spec("torch") is not None
 
         if _torch_available:
@@ -96,6 +100,7 @@ def xformers_check():
         _xformers_version = importlib_metadata.version("xformers")
         if _torch_available:
             import torch
+
             if version.Version(torch.__version__) < version.Version("1.12"):
                 raise ValueError("PyTorch should be >= 1.12")
         has_xformers = True
@@ -106,9 +111,36 @@ def xformers_check():
 
 
 def list_optimizer():
+    array = ["8Bit Adam"]
+    try:
+        from dadaptation import DAdaptAdam
+
+        array.append("Adam Dadapt")
+        return array
+
+    except:
+        return array
+
+    try:
+        from dadaptation import DAdaptSGD
+
+        array.append("SGD Dadapt")
+        return array
+    except:
+        return array
+
+    try:
+        from dadaptation import DAdaptAdaGrad
+
+        array.append("Adagrad Dadapt")
+        return array
+    except:
+        return array
+
     try:
         from lion_pytorch import Lion
-        return ["8Bit Adam", "Lion"]
+
+        array.append("Lion")
     except:
         return ["8Bit Adam"]
 
@@ -116,6 +148,7 @@ def list_optimizer():
 def list_attention():
     has_xformers = xformers_check()
     import diffusers.utils
+
     diffusers.utils.is_xformers_available = xformers_check
     if has_xformers:
         return ["default", "xformers"]
@@ -150,7 +183,10 @@ def wrap_gpu_call(func, extra_outputs=None):
             arg_str = f"Arguments: {str(args)} {str(kwargs)}"
             print(arg_str[:max_debug_str_len], file=sys.stderr)
             if len(arg_str) > max_debug_str_len:
-                print(f"(Argument list truncated at {max_debug_str_len}/{len(arg_str)} characters)", file=sys.stderr)
+                print(
+                    f"(Argument list truncated at {max_debug_str_len}/{len(arg_str)} characters)",
+                    file=sys.stderr,
+                )
 
             print(traceback.format_exc(), file=sys.stderr)
 
@@ -158,16 +194,20 @@ def wrap_gpu_call(func, extra_outputs=None):
             status.job_count = 0
 
             if extra_outputs_array is None:
-                extra_outputs_array = [None, '']
+                extra_outputs_array = [None, ""]
 
-            res = extra_outputs_array + [f"<div class='error'>{html.escape(type(e).__name__ + ': ' + str(e))}</div>"]
+            res = extra_outputs_array + [
+                f"<div class='error'>{html.escape(type(e).__name__ + ': ' + str(e))}</div>"
+            ]
 
         return res
 
     return f
 
 
-def get_full_repo_name(model_id: str, organization: Optional[str] = None, token: Optional[str] = None):
+def get_full_repo_name(
+    model_id: str, organization: Optional[str] = None, token: Optional[str] = None
+):
     if token is None:
         token = HfFolder.get_token()
     if organization is None:
@@ -194,9 +234,9 @@ class PlotDefinition:
 
 
 def plot_multi_alt(
-        data: pd.DataFrame,
-        plot_definition: PlotDefinition,
-        spacing: float = 0.1,
+    data: pd.DataFrame,
+    plot_definition: PlotDefinition,
+    spacing: float = 0.1,
 ):
     styles = ["-", ":", "--", "-."]
     colors = get_standard_colors(num_colors=7)
@@ -205,17 +245,19 @@ def plot_multi_alt(
     for i, yi in enumerate(plot_definition.y_axis):
         if len(yi.columns) > len(styles):
             raise ValueError(
-                f"Maximum {len(styles)} traces per yaxis allowed. If we want to allow this we need to add some logic.")
+                f"Maximum {len(styles)} traces per yaxis allowed. If we want to allow this we need to add some logic."
+            )
         if i > len(colors):
             raise ValueError(
-                f"Maximum {len(colors)} yaxis axis allowed. If we want to allow this we need to add some logic.")
+                f"Maximum {len(colors)} yaxis axis allowed. If we want to allow this we need to add some logic."
+            )
 
         if i == 0:
             ax = data.plot(
                 x=plot_definition.x_axis,
                 y=yi.columns,
                 title=plot_definition.title,
-                color=[loss_color] * len(yi.columns)
+                color=[loss_color] * len(yi.columns),
             )
             ax.set_ylabel(ylabel=yi.name)
 
@@ -227,7 +269,7 @@ def plot_multi_alt(
                 ax=ax_new,
                 x=plot_definition.x_axis,
                 y=yi.columns,
-                color=[avg_colors[yl] for yl in range(len(yi.columns))]
+                color=[avg_colors[yl] for yl in range(len(yi.columns))],
             )
             ax_new.set_ylabel(ylabel=yi.name)
 
@@ -237,11 +279,11 @@ def plot_multi_alt(
 
 
 def plot_multi(
-        data: pd.DataFrame,
-        x: Union[str, None] = None,
-        y: Union[List[str], None] = None,
-        spacing: float = 0.1,
-        **kwargs
+    data: pd.DataFrame,
+    x: Union[str, None] = None,
+    y: Union[List[str], None] = None,
+    spacing: float = 0.1,
+    **kwargs,
 ) -> matplotlib.axes.Axes:
     """Plot multiple Y axes on the same chart with same x axis.
 
@@ -286,9 +328,7 @@ def plot_multi(
         # Multiple y-axes
         ax_new = ax.twinx()
         ax_new.spines["right"].set_position(("axes", 1 + spacing * (i - 1)))
-        data.plot(
-            ax=ax_new, x=x, y=y[i], color=colors[i % len(colors)], **kwargs
-        )
+        data.plot(ax=ax_new, x=x, y=y[i], color=colors[i % len(colors)], **kwargs)
         ax_new.set_ylabel(ylabel=y[i])
 
         # Proper legend position
@@ -336,7 +376,12 @@ def parse_logs(model_name: str, for_ui: bool = False):
             import tensorflow
         except:
             print("Unable to import tensorflow")
-            return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events), has_all
+            return (
+                pd.DataFrame(loss_events),
+                pd.DataFrame(lr_events),
+                pd.DataFrame(ram_events),
+                has_all,
+            )
 
         serialized_examples = tensorflow.data.TFRecordDataset(filepath)
 
@@ -360,8 +405,13 @@ def parse_logs(model_name: str, for_ui: bool = False):
         has_all = True
         for le in loss_events:
             lr = next((item for item in lr_events if item["Step"] == le["Step"]), None)
-            instance_loss = next((item for item in instance_loss_events if item["Step"] == le["Step"]), None)
-            prior_loss = next((item for item in prior_loss_events if item["Step"] == le["Step"]), None)
+            instance_loss = next(
+                (item for item in instance_loss_events if item["Step"] == le["Step"]),
+                None,
+            )
+            prior_loss = next(
+                (item for item in prior_loss_events if item["Step"] == le["Step"]), None
+            )
             if lr is not None and instance_loss is not None and prior_loss is not None:
                 le["LR"] = lr["Value"]
                 le["Loss"] = le["Value"]
@@ -373,7 +423,12 @@ def parse_logs(model_name: str, for_ui: bool = False):
         if has_all:
             loss_events = merged_events
 
-        return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events), has_all
+        return (
+            pd.DataFrame(loss_events),
+            pd.DataFrame(lr_events),
+            pd.DataFrame(ram_events),
+            has_all,
+        )
 
     def parse_tfevent(tfevent):
         return {
@@ -383,14 +438,17 @@ def parse_logs(model_name: str, for_ui: bool = False):
             "Value": float(tfevent.summary.value[0].simple_value),
         }
 
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import (
+        from_file,
+    )
+
     model_config = from_file(model_name)
     if model_config is None:
         print("Unable to load model config!")
         return None
     smoothing_window = int(model_config.graph_smoothing)
     root_dir = os.path.join(model_config.model_dir, "logging", "dreambooth")
-    columns_order = ['Wall_time', 'Name', 'Step', 'Value']
+    columns_order = ["Wall_time", "Name", "Step", "Value"]
 
     out_loss = []
     out_lr = []
@@ -401,7 +459,9 @@ def parse_logs(model_name: str, for_ui: bool = False):
             if "events.out.tfevents" not in filename:
                 continue
             file_full_path = os.path.join(root, filename)
-            converted_loss, converted_lr, converted_ram, merged = convert_tfevent(file_full_path)
+            converted_loss, converted_lr, converted_ram, merged = convert_tfevent(
+                file_full_path
+            )
             out_loss.append(converted_loss)
             out_lr.append(converted_lr)
             out_ram.append(converted_ram)
@@ -410,14 +470,27 @@ def parse_logs(model_name: str, for_ui: bool = False):
 
     loss_columns = columns_order
     if has_all_lr:
-        loss_columns = ['Wall_time', 'Name', 'Step', 'Loss', "LR", "Instance_Loss", "Prior_Loss"]
+        loss_columns = [
+            "Wall_time",
+            "Name",
+            "Step",
+            "Loss",
+            "LR",
+            "Instance_Loss",
+            "Prior_Loss",
+        ]
     # Concatenate (and sort) all partial individual dataframes
     all_df_loss = pd.concat(out_loss)[loss_columns]
     all_df_loss = all_df_loss.fillna(
-        method="ffill")  # since we do not use the standard dreambooth algorithm it's possible to have NaN for instance or prior loss -> forward fill
+        method="ffill"
+    )  # since we do not use the standard dreambooth algorithm it's possible to have NaN for instance or prior loss -> forward fill
     all_df_loss = all_df_loss.sort_values("Wall_time")
     all_df_loss = all_df_loss.reset_index(drop=True)
-    sw = int(smoothing_window if smoothing_window < len(all_df_loss) / 3 else len(all_df_loss) / 3)
+    sw = int(
+        smoothing_window
+        if smoothing_window < len(all_df_loss) / 3
+        else len(all_df_loss) / 3
+    )
     all_df_loss = all_df_loss.rolling(sw).mean(numeric_only=True)
 
     out_images = []
@@ -434,9 +507,8 @@ def parse_logs(model_name: str, for_ui: bool = False):
                 y_axis=[
                     YAxis(name="LR", columns=["LR"]),
                     YAxis(name="Loss", columns=["Instance_Loss", "Prior_Loss", "Loss"]),
-
-                ]
-            )
+                ],
+            ),
         )
         loss_name = "Loss Average/Learning Rate"
     else:
@@ -447,7 +519,9 @@ def parse_logs(model_name: str, for_ui: bool = False):
         all_df_lr = all_df_lr.reset_index(drop=True)
         all_df_lr = all_df_lr.rolling(smoothing_window).mean(numeric_only=True)
         plotted_lr = all_df_lr.plot(x="Step", y="Value", title="Learning Rate")
-        lr_img = os.path.join(model_config.model_dir, "logging", f"lr_plot_{model_config.revision}.png")
+        lr_img = os.path.join(
+            model_config.model_dir, "logging", f"lr_plot_{model_config.revision}.png"
+        )
         plotted_lr.figure.savefig(lr_img)
         log_lr = Image.open(lr_img)
         out_images.append(log_lr)
@@ -455,7 +529,9 @@ def parse_logs(model_name: str, for_ui: bool = False):
 
     status.job_no = 2
     status.textinfo = "Saving graph data..."
-    loss_img = os.path.join(model_config.model_dir, "logging", f"loss_plot_{model_config.revision}.png")
+    loss_img = os.path.join(
+        model_config.model_dir, "logging", f"loss_plot_{model_config.revision}.png"
+    )
     printm(f"Saving {loss_img}")
     plotted_loss.figure.savefig(loss_img)
 
@@ -469,7 +545,9 @@ def parse_logs(model_name: str, for_ui: bool = False):
         all_df_ram = all_df_ram.rolling(smoothing_window).mean(numeric_only=True)
         plotted_ram = all_df_ram.plot(x="Step", y="Value", title="VRAM Usage")
 
-        ram_img = os.path.join(model_config.model_dir, "logging", f"ram_plot_{model_config.revision}.png")
+        ram_img = os.path.join(
+            model_config.model_dir, "logging", f"ram_plot_{model_config.revision}.png"
+        )
         printm(f"Saving {ram_img}")
         plotted_ram.figure.savefig(ram_img)
         out_images.append(ram_img)
