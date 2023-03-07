@@ -15,17 +15,19 @@ from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, \
     get_sorted_lora_models, get_model_snapshots
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention, \
-    list_floats, wrap_gpu_call, parse_logs, printm, list_optimizer
+    list_floats, wrap_gpu_call, printm, list_optimizer
 from extensions.sd_dreambooth_extension.dreambooth.webhook import save_and_test_webhook
 from extensions.sd_dreambooth_extension.helpers.version_helper import check_updates
 from modules import script_callbacks, sd_models
 from modules.ui import gr_show, create_refresh_button
+from extensions.sd_dreambooth_extension.helpers.log_parser import LogParser
 
 params_to_save = []
 params_to_load = []
 refresh_symbol = '\U0001f504'  # 🔄
 delete_symbol = '\U0001F5D1'  # 🗑️
 update_symbol = '\U0001F51D'  # 🠝
+log_parser = LogParser()
 
 
 def get_sd_models():
@@ -956,7 +958,7 @@ def on_ui_tabs():
 
         db_generate_graph.click(
             _js="db_start_logs",
-            fn=parse_logs,
+            fn=log_parser.parse_logs,
             inputs=[db_model_name, gr.Checkbox(value=True, visible=False)],
             outputs=[db_gallery, db_prompt_list]
         )
