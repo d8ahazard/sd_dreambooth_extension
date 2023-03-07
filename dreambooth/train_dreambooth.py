@@ -318,7 +318,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     revision=args.revision,
                     torch_dtype=torch.float32
                 )
-                xformerify(ema_unet)
+                if args.attention == "xformers" and not shared.force_cpu:
+                    xformerify(ema_unet)
 
                 ema_model = EMAModel(ema_unet, device=accelerator.device, dtype=weight_dtype)
                 del ema_unet
@@ -736,7 +737,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 scheduler_class = get_scheduler_class(args.scheduler)
                 s_pipeline.enable_attention_slicing()
                 s_pipeline.unet = torch2ify(s_pipeline.unet)
-                xformerify(s_pipeline)
+                if args.attention == "xformers" and not shared.force_cpu:
+                    xformerify(s_pipeline)
 
                 s_pipeline.scheduler = scheduler_class.from_config(s_pipeline.scheduler.config)
                 if "UniPC" in args.scheduler:
@@ -923,8 +925,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
         last_tenc = 0 < text_encoder_epochs
         if stop_text_percentage == 0:
             last_tenc = False
-            
-        optim_to(torch, profiler, optimizer, accelerator.device)
+
         for epoch in range(first_epoch, max_train_epochs):
             if training_complete:
                 print("Training complete, breaking epoch.")
