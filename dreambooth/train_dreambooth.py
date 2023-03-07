@@ -195,7 +195,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
             )
 
             # get the tracker object for TensorBoard
-            tracker = Accelerator.get_tracker("tensorboard")
+            tracker = accelerator.get_tracker("tensorboard")
 
             # set the SummaryWriter object as the tracker's writer
             tracker.writer = FileWriter(writer.get_logdir())
