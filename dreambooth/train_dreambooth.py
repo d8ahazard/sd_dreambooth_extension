@@ -186,19 +186,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
             run_name = "dreambooth.events"
             max_log_size = 250*1024  # specify the maximum log size
 
-            # create a SummaryWriter object with max_queue and flush_secs arguments
-            writer = SummaryWriter(
-                log_dir=logging_dir,
-                filename_suffix=run_name,
-                max_queue=max_log_size,
-                flush_secs=30  # how often to flush the pending events to disk (in seconds)
-            )
 
-            # get the tracker object for TensorBoard
-            tracker = accelerator.get_tracker("tensorboard")
-
-            # set the SummaryWriter object as the tracker's writer
-            tracker.writer = FileWriter(writer.get_logdir())
         except Exception as e:
             if "AcceleratorState" in str(e):
                 msg = "Change in precision detected, please restart the webUI entirely to use new precision."
@@ -576,7 +564,21 @@ def main(use_txt2img: bool = True) -> TrainResult:
         # We need to initialize the trackers we use, and also store our configuration.
         # The trackers will initialize automatically on the main process.
         if accelerator.is_main_process:
+            # create a SummaryWriter object with max_queue and flush_secs arguments
+            writer = SummaryWriter(
+                log_dir=logging_dir,
+                filename_suffix=run_name,
+                max_queue=max_log_size,
+                flush_secs=30  # how often to flush the pending events to disk (in seconds)
+            )
+
             accelerator.init_trackers("dreambooth")
+            # get the tracker object for TensorBoard
+            tracker = accelerator.get_tracker("tensorboard")
+
+            # set the SummaryWriter object as the tracker's writer
+            tracker.writer = FileWriter(writer.get_logdir())
+
 
         # Train!
         total_batch_size = train_batch_size * accelerator.num_processes * gradient_accumulation_steps
