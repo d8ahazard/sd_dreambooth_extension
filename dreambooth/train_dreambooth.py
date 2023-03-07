@@ -923,6 +923,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
         last_tenc = 0 < text_encoder_epochs
         if stop_text_percentage == 0:
             last_tenc = False
+            
+        optim_to(torch, profiler, optimizer, accelerator.device)
         for epoch in range(first_epoch, max_train_epochs):
             if training_complete:
                 print("Training complete, breaking epoch.")
