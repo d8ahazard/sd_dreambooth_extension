@@ -358,7 +358,7 @@ let db_titles = {
     "Gradient Accumulation Steps": "Number of updates steps to accumulate before performing a backward/update pass. You should try to make this the same as your batch size.",
     "Gradient Checkpointing": "This is a technique to reduce memory usage by clearing activations of certain layers and recomputing them during a backward pass. Effectively, this trades extra computation time for reduced memory usage.",
     "Graph Smoothing Steps": "How many timesteps to smooth graph data over. A lower value means a more jagged graph with more information, higher value will make things prettier but slightly less accurate.",
-    "Growth Rate": "Prevent the D estimate from growing faster than this multiplicative rate. "
+    "Growth Rate": "Prevent the D estimate from growing faster than this multiplicative rate",
     "Half Model": "Enable this to generate model with fp16 precision. Results in a smaller checkpoint with minimal loss in quality.",
     "HuggingFace Token": "Your huggingface token to use for cloning files.",
     "Instance Prompt": "A prompt describing the subject. Use [Filewords] to parse image filename/.txt to insert existing prompt here.",
