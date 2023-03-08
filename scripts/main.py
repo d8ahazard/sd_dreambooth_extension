@@ -441,9 +441,6 @@ def on_ui_tabs():
                             "polynomial",
                             "constant",
                             "constant_with_warmup",
-                            "sgd_with_dadaptation",
-                            "adam_with_dadaptation",
-                            "adagrad_with_dadaptation",
                         ]
                         with gr.Column():
                             gr.HTML(value="Learning Rate")
@@ -485,6 +482,48 @@ def on_ui_tabs():
                                 step=0.05,
                                 visible=False,
                             )
+
+                            #Dadaptation params only visible if with Dadaptation optimizer selected
+                            #Hide all other scheduler params and scheduler dropdown
+                            db_adaptation_growth_rate = gr.Number(
+                                label="Adaptation Growth Rate",
+                                value=1e-8,
+                                precision=1,
+                                visible=False,
+                            )
+
+                            db_adaptation_d0 = gr.Number(
+                                label="Adaptation D0",
+                                value=1e-8,
+                                precision=1,
+                                visible=False,
+                            )
+                            db_adaptation_eps= gr.Number(
+                                label="Adaptation Eps",
+                                value=1e-8,
+                                precision=1,
+                                visible=False,
+                            )
+
+                            db_adaptation_momentum = gr.Number(
+                                label="Adaptation Momentum",
+                                value=0,
+                                precision=1,
+                                visible=False,
+                            )
+                            db_adaptation_beta1 = gr.Number(
+                                label="Adaptation Beta1",
+                                value=0,
+                                precision=1,
+                                visible=False,
+                            )
+                            db_adaptation_beta2 = gr.Number(
+                                label="Adaptation Beta2",
+                                value=0,
+                                precision=1,
+                                visible=False,
+                            )
+
                             with gr.Row(visible=False) as lora_lr_row:
                                 db_lora_learning_rate = gr.Number(
                                     label="Lora UNET Learning Rate", value=2e-4
@@ -623,7 +662,7 @@ def on_ui_tabs():
                                         step=1,
                                     )
                                     db_adamw_weight_decay = gr.Slider(
-                                        label="AdamW Weight Decay",
+                                        label="Weight Decay",
                                         minimum=0,
                                         maximum=1,
                                         step=1e-7,
@@ -1167,6 +1206,11 @@ def on_ui_tabs():
 
         # List of all the things that we need to save
         params_to_save = [
+            db_adaptation_d0,
+            db_adaptation_eps,
+            db_adaptation_betas = Tuple[db_adaptation_beta1, db_adaptation_beta2]
+            db_adaptation_momentum,
+            db_adaptation_growth_rate,
             db_model_name,
             db_attention,
             db_cache_latents,
