@@ -22,14 +22,15 @@ def sanitize_name(name):
 
 
 class DreamboothConfig(BaseModel):
+    # These properties MUST be sorted alphabetically
     adamw_weight_decay: float = 0.01
-    attention: str = "xformers"
     adaptation_beta1: int = 0
     adaptation_beta2: int = 0
     adaptation_d0: float = 1e-8
     adaptation_eps: float = 1e-8
     adaptation_growth_rate: float = 1e-8
     adaptation_momentum: int = 0
+    attention: str = "xformers"
     cache_latents: bool = True
     clip_skip: int = 1
     concepts_list: List[Dict] = []

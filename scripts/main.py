@@ -1189,14 +1189,15 @@ def on_ui_tabs():
         global params_to_load
 
         # List of all the things that we need to save
+        # db_model_name must be first due to save_config() parsing
         params_to_save = [
-            db_model_name,  # must be first due to save_config() parsing
-            db_adaptation_d0,
-            db_adaptation_eps,
+            db_model_name,
             db_adaptation_beta1,
             db_adaptation_beta2,
-            db_adaptation_momentum,
+            db_adaptation_d0,
+            db_adaptation_eps,
             db_adaptation_growth_rate,
+            db_adaptation_momentum,
             db_attention,
             db_cache_latents,
             db_clip_skip,
