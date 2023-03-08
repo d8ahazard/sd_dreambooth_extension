@@ -105,38 +105,34 @@ def xformers_check():
 
 
 def list_optimizer():
-    array = ["8Bit Adam"]
+    optimizer_list = ["8Bit Adam"]
     try:
-        from dadaptation import DAdaptAdam
+        from lion_pytorch import Lion
 
-        array.append("Adam Dadapt")
-        return array
-
+        optimizer_list.append("Lion")
     except:
-        return array
+        return optimizer_list
 
     try:
         from dadaptation import DAdaptSGD
 
-        array.append("SGD Dadapt")
-        return array
+        optimizer_list.append("SGD Dadaptation")
     except:
-        return array
+        return optimizer_list
 
     try:
         from dadaptation import DAdaptAdaGrad
 
-        array.append("Adagrad Dadapt")
-        return array
+        optimizer_list.append("AdaGrad Dadaptation")
     except:
-        return array
+        return optimizer_list
 
     try:
-        from lion_pytorch import Lion
+        from dadaptation import DAdaptAdam
 
-        array.append("Lion")
+        optimizer_list.append("AdamW Dadaptation")
     except:
-        return ["8Bit Adam"]
+        return optimizer_list
 
 
 def list_attention():

@@ -521,12 +521,35 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 logger.warning(f"Exception importing 8bit adam: {a}")
                 traceback.print_exc()
 
-            if args.use_lora:
-                if args.optimizer_class == "DAdaptation":
-                    args.learning_rate = 1.0
-                    args.lora_learning_rate = 1.0
-                else:
-                    args.learning_rate = args.lora_learning_rate
+        elif args.optimizer == "SGD Dadaptation" and not shared.force_cpu:
+            try:
+                from dadaptation import DAdaptSGD
+
+                optimizer_class = DAdaptSGD
+            except Exception as a:
+                logger.warning(f"Exception importing 8bit adam: {a}")
+                traceback.print_exc()
+
+        elif args.optimizer == "AdamW Dadaptation" and not shared.force_cpu:
+            try:
+                from dadaptation import DAdaptAdam
+
+                optimizer_class = DAdaptAdam
+            except Exception as a:
+                logger.warning(f"Exception importing 8bit adam: {a}")
+                traceback.print_exc()
+
+        elif args.optimizer == "Adagrad Dadaptation" and not shared.force_cpu:
+            try:
+                from dadaptation import DAdaptAdaGrad
+
+                optimizer_class = DAdaptAdaGrad
+            except Exception as a:
+                logger.warning(f"Exception importing Adagad with Dadaptation: {a}")
+                traceback.print_exc()
+
+        if args.use_lora:
+            args.learning_rate = args.lora_learning_rate
 
             params_to_optimize = (
                 [
@@ -550,6 +573,12 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 if stop_text_percentage != 0
                 else unet.parameters()
             )
+
+        optimizer = optimizer_class(
+            params_to_optimize,
+            lr=args.learning_rate,
+            weight_decay=args.adamw_weight_decay,
+        )
 
         if args.deis_train_scheduler:
             print("Using DEIS for noise scheduler.")

@@ -72,7 +72,7 @@ function updateInputValue(elements, newValue) {
             }
             const eventListeners = element.getEventListeners?.(event);
             if (eventListeners) {
-                eventListeners.forEach(({listener}) => {
+                eventListeners.forEach(({ listener }) => {
                     listeners.push({
                         event,
                         listener,
@@ -104,7 +104,7 @@ function updateInputValue(elements, newValue) {
     // Restore any saved listeners and MutationObservers
     savedListeners.forEach((listeners, i) => {
         const element = elements[i];
-        listeners.forEach(({event, listener}) => {
+        listeners.forEach(({ event, listener }) => {
             if (listener) {
                 element.addEventListener(event, listener);
             }
@@ -314,6 +314,7 @@ let db_titles = {
     "Amount of time to pause between Epochs (s)": "When 'Pause After N Epochs' is greater than 0, this is the amount of time, in seconds, that training will be paused for",
     "Apply Horizontal Flip": "Randomly decide to flip images horizontally.",
     "Batch Size": "How many images to process at once per training step?",
+    "Betas": "The betas of the used by the Dadaptation schedulers. Default is 0.9, 0.999.",
     "Cache Latents": "When this box is checked latents will be cached. Caching latents will use more VRAM, but improve training speed.",
     "Cancel": "Cancel training.",
     "Class Batch Size": "How many classifier/regularization images to generate at once.",
@@ -333,8 +334,11 @@ let db_titles = {
     "Custom Model Name": "A custom name to use when saving .ckpt and .pt files. Subdirectories will also be named this.",
     "Dataset Directory": "The directory containing training images.",
     "Debug Buckets": "Examine the instance and class images and report any instance images without corresponding class images.",
+    "Decouple": "Decouple the weight decay from learning rate.",
     "Discord Webhook": "Send training samples to a Discord channel after generation.",
+    "D0": "Initial D estimate for D-adaptation",
     "Existing Prompt Contents": "If using [filewords], this tells the string builder how the existing prompts are formatted.",
+    "EPS": "The epsilon value to use for the Dadaptation optimizers.",
     "Extract EMA Weights": "If EMA weights are saved in a model, these will be extracted instead of the full Unet. Probably not necessary for training or fine-tuning.",
     "Freeze CLIP Normalization Layers": "Keep the normalization layers of CLIP frozen during training. Advanced usage, may increase model performance and editability.",
     "Generate Ckpt": "Generate a checkpoint at the current training level.",
@@ -354,6 +358,7 @@ let db_titles = {
     "Gradient Accumulation Steps": "Number of updates steps to accumulate before performing a backward/update pass. You should try to make this the same as your batch size.",
     "Gradient Checkpointing": "This is a technique to reduce memory usage by clearing activations of certain layers and recomputing them during a backward pass. Effectively, this trades extra computation time for reduced memory usage.",
     "Graph Smoothing Steps": "How many timesteps to smooth graph data over. A lower value means a more jagged graph with more information, higher value will make things prettier but slightly less accurate.",
+    "Growth Rate": "Prevent the D estimate from growing faster than this multiplicative rate. "
     "Half Model": "Enable this to generate model with fp16 precision. Results in a smaller checkpoint with minimal loss in quality.",
     "HuggingFace Token": "Your huggingface token to use for cloning files.",
     "Instance Prompt": "A prompt describing the subject. Use [Filewords] to parse image filename/.txt to insert existing prompt here.",
@@ -378,6 +383,7 @@ let db_titles = {
     "Mixed Precision": "Use FP16 or BF16 (if available) will help improve memory performance. Required when using 'xformers'.",
     "Model Path": "The URL to the model on huggingface. Should be in the format of 'developer/model_name'.",
     "Model": "The model to train.",
+    "Momentum": "The momentum to use for the optimizer.",
     "Name": "The name of the model to create.",
     "Number of Hard Resets": "Number of hard resets of the lr in cosine_with_restarts scheduler.",
     "Number of Samples to Generate": "How many samples to generate per subject.",
@@ -642,7 +648,7 @@ function db_progressbar() {
             }
 
         });
-        mutationObserver.observe(progressbar, {childList: true, subtree: true});
+        mutationObserver.observe(progressbar, { childList: true, subtree: true });
     }
 }
 
@@ -691,7 +697,7 @@ function checkDbGallery() {
                 }
             }
         })
-        galleryObserver.observe(gallery, {childList: true, subtree: false});
+        galleryObserver.observe(gallery, { childList: true, subtree: false });
         gallerySet = true;
 
     }
