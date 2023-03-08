@@ -4,23 +4,25 @@ from typing import List
 
 import gradio as gr
 
-from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import save_config, from_file
-from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
-from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret, create_secret, clear_secret
-from extensions.sd_dreambooth_extension.dreambooth.shared import status, get_launch_errors
-from extensions.sd_dreambooth_extension.dreambooth.ui_functions import performance_wizard, \
+from dreambooth.dataclasses import db_config
+from dreambooth.dataclasses.db_config import save_config, from_file
+from dreambooth.diff_to_sd import compile_checkpoint
+from dreambooth.secret import get_secret, create_secret, clear_secret
+from dreambooth.shared import status, get_launch_errors
+from dreambooth.ui_functions import performance_wizard, \
     training_wizard, training_wizard_person, load_model_params, ui_classifiers, debug_buckets, create_model, \
     generate_samples, load_params, start_training, update_extension, start_crop
-from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_names
-from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, \
+from dreambooth.utils.image_utils import get_scheduler_names
+from dreambooth.utils.model_utils import get_db_models, \
     get_sorted_lora_models, get_model_snapshots
-from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention, \
+from dreambooth.utils.utils import list_attention, \
     list_floats, wrap_gpu_call, printm, list_optimizer
-from extensions.sd_dreambooth_extension.dreambooth.webhook import save_and_test_webhook
-from extensions.sd_dreambooth_extension.helpers.version_helper import check_updates
+from dreambooth.webhook import save_and_test_webhook
+from helpers.version_helper import check_updates
+from helpers.log_parser import LogParser
 from modules import script_callbacks, sd_models
 from modules.ui import gr_show, create_refresh_button
-from extensions.sd_dreambooth_extension.helpers.log_parser import LogParser
+
 
 params_to_save = []
 params_to_load = []
@@ -849,7 +851,6 @@ def on_ui_tabs():
 
         ui_keys.append("db_status")
         params_to_load.append(db_status)
-        from extensions.sd_dreambooth_extension.dreambooth.dataclasses import db_config
         db_config.save_keys = save_keys
         db_config.ui_keys = ui_keys
 

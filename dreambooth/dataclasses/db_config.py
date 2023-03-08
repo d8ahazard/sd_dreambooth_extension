@@ -5,15 +5,10 @@ from typing import List, Dict
 
 from pydantic import BaseModel
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_names
-
-except:
-    from dreambooth.dreambooth import shared  # noqa
-    from dreambooth.dreambooth.dataclasses.db_concept import Concept  # noqa
-    from dreambooth.dreambooth.utils.image_utils import get_scheduler_names # noqa
+from dreambooth import shared  # noqa
+from dreambooth.dataclasses.db_concept import Concept  # noqa
+from dreambooth.utils.image_utils import get_scheduler_names # noqa
+from dreambooth.utils.utils import list_attention
 
 # Keys to save, replacing our dumb __init__ method
 save_keys = []
@@ -168,10 +163,6 @@ class DreamboothConfig(BaseModel):
             if "db_" in key:
                 key = key.replace("db_", "")
             if key == "attention" and value == "flash_attention":
-                try:
-                    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import list_attention
-                except:
-                    from dreambooth.dreambooth.utils.utils import list_attention  # noqa
                 value = list_attention()[-1]
                 print(f"Replacing flash attention in config to {value}")
 

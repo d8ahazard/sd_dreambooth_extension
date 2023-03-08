@@ -2,17 +2,17 @@ accelerate==0.16.0
 albumentations~=1.3.0
 bitsandbytes==0.35.4
 diffusers==0.13.1
-gitpython~=3.1.31
+discord-webhook~=1.1.0
 fastapi
 ftfy~=6.1.1
-modelcards~=0.1.6
-tensorboard
-tensorflow==2.11.0; sys_platform != 'darwin' or platform_machine != 'arm64'
-tensorflow-macos==2.11.0; sys_platform == 'darwin' and platform_machine == 'arm64'
+gitpython~=3.1.31
+lion-pytorch~=0.0.7
 mediapipe-silicon; sys_platform == 'darwin'
 mediapipe; sys_platform != 'darwin'
+modelcards~=0.1.6
+tensorboard
+tensorflow-macos==2.11.0; sys_platform == 'darwin' and platform_machine == 'arm64'
+tensorflow==2.11.0; sys_platform != 'darwin' or platform_machine != 'arm64'
 tqdm~=4.64.1
 transformers~=4.26.1
-discord-webhook~=1.1.0
-lion-pytorch~=0.0.7
 xformers==0.0.17.dev464

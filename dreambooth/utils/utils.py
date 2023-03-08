@@ -11,16 +11,14 @@ from typing import Optional
 import importlib_metadata
 from packaging import version
 
+from dreambooth import shared
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import torch
 from huggingface_hub import HfFolder, whoami
 
-try:
-    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-    from extensions.sd_dreambooth_extension.dreambooth.shared import status
-except:
-    from dreambooth.helpers.mytqdm import mytqdm  # noqa
-    from dreambooth.dreambooth.shared import status  # noqa
+from helpers.mytqdm import mytqdm
+from dreambooth.shared import status
 
 
 def printi(msg, params=None, log=True):
@@ -49,7 +47,6 @@ def sanitize_name(name):
 
 
 def printm(msg=""):
-    from extensions.sd_dreambooth_extension.dreambooth import shared
     if shared.debug:
         allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
         cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)

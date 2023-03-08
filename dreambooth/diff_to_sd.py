@@ -14,25 +14,16 @@ import torch
 from diffusers import UNet2DConditionModel
 from torch import Tensor, nn
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared as shared
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig
-    from extensions.sd_dreambooth_extension.dreambooth.shared import status
-    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
-        reload_system_models, \
-        disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path
-    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
-    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-    from extensions.sd_dreambooth_extension.lora_diffusion.lora import merge_lora_to_model
-except:
-    from dreambooth.dreambooth import shared as shared  # noqa
-    from dreambooth.dreambooth.dataclasses.db_config import from_file, DreamboothConfig  # noqa
-    from dreambooth.dreambooth.shared import status  # noqa
-    from dreambooth.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
-        disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path  # noqa
-    from dreambooth.dreambooth.utils.utils import printi  # noqa
-    from dreambooth.helpers.mytqdm import mytqdm  # noqa
-    from dreambooth.lora_diffusion.lora import merge_lora_to_model  # noqa
+
+from dreambooth import shared as shared
+from dreambooth.dataclasses.db_config import from_file, DreamboothConfig
+from dreambooth.shared import status
+from dreambooth.utils.model_utils import unload_system_models, \
+    reload_system_models, \
+    disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path
+from dreambooth.utils.utils import printi
+from helpers.mytqdm import mytqdm
+from lora_diffusion.lora import merge_lora_to_model
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)

@@ -22,36 +22,26 @@ from starlette import status
 from starlette.requests import Request
 
 try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig
-    from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
-    from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
-    from extensions.sd_dreambooth_extension.dreambooth.shared import DreamState
-    from extensions.sd_dreambooth_extension.dreambooth.ui_functions import create_model, generate_samples, \
+    from dreambooth import shared
+    from dreambooth.dataclasses.db_concept import Concept
+    from dreambooth.dataclasses.db_config import from_file, DreamboothConfig
+    from dreambooth.diff_to_sd import compile_checkpoint
+    from dreambooth.secret import get_secret
+    from dreambooth.shared import DreamState
+    from dreambooth.ui_functions import create_model, generate_samples, \
         start_training
-    from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images
-    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
+    from dreambooth.utils.gen_utils import generate_classifiers
+    from dreambooth.utils.image_utils import get_images
+    from dreambooth.utils.model_utils import get_db_models, get_lora_models
 except:
-    from dreambooth.dreambooth import shared  # noqa
-    from dreambooth.dreambooth.dataclasses.db_concept import Concept  # noqa
-    from dreambooth.dreambooth.dataclasses.db_config import from_file, DreamboothConfig  # noqa
-    from dreambooth.dreambooth.diff_to_sd import compile_checkpoint  # noqa
-    from dreambooth.dreambooth.secret import get_secret  # noqa
-    from dreambooth.dreambooth.shared import DreamState  # noqa
-    from dreambooth.dreambooth.ui_functions import create_model, generate_samples, start_training  # noqa
-    from dreambooth.dreambooth.utils.gen_utils import generate_classifiers  # noqa
-    from dreambooth.dreambooth.utils.image_utils import get_images  # noqa
-    from dreambooth.dreambooth.utils.model_utils import get_db_models, get_lora_models  # noqa
-
-    pass
+    print("Exception importing api")
+    traceback.print_exc()
 
 if os.environ.get("DEBUG_API", False):
     logging.basicConfig(level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
-
+print("No, really, API loaded, wtf...")
 
 class InstanceData(BaseModel):
     data: str = Field(title="File data", description="Base64 representation of the file or URL")
@@ -156,6 +146,7 @@ def file_to_base64(file_path) -> str:
 
 
 def dreambooth_api(_, app: FastAPI):
+    print("API LOAD")
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         return JSONResponse(
@@ -941,4 +932,5 @@ try:
     script_callbacks.on_app_started(dreambooth_api)
     logger.debug("SD-Webui API layer loaded")
 except:
+    logger.debug("Unable to import script callbacks.")
     pass

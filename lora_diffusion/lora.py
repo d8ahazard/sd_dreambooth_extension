@@ -8,11 +8,7 @@ from safetensors.torch import safe_open
 from safetensors.torch import save_file as safe_save
 from torch import dtype
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import disable_safe_unpickle, \
-        enable_safe_unpickle
-except:
-    from dreambooth.dreambooth.utils.model_utils import disable_safe_unpickle, enable_safe_unpickle  # noqa
+from dreambooth.utils.model_utils import disable_safe_unpickle, enable_safe_unpickle
 
 
 class LoraInjectedLinear(nn.Module):

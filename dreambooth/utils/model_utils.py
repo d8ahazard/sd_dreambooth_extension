@@ -8,14 +8,9 @@ import torch
 from diffusers.utils import is_xformers_available
 from transformers import PretrainedConfig
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
-    from extensions.sd_dreambooth_extension.dreambooth import shared  # noqa
-    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup  # noqa
-except:
-    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
-    from dreambooth.dreambooth import shared  # noqa
-    from dreambooth.dreambooth.utils.utils import cleanup  # noqa
+from dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
+from dreambooth import shared  # noqa
+from dreambooth.utils.utils import cleanup  # noqa
 
 checkpoints_list = {}
 checkpoint_alisases = {}

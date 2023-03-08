@@ -1,10 +1,7 @@
 import os
 import secrets
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared
-except:
-    from dreambooth.dreambooth import shared  # noqa
+from dreambooth import shared
 
 db_path = os.path.join(shared.models_path, "dreambooth")
 secret_file = os.path.join(db_path, "secret.txt")

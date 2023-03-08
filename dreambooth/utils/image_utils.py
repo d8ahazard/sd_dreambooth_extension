@@ -20,18 +20,11 @@ import numpy as np
 import torch
 import torch.utils.checkpoint
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-
-    from extensions.sd_dreambooth_extension.dreambooth import shared
-    from extensions.sd_dreambooth_extension.dreambooth.shared import status
-except:
-    from dreambooth.dreambooth.dataclasses.db_concept import Concept  # noqa
-    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
-    from dreambooth.helpers.mytqdm import mytqdm  # noqa
-    from dreambooth.dreambooth.shared import status  # noqa
+from dreambooth.dataclasses.db_concept import Concept
+from dreambooth.dataclasses.prompt_data import PromptData
+from helpers.mytqdm import mytqdm
+from dreambooth import shared
+from dreambooth.shared import status
 
 
 def get_dim(filename, max_res):

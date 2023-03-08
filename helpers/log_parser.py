@@ -9,10 +9,7 @@ from pandas import DataFrame
 from pandas.plotting._matplotlib.style import get_standard_colors
 from tensorboard.compat.proto import event_pb2
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth.shared import status
-except:
-    from dreambooth.dreambooth.shared import status
+from dreambooth.shared import status
 
 
 @dataclass
@@ -248,9 +245,9 @@ class LogParser:
             }
 
         try:
-            from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file  # noqa
+            from dreambooth.dataclasses.db_config import from_file  # noqa
         except:
-            from dreambooth.dreambooth.dataclasses.db_config import from_file # noqa
+            from core.modules.dreambooth.dreambooth.dataclasses.db_config import from_file # noqa
         model_config = from_file(model_name)
         print(f"Model name: {model_name}")
         if model_config is None:

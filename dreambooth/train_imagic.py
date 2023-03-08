@@ -13,16 +13,10 @@ from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
-    from extensions.sd_dreambooth_extension.dreambooth.shared import status
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import list_features, is_image
-except:
-    from dreambooth.dreambooth import shared  # noqa
-    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
-    from dreambooth.dreambooth.shared import status  # noqa
-    from dreambooth.dreambooth.utils.image_utils import list_features, is_image  # noqa
+from dreambooth import shared
+from dreambooth.dataclasses.db_config import DreamboothConfig
+from dreambooth.shared import status
+from dreambooth.utils.image_utils import list_features, is_image
 
 logger = get_logger(__name__)
 

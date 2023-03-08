@@ -29,22 +29,13 @@ from huggingface_hub import HfApi, hf_hub_download
 from omegaconf import OmegaConf
 
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
-    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, disable_safe_unpickle, \
-        enable_safe_unpickle
-    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
-    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_class
-
-except:
-    from dreambooth.dreambooth import shared  # noqa
-    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
-    from dreambooth.dreambooth.utils.model_utils import get_db_models, disable_safe_unpickle, enable_safe_unpickle  # noqa
-    from dreambooth.dreambooth.utils.utils import printi  # noqa
-    from dreambooth.helpers.mytqdm import mytqdm  # noqa
-    from dreambooth.dreambooth.utils.image_utils import get_scheduler_class # noqa
+from dreambooth import shared
+from dreambooth.dataclasses.db_config import DreamboothConfig
+from dreambooth.utils.model_utils import get_db_models, disable_safe_unpickle, \
+    enable_safe_unpickle
+from dreambooth.utils.utils import printi
+from helpers.mytqdm import mytqdm
+from dreambooth.utils.image_utils import get_scheduler_class
 
 from diffusers import (
     AutoencoderKL,
@@ -1038,6 +1029,8 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, from_hub=False
 
         status
     """
+    from dreambooth.ui_functions import gr_update
+
     has_ema = False
     v2 = False
     revision = 0
@@ -1146,10 +1139,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, from_hub=False
         if from_hub:
             result_status = "Model fetched from hub."
             db_config.save()
-            try:
-                from extensions.sd_dreambooth_extension.dreambooth.ui_functions import gr_update
-            except:
-                from dreambooth.dreambooth.ui_functions import gr_update  # noqa
+
             return gr_update(choices=sorted(get_db_models()), value=new_model_name), \
                 db_config.model_dir, \
                 revision, \
@@ -1338,10 +1328,6 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, from_hub=False
     enable_safe_unpickle()
     printi(result_status)
 
-    try:
-        from extensions.sd_dreambooth_extension.dreambooth.ui_functions import gr_update
-    except:
-        from dreambooth.dreambooth.ui_functions import gr_update  # noqa
 
     return gr_update(choices=sorted(get_db_models()), value=new_model_name), \
         model_dir, \

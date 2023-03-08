@@ -11,6 +11,8 @@ import sysconfig
 import git
 import requests
 
+from dreambooth import shared
+
 
 def run(command, desc=None, errdesc=None, custom_env=None, live=True):
     if desc:
@@ -38,10 +40,6 @@ def run(command, desc=None, errdesc=None, custom_env=None, live=True):
 def actual_install():
     if os.environ.get("PUBLIC_KEY", None):
         print("Docker, returning.")
-        try:
-            from extensions.sd_dreambooth_extension.dreambooth import shared
-        except:
-            from dreambooth.dreambooth import shared  # noqa
         shared.launch_error = None
         return
     if sys.version_info < (3, 8):
@@ -257,7 +255,7 @@ def actual_install():
     try:
         repo = git.Repo(base_dir)
         revision = repo.rev_parse("HEAD")
-        app_repo = git.Repo(os.path.join(base_dir, "..", ".."))
+        app_repo = git.Repo(os.path.join(base_dir, "../../..", ".."))
         app_revision = app_repo.rev_parse("HEAD")
     except:
         pass
