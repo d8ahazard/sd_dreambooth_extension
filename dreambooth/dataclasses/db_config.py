@@ -24,6 +24,12 @@ def sanitize_name(name):
 class DreamboothConfig(BaseModel):
     adamw_weight_decay: float = 0.01
     attention: str = "xformers"
+    adaptation_beta1: int = 0
+    adaptation_beta2: int = 0
+    adaptation_d0: float = 1e-8
+    adaptation_eps: float = 1e-8
+    adaptation_growth_rate: float = 1e-8
+    adaptation_momentum: int = 0
     cache_latents: bool = True
     clip_skip: int = 1
     concepts_list: List[Dict] = []
@@ -69,7 +75,7 @@ class DreamboothConfig(BaseModel):
     model_path: str = ""
     num_train_epochs: int = 100
     offset_noise: float = 0
-    optimizer: str = "8Bit Adam"
+    optimizer: str = "8bit AdamW"
     pad_tokens: bool = True
     pretrained_model_name_or_path: str = ""
     pretrained_vae_name_or_path: str = ""
@@ -177,9 +183,25 @@ class DreamboothConfig(BaseModel):
                             break
 
             if hasattr(self, key):
+                value = self.validate_param(key, value)
                 setattr(self, key, value)
         if sched_swap:
             self.save()
+
+    @staticmethod
+    def validate_param(key, value):
+        replaced_params = {
+            "optimizer": {
+                "old": ["8Bit Adam"],
+                "new": "8bit AdamW"
+            }
+        }
+
+        if key in replaced_params.keys():
+            replacement = replaced_params[key]
+            if value in replacement["old"]:
+                return replacement["new"]
+        return value
 
     # Pass a dict and return a list of Concept objects
     def concepts(self, required: int = -1):
@@ -276,9 +298,6 @@ def save_config(*args):
     if model_name is None or model_name == "":
         print("Invalid model name.")
         return
-    config = from_file(model_name)
-    if config is None:
-        config = DreamboothConfig(model_name)
     params_dict = dict(zip(save_keys, params))
     concepts_list = []
     # If using a concepts file/string, keep concepts_list empty.
@@ -298,6 +317,9 @@ def save_config(*args):
         if len(concepts_list) and not len(existing_concepts):
             params_dict["concepts_list"] = concepts_list
 
+    config = from_file(model_name)
+    if config is None:
+        config = DreamboothConfig(model_name)
     config.load_params(params_dict)
     shared.db_model_config = config
     config.save()

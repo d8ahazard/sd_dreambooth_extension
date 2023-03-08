@@ -97,8 +97,8 @@ except:
         get_checkpoint_match,
     )  # noqa
     from dreambooth.dreambooth.utils.utils import printm, cleanup  # noqa
-    from dreambooth.helpers.image_builder import ImageBuilder  # noqa
-    from dreambooth.helpers.mytqdm import mytqdm  # noqa
+    from helpers.image_builder import ImageBuilder  # noqa
+    from helpers.mytqdm import mytqdm  # noqa
 
 logger = logging.getLogger(__name__)
 console = logging.StreamHandler()
@@ -226,7 +226,7 @@ def performance_wizard(model_name):
     msg: Stuff to show in the UI
     """
     attention = "flash_attention"
-    optimizer = "8Bit Adam"
+    optimizer = "8bit AdamW"
     gradient_checkpointing = False
     gradient_accumulation_steps = 1
     mixed_precision = "fp16"

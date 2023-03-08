@@ -11,6 +11,7 @@ lion-pytorch~=0.0.7
 mediapipe-silicon; sys_platform == 'darwin'
 mediapipe; sys_platform != 'darwin'
 modelcards~=0.1.6
+pytorch-optimizer~=2.5.0
 tensorboard
 tensorflow==2.11.0; sys_platform != 'darwin' or platform_machine != 'arm64'
 tensorflow-macos==2.11.0; sys_platform == 'darwin' and platform_machine == 'arm64'

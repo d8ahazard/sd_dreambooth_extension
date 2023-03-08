@@ -4,7 +4,6 @@ from typing import List
 
 import gradio as gr
 
-from dreambooth.dataclasses import db_config
 from dreambooth.dataclasses.db_config import (
     save_config,
     from_file,
@@ -485,45 +484,31 @@ def on_ui_tabs():
                                 visible=False,
                             )
 
-                            #Dadaptation params only visible if with Dadaptation optimizer selected
-                            #Hide all other scheduler params and scheduler dropdown
+                            # Dadaptation params only visible if with Dadaptation optimizer selected
+                            # Hide all other scheduler params and scheduler dropdown
                             db_adaptation_growth_rate = gr.Number(
                                 label="Adaptation Growth Rate",
                                 value=1e-8,
-                                precision=1,
-                                visible=False,
                             )
-
                             db_adaptation_d0 = gr.Number(
                                 label="Adaptation D0",
                                 value=1e-8,
-                                precision=1,
-                                visible=False,
                             )
-                            db_adaptation_eps= gr.Number(
+                            db_adaptation_eps = gr.Number(
                                 label="Adaptation Eps",
                                 value=1e-8,
-                                precision=1,
-                                visible=False,
                             )
-
                             db_adaptation_momentum = gr.Number(
                                 label="Adaptation Momentum",
                                 value=0,
-                                precision=1,
-                                visible=False,
                             )
                             db_adaptation_beta1 = gr.Number(
                                 label="Adaptation Beta1",
-                                value=0,
-                                precision=1,
-                                visible=False,
+                                value=0
                             )
                             db_adaptation_beta2 = gr.Number(
                                 label="Adaptation Beta2",
                                 value=0,
-                                precision=1,
-                                visible=False,
                             )
 
                             with gr.Row(visible=False) as lora_lr_row:
@@ -555,11 +540,8 @@ def on_ui_tabs():
                             )
                             db_sanity_prompt = gr.Textbox(
                                 label="Sanity Sample Prompt",
-                                placeholder="A generic prompt "
-                                "used to generate"
-                                " a sample image "
-                                "to verify model "
-                                "fidelity.",
+                                placeholder="A generic prompt used to generate a sample image "
+                                    "to verify model fidelity.",
                             )
                             db_sanity_negative_prompt = gr.Textbox(
                                 label="Sanity Sample Negative Prompt",
@@ -617,7 +599,7 @@ def on_ui_tabs():
                                     )
                                     db_optimizer = gr.Dropdown(
                                         label="Optimizer",
-                                        value="8Bit Adam",
+                                        value="8bit AdamW",
                                         choices=list_optimizer(),
                                     )
                                     db_mixed_precision = gr.Dropdown(
@@ -1208,12 +1190,13 @@ def on_ui_tabs():
 
         # List of all the things that we need to save
         params_to_save = [
+            db_model_name,  # must be first due to save_config() parsing
             db_adaptation_d0,
             db_adaptation_eps,
-            db_adaptation_betas = Tuple[db_adaptation_beta1, db_adaptation_beta2]
+            db_adaptation_beta1,
+            db_adaptation_beta2,
             db_adaptation_momentum,
             db_adaptation_growth_rate,
-            db_model_name,
             db_attention,
             db_cache_latents,
             db_clip_skip,
@@ -1389,7 +1372,7 @@ def on_ui_tabs():
 
         ui_keys.append("db_status")
         params_to_load.append(db_status)
-        from extensions.sd_dreambooth_extension.dreambooth.dataclasses import db_config
+        from dreambooth.dataclasses import db_config
         db_config.save_keys = save_keys
         db_config.ui_keys = ui_keys
 

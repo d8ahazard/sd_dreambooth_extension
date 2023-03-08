@@ -103,34 +103,33 @@ def xformers_check():
 
 
 def list_optimizer():
-    optimizer_list = ["8Bit Adam"]
+    optimizer_list = ["8bit AdamW"]
+
     try:
         from lion_pytorch import Lion
-
         optimizer_list.append("Lion")
     except:
-        return optimizer_list
+        pass
 
     try:
         from dadaptation import DAdaptSGD
-
         optimizer_list.append("SGD Dadaptation")
     except:
-        return optimizer_list
+        pass
 
     try:
         from dadaptation import DAdaptAdaGrad
-
         optimizer_list.append("AdaGrad Dadaptation")
     except:
-        return optimizer_list
+        pass
 
     try:
         from dadaptation import DAdaptAdam
-
         optimizer_list.append("AdamW Dadaptation")
     except:
-        return optimizer_list
+        pass
+
+    return optimizer_list
 
 
 def list_attention():
@@ -145,15 +144,13 @@ def list_attention():
 
 
 def list_floats():
-    has_bf16 = False
+    floats = ["no", "fp16"]
     try:
-        has_bf16 = torch.cuda.is_bf16_supported()
+        if torch.cuda.is_bf16_supported():
+            floats.append("bf16")
     except:
         pass
-    if has_bf16:
-        return ["no", "fp16", "bf16"]
-    else:
-        return ["no", "fp16"]
+    return floats
 
 
 def wrap_gpu_call(func, extra_outputs=None):

@@ -100,7 +100,7 @@ try:
     )
     from extensions.sd_dreambooth_extension.dreambooth.deis_velocity import get_velocity
 except:
-    from dreambooth.helpers.log_parser import LogParser
+    from helpers.log_parser import LogParser
     from dreambooth.dreambooth import xattention, shared  # noqa
     from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
     from dreambooth.dreambooth.dataclasses.train_result import TrainResult  # noqa
@@ -128,8 +128,8 @@ except:
     from dreambooth.dreambooth.utils.utils import cleanup, printm  # noqa
     from dreambooth.dreambooth.webhook import send_training_update  # noqa
     from dreambooth.dreambooth.xattention import optim_to  # noqa
-    from dreambooth.helpers.ema_model import EMAModel  # noqa
-    from dreambooth.helpers.mytqdm import mytqdm  # noqa
+    from helpers.ema_model import EMAModel  # noqa
+    from helpers.mytqdm import mytqdm  # noqa
     from dreambooth.lora_diffusion.extra_networks import save_extra_networks  # noqa
     from dreambooth.lora_diffusion.lora import (
         save_lora_weight,
@@ -472,81 +472,49 @@ def main(use_txt2img: bool = True) -> TrainResult:
             if not args.train_unet:
                 unet.requires_grad_(False)
 
-        # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
+        # Init optimizer
         optimizer_class = torch.optim.AdamW
 
-        if args.optimizer == "8Bit Adam" and not shared.force_cpu:
-            try:
-                import bitsandbytes as bnb
+        try:
+            if shared.force_cpu:
+                pass
 
-                optimizer_class = bnb.optim.AdamW8bit
-            except Exception as a:
-                logger.warning(f"Exception importing 8bit adam: {a}")
-                traceback.print_exc()
+            elif args.optimizer in ["8bit AdamW", "8Bit Adam"]:
+                from bitsandbytes.optim import AdamW8bit
+                optimizer_class = AdamW8bit
 
-        # Import all optimisers from Dadaptation
-        if args.optimizer == "SGD D-Adaptation" and not shared.force_cpu:
-            try:
+            elif args.optimizer == "SGD D-Adaptation":
                 from pytorch_optimizer import DAdaptSGD as DAdaptation
-
                 optimizer_class = DAdaptation
-            except Exception as a:
-                logger.warning(f"Exception importing D-adaptation SGD: {a}")
-                traceback.print_exc()
 
-        if args.optimizer == "AdamW D-Adaptation" and not shared.force_cpu:
-            try:
+            elif args.optimizer == "AdamW D-Adaptation":
                 from pytorch_optimizer import DAdaptAdam as DAdaptation
-
                 optimizer_class = DAdaptation
-            except Exception as a:
-                logger.warning(f"Exception importing D-adaptation AdamW: {a}")
-                traceback.print_exc()
 
-        if args.optimizer == "Adagrad D-Adaptation" and not shared.force_cpu:
-            try:
+            elif args.optimizer == "Adagrad D-Adaptation":
                 from pytorch_optimizer import DAdaptAdaGrad as DAdaptation
-
                 optimizer_class = DAdaptation
-            except Exception as a:
-                logger.warning(f"Exception importing D-adaptation Adagrad: {a}")
-                traceback.print_exc()
 
-        elif args.optimizer == "Lion" and not shared.force_cpu:
-            try:
+            elif args.optimizer == "Lion":
                 from lion_pytorch import Lion
-
                 optimizer_class = Lion
-            except Exception as a:
-                logger.warning(f"Exception importing 8bit adam: {a}")
-                traceback.print_exc()
 
-        elif args.optimizer == "SGD Dadaptation" and not shared.force_cpu:
-            try:
+            elif args.optimizer == "SGD Dadaptation":
                 from dadaptation import DAdaptSGD
-
                 optimizer_class = DAdaptSGD
-            except Exception as a:
-                logger.warning(f"Exception importing 8bit adam: {a}")
-                traceback.print_exc()
 
-        elif args.optimizer == "AdamW Dadaptation" and not shared.force_cpu:
-            try:
+            elif args.optimizer == "AdamW Dadaptation":
                 from dadaptation import DAdaptAdam
-
                 optimizer_class = DAdaptAdam
-            except Exception as a:
-                logger.warning(f"Exception importing 8bit adam: {a}")
-                traceback.print_exc()
 
-        elif args.optimizer == "Adagrad Dadaptation" and not shared.force_cpu:
-            try:
+            elif args.optimizer == "Adagrad Dadaptation":
                 from dadaptation import DAdaptAdaGrad
-
                 optimizer_class = DAdaptAdaGrad
-            except Exception as a:
-                logger.warning(f"Exception importing Adagad with Dadaptation: {a}")
-                traceback.print_exc()
+
+        except Exception as a:
+            logger.warning(f"Exception importing {args.optimizer}: {a}")
+            traceback.print_exc()
+            print("Using default optimizer (AdamW from Torch)")
 
         if args.use_lora:
             args.learning_rate = args.lora_learning_rate
@@ -702,33 +670,31 @@ def main(use_txt2img: bool = True) -> TrainResult:
         # affected by batch size
         sched_train_steps = args.num_train_epochs * train_dataset.num_train_images
 
-    # If using dAdaptation override lr_scheduler
+        if (
+            args.optimizer_class == "DAdaptSGD"
+            or args.optimizer_class == "DAdaptAdam"
+            or args.optimizer_class == "DAdaptAdaGrad"
+        ):
+            lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
+                optimizer=optimizer,
+                lr_lambda=[lambda epoch: 0.5, lambda epoch: 1],
+                last_epoch=-1,
+                verbose=False,
+            )
 
-    if (
-        args.optimizer_class == "DAdaptSGD"
-        or args.optimizer_class == "DAdaptAdam"
-        or args.optimizer_class == "DAdaptAdaGrad"
-    ):
-        lr_scheduler = optim.lr_scheduler.LambdaLR(
-            optimizer=optimizer,
-            lr_lambda=[lambda epoch: 0.5, lambda epoch: 1],
-            last_epoch=-1,
-            verbose=False,
-        )
-
-    else:
-        lr_scheduler = UniversalScheduler(
-            args.lr_scheduler,
-            optimizer=optimizer,
-            num_warmup_steps=args.lr_warmup_steps,
-            total_training_steps=sched_train_steps,
-            total_epochs=args.num_train_epochs,
-            num_cycles=args.lr_cycles,
-            power=args.lr_power,
-            factor=args.lr_factor,
-            scale_pos=args.lr_scale_pos,
-            min_lr=args.learning_rate_min,
-        )
+        else:
+            lr_scheduler = UniversalScheduler(
+                args.lr_scheduler,
+                optimizer=optimizer,
+                num_warmup_steps=args.lr_warmup_steps,
+                total_training_steps=sched_train_steps,
+                total_epochs=args.num_train_epochs,
+                num_cycles=args.lr_cycles,
+                power=args.lr_power,
+                factor=args.lr_factor,
+                scale_pos=args.lr_scale_pos,
+                min_lr=args.learning_rate_min,
+            )
 
         # create ema, fix OOM
         if args.use_ema:

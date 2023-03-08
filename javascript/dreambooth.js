@@ -355,7 +355,7 @@ let db_titles = {
     "Generate lora weights when saving during training.": "When enabled, lora .pt files will be generated at each specified epoch interval during training. This also affects whether .pt files will be generated when manually clicking the 'Save Weights' button.",
     "Generate lora weights when training completes.": "When enabled, lora .pt files will be generated when training completes.",
     "Generate lora weights when training is canceled.": "When enabled, lora .pt files will be generated when training is cancelled by the user.",
-    "Gradient Accumulation Steps": "Number of updates steps to accumulate before performing a backward/update pass. You should try to make this the same as your batch size.",
+    "Gradient Accumulation Steps": "Number of updates steps to accumulate before performing a backward/update pass.",
     "Gradient Checkpointing": "This is a technique to reduce memory usage by clearing activations of certain layers and recomputing them during a backward pass. Effectively, this trades extra computation time for reduced memory usage.",
     "Graph Smoothing Steps": "How many timesteps to smooth graph data over. A lower value means a more jagged graph with more information, higher value will make things prettier but slightly less accurate.",
     "Growth Rate": "Prevent the D estimate from growing faster than this multiplicative rate",
