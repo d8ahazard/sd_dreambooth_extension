@@ -29,10 +29,12 @@ from packaging import version
 from tensorflow.python.framework.random_seed import set_seed as set_seed1
 from torch.cuda.profiler import profile
 from torch.utils.data import Dataset
+from torch.utils.tensorboard import SummaryWriter, FileWriter
 from transformers import AutoTokenizer
 
 
 try:
+    from extensions.sd_dreambooth_extension.helpers.log_parser import LogParser
     from extensions.sd_dreambooth_extension.dreambooth import xattention, shared
     from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import (
         PromptData,
@@ -80,7 +82,6 @@ try:
     )
     from extensions.sd_dreambooth_extension.dreambooth.utils.utils import (
         cleanup,
-        parse_logs,
         printm,
     )
     from extensions.sd_dreambooth_extension.dreambooth.webhook import (
@@ -99,6 +100,7 @@ try:
     )
     from extensions.sd_dreambooth_extension.dreambooth.deis_velocity import get_velocity
 except:
+    from dreambooth.helpers.log_parser import LogParser
     from dreambooth.dreambooth import xattention, shared  # noqa
     from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
     from dreambooth.dreambooth.dataclasses.train_result import TrainResult  # noqa
@@ -123,7 +125,7 @@ except:
         enable_safe_unpickle,
     )  # noqa
     from dreambooth.dreambooth.utils.text_utils import encode_hidden_state  # noqa
-    from dreambooth.dreambooth.utils.utils import cleanup, parse_logs, printm  # noqa
+    from dreambooth.dreambooth.utils.utils import cleanup, printm  # noqa
     from dreambooth.dreambooth.webhook import send_training_update  # noqa
     from dreambooth.dreambooth.xattention import optim_to  # noqa
     from dreambooth.helpers.ema_model import EMAModel  # noqa
@@ -209,6 +211,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
     """
     args = shared.db_model_config
     logging_dir = Path(args.model_dir, "logging")
+    log_parser = LogParser()
 
     result = TrainResult
     result.config = args
@@ -251,6 +254,10 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 project_dir=logging_dir,
                 cpu=shared.force_cpu,
             )
+
+            run_name = "dreambooth.events"
+            max_log_size = 250 * 1024  # specify the maximum log size
+
         except Exception as e:
             if "AcceleratorState" in str(e):
                 msg = "Change in precision detected, please restart the webUI entirely to use new precision."
@@ -412,7 +419,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     revision=args.revision,
                     torch_dtype=torch.float32,
                 )
-                xformerify(ema_unet)
+                if args.attention == "xformers" and not shared.force_cpu:
+                    xformerify(ema_unet)
 
                 ema_model = EMAModel(
                     ema_unet, device=accelerator.device, dtype=weight_dtype
@@ -739,7 +747,20 @@ def main(use_txt2img: bool = True) -> TrainResult:
         # We need to initialize the trackers we use, and also store our configuration.
         # The trackers will initialize automatically on the main process.
         if accelerator.is_main_process:
+            # create a SummaryWriter object with max_queue and flush_secs arguments
+            writer = SummaryWriter(
+                log_dir=logging_dir,
+                filename_suffix=run_name,
+                max_queue=max_log_size,
+                flush_secs=30,  # how often to flush the pending events to disk (in seconds)
+            )
+
             accelerator.init_trackers("dreambooth")
+            # get the tracker object for TensorBoard
+            tracker = accelerator.get_tracker("tensorboard")
+
+            # set the SummaryWriter object as the tracker's writer
+            tracker.writer = FileWriter(writer.get_logdir())
 
         # Train!
         total_batch_size = (
@@ -926,7 +947,8 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 scheduler_class = get_scheduler_class(args.scheduler)
                 s_pipeline.enable_attention_slicing()
                 s_pipeline.unet = torch2ify(s_pipeline.unet)
-                xformerify(s_pipeline)
+                if args.attention == "xformers" and not shared.force_cpu:
+                    xformerify(s_pipeline)
 
                 s_pipeline.scheduler = scheduler_class.from_config(
                     s_pipeline.scheduler.config
@@ -1018,18 +1040,26 @@ def main(use_txt2img: bool = True) -> TrainResult:
                                 # save extra_net
                                 if args.save_lora_for_extra_net:
                                     if args.use_lora_extended:
-                                        print(
-                                            "Saving extra networks lora does not work with use_lora_extended. Skipping save."
-                                        )
-                                    else:
-                                        os.makedirs(
-                                            shared.ui_lora_models_path, exist_ok=True
-                                        )
-                                        out_safe = os.path.join(
-                                            shared.ui_lora_models_path,
-                                            f"{lora_file_prefix}.safetensors",
-                                        )
-                                        save_extra_networks(modelmap, out_safe)
+                                        if not os.path.exists(
+                                            os.path.join(
+                                                shared.script_path,
+                                                "extensions",
+                                                "a1111-sd-webui-locon",
+                                            )
+                                        ):
+                                            raise Exception(
+                                                r"a1111-sd-webui-locon extension is required to save "
+                                                r"extra net for extended lora. Please install "
+                                                r"https://github.com/KohakuBlueleaf/a1111-sd-webui-locon"
+                                            )
+                                    os.makedirs(
+                                        shared.ui_lora_models_path, exist_ok=True
+                                    )
+                                    out_safe = os.path.join(
+                                        shared.ui_lora_models_path,
+                                        f"{lora_file_prefix}.safetensors",
+                                    )
+                                    save_extra_networks(modelmap, out_safe)
                             # package pt into checkpoint
                             if save_checkpoint:
                                 pbar.set_description("Compiling Checkpoint")
@@ -1122,7 +1152,9 @@ def main(use_txt2img: bool = True) -> TrainResult:
                         del generator
                     try:
                         printm("Parse logs.")
-                        log_images, log_names = parse_logs(model_name=args.model_name)
+                        log_images, log_names = log_parser.parse_logs(
+                            model_name=args.model_name
+                        )
                         pbar.update()
                         for log_image in log_images:
                             last_samples.append(log_image)
@@ -1182,6 +1214,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
         last_tenc = 0 < text_encoder_epochs
         if stop_text_percentage == 0:
             last_tenc = False
+
         for epoch in range(first_epoch, max_train_epochs):
             if training_complete:
                 print("Training complete, breaking epoch.")

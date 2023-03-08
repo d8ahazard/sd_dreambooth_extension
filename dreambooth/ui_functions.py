@@ -854,7 +854,7 @@ def start_crop(src_dir: str, dest_dir: str, max_res: int, bucket_step: int, dry_
             cropped = open_and_trim(image, res, True)
             if not dry_run:
                 print(f"\nSaving to {out_img}")
-                cropped.save(out_img)
+                cropped.save(out_img, quality=100)
             out_images.append(cropped)
             shared.status.current_image = [cropped]
 

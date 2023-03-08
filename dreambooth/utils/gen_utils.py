@@ -57,8 +57,6 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
     tokens = []
 
     print(f"Found {len(class_prompts)} reg images.")
-
-    min_bucket_reso = (int(args.resolution * 0.28125) // 64) * 64
     try:
         from extensions.sd_dreambooth_extension.dreambooth.dataset.db_dataset import DbDataset
     except:
@@ -82,7 +80,7 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
         debug_dataset=debug,
         model_dir=model_dir
     )
-    train_dataset.make_buckets_with_caching(vae, min_bucket_reso)
+    train_dataset.make_buckets_with_caching(vae)
 
     # train_dataset = train_dataset.pin_memory()
     print(f"Total dataset length (steps): {len(train_dataset)}")

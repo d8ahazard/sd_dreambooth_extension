@@ -99,7 +99,7 @@ class ImageBuilder:
                     revision=config.revision,
                     torch_dtype=torch_dtype
                 ),
-                unet=UNet2DConditionModel.from_pretrained(unet_path),
+                unet=UNet2DConditionModel.from_pretrained(unet_path, torch_dtype=torch_dtype),
                 torch_dtype=torch_dtype,
                 requires_safety_checker=False,
                 safety_checker=None,

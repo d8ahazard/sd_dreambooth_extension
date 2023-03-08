@@ -347,6 +347,8 @@ they'll help me help you faster.
 
 [Feature Request](https://github.com/d8ahazard/sd_dreambooth_extension/issues/new?assignees=&labels=&template=feature_request.md&title=)
 
+[Discord](https://discord.gg/q8dtpfRD5w)
+
 # Credits
 
 [Huggingface.co](https://huggingface.co) - All the things

@@ -449,7 +449,7 @@ onUiUpdate(function () {
     if (cm && cl) {
         if (cl.innerHTML !== "" && modalShown !== true) {
             modalShown = true;
-            //cm.classList.add("active");
+            cm.classList.add("active");
         }
     }
 
