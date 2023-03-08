@@ -702,13 +702,20 @@ def main(use_txt2img: bool = True) -> TrainResult:
         # affected by batch size
         sched_train_steps = args.num_train_epochs * train_dataset.num_train_images
 
-    if args.optimizer_class == "DAdaptation":
+    # If using dAdaptation override lr_scheduler
+
+    if (
+        args.optimizer_class == "DAdaptSGD"
+        or args.optimizer_class == "DAdaptAdam"
+        or args.optimizer_class == "DAdaptAdaGrad"
+    ):
         lr_scheduler = optim.lr_scheduler.LambdaLR(
             optimizer=optimizer,
             lr_lambda=[lambda epoch: 0.5, lambda epoch: 1],
             last_epoch=-1,
             verbose=False,
         )
+
     else:
         lr_scheduler = UniversalScheduler(
             args.lr_scheduler,
