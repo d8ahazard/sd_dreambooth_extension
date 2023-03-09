@@ -15,90 +15,53 @@ import torch.utils.data.dataloader
 from accelerate import find_executable_batch_size
 from diffusers.utils import logging as dl
 
-try:
-    from dreambooth import shared
-    from dreambooth.dataclasses import db_config
-    from dreambooth.dataclasses.db_config import (
-        from_file,
-        DreamboothConfig,
-        sanitize_name,
-    )
-    from dreambooth.dataclasses.prompt_data import (
-        PromptData,
-    )
-    from dreambooth.dataset.bucket_sampler import (
-        BucketSampler,
-    )
-    from dreambooth.dataset.class_dataset import (
-        ClassDataset,
-    )
-    from dreambooth.optimization import (
-        UniversalScheduler,
-    )
-    from dreambooth.sd_to_diff import (
-        extract_checkpoint,
-    )
-    from dreambooth.shared import status, run
-    from dreambooth.utils.gen_utils import (
-        generate_dataset,
-        generate_classifiers,
-    )
-    from dreambooth.utils.image_utils import (
-        get_images,
-        db_save_image,
-        make_bucket_resolutions,
-        get_dim,
-        closest_resolution,
-        open_and_trim,
-    )
-    from dreambooth.utils.model_utils import (
-        unload_system_models,
-        reload_system_models,
-        get_lora_models,
-        get_checkpoint_match,
-        get_model_snapshots,
-    )
-    from dreambooth.utils.utils import (
-        printm,
-        cleanup,
-    )
-    from helpers.image_builder import ImageBuilder
-    from helpers.mytqdm import mytqdm
-except:
-    from dreambooth import shared  # noqa
-    from dreambooth.dataclasses import db_config  # noqa
-    from dreambooth.dataclasses.db_config import (
-        from_file,
-        DreamboothConfig,
-        sanitize_name,
-    )  # noqa
-    from dreambooth.dataclasses.prompt_data import PromptData  # noqa
-    from dreambooth.dataset.bucket_sampler import BucketSampler  # noqa
-    from dreambooth.dataset.class_dataset import ClassDataset  # noqa
-    from dreambooth.optimization import UniversalScheduler  # noqa
-    from dreambooth.sd_to_diff import extract_checkpoint  # noqa
-    from dreambooth.shared import status, run  # noqa
-    from dreambooth.utils.gen_utils import (
-        generate_dataset,
-        generate_classifiers,
-    )  # noqa
-    from dreambooth.utils.image_utils import (
-        get_images,
-        db_save_image,
-        make_bucket_resolutions,
-        get_dim,
-        closest_resolution,
-        open_and_trim,
-    )  # noqa
-    from dreambooth.utils.model_utils import (
-        unload_system_models,
-        reload_system_models,
-        get_lora_models,
-        get_checkpoint_match,
-    )  # noqa
-    from dreambooth.utils.utils import printm, cleanup  # noqa
-    from helpers.image_builder import ImageBuilder  # noqa
-    from helpers.mytqdm import mytqdm  # noqa
+from dreambooth import shared
+from dreambooth.dataclasses import db_config
+from dreambooth.dataclasses.db_config import (
+    from_file,
+    sanitize_name,
+)
+from dreambooth.dataclasses.prompt_data import (
+    PromptData,
+)
+from dreambooth.dataset.bucket_sampler import (
+    BucketSampler,
+)
+from dreambooth.dataset.class_dataset import (
+    ClassDataset,
+)
+from dreambooth.optimization import (
+    UniversalScheduler,
+)
+from dreambooth.sd_to_diff import (
+    extract_checkpoint,
+)
+from dreambooth.shared import status, run
+from dreambooth.utils.gen_utils import (
+    generate_dataset,
+    generate_classifiers,
+)
+from dreambooth.utils.image_utils import (
+    get_images,
+    db_save_image,
+    make_bucket_resolutions,
+    get_dim,
+    closest_resolution,
+    open_and_trim,
+)
+from dreambooth.utils.model_utils import (
+    unload_system_models,
+    reload_system_models,
+    get_lora_models,
+    get_checkpoint_match,
+    get_model_snapshots,
+)
+from dreambooth.utils.utils import (
+    printm,
+    cleanup,
+)
+from helpers.image_builder import ImageBuilder
+from helpers.mytqdm import mytqdm
 
 logger = logging.getLogger(__name__)
 console = logging.StreamHandler()

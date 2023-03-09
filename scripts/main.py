@@ -48,11 +48,10 @@ from dreambooth.utils.utils import (
     list_optimizer,
 )
 from dreambooth.webhook import save_and_test_webhook
-from helpers.version_helper import check_updates
 from helpers.log_parser import LogParser
+from helpers.version_helper import check_updates
 from modules import script_callbacks, sd_models
 from modules.ui import gr_show, create_refresh_button
-
 
 params_to_save = []
 params_to_load = []

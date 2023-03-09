@@ -1,8 +1,8 @@
 import json
-from safetensors.torch import save_file as safe_save
 from typing import Optional, Set
-import torch.nn as nn
 
+import torch.nn as nn
+from safetensors.torch import save_file as safe_save
 
 from lora_diffusion.lora import DEFAULT_TARGET_REPLACE, LoraInjectedLinear, LoraInjectedConv2d
 

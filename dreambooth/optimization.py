@@ -22,6 +22,7 @@ from enum import Enum
 from typing import Optional, Tuple, Union, List
 
 import torch.optim.lr_scheduler
+from dadaptation import DAdaptAdam, DAdaptAdaGrad, DAdaptSGD
 from diffusers.utils import logging
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import (
@@ -31,7 +32,6 @@ from torch.optim.lr_scheduler import (
     CosineAnnealingLR,
     CosineAnnealingWarmRestarts,
 )
-from dadaptation import DAdaptAdam, DAdaptAdaGrad, DAdaptSGD
 
 logger = logging.get_logger(__name__)
 
@@ -376,23 +376,20 @@ def get_cosine_schedule_with_warmup(
 
 
 def get_sgd_with_daptation(
-    Optimizer: Optimizer,
     lr: float = 1.0,
-    weight_decay: float = 0.0,
     momentum: float = 0.0,
+    weight_decay: float = 0.0,
     weight_decouple: bool = True,
     d0: float = 1e-6,
 ):
     """Create the SGD optimizer with adaptation."""
-    optimizer = pytorch_optimizer.DAdaptSGD(
+    return DAdaptSGD(
         lr=lr,
         weight_decay=weight_decay,
         momentum=momentum,
         weight_decouple=weight_decouple,
         d0=d0,
     )
-
-    return optimizer
 
 
 def get_adam_with_daptation(
@@ -402,33 +399,29 @@ def get_adam_with_daptation(
     d0: float = 1e-6,
 ):
     """Create the Adam optimizer with adaptation."""
-    optimizer = pytorch_optimizer.DAdaptAdam(
+    return DAdaptAdam(
         lr=lr,
         weight_decay=weight_decay,
-        momentum=momentum,
         weight_decouple=weight_decouple,
         d0=d0,
     )
 
-    return optimizer
-
 
 def get_adagrad_with_daptation(
     lr: float = 1.0,
+    momentum: float = 0.0,
     weight_decay: float = 0.0,
     weight_decouple: bool = True,
     d0: float = 1e-6,
 ):
     """Create the Adagrad optimizer with adaptation."""
-    optimizer = pytorch_optimizer.DAdaptAdagrad(
+    return DAdaptAdaGrad(
         lr=lr,
         weight_decay=weight_decay,
         momentum=momentum,
         weight_decouple=weight_decouple,
         d0=d0,
     )
-
-    return optimizer
 
 
 def get_cosine_with_hard_restarts_schedule_with_warmup(

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from dreambooth import shared  # noqa
 from dreambooth.dataclasses.db_concept import Concept  # noqa
-from dreambooth.utils.image_utils import get_scheduler_names # noqa
+from dreambooth.utils.image_utils import get_scheduler_names  # noqa
 from dreambooth.utils.utils import list_attention
 
 # Keys to save, replacing our dumb __init__ method

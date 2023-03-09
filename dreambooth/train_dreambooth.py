@@ -32,110 +32,39 @@ from torch.utils.data import Dataset
 from torch.utils.tensorboard import SummaryWriter, FileWriter
 from transformers import AutoTokenizer
 
-
-try:
-    from helpers.log_parser import LogParser
-    from dreambooth import xattention, shared
-    from dreambooth.dataclasses.prompt_data import (
-        PromptData,
-    )
-    from dreambooth.dataclasses.train_result import (
-        TrainResult,
-    )
-    from dreambooth.dataset.bucket_sampler import (
-        BucketSampler,
-    )
-    from dreambooth.dataset.sample_dataset import (
-        SampleDataset,
-    )
-    from dreambooth.diff_to_sd import (
-        compile_checkpoint,
-    )
-    from dreambooth.memory import (
-        find_executable_batch_size,
-    )
-    from dreambooth.optimization import (
-        UniversalScheduler,
-    )
-    from dreambooth.shared import (
-        status,
-        load_auto_settings,
-    )
-    from dreambooth.utils.gen_utils import (
-        generate_classifiers,
-        generate_dataset,
-    )
-    from dreambooth.utils.image_utils import (
-        db_save_image,
-        get_scheduler_class,
-    )
-    from dreambooth.utils.model_utils import (
-        unload_system_models,
-        import_model_class_from_model_name_or_path,
-        disable_safe_unpickle,
-        enable_safe_unpickle,
-        xformerify,
-        torch2ify,
-    )
-    from dreambooth.utils.text_utils import (
-        encode_hidden_state,
-    )
-    from dreambooth.utils.utils import (
-        cleanup,
-        printm,
-    )
-    from dreambooth.webhook import (
-        send_training_update,
-    )
-    from dreambooth.xattention import optim_to
-    from helpers.ema_model import EMAModel
-    from helpers.mytqdm import mytqdm
-    from lora_diffusion.extra_networks import (
-        save_extra_networks,
-    )
-    from lora_diffusion.lora import (
-        save_lora_weight,
-        TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
-        get_target_module,
-    )
-    from dreambooth.deis_velocity import get_velocity
-except:
-    from helpers.log_parser import LogParser
-    from dreambooth import xattention, shared  # noqa
-    from dreambooth.dataclasses.prompt_data import PromptData  # noqa
-    from dreambooth.dataclasses.train_result import TrainResult  # noqa
-    from dreambooth.dataset.bucket_sampler import BucketSampler  # noqa
-    from dreambooth.dataset.sample_dataset import SampleDataset  # noqa
-    from dreambooth.diff_to_sd import compile_checkpoint  # noqa
-    from dreambooth.memory import find_executable_batch_size  # noqa
-    from dreambooth.optimization import UniversalScheduler  # noqa
-    from dreambooth.shared import status, load_auto_settings  # noqa
-    from dreambooth.utils.gen_utils import (
-        generate_classifiers,
-        generate_dataset,
-    )  # noqa
-    from dreambooth.utils.image_utils import (
-        db_save_image,
-        get_scheduler_class,
-    )  # noqa
-    from dreambooth.utils.model_utils import (
-        unload_system_models,
-        import_model_class_from_model_name_or_path,
-        disable_safe_unpickle,
-        enable_safe_unpickle,
-    )  # noqa
-    from dreambooth.utils.text_utils import encode_hidden_state  # noqa
-    from dreambooth.utils.utils import cleanup, printm  # noqa
-    from dreambooth.webhook import send_training_update  # noqa
-    from dreambooth.xattention import optim_to  # noqa
-    from helpers.ema_model import EMAModel  # noqa
-    from helpers.mytqdm import mytqdm  # noqa
-    from lora_diffusion.extra_networks import save_extra_networks  # noqa
-    from lora_diffusion.lora import (
-        save_lora_weight,
-        TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
-        get_target_module,
-    )  # noqa
+from dreambooth import shared
+from dreambooth.dataclasses.prompt_data import PromptData
+from dreambooth.dataclasses.train_result import TrainResult
+from dreambooth.dataset.bucket_sampler import BucketSampler
+from dreambooth.dataset.sample_dataset import SampleDataset
+from dreambooth.deis_velocity import get_velocity
+from dreambooth.diff_to_sd import compile_checkpoint
+from dreambooth.memory import find_executable_batch_size
+from dreambooth.optimization import UniversalScheduler
+from dreambooth.shared import status
+from dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
+from dreambooth.utils.image_utils import db_save_image, get_scheduler_class
+from dreambooth.utils.model_utils import (
+    unload_system_models,
+    import_model_class_from_model_name_or_path,
+    disable_safe_unpickle,
+    enable_safe_unpickle,
+    xformerify,
+    torch2ify,
+)
+from dreambooth.utils.text_utils import encode_hidden_state
+from dreambooth.utils.utils import cleanup, printm
+from dreambooth.webhook import send_training_update
+from dreambooth.xattention import optim_to
+from helpers.ema_model import EMAModel
+from helpers.log_parser import LogParser
+from helpers.mytqdm import mytqdm
+from lora_diffusion.extra_networks import save_extra_networks
+from lora_diffusion.lora import (
+    save_lora_weight,
+    TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
+    get_target_module,
+)
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
@@ -670,26 +599,18 @@ def main(use_txt2img: bool = True) -> TrainResult:
         # affected by batch size
         sched_train_steps = args.num_train_epochs * train_dataset.num_train_images
 
-        if optimizer_class.__name__ in ["DAdaptSGD", "DAdaptAdam", "DAdaptAdaGrad"]:
-            lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
-                optimizer=optimizer,
-                lr_lambda=[lambda epoch: 0.5, lambda epoch: 1],
-                last_epoch=-1,
-                verbose=False,
-            )
-        else:
-            lr_scheduler = UniversalScheduler(
-                args.lr_scheduler,
-                optimizer=optimizer,
-                num_warmup_steps=args.lr_warmup_steps,
-                total_training_steps=sched_train_steps,
-                total_epochs=args.num_train_epochs,
-                num_cycles=args.lr_cycles,
-                power=args.lr_power,
-                factor=args.lr_factor,
-                scale_pos=args.lr_scale_pos,
-                min_lr=args.learning_rate_min,
-            )
+        lr_scheduler = UniversalScheduler(
+            name=args.lr_scheduler,
+            optimizer=optimizer,
+            num_warmup_steps=args.lr_warmup_steps,
+            total_training_steps=sched_train_steps,
+            total_epochs=args.num_train_epochs,
+            num_cycles=args.lr_cycles,
+            power=args.lr_power,
+            factor=args.lr_factor,
+            scale_pos=args.lr_scale_pos,
+            min_lr=args.learning_rate_min,
+        )
 
         # create ema, fix OOM
         if args.use_ema:

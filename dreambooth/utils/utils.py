@@ -11,8 +11,6 @@ from typing import Optional
 import importlib_metadata
 from packaging import version
 
-from dreambooth import shared
-
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import torch
 from huggingface_hub import HfFolder, whoami
