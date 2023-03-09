@@ -96,14 +96,13 @@ class ClassDataset(Dataset):
 
                 # Otherwise, generate and append new class images
                 else:
-                    class_prompts = [img.prompt for img in c_prompt_datas]
-                    instance_prompts = [img.prompt for img in i_prompt_datas]
+                    existing_class_prompts = [img.prompt for img in c_prompt_datas]
 
                     if "[filewords]" in concept.class_prompt:
                         for prompt in instance_img_filewords:
                             sample_prompt = text_getter.create_text(
                                 concept.class_prompt, prompt, concept.instance_token, concept.class_token, True)
-                            num_to_gen = concept.num_class_images_per - class_prompts.count(sample_prompt)
+                            num_to_gen = concept.num_class_images_per - existing_class_prompts.count(sample_prompt)
                             for _ in range(num_to_gen):
                                 pd = PromptData(
                                     prompt=sample_prompt,
@@ -120,8 +119,7 @@ class ClassDataset(Dataset):
                     else:
                         sample_prompt = text_getter.create_text(
                             concept.class_prompt, "", concept.instance_token, concept.class_token, True)
-                        num_to_gen = concept.num_class_images_per * len(i_prompt_datas) - class_prompts.count(
-                            sample_prompt)
+                        num_to_gen = concept.num_class_images_per * len(i_prompt_datas) - existing_class_prompts.count(sample_prompt)
                         for _ in range(num_to_gen):
                             pd = PromptData(
                                 prompt=sample_prompt,
