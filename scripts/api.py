@@ -41,7 +41,7 @@ if os.environ.get("DEBUG_API", False):
     logging.basicConfig(level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
-print("No, really, API loaded, wtf...")
+
 
 class InstanceData(BaseModel):
     data: str = Field(title="File data", description="Base64 representation of the file or URL")
@@ -146,7 +146,7 @@ def file_to_base64(file_path) -> str:
 
 
 def dreambooth_api(_, app: FastAPI):
-    print("API LOAD")
+    logger.debug("Loading Dreambooth API Endpoints.")
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         return JSONResponse(

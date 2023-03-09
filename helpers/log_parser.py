@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Tuple, List, Union
 
 import matplotlib
+from matplotlib import axes
 import pandas as pd
 from PIL import Image
 from pandas import DataFrame
