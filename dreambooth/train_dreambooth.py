@@ -133,9 +133,9 @@ def stop_profiler(profiler):
             pass
 
 
-def main(use_txt2img: bool = True) -> TrainResult:
+def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
     """
-    @param use_txt2img: Use txt2img when generating class images.
+    @param class_gen_method: Class image generation method.
     @return: TrainResult
     """
     args = shared.db_model_config
@@ -215,14 +215,14 @@ def main(use_txt2img: bool = True) -> TrainResult:
             status.textinfo = msg
             stop_text_percentage = 0
         count, instance_prompts, class_prompts = generate_classifiers(
-            args, use_txt2img=use_txt2img, accelerator=accelerator, ui=False
+            args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False
         )
         if status.interrupted:
             result.msg = "Training interrupted."
             stop_profiler(profiler)
             return result
 
-        if use_txt2img and count > 0:
+        if class_gen_method == "Native Diffusers" and count > 0:
             unload_system_models()
 
         def create_vae():
@@ -447,7 +447,6 @@ def main(use_txt2img: bool = True) -> TrainResult:
 
         if args.use_lora:
             args.learning_rate = args.lora_learning_rate
-
             params_to_optimize = (
                 [
                     {
@@ -477,8 +476,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
             weight_decay=args.adamw_weight_decay,
         )
 
-        if args.deis_train_scheduler:
-            print("Using DEIS for noise scheduler.")
+        if args.noise_scheduler == "DEIS":
             noise_scheduler = DEISMultistepScheduler.from_pretrained(
                 args.pretrained_model_name_or_path, subfolder="scheduler"
             )
@@ -604,12 +602,19 @@ def main(use_txt2img: bool = True) -> TrainResult:
             optimizer=optimizer,
             num_warmup_steps=args.lr_warmup_steps,
             total_training_steps=sched_train_steps,
+            lr=args.learning_rate,
+            min_lr=args.learning_rate_min,
             total_epochs=args.num_train_epochs,
             num_cycles=args.lr_cycles,
             power=args.lr_power,
             factor=args.lr_factor,
             scale_pos=args.lr_scale_pos,
-            min_lr=args.learning_rate_min,
+            betas=(args.adaptation_beta1, args.adaptation_beta2),
+            momentum=args.adaptation_momentum,
+            eps=args.adaptation_eps,
+            weight_decay=args.adamw_weight_decay,
+            d0=args.adaptation_d0,
+            growth_rate=args.adaptation_growth_rate,
         )
 
         # create ema, fix OOM
@@ -727,18 +732,14 @@ def main(use_txt2img: bool = True) -> TrainResult:
         print(f"  Num Epochs = {max_train_epochs}")
         print(f"  Batch Size Per Device = {train_batch_size}")
         print(f"  Gradient Accumulation steps = {gradient_accumulation_steps}")
-        print(
-            f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}"
-        )
+        print(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
         print(f"  Text Encoder Epochs: {text_encoder_epochs}")
         print(f"  Total optimization steps = {sched_train_steps}")
         print(f"  Total training steps = {max_train_steps}")
         print(f"  Resuming from checkpoint: {resume_from_checkpoint}")
         print(f"  First resume epoch: {first_epoch}")
         print(f"  First resume step: {resume_step}")
-        print(
-            f"  Lora: {args.use_lora}, Optimizer: {args.optimizer}, Prec: {precision}"
-        )
+        print(f"  Lora: {args.use_lora}, Optimizer: {args.optimizer}, Prec: {precision}")
         print(f"  Gradient Checkpointing: {args.gradient_checkpointing}")
         print(f"  EMA: {args.use_ema}")
         print(f"  UNET: {args.train_unet}")

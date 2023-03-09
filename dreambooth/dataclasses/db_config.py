@@ -22,21 +22,20 @@ def sanitize_name(name):
 
 
 class DreamboothConfig(BaseModel):
-    # These properties MUST be sorted alphabetically
     adamw_weight_decay: float = 0.01
-    adaptation_beta1: int = 0
-    adaptation_beta2: int = 0
-    adaptation_d0: float = 1e-8
+    adaptation_beta1: int = 0.9
+    adaptation_beta2: int = 0.999
+    adaptation_d0: float = 1e-6
     adaptation_eps: float = 1e-8
-    adaptation_growth_rate: float = 1e-8
-    adaptation_momentum: int = 0
+    adaptation_growth_rate: float = 1.02
+    adaptation_momentum: int = 0.9
     attention: str = "xformers"
     cache_latents: bool = True
     clip_skip: int = 1
     concepts_list: List[Dict] = []
     concepts_path: str = ""
     custom_model_name: str = ""
-    deis_train_scheduler: bool = False
+    noise_scheduler: str = "DDPM"
     deterministic: bool = False
     ema_predict: bool = False
     epoch: int = 0
@@ -184,7 +183,7 @@ class DreamboothConfig(BaseModel):
                             break
 
             if hasattr(self, key):
-                value = self.validate_param(key, value)
+                key, value = self.validate_param(key, value)
                 setattr(self, key, value)
         if sched_swap:
             self.save()
@@ -192,17 +191,37 @@ class DreamboothConfig(BaseModel):
     @staticmethod
     def validate_param(key, value):
         replaced_params = {
+            # "old_key" : {
+            #   "new_key": "...",
+            #   "values": [{
+            #       "old": ["...", "..."]
+            #       "new": "..."
+            #   }]
+            # }
             "optimizer": {
-                "old": ["8Bit Adam"],
-                "new": "8bit AdamW"
-            }
+                "values": [{
+                    "old": ["8Bit Adam"],
+                    "new": "8bit AdamW"
+                }],
+            },
+            "deis_train_scheduler": {
+                "new_key": "noise_scheduler",
+                "values": [{
+                    "old": [True],
+                    "new": "DDPM"
+                }],
+            },
         }
 
         if key in replaced_params.keys():
             replacement = replaced_params[key]
-            if value in replacement["old"]:
-                return replacement["new"]
-        return value
+            if hasattr(replacement, "new_key"):
+                key = replacement["new_key"]
+            if hasattr(replacement, "values"):
+                for _value in replacement["values"]:
+                    if value in _value["old"]:
+                        value = _value["new"]
+        return key, value
 
     # Pass a dict and return a list of Concept objects
     def concepts(self, required: int = -1):

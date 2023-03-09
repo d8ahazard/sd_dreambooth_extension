@@ -160,3 +160,7 @@ button:disabled, input:disabled {
 #db_preview div.left-0.top-0 {
     display: none;
 }
+
+#hyperlink {
+    text-decoration: underline
+}

@@ -417,7 +417,7 @@ def generate_samples(
     seed: int,
     steps: int,
     scale: float,
-    use_txt2img: bool,
+    class_gen_method: str = "Native Diffusers",
     scheduler: str = "UniPCMultistep",
     swap_faces: bool = False,
     swap_prompt: str = "",
@@ -435,7 +435,7 @@ def generate_samples(
         config = from_file(model_name)
         source_model = None
 
-        if use_txt2img:
+        if class_gen_method == "A1111 txt2img (DPM++ 2S a Karras)":
             tgt_name = (
                 model_name if not config.custom_model_name else config.custom_model_name
             )
@@ -491,7 +491,7 @@ def generate_samples(
 
             img_builder = ImageBuilder(
                 config=config,
-                use_txt2img=use_txt2img,
+                class_gen_method=class_gen_method,
                 lora_model=config.lora_model_name,
                 batch_size=batch_size,
                 lora_unet_rank=config.lora_unet_rank,
@@ -673,11 +673,11 @@ def load_model_params(model_name):
         )
 
 
-def start_training(model_dir: str, use_txt2img: bool = True):
+def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
     """
 
     @param model_dir: The directory containing the dreambooth model/config
-    @param use_txt2img: Whether to use txt2img or diffusion pipeline for image generation.
+    @param class_gen_method: Class image generation method.
     @return:
     lora_model_name: If using lora, this will be the model name of the saved weights. (For resuming further training)
     revision: The model revision after training.
@@ -741,7 +741,7 @@ def start_training(model_dir: str, use_txt2img: bool = True):
                 from dreambooth.train_dreambooth import main  # noqa
             except:
                 from dreambooth.train_dreambooth import main  # noqa
-            result = main(use_txt2img=use_txt2img)
+            result = main(class_gen_method=class_gen_method)
 
         config = result.config
         images = result.samples
@@ -814,11 +814,11 @@ def update_extension():
     reload_extension()
 
 
-def ui_classifiers(model_name: str, use_txt2img: bool):
+def ui_classifiers(model_name: str, class_gen_method: str = "Native Diffusers"):
     """
     UI method for generating class images.
     @param model_name: The model to generate classes for.
-    @param use_txt2img: Use txt2image when generating concepts.
+    @param class_gen_method" Class image generation method.
     @return:
     """
     if model_name == "" or model_name is None:

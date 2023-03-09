@@ -42,10 +42,11 @@ from dreambooth.utils.model_utils import (
 )
 from dreambooth.utils.utils import (
     list_attention,
-    list_floats,
+    list_precisions,
     wrap_gpu_call,
     printm,
     list_optimizer,
+    list_adapt_schedulers,
 )
 from dreambooth.webhook import save_and_test_webhook
 from helpers.log_parser import LogParser
@@ -257,94 +258,100 @@ def on_ui_tabs():
             gr.HTML(value="Select or create a model to begin.", elem_id="hint_row")
         with gr.Row().style(equal_height=False):
             with gr.Column(variant="panel", elem_id="ModelPanel"):
-                gr.HTML(value="<span class='hh'>Model</span>")
-                with gr.Tab("Select"):
-                    with gr.Row():
-                        db_model_name = gr.Dropdown(
-                            label="Model", choices=sorted(get_db_models())
-                        )
-                        create_refresh_button(
-                            db_model_name,
-                            get_db_models,
-                            lambda: {"choices": sorted(get_db_models())},
-                            "refresh_db_models",
-                        )
-                    with gr.Row():
-                        db_snapshot = gr.Dropdown(
-                            label="Snapshot to Resume",
-                            choices=sorted(get_model_snapshots()),
-                        )
-                        create_refresh_button(
-                            db_snapshot,
-                            get_model_snapshots,
-                            lambda: {"choices": sorted(get_model_snapshots())},
-                            "refresh_db_snapshots",
-                        )
-                    with gr.Row(visible=False) as lora_model_row:
-                        db_lora_model_name = gr.Dropdown(
-                            label="Lora Model", choices=get_sorted_lora_models()
-                        )
-                        create_refresh_button(
-                            db_lora_model_name,
-                            get_sorted_lora_models,
-                            lambda: {"choices": get_sorted_lora_models()},
-                            "refresh_lora_models",
-                        )
-                    with gr.Row():
-                        gr.HTML(value="Loaded Model:")
-                        db_model_path = gr.HTML()
-                    with gr.Row():
-                        gr.HTML(value="Model Revision:")
-                        db_revision = gr.HTML(elem_id="db_revision")
-                    with gr.Row():
-                        gr.HTML(value="Model Epoch:")
-                        db_epochs = gr.HTML(elem_id="db_epochs")
-                    with gr.Row():
-                        gr.HTML(value="V2 Model:")
-                        db_v2 = gr.HTML(elem_id="db_v2")
-                    with gr.Row():
-                        gr.HTML(value="Has EMA:")
-                        db_has_ema = gr.HTML(elem_id="db_has_ema")
-                    with gr.Row():
-                        gr.HTML(value="Source Checkpoint:")
-                        db_src = gr.HTML()
-
-                with gr.Tab("Create"):
-                    with gr.Column():
-                        db_create_model = gr.Button(
-                            value="Create Model", variant="primary"
-                        )
-                    db_new_model_name = gr.Textbox(label="Name")
-                    with gr.Row():
-                        db_create_from_hub = gr.Checkbox(
-                            label="Create From Hub", value=False
-                        )
-                        db_512_model = gr.Checkbox(label="512x Model", value=True)
-                    with gr.Column(visible=False) as hub_row:
-                        db_new_model_url = gr.Textbox(
-                            label="Model Path",
-                            placeholder="runwayml/stable-diffusion-v1-5",
-                        )
-                        db_new_model_token = gr.Textbox(
-                            label="HuggingFace Token", value=""
-                        )
-                    with gr.Column(visible=True) as local_row:
+                with gr.Column():
+                    gr.HTML(value="<span class='hh'>Model</span>")
+                    with gr.Tab("Select"):
                         with gr.Row():
-                            db_new_model_src = gr.Dropdown(
-                                label="Source Checkpoint",
-                                choices=sorted(get_sd_models()),
+                            db_model_name = gr.Dropdown(
+                                label="Model", choices=sorted(get_db_models())
                             )
                             create_refresh_button(
-                                db_new_model_src,
-                                get_sd_models,
-                                lambda: {"choices": sorted(get_sd_models())},
-                                "refresh_sd_models",
+                                db_model_name,
+                                get_db_models,
+                                lambda: {"choices": sorted(get_db_models())},
+                                "refresh_db_models",
                             )
-                    db_new_model_extract_ema = gr.Checkbox(
-                        label="Extract EMA Weights", value=False
-                    )
-                    db_train_unfrozen = gr.Checkbox(label="Unfreeze Model", value=False)
-
+                        with gr.Row():
+                            db_snapshot = gr.Dropdown(
+                                label="Snapshot to Resume",
+                                choices=sorted(get_model_snapshots()),
+                            )
+                            create_refresh_button(
+                                db_snapshot,
+                                get_model_snapshots,
+                                lambda: {"choices": sorted(get_model_snapshots())},
+                                "refresh_db_snapshots",
+                            )
+                        with gr.Row(visible=False) as lora_model_row:
+                            db_lora_model_name = gr.Dropdown(
+                                label="Lora Model", choices=get_sorted_lora_models()
+                            )
+                            create_refresh_button(
+                                db_lora_model_name,
+                                get_sorted_lora_models,
+                                lambda: {"choices": get_sorted_lora_models()},
+                                "refresh_lora_models",
+                            )
+                        with gr.Row():
+                            gr.HTML(value="Loaded Model:")
+                            db_model_path = gr.HTML()
+                        with gr.Row():
+                            gr.HTML(value="Model Revision:")
+                            db_revision = gr.HTML(elem_id="db_revision")
+                        with gr.Row():
+                            gr.HTML(value="Model Epoch:")
+                            db_epochs = gr.HTML(elem_id="db_epochs")
+                        with gr.Row():
+                            gr.HTML(value="V2 Model:")
+                            db_v2 = gr.HTML(elem_id="db_v2")
+                        with gr.Row():
+                            gr.HTML(value="Has EMA:")
+                            db_has_ema = gr.HTML(elem_id="db_has_ema")
+                        with gr.Row():
+                            gr.HTML(value="Source Checkpoint:")
+                            db_src = gr.HTML()
+                    with gr.Tab("Create"):
+                        with gr.Column():
+                            db_create_model = gr.Button(
+                                value="Create Model", variant="primary"
+                            )
+                        db_new_model_name = gr.Textbox(label="Name")
+                        with gr.Row():
+                            db_create_from_hub = gr.Checkbox(
+                                label="Create From Hub", value=False
+                            )
+                            db_512_model = gr.Checkbox(label="512x Model", value=True)
+                        with gr.Column(visible=False) as hub_row:
+                            db_new_model_url = gr.Textbox(
+                                label="Model Path",
+                                placeholder="runwayml/stable-diffusion-v1-5",
+                            )
+                            db_new_model_token = gr.Textbox(
+                                label="HuggingFace Token", value=""
+                            )
+                        with gr.Column(visible=True) as local_row:
+                            with gr.Row():
+                                db_new_model_src = gr.Dropdown(
+                                    label="Source Checkpoint",
+                                    choices=sorted(get_sd_models()),
+                                )
+                                create_refresh_button(
+                                    db_new_model_src,
+                                    get_sd_models,
+                                    lambda: {"choices": sorted(get_sd_models())},
+                                    "refresh_sd_models",
+                                )
+                        db_new_model_extract_ema = gr.Checkbox(
+                            label="Extract EMA Weights", value=False
+                        )
+                        db_train_unfrozen = gr.Checkbox(label="Unfreeze Model", value=False)
+                with gr.Column():
+                    with gr.Row():
+                        gr.HTML(value="Beginners Guide:")
+                        gr.HTML(
+                            value="<a href=\"https://github.com/d8ahazard/sd_dreambooth_extension/wiki/ELI5-Training\">ELI5-Training</a>",
+                            elem_id="hyperlink"
+                        )
             with gr.Column(variant="panel", elem_id="SettingsPanel"):
                 gr.HTML(value="<span class='hh'>Input</span>")
                 with gr.Tab("Settings", elem_id="TabSettings"):
@@ -354,19 +361,15 @@ def on_ui_tabs():
                             gr.HTML(value="General")
                             db_use_lora = gr.Checkbox(label="Use LORA", value=False)
                             db_use_lora_extended = gr.Checkbox(
-                                label="Use Lora Extended", value=False
+                                label="Use Lora Extended",
+                                value=False,
+                                visible=False,
                             )
-                            db_train_imagic_only = gr.Checkbox(
-                                label="Train Imagic Only", value=False
-                            )
+                            db_train_imagic_only = gr.Checkbox(label="Train Imagic Only", value=False)
                             db_train_inpainting = gr.Checkbox(
                                 label="Train Inpainting Model",
                                 value=False,
                                 visible=False,
-                            )
-                            db_use_txt2img = gr.Checkbox(
-                                label="Generate Classification Images Using txt2img",
-                                value=False,
                             )
                         with gr.Column():
                             gr.HTML(value="Intervals")
@@ -431,27 +434,24 @@ def on_ui_tabs():
                                 label="Gradient Checkpointing", value=True
                             )
 
-                        schedulers = [
-                            "linear",
-                            "linear_with_warmup",
-                            "cosine",
-                            "cosine_annealing",
-                            "cosine_annealing_with_restarts",
-                            "cosine_with_restarts",
-                            "polynomial",
-                            "constant",
-                            "constant_with_warmup",
-                        ]
                         with gr.Column():
                             gr.HTML(value="Learning Rate")
+                            with gr.Row(visible=False) as lora_lr_row:
+                                db_lora_learning_rate = gr.Number(
+                                    label="Lora UNET Learning Rate", value=2e-4
+                                )
+                                db_lora_txt_learning_rate = gr.Number(
+                                    label="Lora Text Encoder Learning Rate", value=2e-4
+                                )
+                            with gr.Row() as standard_lr_row:
+                                db_learning_rate = gr.Number(
+                                    label="Learning Rate", value=2e-6
+                                )
+
                             db_lr_scheduler = gr.Dropdown(
                                 label="Learning Rate Scheduler",
                                 value="constant_with_warmup",
-                                choices=schedulers,
-                            )
-
-                            db_learning_rate = gr.Number(
-                                label="Learning Rate", value=2e-6
+                                choices=list_adapt_schedulers(),
                             )
                             db_learning_rate_min = gr.Number(
                                 label="Min Learning Rate", value=1e-6, visible=False
@@ -482,47 +482,39 @@ def on_ui_tabs():
                                 step=0.05,
                                 visible=False,
                             )
-
-                            # Dadaptation params only visible if with Dadaptation optimizer selected
-                            # Hide all other scheduler params and scheduler dropdown
-                            db_adaptation_growth_rate = gr.Number(
-                                label="Adaptation Growth Rate",
-                                value=1e-8,
-                            )
-                            db_adaptation_d0 = gr.Number(
-                                label="Adaptation D0",
-                                value=1e-8,
-                            )
-                            db_adaptation_eps = gr.Number(
-                                label="Adaptation Eps",
-                                value=1e-8,
-                            )
-                            db_adaptation_momentum = gr.Number(
-                                label="Adaptation Momentum",
-                                value=0,
-                            )
-                            db_adaptation_beta1 = gr.Number(
-                                label="Adaptation Beta1",
-                                value=0
-                            )
-                            db_adaptation_beta2 = gr.Number(
-                                label="Adaptation Beta2",
-                                value=0,
-                            )
-
-                            with gr.Row(visible=False) as lora_lr_row:
-                                db_lora_learning_rate = gr.Number(
-                                    label="Lora UNET Learning Rate", value=2e-4
-                                )
-                                db_lora_txt_learning_rate = gr.Number(
-                                    label="Lora Text Encoder Learning Rate", value=2e-4
-                                )
                             db_lr_warmup_steps = gr.Slider(
                                 label="Learning Rate Warmup Steps",
                                 value=0,
                                 step=5,
                                 maximum=10000,
                             )
+
+                            with gr.Column(visible=False) as adaptation_lr_row:
+                                # Hide all other scheduler params and scheduler dropdown
+                                db_adaptation_growth_rate = gr.Number(
+                                    label="Adaptation Growth Rate",
+                                    value=1.02,
+                                )
+                                db_adaptation_d0 = gr.Number(
+                                    label="Adaptation D0",
+                                    value=1e-6,
+                                )
+                                db_adaptation_eps = gr.Number(
+                                    label="Adaptation Eps",
+                                    value=1e-8,
+                                )
+                                db_adaptation_momentum = gr.Number(
+                                    label="Adaptation Momentum",
+                                    value=0.9,
+                                )
+                                db_adaptation_beta1 = gr.Number(
+                                    label="Adaptation Beta1",
+                                    value=0.9
+                                )
+                                db_adaptation_beta2 = gr.Number(
+                                    label="Adaptation Beta2",
+                                    value=0.999,
+                                )
 
                         with gr.Column():
                             gr.HTML(value="Image Processing")
@@ -604,7 +596,7 @@ def on_ui_tabs():
                                     db_mixed_precision = gr.Dropdown(
                                         label="Mixed Precision",
                                         value="no",
-                                        choices=list_floats(),
+                                        choices=list_precisions(),
                                     )
                                     db_attention = gr.Dropdown(
                                         label="Memory Attention",
@@ -878,6 +870,21 @@ def on_ui_tabs():
                             label="Save separate diffusers snapshots when training is canceled."
                         )
                 with gr.Tab("Generate", elem_id="TabGenerate"):
+                    gr.HTML(value="Class Generation Schedulers")
+                    db_class_gen_method = gr.Dropdown(
+                        label="Class Image Generation Method",
+                        value="Native Diffusers",
+                        choices=[
+                            "A1111 txt2img (DPM++ 2S a Karras)",
+                            "Native Diffusers",
+                        ]
+                    )
+                    db_scheduler = gr.Dropdown(
+                        label="Scheduler",
+                        value="DEISMultistep",
+                        choices=get_scheduler_names(),
+                    )
+                    gr.HTML(value="Manual Class Generation")
                     with gr.Column():
                         db_generate_classes = gr.Button(value="Generate Class Images")
                         db_generate_graph = gr.Button(value="Generate Graph")
@@ -952,11 +959,6 @@ def on_ui_tabs():
                             minimum=1,
                             maximum=20,
                         )
-                        db_scheduler = gr.Dropdown(
-                            label="Scheduler",
-                            choices=get_scheduler_names(),
-                            value="DEISMultistep",
-                        )
                         with gr.Column(variant="panel", visible=has_face_swap()):
                             db_swap_faces = gr.Checkbox(label="Swap Sample Faces")
                             db_swap_prompt = gr.Textbox(label="Swap Prompt")
@@ -965,19 +967,27 @@ def on_ui_tabs():
                             db_swap_batch = gr.Slider(label="Swap Batch", value=40)
 
                         db_sample_txt2img = gr.Checkbox(
-                            label="Use txt2img", value=False
+                            label="Use txt2img",
+                            value=False,
+                            visible=False  # db_sample_txt2img not implemented yet
                         )
                 with gr.Tab("Testing", elem_id="TabDebug"):
+                    gr.HTML(value="Experimental Settings")
                     db_deterministic = gr.Checkbox(label="Deterministic")
-                    db_ema_predict = gr.Checkbox(label="Use EMA for prediction.")
+                    db_ema_predict = gr.Checkbox(label="Use EMA for prediction")
                     db_split_loss = gr.Checkbox(
                         label="Calculate Split Loss", value=True
                     )
                     db_tf32_enable = gr.Checkbox(
                         label="Use TensorFloat 32", value=False
                     )
-                    db_deis_train_scheduler = gr.Checkbox(
-                        label="Use DEIS for noise scheduler", value=False
+                    db_noise_scheduler = gr.Dropdown(
+                        label="Noise scheduler",
+                        value="DDPM",
+                        choices=[
+                            "DDPM",
+                            "DEIS",
+                        ]
                     )
                     db_update_extension = gr.Button(
                         value="Update Extension and Restart"
@@ -1029,12 +1039,17 @@ def on_ui_tabs():
                 )
 
                 def check_toggles(
-                    use_ema, use_lora, lr_scheduler, train_unet, scale_prior
+                    use_lora, lr_scheduler, train_unet, scale_prior
                 ):
                     stop_text_encoder = update_stop_tenc(train_unet)
-                    show_ema, lora_save, lora_lr, lora_model = disable_ema(use_lora)
-                    if not use_lora and use_ema:
-                        disable_lora(use_ema)
+                    (
+                        show_ema,
+                        use_lora_extended,
+                        lora_save,
+                        lora_lr,
+                        standard_lr,
+                        lora_model,
+                     ) = disable_lora(use_lora)
                     (
                         lr_power,
                         lr_cycles,
@@ -1042,11 +1057,12 @@ def on_ui_tabs():
                         lr_factor,
                         learning_rate_min,
                         lr_warmup_steps,
-                    ) = toggle_lr_min(lr_scheduler)
+                     ) = lr_scheduler_changed(lr_scheduler)
                     loss_min, loss_tgt = toggle_loss_items(scale_prior)
                     return (
                         stop_text_encoder,
                         show_ema,
+                        use_lora_extended,
                         lora_save,
                         lora_lr,
                         lora_model,
@@ -1058,6 +1074,7 @@ def on_ui_tabs():
                         lr_warmup_steps,
                         loss_min,
                         loss_tgt,
+                        standard_lr
                     )
 
                 db_start_crop.click(
@@ -1076,7 +1093,6 @@ def on_ui_tabs():
                 db_update_params.click(
                     fn=check_toggles,
                     inputs=[
-                        db_use_ema,
                         db_use_lora,
                         db_lr_scheduler,
                         db_train_unet,
@@ -1085,6 +1101,7 @@ def on_ui_tabs():
                     outputs=[
                         db_stop_text_encoder,
                         db_use_ema,
+                        db_use_lora_extended,
                         lora_save_col,
                         lora_lr_row,
                         lora_model_row,
@@ -1096,6 +1113,7 @@ def on_ui_tabs():
                         db_lr_warmup_steps,
                         db_prior_loss_weight_min,
                         db_prior_loss_target,
+                        standard_lr_row,
                     ],
                 )
 
@@ -1202,7 +1220,7 @@ def on_ui_tabs():
             db_clip_skip,
             db_concepts_path,
             db_custom_model_name,
-            db_deis_train_scheduler,
+            db_noise_scheduler,
             db_deterministic,
             db_ema_predict,
             db_epochs,
@@ -1405,18 +1423,23 @@ def on_ui_tabs():
             outputs=[db_prior_loss_weight_min, db_prior_loss_target],
         )
 
-        def disable_ema(x):
+        def disable_lora(x):
+            use_ema = gr.update(interactive=not x)
+            use_lora_extended = gr.update(visible=x)
+            lora_save = gr.update(visible=x)
+            lora_lr = gr.update(visible=x)
+            standard_lr = gr.update(visible=not x)
+            lora_model = gr.update(visible=x)
             return (
-                gr.update(interactive=not x),
-                gr.update(visible=x),
-                gr.update(visible=x),
-                gr.update(visible=x),
+                use_ema,
+                use_lora_extended,
+                lora_save,
+                lora_lr,
+                standard_lr,
+                lora_model,
             )
 
-        def disable_lora(x):
-            db_use_lora.interactive = not x
-
-        def toggle_lr_min(sched):
+        def lr_scheduler_changed(sched):
             show_scale_pos = gr.update(visible=False)
             show_min_lr = gr.update(visible=False)
             show_lr_factor = gr.update(visible=False)
@@ -1433,9 +1456,9 @@ def on_ui_tabs():
                 show_scale_pos = gr.update(visible=True)
             else:
                 show_lr_warmup = gr.update(visible=True)
-            if sched == "cosine_annealing" or sched == "cosine_annealing_with_restarts":
+            if sched in ["cosine_annealing", "cosine_annealing_with_restarts"]:
                 show_min_lr = gr.update(visible=True)
-            if sched == "linear" or sched == "constant":
+            if sched in ["linear", "constant"]:
                 show_lr_factor = gr.update(visible=True)
             return (
                 show_lr_power,
@@ -1446,14 +1469,31 @@ def on_ui_tabs():
                 show_lr_warmup,
             )
 
+        def optimizer_changed(opti):
+            show_adapt = opti in ["SGD Dadaptation", "AdaGrad Dadaptation", "AdamW Dadaptation"]
+            adaptation_lr = gr.update(visible=show_adapt)
+            return adaptation_lr
+
+        def class_gen_method_changed(method):
+            show_scheduler = method == "Native Diffusers"
+            scheduler = gr.update(visible=show_scheduler)
+            return scheduler
+
         db_use_lora.change(
-            fn=disable_ema,
+            fn=disable_lora,
             inputs=[db_use_lora],
-            outputs=[db_use_ema, lora_save_col, lora_lr_row, lora_model_row],
+            outputs=[
+                db_use_ema,
+                db_use_lora_extended,
+                lora_save_col,
+                lora_lr_row,
+                standard_lr_row,
+                lora_model_row,
+            ],
         )
 
         db_lr_scheduler.change(
-            fn=toggle_lr_min,
+            fn=lr_scheduler_changed,
             inputs=[db_lr_scheduler],
             outputs=[
                 db_lr_power,
@@ -1465,10 +1505,16 @@ def on_ui_tabs():
             ],
         )
 
-        db_use_ema.change(
-            fn=disable_lora,
-            inputs=[db_use_ema],
-            outputs=[db_use_lora],
+        db_optimizer.change(
+            fn=optimizer_changed,
+            inputs=[db_optimizer],
+            outputs=[adaptation_lr_row],
+        )
+
+        db_class_gen_method.change(
+            fn=class_gen_method_changed,
+            inputs=[db_class_gen_method],
+            outputs=[db_scheduler],
         )
 
         db_model_name.change(
@@ -1630,14 +1676,14 @@ def on_ui_tabs():
         db_train_model.click(
             fn=wrap_gpu_call(start_training),
             _js="db_start_train",
-            inputs=[db_model_name, db_use_txt2img],
+            inputs=[db_model_name, db_class_gen_method],
             outputs=[db_lora_model_name, db_revision, db_epochs, db_gallery, db_status],
         )
 
         db_generate_classes.click(
             _js="db_start_classes",
             fn=wrap_gpu_call(ui_classifiers),
-            inputs=[db_model_name, db_use_txt2img],
+            inputs=[db_model_name, db_class_gen_method],
             outputs=[db_gallery, db_status],
         )
 
