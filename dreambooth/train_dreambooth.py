@@ -670,7 +670,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
         # affected by batch size
         sched_train_steps = args.num_train_epochs * train_dataset.num_train_images
 
-        if args.optimizer_class in ["DAdaptSGD", "DAdaptAdam", "DAdaptAdaGrad"]:
+        if optimizer_class.__name__ in ["DAdaptSGD", "DAdaptAdam", "DAdaptAdaGrad"]:
             lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
                 optimizer=optimizer,
                 lr_lambda=[lambda epoch: 0.5, lambda epoch: 1],
