@@ -47,7 +47,7 @@ def sanitize_name(name):
 
 
 def printm(msg=""):
-    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from dreambooth import shared
 
     if shared.debug:
         allocated = round(torch.cuda.memory_allocated(0) / 1024**3, 1)

@@ -490,26 +490,26 @@ def on_ui_tabs():
                                 label="Adaptation Growth Rate",
                                 value=1e-8,
                             )
-                            db_adaptation_d0 = gr.Number(
-                                label="Adaptation D0",
-                                value=1e-8,
-                            )
-                            db_adaptation_eps = gr.Number(
-                                label="Adaptation Eps",
-                                value=1e-8,
-                            )
-                            db_adaptation_momentum = gr.Number(
-                                label="Adaptation Momentum",
-                                value=0,
-                            )
-                            db_adaptation_beta1 = gr.Number(
-                                label="Adaptation Beta1",
-                                value=0
-                            )
-                            db_adaptation_beta2 = gr.Number(
-                                label="Adaptation Beta2",
-                                value=0,
-                            )
+                            # db_adaptation_d0 = gr.Number(
+                            #     label="Adaptation D0",
+                            #     value=1e-8,
+                            # )
+                            # db_adaptation_eps = gr.Number(
+                            #     label="Adaptation Eps",
+                            #     value=1e-8,
+                            # )
+                            # db_adaptation_momentum = gr.Number(
+                            #     label="Adaptation Momentum",
+                            #     value=0,
+                            # )
+                            # db_adaptation_beta1 = gr.Number(
+                            #     label="Adaptation Beta1",
+                            #     value=0
+                            # )
+                            # db_adaptation_beta2 = gr.Number(
+                            #     label="Adaptation Beta2",
+                            #     value=0,
+                            # )
 
                             with gr.Row(visible=False) as lora_lr_row:
                                 db_lora_learning_rate = gr.Number(
@@ -1192,12 +1192,12 @@ def on_ui_tabs():
         # db_model_name must be first due to save_config() parsing
         params_to_save = [
             db_model_name,
-            db_adaptation_beta1,
-            db_adaptation_beta2,
-            db_adaptation_d0,
-            db_adaptation_eps,
+            # db_adaptation_beta1,
+            # db_adaptation_beta2,
+            # db_adaptation_d0,
+            # db_adaptation_eps,
             db_adaptation_growth_rate,
-            db_adaptation_momentum,
+            # db_adaptation_momentum,
             db_attention,
             db_cache_latents,
             db_clip_skip,

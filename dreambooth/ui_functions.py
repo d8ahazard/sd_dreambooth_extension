@@ -16,34 +16,34 @@ from accelerate import find_executable_batch_size
 from diffusers.utils import logging as dl
 
 try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses import db_config
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import (
+    from dreambooth import shared
+    from dreambooth.dataclasses import db_config
+    from dreambooth.dataclasses.db_config import (
         from_file,
         DreamboothConfig,
         sanitize_name,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import (
+    from dreambooth.dataclasses.prompt_data import (
         PromptData,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.dataset.bucket_sampler import (
+    from dreambooth.dataset.bucket_sampler import (
         BucketSampler,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import (
+    from dreambooth.dataset.class_dataset import (
         ClassDataset,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.optimization import (
+    from dreambooth.optimization import (
         UniversalScheduler,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import (
+    from dreambooth.sd_to_diff import (
         extract_checkpoint,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.shared import status, run
-    from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import (
+    from dreambooth.shared import status, run
+    from dreambooth.utils.gen_utils import (
         generate_dataset,
         generate_classifiers,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import (
+    from dreambooth.utils.image_utils import (
         get_images,
         db_save_image,
         make_bucket_resolutions,
@@ -51,38 +51,38 @@ try:
         closest_resolution,
         open_and_trim,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import (
+    from dreambooth.utils.model_utils import (
         unload_system_models,
         reload_system_models,
         get_lora_models,
         get_checkpoint_match,
         get_model_snapshots,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import (
+    from dreambooth.utils.utils import (
         printm,
         cleanup,
     )
-    from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
-    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
+    from helpers.image_builder import ImageBuilder
+    from helpers.mytqdm import mytqdm
 except:
-    from dreambooth.dreambooth import shared  # noqa
-    from dreambooth.dreambooth.dataclasses import db_config  # noqa
-    from dreambooth.dreambooth.dataclasses.db_config import (
+    from dreambooth import shared  # noqa
+    from dreambooth.dataclasses import db_config  # noqa
+    from dreambooth.dataclasses.db_config import (
         from_file,
         DreamboothConfig,
         sanitize_name,
     )  # noqa
-    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
-    from dreambooth.dreambooth.dataset.bucket_sampler import BucketSampler  # noqa
-    from dreambooth.dreambooth.dataset.class_dataset import ClassDataset  # noqa
-    from dreambooth.dreambooth.optimization import UniversalScheduler  # noqa
-    from dreambooth.dreambooth.sd_to_diff import extract_checkpoint  # noqa
-    from dreambooth.dreambooth.shared import status, run  # noqa
-    from dreambooth.dreambooth.utils.gen_utils import (
+    from dreambooth.dataclasses.prompt_data import PromptData  # noqa
+    from dreambooth.dataset.bucket_sampler import BucketSampler  # noqa
+    from dreambooth.dataset.class_dataset import ClassDataset  # noqa
+    from dreambooth.optimization import UniversalScheduler  # noqa
+    from dreambooth.sd_to_diff import extract_checkpoint  # noqa
+    from dreambooth.shared import status, run  # noqa
+    from dreambooth.utils.gen_utils import (
         generate_dataset,
         generate_classifiers,
     )  # noqa
-    from dreambooth.dreambooth.utils.image_utils import (
+    from dreambooth.utils.image_utils import (
         get_images,
         db_save_image,
         make_bucket_resolutions,
@@ -90,13 +90,13 @@ except:
         closest_resolution,
         open_and_trim,
     )  # noqa
-    from dreambooth.dreambooth.utils.model_utils import (
+    from dreambooth.utils.model_utils import (
         unload_system_models,
         reload_system_models,
         get_lora_models,
         get_checkpoint_match,
     )  # noqa
-    from dreambooth.dreambooth.utils.utils import printm, cleanup  # noqa
+    from dreambooth.utils.utils import printm, cleanup  # noqa
     from helpers.image_builder import ImageBuilder  # noqa
     from helpers.mytqdm import mytqdm  # noqa
 
@@ -766,18 +766,18 @@ def start_training(model_dir: str, use_txt2img: bool = True):
             status.textinfo = "Initializing imagic training..."
             print(status.textinfo)
             try:
-                from extensions.sd_dreambooth_extension.dreambooth.train_imagic import train_imagic  # noqa
+                from dreambooth.train_imagic import train_imagic  # noqa
             except:
-                from dreambooth.dreambooth.train_imagic import train_imagic  # noqa
+                from dreambooth.train_imagic import train_imagic  # noqa
 
             result = train_imagic(config)
         else:
             status.textinfo = "Initializing dreambooth training..."
             print(status.textinfo)
             try:
-                from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main  # noqa
+                from dreambooth.train_dreambooth import main  # noqa
             except:
-                from dreambooth.dreambooth.train_dreambooth import main  # noqa
+                from dreambooth.train_dreambooth import main  # noqa
             result = main(use_txt2img=use_txt2img)
 
         config = result.config
@@ -828,7 +828,7 @@ def reload_extension():
         except Exception as e:
             print(f"Couldn't import module: {re_add}")
     try:
-        from extensions.sd_dreambooth_extension.postinstall import actual_install  # noqa
+        from postinstall import actual_install  # noqa
     except:
         from dreambooth.postinstall import actual_install  # noqa
 

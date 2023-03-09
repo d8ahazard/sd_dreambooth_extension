@@ -34,42 +34,42 @@ from transformers import AutoTokenizer
 
 
 try:
-    from extensions.sd_dreambooth_extension.helpers.log_parser import LogParser
-    from extensions.sd_dreambooth_extension.dreambooth import xattention, shared
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import (
+    from helpers.log_parser import LogParser
+    from dreambooth import xattention, shared
+    from dreambooth.dataclasses.prompt_data import (
         PromptData,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.train_result import (
+    from dreambooth.dataclasses.train_result import (
         TrainResult,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.dataset.bucket_sampler import (
+    from dreambooth.dataset.bucket_sampler import (
         BucketSampler,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.dataset.sample_dataset import (
+    from dreambooth.dataset.sample_dataset import (
         SampleDataset,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import (
+    from dreambooth.diff_to_sd import (
         compile_checkpoint,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.memory import (
+    from dreambooth.memory import (
         find_executable_batch_size,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.optimization import (
+    from dreambooth.optimization import (
         UniversalScheduler,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.shared import (
+    from dreambooth.shared import (
         status,
         load_auto_settings,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import (
+    from dreambooth.utils.gen_utils import (
         generate_classifiers,
         generate_dataset,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import (
+    from dreambooth.utils.image_utils import (
         db_save_image,
         get_scheduler_class,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import (
+    from dreambooth.utils.model_utils import (
         unload_system_models,
         import_model_class_from_model_name_or_path,
         disable_safe_unpickle,
@@ -77,61 +77,61 @@ try:
         xformerify,
         torch2ify,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import (
+    from dreambooth.utils.text_utils import (
         encode_hidden_state,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import (
+    from dreambooth.utils.utils import (
         cleanup,
         printm,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.webhook import (
+    from dreambooth.webhook import (
         send_training_update,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
-    from extensions.sd_dreambooth_extension.helpers.ema_model import EMAModel
-    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-    from extensions.sd_dreambooth_extension.lora_diffusion.extra_networks import (
+    from dreambooth.xattention import optim_to
+    from helpers.ema_model import EMAModel
+    from helpers.mytqdm import mytqdm
+    from lora_diffusion.extra_networks import (
         save_extra_networks,
     )
-    from extensions.sd_dreambooth_extension.lora_diffusion.lora import (
+    from lora_diffusion.lora import (
         save_lora_weight,
         TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
         get_target_module,
     )
-    from extensions.sd_dreambooth_extension.dreambooth.deis_velocity import get_velocity
+    from dreambooth.deis_velocity import get_velocity
 except:
     from helpers.log_parser import LogParser
-    from dreambooth.dreambooth import xattention, shared  # noqa
-    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
-    from dreambooth.dreambooth.dataclasses.train_result import TrainResult  # noqa
-    from dreambooth.dreambooth.dataset.bucket_sampler import BucketSampler  # noqa
-    from dreambooth.dreambooth.dataset.sample_dataset import SampleDataset  # noqa
-    from dreambooth.dreambooth.diff_to_sd import compile_checkpoint  # noqa
-    from dreambooth.dreambooth.memory import find_executable_batch_size  # noqa
-    from dreambooth.dreambooth.optimization import UniversalScheduler  # noqa
-    from dreambooth.dreambooth.shared import status, load_auto_settings  # noqa
-    from dreambooth.dreambooth.utils.gen_utils import (
+    from dreambooth import xattention, shared  # noqa
+    from dreambooth.dataclasses.prompt_data import PromptData  # noqa
+    from dreambooth.dataclasses.train_result import TrainResult  # noqa
+    from dreambooth.dataset.bucket_sampler import BucketSampler  # noqa
+    from dreambooth.dataset.sample_dataset import SampleDataset  # noqa
+    from dreambooth.diff_to_sd import compile_checkpoint  # noqa
+    from dreambooth.memory import find_executable_batch_size  # noqa
+    from dreambooth.optimization import UniversalScheduler  # noqa
+    from dreambooth.shared import status, load_auto_settings  # noqa
+    from dreambooth.utils.gen_utils import (
         generate_classifiers,
         generate_dataset,
     )  # noqa
-    from dreambooth.dreambooth.utils.image_utils import (
+    from dreambooth.utils.image_utils import (
         db_save_image,
         get_scheduler_class,
     )  # noqa
-    from dreambooth.dreambooth.utils.model_utils import (
+    from dreambooth.utils.model_utils import (
         unload_system_models,
         import_model_class_from_model_name_or_path,
         disable_safe_unpickle,
         enable_safe_unpickle,
     )  # noqa
-    from dreambooth.dreambooth.utils.text_utils import encode_hidden_state  # noqa
-    from dreambooth.dreambooth.utils.utils import cleanup, printm  # noqa
-    from dreambooth.dreambooth.webhook import send_training_update  # noqa
-    from dreambooth.dreambooth.xattention import optim_to  # noqa
+    from dreambooth.utils.text_utils import encode_hidden_state  # noqa
+    from dreambooth.utils.utils import cleanup, printm  # noqa
+    from dreambooth.webhook import send_training_update  # noqa
+    from dreambooth.xattention import optim_to  # noqa
     from helpers.ema_model import EMAModel  # noqa
     from helpers.mytqdm import mytqdm  # noqa
-    from dreambooth.lora_diffusion.extra_networks import save_extra_networks  # noqa
-    from dreambooth.lora_diffusion.lora import (
+    from lora_diffusion.extra_networks import save_extra_networks  # noqa
+    from lora_diffusion.lora import (
         save_lora_weight,
         TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
         get_target_module,
@@ -484,16 +484,16 @@ def main(use_txt2img: bool = True) -> TrainResult:
                 optimizer_class = AdamW8bit
 
             elif args.optimizer == "SGD D-Adaptation":
-                from pytorch_optimizer import DAdaptSGD as DAdaptation
-                optimizer_class = DAdaptation
+                from pytorch_optimizer import DAdaptSGD
+                optimizer_class = DAdaptSGD
 
             elif args.optimizer == "AdamW D-Adaptation":
-                from pytorch_optimizer import DAdaptAdam as DAdaptation
-                optimizer_class = DAdaptation
+                from pytorch_optimizer import DAdaptAdam
+                optimizer_class = DAdaptAdam
 
             elif args.optimizer == "Adagrad D-Adaptation":
-                from pytorch_optimizer import DAdaptAdaGrad as DAdaptation
-                optimizer_class = DAdaptation
+                from pytorch_optimizer import DAdaptAdaGrad
+                optimizer_class = DAdaptAdaGrad
 
             elif args.optimizer == "Lion":
                 from lion_pytorch import Lion
@@ -670,18 +670,13 @@ def main(use_txt2img: bool = True) -> TrainResult:
         # affected by batch size
         sched_train_steps = args.num_train_epochs * train_dataset.num_train_images
 
-        if (
-            args.optimizer_class == "DAdaptSGD"
-            or args.optimizer_class == "DAdaptAdam"
-            or args.optimizer_class == "DAdaptAdaGrad"
-        ):
+        if args.optimizer_class in ["DAdaptSGD", "DAdaptAdam", "DAdaptAdaGrad"]:
             lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
                 optimizer=optimizer,
                 lr_lambda=[lambda epoch: 0.5, lambda epoch: 1],
                 last_epoch=-1,
                 verbose=False,
             )
-
         else:
             lr_scheduler = UniversalScheduler(
                 args.lr_scheduler,
