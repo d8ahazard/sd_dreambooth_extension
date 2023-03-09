@@ -25,7 +25,7 @@ from lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale,
 class ImageBuilder:
     def __init__(
             self, config: DreamboothConfig,
-            use_txt2img: bool,
+            class_gen_method: str = "Native Diffusers",
             lora_model: str = None,
             batch_size: int = 1,
             accelerator: Accelerator = None,
@@ -40,6 +40,7 @@ class ImageBuilder:
         self.last_model = None
         self.batch_size = batch_size
         self.exception_count = 0
+        use_txt2img = class_gen_method == "A1111 txt2img (DPM++ 2S a Karras)"
 
         if not image_utils.txt2img_available and use_txt2img:
             print("No txt2img available.")

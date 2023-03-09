@@ -73,11 +73,11 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
     return train_dataset
 
 
-def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accelerator: Accelerator = None, ui=True):
+def generate_classifiers(args: DreamboothConfig, class_gen_method: bool = True, accelerator: Accelerator = None, ui=True):
     """
 
     @param args: A DreamboothConfig
-    @param use_txt2img: Generate images using txt2image. Does not use lora.
+    @param class_gen_method
     @param accelerator: An optional existing accelerator to use.
     @param ui: Whether this was called by th UI, or is being run during training.
     @return:
@@ -117,7 +117,7 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     shared.status.job_no = 0
     builder = ImageBuilder(
         args,
-        use_txt2img=use_txt2img,
+        class_gen_method=class_gen_method,
         lora_model=args.lora_model_name,
         batch_size=args.sample_batch_size,
         accelerator=accelerator,
