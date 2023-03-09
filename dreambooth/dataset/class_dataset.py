@@ -70,6 +70,9 @@ class ClassDataset(Dataset):
                 class_prompt_datas = sort_prompts(concept, text_getter, class_dir, c_images[c_idx], bucket_resos, c_idx,
                                                   True, pbar)
 
+            # Create list of filewords from instance images
+            instance_img_filewords = [text_getter.read_text(img) for img in i_images[c_idx]]
+
             # Iterate over each resolution of images, per concept
             for res, i_prompt_datas in instance_prompt_datas.items():
                 # Extend instance prompts by the instance data
@@ -97,7 +100,7 @@ class ClassDataset(Dataset):
                     instance_prompts = [img.prompt for img in i_prompt_datas]
 
                     if "[filewords]" in concept.class_prompt:
-                        for prompt in instance_prompts:
+                        for prompt in instance_img_filewords:
                             sample_prompt = text_getter.create_text(
                                 concept.class_prompt, prompt, concept.instance_token, concept.class_token, True)
                             num_to_gen = concept.num_class_images_per - class_prompts.count(sample_prompt)
