@@ -426,6 +426,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 else unet.parameters()
             )
 
+        optimizer_class = torch.optim.AdamW
         try:
             if args.optimizer == "SGD Dadaptation":
                 from dadaptation import DAdaptSGD
@@ -462,8 +463,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 )
 
             else:
-                optimizer_class = torch.optim.AdamW
-
                 if shared.force_cpu:
                     pass
 
@@ -487,16 +486,15 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     from lion_pytorch import Lion
                     optimizer_class = Lion
 
-                optimizer = optimizer_class(
-                    params_to_optimize,
-                    lr=args.learning_rate,
-                    weight_decay=args.adamw_weight_decay,
-                )
-
         except Exception as a:
             logger.warning(f"Exception importing {args.optimizer}: {a}")
             traceback.print_exc()
             print("Using default optimizer (AdamW from Torch)")
+            optimizer = optimizer_class(
+                params_to_optimize,
+                lr=args.learning_rate,
+                weight_decay=args.adamw_weight_decay,
+            )
 
         if args.noise_scheduler == "DEIS":
             noise_scheduler = DEISMultistepScheduler.from_pretrained(
@@ -720,17 +718,16 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         )
         if os.path.exists(new_hotness):
             accelerator.print(f"Resuming from checkpoint {new_hotness}")
+
             try:
                 import modules.shared
-
                 no_safe = modules.shared.cmd_opts.disable_safe_unpickle
                 modules.shared.cmd_opts.disable_safe_unpickle = True
-
             except:
                 no_safe = False
+
             try:
                 import modules.shared
-
                 accelerator.load_state(new_hotness)
                 modules.shared.cmd_opts.disable_safe_unpickle = no_safe
                 global_step = resume_step = args.revision
@@ -797,6 +794,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             save_snapshot = False
             save_lora = False
             save_checkpoint = False
+
             if shared.status.do_save_samples and is_epoch_check:
                 save_image = True
                 shared.status.do_save_samples = False
@@ -1132,11 +1130,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         progress_bar.set_description("Steps")
         progress_bar.set_postfix(refresh=True)
         args.revision = (
-            args.revision
-            if isinstance(args.revision, int)
-            else int(args.revision)
-            if str.strip(args.revision) != ""
-            else 0
+            args.revision if isinstance(args.revision, int) else
+            int(args.revision) if str.strip(args.revision) != "" else
+            0
         )
         lifetime_step = args.revision
         lifetime_epoch = args.epoch
@@ -1160,15 +1156,17 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             train_tenc = epoch < text_encoder_epochs
             if stop_text_percentage == 0:
                 train_tenc = False
+
             if not args.freeze_clip_normalization:
                 text_encoder.train(train_tenc)
             else:
                 text_encoder.eval()
+
             if not args.use_lora:
                 text_encoder.requires_grad_(train_tenc)
-            else:
-                if train_tenc:
-                    text_encoder.text_model.embeddings.requires_grad_(True)
+            elif train_tenc:
+                text_encoder.text_model.embeddings.requires_grad_(True)
+
             if last_tenc != train_tenc:
                 last_tenc = train_tenc
                 cleanup()
@@ -1254,6 +1252,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                         target = noise_scheduler.get_velocity(latents, noise, timesteps)
                     else:
                         target = noise
+
                     if not args.split_loss:
                         loss = instance_loss = torch.nn.functional.mse_loss(
                             noise_pred.float(), target.float(), reduction="mean"
@@ -1302,9 +1301,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
                         if len(instance_chunks) and len(prior_chunks):
                             # Add the prior loss to the instance loss.
-                            loss = (
-                                    instance_loss + current_prior_loss_weight * prior_loss
-                            )
+                            loss = instance_loss + current_prior_loss_weight * prior_loss
                         elif len(instance_chunks):
                             loss = instance_loss
                         else:
