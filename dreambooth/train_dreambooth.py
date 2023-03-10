@@ -455,7 +455,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     lr=args.learning_rate,
                     momentum=args.adaptation_momentum,
                     weight_decay=args.adamw_weight_decay,
-                    # growth_rate=args.adaptation_growth_rate,
+                    growth_rate=args.adaptation_growth_rate,
                 )
 
             else:
