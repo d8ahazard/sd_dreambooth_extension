@@ -495,10 +495,6 @@ def on_ui_tabs():
                                     label="Adaptation Growth Rate",
                                     value=1.02,
                                 )
-                                db_adaptation_eps = gr.Number(
-                                    label="Adaptation Eps",
-                                    value=1e-8,
-                                )
                                 db_adaptation_momentum = gr.Number(
                                     label="Adaptation Momentum",
                                     value=0.9,
@@ -1197,7 +1193,6 @@ def on_ui_tabs():
         # db_model_name must be first due to save_config() parsing
         params_to_save = [
             db_model_name,
-            db_adaptation_eps,
             db_adaptation_growth_rate,
             db_adaptation_momentum,
             db_attention,

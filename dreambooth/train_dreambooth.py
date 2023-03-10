@@ -435,7 +435,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     lr=args.learning_rate,
                     momentum=args.adaptation_momentum,
                     weight_decay=args.adamw_weight_decay,
-                    growth_rate=args.adaptation_growth_rate,
+                    # growth_rate=args.adaptation_growth_rate,
                 )
 
             elif args.optimizer == "AdamW Dadaptation":
@@ -443,10 +443,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 optimizer = DAdaptAdam(
                     params_to_optimize,
                     lr=args.learning_rate,
-                    eps=args.adaptation_eps,
                     weight_decay=args.adamw_weight_decay,
                     decouple=False,
-                    growth_rate=args.adaptation_growth_rate,
+                    # growth_rate=args.adaptation_growth_rate,
                 )
 
             elif args.optimizer == "Adagrad Dadaptation":
@@ -456,7 +455,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     lr=args.learning_rate,
                     momentum=args.adaptation_momentum,
                     weight_decay=args.adamw_weight_decay,
-                    growth_rate=args.adaptation_growth_rate,
+                    # growth_rate=args.adaptation_growth_rate,
                 )
 
             else:

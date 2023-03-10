@@ -23,7 +23,6 @@ def sanitize_name(name):
 
 class DreamboothConfig(BaseModel):
     adamw_weight_decay: float = 0.01
-    adaptation_eps: float = 1e-8
     adaptation_growth_rate: float = 1.02
     adaptation_momentum: int = 0.9
     attention: str = "xformers"
