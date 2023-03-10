@@ -19,10 +19,9 @@
 
 import math
 from enum import Enum
-from typing import Optional, Tuple, Union, List
+from typing import Optional, Union, List
 
 import torch.optim.lr_scheduler
-from dadaptation import DAdaptAdam, DAdaptAdaGrad, DAdaptSGD
 from diffusers.utils import logging
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import (
@@ -46,143 +45,9 @@ class SchedulerType(Enum):
     POLYNOMIAL = "polynomial"
     CONSTANT = "constant"
     CONSTANT_WITH_WARMUP = "constant_with_warmup"
-    SGD_WITH_DADAPTATION = "sgd_with_dadaptation"
-    ADAM_WITH_DADAPTATION = "adam_with_dadaptation"
-    ADAGRAD_WITH_DADAPTATION = "adagrad_with_dadaptation"
 
 
-def get_sgd_with_dadaptation(
-    optimizer: Optimizer,
-    lr: float,
-    betas: Tuple[float, float] = (0.9, 0.999),
-    momentum: float = 0.9,
-    weight_decay: float = 0.0,
-    d0: float = 1e-6,
-    growth_rate: float = float("inf"),
-):
-    """
-    Implements SGD with D-Adaptation automatic step-sizes. Leave LR set to 1 unless you encounter instability.
-    Arguments:
-        params (iterable):
-            Iterable of parameters to optimize or dicts defining parameter groups.
-        lr (float):
-            Learning rate adjustment parameter. Increases or decreases the D-adapted learning rate.
-        betas (Tuple[float, float], optional): coefficients used for computing
-            running averages of gradient and its square (default: (0.9, 0.999))
-        momentum (float):
-            Momentum value in  the range [0,1) (default: 0.9).
-        weight_decay (float):
-            Weight decay, i.e. a L2 penalty (default: 0).
-        log_every (int):
-            Log using print every k steps, default 0 (no logging).
-        d0 (float):
-            Initial D estimate for D-adaptation (default 1e-6). Rarely needs changing.
-        growth_rate (float):
-            prevent the D estimate from growing faster than this multiplicative rate.
-            Default is inf, for unrestricted. More conservative values like 1.02 may
-            help if training is unstable.
-    """
-    return DAdaptSGD(
-        optimizer=optimizer,
-        lr=lr,
-        betas=betas,
-        momentum=momentum,
-        weight_decay=weight_decay,
-        d0=d0,
-        growth_rate=growth_rate,
-    )
-
-
-def get_adam_with_dadaptation(
-    optimizer: Optimizer,
-    lr: float = 1.0,
-    betas: Tuple[float, float] = (0.9, 0.999),
-    momentum: float = 0.9,
-    eps: float = 1e-8,
-    weight_decay: float = 0.0,
-    log_every: int = 0,
-    decouple: bool = True,
-    d0: float = 1e-6,
-    growth_rate: float = float("inf"),
-):
-    """
-    Implements Adam with D-Adaptation automatic step-sizes. Leave LR set to 1 unless you encounter instability.
-    Arguments:
-        params (iterable):
-            Iterable of parameters to optimize or dicts defining parameter groups.
-        lr (float):
-            Learning rate adjustment parameter. Increases or decreases the D-adapted learning rate.
-        betas (Tuple[float, float], optional): coefficients used for computing
-            running averages of gradient and its square (default: (0.9, 0.999))
-        momentum (float):
-            Momentum value in  the range [0,1) (default: 0.9).
-        eps (float):
-            Term added to the denominator outside of the root operation to improve numerical stability. (default: 1e-8).
-        weight_decay (float):
-            Weight decay, i.e. a L2 penalty (default: 0).
-        log_every (int):
-            Log using print every k steps, default 0 (no logging).
-        decouple (boolean):
-            Use AdamW style decoupled weight decay
-        d0 (float):
-            Initial D estimate for D-adaptation (default 1e-6). Rarely needs changing.
-        growth_rate (float):
-            prevent the D estimate from growing faster than this multiplicative rate.
-            Default is inf, for unrestricted. Values like 1.02 give a kind of learning
-            rate warmup effect.
-    """
-    return DAdaptAdam(
-        optimizer=optimizer,
-        lr=lr,
-        betas=betas,
-        momentum=momentum,
-        eps=eps,
-        weight_decay=weight_decay,
-        log_every=log_every,
-        decouple=decouple,
-        d0=d0,
-        growth_rate=growth_rate,
-    )
-
-
-def get_adagrad_with_dadaptation(
-    optimizer: Optimizer,
-    lr: float = 1.0,
-    log_every: int = 0,
-    weight_decay: float = 0.0,
-    d0: float = 1e-6,
-    growth_rate: float = float("inf"),
-):
-    """
-    Adagrad with D-Adaptation. Leave LR set to 1 unless you encounter instability.
-    Arguments:
-        params (iterable):
-            Iterable of parameters to optimize or dicts defining parameter groups.
-        lr (float):
-            Learning rate adjustment parameter. Increases or decreases the D-adapted learning rate.
-        log_every (int):
-            Log using print every k steps, default 0 (no logging).
-        weight_decay (float):
-            Weight decay, i.e. a L2 penalty (default: 0).
-        eps (float):
-            Term added to the denominator outside of the root operation to improve numerical stability. (default: 1e-6).
-        d0 (float):
-            Initial D estimate for D-adaptation (default 1e-6). Rarely needs changing.
-        growth_rate (float):
-            prevent the D estimate from growing faster than this multiplicative rate.
-            Default is inf, for unrestricted.
-    """
-    return DAdaptAdaGrad(
-        optimizer=optimizer,
-        lr=lr,
-        log_every=log_every,
-        weight_decay=weight_decay,
-        d0=d0,
-        growth_rate=growth_rate,
-    )
-
-
-# region New Schedulers
+# Newer Schedulers
 def get_cosine_annealing_scheduler(
     optimizer: Optimizer, max_iter: int = 500, eta_min: float = 1e-6
 ):
@@ -556,39 +421,6 @@ def get_scheduler(
     name = SchedulerType(name)
     break_steps = int(total_training_steps * scale_pos)
 
-    # Adaptation schedulers
-    if name == SchedulerType.SGD_WITH_DADAPTATION:
-        return get_sgd_with_dadaptation(
-            optimizer,
-            lr=lr,
-            betas=betas,
-            momentum=momentum,
-            weight_decay=weight_decay,
-            d0=d0,
-            growth_rate=growth_rate,
-        )
-
-    if name == SchedulerType.ADAM_WITH_DADAPTATION:
-        return get_adam_with_dadaptation(
-            optimizer,
-            lr=lr,
-            betas=betas,
-            momentum=momentum,
-            eps=eps,
-            weight_decay=weight_decay,
-            d0=d0,
-            growth_rate=growth_rate,
-        )
-
-    if name == SchedulerType.ADAGRAD_WITH_DADAPTATION:
-        return get_adagrad_with_dadaptation(
-            optimizer,
-            lr=lr,
-            weight_decay=weight_decay,
-            d0=d0,
-            growth_rate=growth_rate,
-        )
-
     # Newer schedulers
     if name == SchedulerType.CONSTANT:
         return get_constant_schedule(optimizer, factor, break_steps)
@@ -673,9 +505,7 @@ class UniversalScheduler:
 
         self.is_torch_scheduler = name in og_schedulers
 
-        self.total_steps = (
-            total_training_steps if not self.is_torch_scheduler else total_epochs
-        )
+        self.total_steps = total_training_steps if not self.is_torch_scheduler else total_epochs
 
         self.scheduler = get_scheduler(
             name=name,
