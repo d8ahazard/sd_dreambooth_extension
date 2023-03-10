@@ -486,6 +486,12 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     from lion_pytorch import Lion
                     optimizer_class = Lion
 
+                optimizer = optimizer_class(
+                    params_to_optimize,
+                    lr=args.learning_rate,
+                    weight_decay=args.adamw_weight_decay,
+                )
+
         except Exception as a:
             logger.warning(f"Exception importing {args.optimizer}: {a}")
             traceback.print_exc()
