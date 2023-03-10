@@ -435,7 +435,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     lr=args.learning_rate,
                     momentum=args.adaptation_momentum,
                     weight_decay=args.adamw_weight_decay,
-                    log_every=1,
                     growth_rate=args.adaptation_growth_rate,
                 )
 
@@ -446,7 +445,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     lr=args.learning_rate,
                     eps=args.adaptation_eps,
                     weight_decay=args.adamw_weight_decay,
-                    log_every=1,
                     decouple=False,
                     growth_rate=args.adaptation_growth_rate,
                 )
@@ -457,7 +455,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     params_to_optimize,
                     lr=args.learning_rate,
                     momentum=args.adaptation_momentum,
-                    log_every=1,
                     weight_decay=args.adamw_weight_decay,
                     growth_rate=args.adaptation_growth_rate,
                 )
@@ -702,7 +699,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             tracker = accelerator.get_tracker("tensorboard")
 
             # set the SummaryWriter object as the tracker's writer
-            tracker.writer = SummaryWriter(writer.get_logdir())
+            tracker.writer = FileWriter(writer.get_logdir())
 
         # Train!
         total_batch_size = (

@@ -1,4 +1,4 @@
-accelerate==0.17.0
+accelerate==0.16.0
 albumentations~=1.3.0
 bitsandbytes==0.35.4
 dadaptation==1.5.0
