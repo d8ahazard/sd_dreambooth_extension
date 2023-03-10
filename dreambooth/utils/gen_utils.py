@@ -73,7 +73,11 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
     return train_dataset
 
 
-def generate_classifiers(args: DreamboothConfig, class_gen_method: bool = True, accelerator: Accelerator = None, ui=True):
+def generate_classifiers(
+        args: DreamboothConfig,
+        class_gen_method: str = "Native Diffusers",
+        accelerator: Accelerator = None,
+        ui=True):
     """
 
     @param args: A DreamboothConfig

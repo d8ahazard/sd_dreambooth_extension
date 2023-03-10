@@ -152,7 +152,7 @@ def list_precisions():
     return precisions
 
 
-def list_og_schedulers():
+def list_schedulers():
     return [
         "linear",
         "linear_with_warmup",
@@ -164,30 +164,6 @@ def list_og_schedulers():
         "constant",
         "constant_with_warmup",
     ]
-
-
-def list_adapt_schedulers():
-    schedulers = list_og_schedulers()
-
-    try:
-        from dadaptation import DAdaptSGD
-        schedulers.append("sgd_with_dadaptation")
-    except ImportError:
-        pass
-
-    try:
-        from dadaptation import DAdaptAdaGrad
-        schedulers.append("adam_with_dadaptation")
-    except ImportError:
-        pass
-
-    try:
-        from dadaptation import DAdaptAdam
-        schedulers.append("adagrad_with_dadaptation")
-    except ImportError:
-        pass
-    
-    return schedulers
 
 
 def wrap_gpu_call(func, extra_outputs=None):

@@ -41,7 +41,7 @@ if os.environ.get("DEBUG_API", False):
     logging.basicConfig(level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
-print("No, really, API loaded, wtf...")
+
 
 class InstanceData(BaseModel):
     data: str = Field(title="File data", description="Base64 representation of the file or URL")

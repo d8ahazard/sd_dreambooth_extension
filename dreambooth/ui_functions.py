@@ -856,7 +856,7 @@ def ui_classifiers(model_name: str, class_gen_method: str = "Native Diffusers"):
     images = []
     try:
         unload_system_models()
-        count, images = generate_classifiers(config, use_txt2img=use_txt2img, ui=True)
+        count, images = generate_classifiers(config, class_gen_method=class_gen_method, ui=True)
         reload_system_models()
         msg = f"Generated {count} class images."
     except Exception as e:
@@ -1039,30 +1039,18 @@ def debug_buckets(model_name, num_epochs, batch_size):
         placeholder, lr=args.learning_rate, weight_decay=args.adamw_weight_decay
     )
 
-    if (
-        optimizer_class == "DAdaptSGD"
-        or optimizer_class == "DAdaptAdam"
-        or optimizer_class == "DAdaptAdaGrad"
-    ):
-        lr_scheduler = LambdaLR(
-            optimizer=optimizer,
-            lr_lambda=[lambda epoch: 0.5, lambda epoch: 1],
-            last_epoch=-1,
-            verbose=False,
-        )
-    else:
-        lr_scheduler = UniversalScheduler(
-            args.lr_scheduler,
-            optimizer=optimizer,
-            num_warmup_steps=args.lr_warmup_steps,
-            total_training_steps=sched_train_steps,
-            total_epochs=num_epochs,
-            num_cycles=args.lr_cycles,
-            power=args.lr_power,
-            factor=args.lr_factor,
-            scale_pos=args.lr_scale_pos,
-            min_lr=args.learning_rate_min,
-        )
+    lr_scheduler = UniversalScheduler(
+        args.lr_scheduler,
+        optimizer=optimizer,
+        num_warmup_steps=args.lr_warmup_steps,
+        total_training_steps=sched_train_steps,
+        total_epochs=num_epochs,
+        num_cycles=args.lr_cycles,
+        power=args.lr_power,
+        factor=args.lr_factor,
+        scale_pos=args.lr_scale_pos,
+        min_lr=args.learning_rate_min,
+    )
 
     sampler = BucketSampler(dataset, args.train_batch_size, True)
     n_workers = 0

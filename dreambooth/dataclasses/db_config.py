@@ -23,9 +23,6 @@ def sanitize_name(name):
 
 class DreamboothConfig(BaseModel):
     adamw_weight_decay: float = 0.01
-    adaptation_beta1: int = 0.9
-    adaptation_beta2: int = 0.999
-    adaptation_d0: float = 1e-6
     adaptation_eps: float = 1e-8
     adaptation_growth_rate: float = 1.02
     adaptation_momentum: int = 0.9
@@ -134,7 +131,6 @@ class DreamboothConfig(BaseModel):
             models_path = os.path.join(shared.paths["models"], "dreambooth")
 
         model_dir = os.path.join(models_path, model_name)
-        print(f"Model dir set to: {model_dir}")
         working_dir = os.path.join(model_dir, "working")
 
         if not os.path.exists(working_dir):

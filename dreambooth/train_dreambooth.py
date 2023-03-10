@@ -117,8 +117,8 @@ def current_prior_loss(args, current_epoch):
         return args.prior_loss_weight_min
     percentage_completed = current_epoch / args.prior_loss_target
     prior = (
-        args.prior_loss_weight * (1 - percentage_completed)
-        + args.prior_loss_weight_min * percentage_completed
+            args.prior_loss_weight * (1 - percentage_completed)
+            + args.prior_loss_weight_min * percentage_completed
     )
     printm(f"Prior: {prior}")
     return prior
@@ -153,7 +153,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         logging_dir=logging_dir,
     )
     def inner_loop(
-        train_batch_size: int, gradient_accumulation_steps: int, profiler: profile
+            train_batch_size: int, gradient_accumulation_steps: int, profiler: profile
     ):
 
         text_encoder = None
@@ -202,9 +202,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         # accumulation when training two models.
         # TODO (patil-suraj): Remove this check when gradient accumulation with two models is enabled in accelerate.
         if (
-            stop_text_percentage != 0
-            and gradient_accumulation_steps > 1
-            and accelerator.num_processes > 1
+                stop_text_percentage != 0
+                and gradient_accumulation_steps > 1
+                and accelerator.num_processes > 1
         ):
             msg = (
                 "Gradient accumulation is not supported when training the text encoder in distributed training. "
@@ -301,8 +301,8 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             )
 
         if (
-            args.stop_text_encoder != 0
-            and accelerator.unwrap_model(text_encoder).dtype != torch.float32
+                args.stop_text_encoder != 0
+                and accelerator.unwrap_model(text_encoder).dtype != torch.float32
         ):
             print(
                 f"Text encoder loaded as datatype {accelerator.unwrap_model(text_encoder).dtype}."
@@ -314,9 +314,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         try:
             # Apparently, some versions of torch don't have a cuda_version flag? IDK, but it breaks my runpod.
             if (
-                torch.cuda.is_available()
-                and float(torch.cuda_version) >= 11.0
-                and args.tf32_enable
+                    torch.cuda.is_available()
+                    and float(torch.cuda_version) >= 11.0
+                    and args.tf32_enable
             ):
                 print("Attempting to enable TF32.")
                 torch.backends.cuda.matmul.allow_tf32 = True
@@ -336,11 +336,11 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         ema_model = None
         if args.use_ema:
             if os.path.exists(
-                os.path.join(
-                    args.pretrained_model_name_or_path,
-                    "ema_unet",
-                    "diffusion_pytorch_model.safetensors",
-                )
+                    os.path.join(
+                        args.pretrained_model_name_or_path,
+                        "ema_unet",
+                        "diffusion_pytorch_model.safetensors",
+                    )
             ):
                 ema_unet = UNet2DConditionModel.from_pretrained(
                     args.pretrained_model_name_or_path,
@@ -401,50 +401,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             if not args.train_unet:
                 unet.requires_grad_(False)
 
-        # Init optimizer
-        optimizer_class = torch.optim.AdamW
-
-        try:
-            if shared.force_cpu:
-                pass
-
-            elif args.optimizer in ["8bit AdamW", "8Bit Adam"]:
-                from bitsandbytes.optim import AdamW8bit
-                optimizer_class = AdamW8bit
-
-            elif args.optimizer == "SGD D-Adaptation":
-                from pytorch_optimizer import DAdaptSGD
-                optimizer_class = DAdaptSGD
-
-            elif args.optimizer == "AdamW D-Adaptation":
-                from pytorch_optimizer import DAdaptAdam
-                optimizer_class = DAdaptAdam
-
-            elif args.optimizer == "Adagrad D-Adaptation":
-                from pytorch_optimizer import DAdaptAdaGrad
-                optimizer_class = DAdaptAdaGrad
-
-            elif args.optimizer == "Lion":
-                from lion_pytorch import Lion
-                optimizer_class = Lion
-
-            elif args.optimizer == "SGD Dadaptation":
-                from dadaptation import DAdaptSGD
-                optimizer_class = DAdaptSGD
-
-            elif args.optimizer == "AdamW Dadaptation":
-                from dadaptation import DAdaptAdam
-                optimizer_class = DAdaptAdam
-
-            elif args.optimizer == "Adagrad Dadaptation":
-                from dadaptation import DAdaptAdaGrad
-                optimizer_class = DAdaptAdaGrad
-
-        except Exception as a:
-            logger.warning(f"Exception importing {args.optimizer}: {a}")
-            traceback.print_exc()
-            print("Using default optimizer (AdamW from Torch)")
-
         if args.use_lora:
             args.learning_rate = args.lora_learning_rate
             params_to_optimize = (
@@ -470,11 +426,77 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 else unet.parameters()
             )
 
-        optimizer = optimizer_class(
-            params_to_optimize,
-            lr=args.learning_rate,
-            weight_decay=args.adamw_weight_decay,
-        )
+        try:
+            if args.optimizer == "SGD Dadaptation":
+                from dadaptation import DAdaptSGD
+                optimizer = DAdaptSGD(
+                    params_to_optimize,
+                    lr=args.learning_rate,
+                    momentum=args.adaptation_momentum,
+                    weight_decay=args.adamw_weight_decay,
+                    log_every=1,
+                    growth_rate=args.adaptation_growth_rate,
+                )
+
+            elif args.optimizer == "AdamW Dadaptation":
+                from dadaptation import DAdaptAdam
+                optimizer = DAdaptAdam(
+                    params_to_optimize,
+                    lr=args.learning_rate,
+                    eps=args.adaptation_eps,
+                    weight_decay=args.adamw_weight_decay,
+                    log_every=1,
+                    decouple=False,
+                    growth_rate=args.adaptation_growth_rate,
+                )
+
+            elif args.optimizer == "Adagrad Dadaptation":
+                from dadaptation import DAdaptAdaGrad
+                optimizer = DAdaptAdaGrad(
+                    params_to_optimize,
+                    lr=args.learning_rate,
+                    momentum=args.adaptation_momentum,
+                    log_every=1,
+                    weight_decay=args.adamw_weight_decay,
+                    growth_rate=args.adaptation_growth_rate,
+                )
+
+            else:
+                optimizer_class = torch.optim.AdamW
+
+                if shared.force_cpu:
+                    pass
+
+                elif args.optimizer in ["8bit AdamW", "8Bit Adam"]:
+                    from bitsandbytes.optim import AdamW8bit
+                    optimizer_class = AdamW8bit
+
+                elif args.optimizer == "SGD D-Adaptation":
+                    from pytorch_optimizer import DAdaptSGD
+                    optimizer_class = DAdaptSGD
+
+                elif args.optimizer == "AdamW D-Adaptation":
+                    from pytorch_optimizer import DAdaptAdam
+                    optimizer_class = DAdaptAdam
+
+                elif args.optimizer == "Adagrad D-Adaptation":
+                    from pytorch_optimizer import DAdaptAdaGrad
+                    optimizer_class = DAdaptAdaGrad
+
+                elif args.optimizer == "Lion":
+                    from lion_pytorch import Lion
+                    optimizer_class = Lion
+
+                optimizer = optimizer_class(
+                    params_to_optimize,
+                    lr=args.learning_rate,
+                    weight_decay=args.adamw_weight_decay,
+                )
+
+        except Exception as a:
+            logger.warning(f"Exception importing {args.optimizer}: {a}")
+            traceback.print_exc()
+            print("Using default optimizer (AdamW from Torch)")
 
         if args.noise_scheduler == "DEIS":
             noise_scheduler = DEISMultistepScheduler.from_pretrained(
@@ -602,19 +624,12 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             optimizer=optimizer,
             num_warmup_steps=args.lr_warmup_steps,
             total_training_steps=sched_train_steps,
-            lr=args.learning_rate,
             min_lr=args.learning_rate_min,
             total_epochs=args.num_train_epochs,
             num_cycles=args.lr_cycles,
             power=args.lr_power,
             factor=args.lr_factor,
             scale_pos=args.lr_scale_pos,
-            betas=(args.adaptation_beta1, args.adaptation_beta2),
-            momentum=args.adaptation_momentum,
-            eps=args.adaptation_eps,
-            weight_decay=args.adamw_weight_decay,
-            d0=args.adaptation_d0,
-            growth_rate=args.adaptation_growth_rate,
         )
 
         # create ema, fix OOM
@@ -683,11 +698,11 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             tracker = accelerator.get_tracker("tensorboard")
 
             # set the SummaryWriter object as the tracker's writer
-            tracker.writer = FileWriter(writer.get_logdir())
+            tracker.writer = SummaryWriter(writer.get_logdir())
 
         # Train!
         total_batch_size = (
-            train_batch_size * accelerator.num_processes * gradient_accumulation_steps
+                train_batch_size * accelerator.num_processes * gradient_accumulation_steps
         )
         max_train_epochs = args.num_train_epochs
         # we calculate our number of tenc training epochs
@@ -809,11 +824,11 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     save_checkpoint = args.save_ckpt_during
 
             if (
-                save_checkpoint
-                or save_snapshot
-                or save_lora
-                or save_image
-                or save_model
+                    save_checkpoint
+                    or save_snapshot
+                    or save_lora
+                    or save_image
+                    or save_model
             ):
                 printm(" Saving weights.")
                 save_weights(
@@ -832,7 +847,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             return save_model
 
         def save_weights(
-            save_image, save_model, save_snapshot, save_checkpoint, save_lora, pbar
+                save_image, save_model, save_snapshot, save_checkpoint, save_lora, pbar
         ):
             global last_samples
             global last_prompts
@@ -960,11 +975,11 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                 if args.save_lora_for_extra_net:
                                     if args.use_lora_extended:
                                         if not os.path.exists(
-                                            os.path.join(
-                                                shared.script_path,
-                                                "extensions",
-                                                "a1111-sd-webui-locon",
-                                            )
+                                                os.path.join(
+                                                    shared.script_path,
+                                                    "extensions",
+                                                    "a1111-sd-webui-locon",
+                                                )
                                         ):
                                             raise Exception(
                                                 r"a1111-sd-webui-locon extension is required to save "
@@ -1015,8 +1030,8 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                 prompts = sd.prompts
                                 concepts = args.concepts()
                                 if (
-                                    args.sanity_prompt != ""
-                                    and args.sanity_prompt is not None
+                                        args.sanity_prompt != ""
+                                        and args.sanity_prompt is not None
                                 ):
                                     epd = PromptData(
                                         prompt=args.sanity_prompt,
@@ -1166,9 +1181,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             for step, batch in enumerate(train_dataloader):
                 # Skip steps until we reach the resumed step
                 if (
-                    resume_from_checkpoint
-                    and epoch == first_epoch
-                    and step < resume_step
+                        resume_from_checkpoint
+                        and epoch == first_epoch
+                        and step < resume_step
                 ):
                     progress_bar.update(train_batch_size)
                     progress_bar.reset()
@@ -1288,7 +1303,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                         if len(instance_chunks) and len(prior_chunks):
                             # Add the prior loss to the instance loss.
                             loss = (
-                                instance_loss + current_prior_loss_weight * prior_loss
+                                    instance_loss + current_prior_loss_weight * prior_loss
                             )
                         elif len(instance_chunks):
                             loss = instance_loss
@@ -1314,8 +1329,8 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
                     optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
 
-                allocated = round(torch.cuda.memory_allocated(0) / 1024**3, 1)
-                cached = round(torch.cuda.memory_reserved(0) / 1024**3, 1)
+                allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
+                cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
                 last_lr = lr_scheduler.get_last_lr()[0]
                 global_step += train_batch_size
                 args.revision += train_batch_size

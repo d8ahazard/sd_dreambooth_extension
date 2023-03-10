@@ -46,7 +46,7 @@ from dreambooth.utils.utils import (
     wrap_gpu_call,
     printm,
     list_optimizer,
-    list_adapt_schedulers,
+    list_schedulers,
 )
 from dreambooth.webhook import save_and_test_webhook
 from helpers.log_parser import LogParser
@@ -451,7 +451,7 @@ def on_ui_tabs():
                             db_lr_scheduler = gr.Dropdown(
                                 label="Learning Rate Scheduler",
                                 value="constant_with_warmup",
-                                choices=list_adapt_schedulers(),
+                                choices=list_schedulers(),
                             )
                             db_learning_rate_min = gr.Number(
                                 label="Min Learning Rate", value=1e-6, visible=False
@@ -495,10 +495,6 @@ def on_ui_tabs():
                                     label="Adaptation Growth Rate",
                                     value=1.02,
                                 )
-                                db_adaptation_d0 = gr.Number(
-                                    label="Adaptation D0",
-                                    value=1e-6,
-                                )
                                 db_adaptation_eps = gr.Number(
                                     label="Adaptation Eps",
                                     value=1e-8,
@@ -506,14 +502,6 @@ def on_ui_tabs():
                                 db_adaptation_momentum = gr.Number(
                                     label="Adaptation Momentum",
                                     value=0.9,
-                                )
-                                db_adaptation_beta1 = gr.Number(
-                                    label="Adaptation Beta1",
-                                    value=0.9
-                                )
-                                db_adaptation_beta2 = gr.Number(
-                                    label="Adaptation Beta2",
-                                    value=0.999,
                                 )
 
                         with gr.Column():
@@ -1209,9 +1197,6 @@ def on_ui_tabs():
         # db_model_name must be first due to save_config() parsing
         params_to_save = [
             db_model_name,
-            db_adaptation_beta1,
-            db_adaptation_beta2,
-            db_adaptation_d0,
             db_adaptation_eps,
             db_adaptation_growth_rate,
             db_adaptation_momentum,
