@@ -23,6 +23,7 @@ from diffusers import (
     UNet2DConditionModel,
     DDPMScheduler,
     DEISMultistepScheduler,
+    UniPCMultiStepScheduler
 )
 from diffusers.utils import logging as dl, is_xformers_available
 from packaging import version
@@ -458,6 +459,16 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     growth_rate=args.adaptation_growth_rate,
                 )
 
+            elif args.optimizer == "Adan Dadaptation":
+                from dreambooth.dadapt_adan import DAdaptAdan
+                optimizer = DAdaptAdan(
+                    params_to_optimize,
+                    lr=args.learning_rate,
+                    weight_decay = args.adamw_weight_decay,
+                    no_prox=False,
+                    growth_rate=args.adaptation_growth_rate,
+                )
+
             else:
                 if shared.force_cpu:
                     pass
@@ -477,6 +488,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 elif args.optimizer == "Adagrad D-Adaptation":
                     from pytorch_optimizer import DAdaptAdaGrad
                     optimizer_class = DAdaptAdaGrad
+
+                elif args.optimizer == "Adan D-Adaptation":
+                    from pytorch_optimizer import DAdaptAdan
+                    optimizer_class = DAdaptAdan
 
                 elif args.optimizer == "Lion":
                     from lion_pytorch import Lion
@@ -500,6 +515,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
         if args.noise_scheduler == "DEIS":
             noise_scheduler = DEISMultistepScheduler.from_pretrained(
+                args.pretrained_model_name_or_path, subfolder="scheduler"
+            )
+        elif args.noise_scheduler == "UniPC":
+            noise_scheduler = UniPCMultiStepScheduler.from_pretrained(
                 args.pretrained_model_name_or_path, subfolder="scheduler"
             )
         else:
