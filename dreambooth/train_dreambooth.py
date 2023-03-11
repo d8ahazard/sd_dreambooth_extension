@@ -518,7 +518,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 args.pretrained_model_name_or_path, subfolder="scheduler"
             )
         elif args.noise_scheduler == "UniPC":
-            noise_scheduler = UniPCMultiStepScheduler.from_pretrained(
+            noise_scheduler = UniPCMultistepScheduler.from_pretrained(
                 args.pretrained_model_name_or_path, subfolder="scheduler"
             )
         else:
