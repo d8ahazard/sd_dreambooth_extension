@@ -19,7 +19,7 @@
 
 import math
 from enum import Enum
-from typing import Optional, Union, List
+from typing import Optional, Tuple, Union, List
 
 import torch.optim.lr_scheduler
 from diffusers.utils import logging
