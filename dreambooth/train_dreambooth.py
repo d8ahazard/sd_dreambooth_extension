@@ -23,7 +23,7 @@ from diffusers import (
     UNet2DConditionModel,
     DDPMScheduler,
     DEISMultistepScheduler,
-    UniPCMultiStepScheduler
+    UniPCMultistepScheduler
 )
 from diffusers.utils import logging as dl, is_xformers_available
 from packaging import version
