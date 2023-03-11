@@ -1,20 +1,19 @@
+#
+# SOURCE: https://github.com/qwopqwop200/D-Adaptation-Adan/blob/main/opt/dadapt_adan.py
+#
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 #
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import math
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any
 
 import torch
 import torch.optim
-import pdb
-import logging
-import os
 
 if TYPE_CHECKING:
-    from torch.optim.optimizer import _params_t
+    pass
 else:
     _params_t = Any
 
