@@ -127,6 +127,12 @@ def list_optimizer():
     except ImportError:
         pass
 
+    try:
+        from dreambooth.dadapt_adan import DAdaptAdan
+        optimizer_list.append("Adan Dadaptation")
+    except ImportError:
+        pass
+
     return optimizer_list
 
 

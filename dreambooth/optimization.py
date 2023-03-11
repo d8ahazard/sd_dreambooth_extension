@@ -47,7 +47,7 @@ class SchedulerType(Enum):
     CONSTANT_WITH_WARMUP = "constant_with_warmup"
 
 
-# Newer Schedulers
+# region Newer Schedulers
 def get_cosine_annealing_scheduler(
     optimizer: Optimizer, max_iter: int = 500, eta_min: float = 1e-6
 ):

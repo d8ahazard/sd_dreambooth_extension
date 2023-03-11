@@ -1043,6 +1043,7 @@ def debug_buckets(model_name, num_epochs, batch_size):
         optimizer_class == "DAdaptSGD"
         or optimizer_class == "DAdaptAdam"
         or optimizer_class == "DAdaptAdaGrad"
+        or optimizer_class =="DAdaptAdan"
     ):
         lr_scheduler = LambdaLR(
             optimizer=optimizer,

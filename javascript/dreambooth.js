@@ -384,6 +384,7 @@ let db_titles = {
     "Model Path": "The URL to the model on huggingface. Should be in the format of 'developer/model_name'.",
     "Model": "The model to train.",
     "Momentum": "The momentum to use for the optimizer.",
+    "NoProx": "How to perform the decoupled weight decay.",
     "Name": "The name of the model to create.",
     "Number of Hard Resets": "Number of hard resets of the lr in cosine_with_restarts scheduler.",
     "Number of Samples to Generate": "How many samples to generate per subject.",

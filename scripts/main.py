@@ -971,6 +971,7 @@ def on_ui_tabs():
                         choices=[
                             "DDPM",
                             "DEIS",
+                            "UniPC"
                         ]
                     )
                     db_update_extension = gr.Button(
@@ -1453,7 +1454,7 @@ def on_ui_tabs():
             )
 
         def optimizer_changed(opti):
-            show_adapt = opti in ["SGD Dadaptation", "AdaGrad Dadaptation", "AdamW Dadaptation"]
+            show_adapt = opti in ["SGD Dadaptation", "AdaGrad Dadaptation", "AdamW Dadaptation", "Adan Dadaptation""]
             adaptation_lr = gr.update(visible=show_adapt)
             return adaptation_lr
 
