@@ -1081,7 +1081,6 @@ def on_ui_tabs():
                     inputs=[
                         db_use_lora,
                         db_lr_scheduler,
-                        db_optimizer,
                         db_train_unet,
                         db_prior_loss_scale,
                     ],
