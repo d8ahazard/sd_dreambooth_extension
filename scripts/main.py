@@ -1024,7 +1024,7 @@ def on_ui_tabs():
                 )
 
                 def check_toggles(
-                    use_lora, lr_scheduler, train_unet, scale_prior
+                    use_lora, class_gen_method, lr_scheduler, train_unet, scale_prior
                 ):
                     stop_text_encoder = update_stop_tenc(train_unet)
                     (
@@ -1043,6 +1043,7 @@ def on_ui_tabs():
                         learning_rate_min,
                         lr_warmup_steps,
                      ) = lr_scheduler_changed(lr_scheduler)
+                    scheduler = class_gen_method_changed(class_gen_method)
                     loss_min, loss_tgt = toggle_loss_items(scale_prior)
                     return (
                         stop_text_encoder,
@@ -1051,7 +1052,7 @@ def on_ui_tabs():
                         lora_save,
                         lora_lr,
                         lora_model,
-                        lr_scheduler,
+                        scheduler,
                         lr_power,
                         lr_cycles,
                         lr_scale_pos,
@@ -1080,6 +1081,7 @@ def on_ui_tabs():
                     fn=check_toggles,
                     inputs=[
                         db_use_lora,
+                        db_class_gen_method,
                         db_lr_scheduler,
                         db_train_unet,
                         db_prior_loss_scale,
