@@ -427,7 +427,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 else unet.parameters()
             )
 
-        optimizer_class = torch.optim.AdamW
+        optimizer = None
         try:
             if args.optimizer == "SGD Dadaptation":
                 from dadaptation import DAdaptSGD
@@ -464,40 +464,22 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 optimizer = DAdaptAdan(
                     params_to_optimize,
                     lr=args.learning_rate,
-                    weight_decay = args.adamw_weight_decay,
+                    weight_decay=args.adamw_weight_decay,
                     no_prox=False,
                     growth_rate=args.adaptation_growth_rate,
                 )
 
-            else:
-                if shared.force_cpu:
-                    pass
+            elif args.optimizer == "8bit AdamW":
+                from bitsandbytes.optim import AdamW8bit
+                optimizer = AdamW8bit(
+                    params_to_optimize,
+                    lr=args.learning_rate,
+                    weight_decay=args.adamw_weight_decay,
+                )
 
-                elif args.optimizer in ["8bit AdamW", "8Bit Adam"]:
-                    from bitsandbytes.optim import AdamW8bit
-                    optimizer_class = AdamW8bit
-
-                elif args.optimizer == "SGD D-Adaptation":
-                    from pytorch_optimizer import DAdaptSGD
-                    optimizer_class = DAdaptSGD
-
-                elif args.optimizer == "AdamW D-Adaptation":
-                    from pytorch_optimizer import DAdaptAdam
-                    optimizer_class = DAdaptAdam
-
-                elif args.optimizer == "Adagrad D-Adaptation":
-                    from pytorch_optimizer import DAdaptAdaGrad
-                    optimizer_class = DAdaptAdaGrad
-
-                elif args.optimizer == "Adan D-Adaptation":
-                    from pytorch_optimizer import DAdaptAdan
-                    optimizer_class = DAdaptAdan
-
-                elif args.optimizer == "Lion":
-                    from lion_pytorch import Lion
-                    optimizer_class = Lion
-
-                optimizer = optimizer_class(
+            elif args.optimizer == "Lion":
+                from lion_pytorch import Lion
+                optimizer = Lion(
                     params_to_optimize,
                     lr=args.learning_rate,
                     weight_decay=args.adamw_weight_decay,
@@ -507,7 +489,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             logger.warning(f"Exception importing {args.optimizer}: {a}")
             traceback.print_exc()
             print("Using default optimizer (AdamW from Torch)")
-            optimizer = optimizer_class(
+
+        if optimizer is None:
+            optimizer = torch.optim.AdamW(
                 params_to_optimize,
                 lr=args.learning_rate,
                 weight_decay=args.adamw_weight_decay,
