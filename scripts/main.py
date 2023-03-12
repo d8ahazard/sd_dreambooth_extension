@@ -859,7 +859,7 @@ def on_ui_tabs():
                         label="Class Image Generation Method",
                         value="Native Diffusers",
                         choices=[
-                            "A1111 txt2img (DPM++ 2S a Karras)",
+                            "A1111 txt2img (Euler a)",
                             "Native Diffusers",
                         ]
                     )
@@ -986,7 +986,7 @@ def on_ui_tabs():
                             label="Max Res", value=512, step=64, maximum=4096
                         )
                         db_crop_bucket_step = gr.Slider(
-                            label="Bucket Steps", value=64, step=64, maximum=4096
+                            label="Bucket Steps", value=64, step=32, maximum=4096
                         )
                         db_crop_dry = gr.Checkbox(label="Dry Run", value=True)
                         db_start_crop = gr.Button("Start Cropping")

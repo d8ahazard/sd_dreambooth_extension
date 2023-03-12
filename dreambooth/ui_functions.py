@@ -417,7 +417,7 @@ def generate_samples(
         config = from_file(model_name)
         source_model = None
 
-        if class_gen_method == "A1111 txt2img (DPM++ 2S a Karras)":
+        if class_gen_method == "A1111 txt2img (Euler a)":
             tgt_name = (
                 model_name if not config.custom_model_name else config.custom_model_name
             )
@@ -853,9 +853,8 @@ def start_crop(
         src_dir: str, dest_dir: str, max_res: int, bucket_step: int, dry_run: bool
 ):
     src_images = get_images(src_dir)
-    min_res = (int(max_res * 0.28125) // 64) * 64
 
-    bucket_resos = make_bucket_resolutions(max_res)
+    bucket_resos = make_bucket_resolutions(max_res, bucket_step)
 
     max_dim = 0
     for (w, h) in bucket_resos:

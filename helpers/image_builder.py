@@ -40,7 +40,7 @@ class ImageBuilder:
         self.last_model = None
         self.batch_size = batch_size
         self.exception_count = 0
-        use_txt2img = class_gen_method == "A1111 txt2img (DPM++ 2S a Karras)"
+        use_txt2img = class_gen_method == "A1111 txt2img (Euler a)"
 
         if not image_utils.txt2img_available and use_txt2img:
             print("No txt2img available.")
@@ -190,7 +190,7 @@ class ImageBuilder:
                 from modules import shared as auto_shared
 
                 p = StableDiffusionProcessingTxt2Img(
-                    sampler_name='DPM++ 2S a Karras',
+                    sampler_name='Euler a',
                     sd_model=auto_shared.sd_model,
                     prompt=positive_prompts,
                     negative_prompt=negative_prompts,
