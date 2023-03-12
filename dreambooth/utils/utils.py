@@ -101,7 +101,13 @@ def xformers_check():
 
 
 def list_optimizer():
-    optimizer_list = ["8bit AdamW"]
+    optimizer_list = ["Torch AdamW"]
+
+    try:
+        from bitsandbytes.optim import AdamW8bit
+        optimizer_list.append("8bit AdamW")
+    except ImportError:
+        pass
 
     try:
         from lion_pytorch import Lion

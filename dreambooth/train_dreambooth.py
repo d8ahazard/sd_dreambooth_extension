@@ -30,7 +30,6 @@ from packaging import version
 from tensorflow.python.framework.random_seed import set_seed as set_seed1
 from torch.cuda.profiler import profile
 from torch.utils.data import Dataset
-from torch.utils.tensorboard import SummaryWriter, FileWriter
 from transformers import AutoTokenizer
 
 from dreambooth import shared
@@ -56,7 +55,6 @@ from dreambooth.utils.model_utils import (
 from dreambooth.utils.text_utils import encode_hidden_state
 from dreambooth.utils.utils import cleanup, printm
 from dreambooth.webhook import send_training_update
-from dreambooth.xattention import optim_to
 from helpers.ema_model import EMAModel
 from helpers.log_parser import LogParser
 from helpers.mytqdm import mytqdm
@@ -429,6 +427,29 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
         optimizer = None
         try:
+            if args.optimizer == "Torch AdamW":
+                optimizer = torch.optim.AdamW(
+                    params_to_optimize,
+                    lr=args.learning_rate,
+                    weight_decay=args.adamw_weight_decay,
+                )
+
+            if args.optimizer == "8bit AdamW":
+                from bitsandbytes.optim import AdamW8bit
+                optimizer = AdamW8bit(
+                    params_to_optimize,
+                    lr=args.learning_rate,
+                    weight_decay=args.adamw_weight_decay,
+                )
+
+            elif args.optimizer == "Lion":
+                from lion_pytorch import Lion
+                optimizer = Lion(
+                    params_to_optimize,
+                    lr=args.learning_rate,
+                    weight_decay=args.adamw_weight_decay,
+                )
+
             if args.optimizer == "SGD Dadaptation":
                 from dadaptation import DAdaptSGD
                 optimizer = DAdaptSGD(
@@ -469,28 +490,12 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     growth_rate=args.adaptation_growth_rate,
                 )
 
-            elif args.optimizer == "8bit AdamW":
-                from bitsandbytes.optim import AdamW8bit
-                optimizer = AdamW8bit(
-                    params_to_optimize,
-                    lr=args.learning_rate,
-                    weight_decay=args.adamw_weight_decay,
-                )
-
-            elif args.optimizer == "Lion":
-                from lion_pytorch import Lion
-                optimizer = Lion(
-                    params_to_optimize,
-                    lr=args.learning_rate,
-                    weight_decay=args.adamw_weight_decay,
-                )
-
         except Exception as a:
             logger.warning(f"Exception importing {args.optimizer}: {a}")
             traceback.print_exc()
 
         if optimizer is None:
-            print("Using default optimizer (AdamW from Torch)")
+            print("WARNING: Using default optimizer (AdamW from Torch)")
             optimizer = torch.optim.AdamW(
                 params_to_optimize,
                 lr=args.learning_rate,
@@ -688,20 +693,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         # We need to initialize the trackers we use, and also store our configuration.
         # The trackers will initialize automatically on the main process.
         if accelerator.is_main_process:
-            # create a SummaryWriter object with max_queue and flush_secs arguments
-            writer = SummaryWriter(
-                log_dir=logging_dir,
-                filename_suffix=run_name,
-                max_queue=max_log_size,
-                flush_secs=30,  # how often to flush the pending events to disk (in seconds)
-            )
-
             accelerator.init_trackers("dreambooth")
-            # get the tracker object for TensorBoard
-            tracker = accelerator.get_tracker("tensorboard")
-
-            # set the SummaryWriter object as the tracker's writer
-            tracker.writer = FileWriter(writer.get_logdir())
 
         # Train!
         total_batch_size = (
@@ -859,7 +851,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             # Create the pipeline using the trained modules and save it.
             if accelerator.is_main_process:
                 printm("Pre-cleanup.")
-                optim_to(torch, profiler, optimizer)
                 if profiler is not None:
                     cleanup()
 
@@ -1121,7 +1112,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
                 status.current_image = last_samples
                 printm("Cleanup.")
-                optim_to(torch, profiler, optimizer, accelerator.device)
                 cleanup()
                 printm("Cleanup completed.")
 
