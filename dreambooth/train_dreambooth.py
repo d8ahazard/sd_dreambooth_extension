@@ -488,9 +488,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         except Exception as a:
             logger.warning(f"Exception importing {args.optimizer}: {a}")
             traceback.print_exc()
-            print("Using default optimizer (AdamW from Torch)")
 
         if optimizer is None:
+            print("Using default optimizer (AdamW from Torch)")
             optimizer = torch.optim.AdamW(
                 params_to_optimize,
                 lr=args.learning_rate,
@@ -882,8 +882,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     requires_safety_checker=None,
                 )
                 scheduler_class = get_scheduler_class(args.scheduler)
-                s_pipeline.enable_attention_slicing()
-                s_pipeline.unet = torch2ify(s_pipeline.unet)
                 if args.attention == "xformers" and not shared.force_cpu:
                     xformerify(s_pipeline)
 
