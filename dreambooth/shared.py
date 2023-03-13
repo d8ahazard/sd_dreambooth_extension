@@ -15,6 +15,7 @@ from packaging import version
 
 logger = logging.getLogger(__name__)
 
+
 def load_auto_settings():
     global models_path, script_path, ckpt_dir, device_id, disable_safe_unpickle, dataset_filename_word_regex, \
         dataset_filename_join_string, show_progress_every_n_steps, parallel_processing_allowed, state, ckptfix, medvram, \
@@ -397,7 +398,7 @@ orig_tensor_to = torch.Tensor.to
 orig_layer_norm = torch.nn.functional.layer_norm
 orig_tensor_numpy = torch.Tensor.numpy
 extension_path = ""
-
+status = None
 orig_cumsum = torch.cumsum
 orig_Tensor_cumsum = torch.Tensor.cumsum
 

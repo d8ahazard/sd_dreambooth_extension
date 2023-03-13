@@ -2,9 +2,43 @@
     <div class="container-fluid">
         <div class="row">
             <div class="col-12">
-                <div class="card shadow">
+                <div class="card shadow" id="dreamModel">
+                    <div class="card-body">
+                        <ul class="nav nav-tabs" id="myTab" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="db-model-select-tab" data-bs-toggle="tab"
+                                        data-bs-target="#db-model-select" type="button" role="tab" aria-controls="db-model-select"
+                                        aria-selected="true">Select Model
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="db-model-create-tab" data-bs-toggle="tab" data-bs-target="#db-model-create"
+                                        type="button" role="tab" aria-controls="profile" aria-selected="false">Create Model
+                                </button>
+                            </li>
+                        </ul>
+                        <div class="tab-content" id="myTabContent">
+                            <div class="tab-pane fade show active" id="db-model-select" role="tabpanel" aria-labelledby="db-model-select">
+                                <div id="dreamModelSelect"></div>
+                            </div>
+                            <div class="tab-pane fade" id="db-model-create" role="tabpanel" aria-labelledby="db-model-create">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="card shadow" id="dreamSettings">
                     <div class="card-body">
 
+                    </div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="card shadow" id="dreamStatus">
+                    <div class="card-body">
+                        <div class="progressGroup" id="dreamProgress"></div>
+                        <div class="image-container inline-gallery-container" id="dreamGallery"></div>
                     </div>
                 </div>
             </div>

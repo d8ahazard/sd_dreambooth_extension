@@ -26,32 +26,30 @@ from torch.utils.data import Dataset
 from torch.utils.tensorboard import SummaryWriter, FileWriter
 from transformers import AutoTokenizer
 
-
-
-from helpers.log_parser import LogParser
-from dreambooth import xattention, shared
+from dreambooth import shared
 from dreambooth.dataclasses.prompt_data import PromptData
 from dreambooth.dataclasses.train_result import TrainResult
 from dreambooth.dataset.bucket_sampler import BucketSampler
 from dreambooth.dataset.sample_dataset import SampleDataset
-from dreambooth.diff_to_sd import compile_checkpoint
+from dreambooth.deis_velocity import get_velocity
+from dreambooth.diff_to_sd import compile_checkpoint, copy_diffusion_model
 from dreambooth.memory import find_executable_batch_size
 from dreambooth.optimization import UniversalScheduler
-from dreambooth.shared import status, load_auto_settings
+from dreambooth.shared import status
 from dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
 from dreambooth.utils.image_utils import db_save_image, get_scheduler_class
 from dreambooth.utils.model_utils import unload_system_models, \
-import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle, xformerify, torch2ify
+    import_model_class_from_model_name_or_path, disable_safe_unpickle, enable_safe_unpickle, xformerify, torch2ify
 from dreambooth.utils.text_utils import encode_hidden_state
 from dreambooth.utils.utils import cleanup, printm
 from dreambooth.webhook import send_training_update
 from dreambooth.xattention import optim_to
 from helpers.ema_model import EMAModel
+from helpers.log_parser import LogParser
 from helpers.mytqdm import mytqdm
 from lora_diffusion.extra_networks import save_extra_networks
 from lora_diffusion.lora import save_lora_weight, \
     TEXT_ENCODER_DEFAULT_TARGET_REPLACE, get_target_module
-from dreambooth.deis_velocity import get_velocity
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
@@ -77,6 +75,18 @@ try:
         print("The version of diffusers is greater than 0.14.0, hopefully they merged the PR by now")
 except:
     print("Exception monkey-patching DEIS scheduler.")
+
+export_diffusers = False
+diffusers_dir = ""
+try:
+    from core.handlers.config import ConfigHandler
+    from core.handlers.models import ModelHandler
+    ch = ConfigHandler()
+    mh = ModelHandler()
+    export_diffusers = ch.get_item("export_diffusers", "dreambooth", True)
+    diffusers_dir = os.path.join(mh.models_path, "diffusers")
+except:
+    pass
 
 
 def set_seed(deterministic: bool):
@@ -711,6 +721,7 @@ def main(use_txt2img: bool = True) -> TrainResult:
                     safety_checker=None,
                     requires_safety_checker=None
                 )
+
                 scheduler_class = get_scheduler_class(args.scheduler)
                 s_pipeline.enable_attention_slicing()
                 s_pipeline.unet = torch2ify(s_pipeline.unet)
@@ -788,8 +799,11 @@ def main(use_txt2img: bool = True) -> TrainResult:
                             if save_checkpoint:
                                 pbar.set_description("Compiling Checkpoint")
                                 snap_rev = str(args.revision) if save_snapshot else ""
-                                compile_checkpoint(args.model_name, reload_models=False, lora_file_name=out_file, log=False,
-                                                   snap_rev=snap_rev)
+                                if export_diffusers:
+                                    copy_diffusion_model(args.model_name, diffusers_dir)
+                                else:
+                                    compile_checkpoint(args.model_name, reload_models=False, lora_file_name=out_file, log=False,
+                                                       snap_rev=snap_rev)
                                 pbar.update()
                                 printm("Restored, moved to acc.device.")
                         except Exception as ex:
