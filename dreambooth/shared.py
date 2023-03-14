@@ -132,6 +132,11 @@ def torch_gc():
             torch.cuda.ipc_collect()
 
 
+def format_time(seconds: float):
+    date = datetime.datetime.utcfromtimestamp(seconds)
+    return datetime.datetime.strftime(date, "%H:%M:%S")
+
+
 class DreamState:
     interrupted = False
     interrupted_after_save = False
@@ -206,6 +211,7 @@ class DreamState:
         torch_gc()
 
     def end(self):
+        print("Training duration: " + format_time(time.time() - self.time_start))
         self.job = ""
         self.job_count = 0
         self.job_no = 0

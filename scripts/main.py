@@ -121,7 +121,7 @@ def check_progress_call():
     """
     Check the progress from share dreamstate and return appropriate UI elements.
     @return:
-    active: Checkbox to physically holde an active state
+    active: Checkbox to physically hold an active state
     pspan: Progress bar span contents
     preview: Preview Image/Visibility
     gallery: Gallery Image/Visibility
@@ -986,7 +986,7 @@ def on_ui_tabs():
                             label="Max Res", value=512, step=64, maximum=4096
                         )
                         db_crop_bucket_step = gr.Slider(
-                            label="Bucket Steps", value=64, step=32, maximum=4096
+                            label="Bucket Steps", value=32, step=32, maximum=4096
                         )
                         db_crop_dry = gr.Checkbox(label="Dry Run", value=True)
                         db_start_crop = gr.Button("Start Cropping")
