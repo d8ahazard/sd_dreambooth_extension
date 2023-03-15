@@ -429,7 +429,30 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
         optimizer = None
         try:
-            if args.optimizer == "SGD Dadaptation":
+            if args.optimizer == "Torch AdamW":
+                optimizer = torch.optim.AdamW(
+                    params_to_optimize,
+                    lr=args.learning_rate,
+                    weight_decay=args.adamw_weight_decay,
+                )
+
+            if args.optimizer == "8bit AdamW":
+                from bitsandbytes.optim import AdamW8bit
+                optimizer = AdamW8bit(
+                    params_to_optimize,
+                    lr=args.learning_rate,
+                    weight_decay=args.adamw_weight_decay,
+                )
+
+            elif args.optimizer == "Lion":
+                from lion_pytorch import Lion
+                optimizer = Lion(
+                    params_to_optimize,
+                    lr=args.learning_rate,
+                    weight_decay=args.adamw_weight_decay,
+                )
+
+            elif args.optimizer == "SGD Dadaptation":
                 from dadaptation import DAdaptSGD
                 optimizer = DAdaptSGD(
                     params_to_optimize,
@@ -490,7 +513,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             traceback.print_exc()
 
         if optimizer is None:
-            print("Using default optimizer (AdamW from Torch)")
+            print("WARNING: Using default optimizer (AdamW from Torch)")
             optimizer = torch.optim.AdamW(
                 params_to_optimize,
                 lr=args.learning_rate,
