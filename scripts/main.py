@@ -346,12 +346,14 @@ def on_ui_tabs():
                         )
                         db_train_unfrozen = gr.Checkbox(label="Unfreeze Model", value=False)
                 with gr.Column():
-                    with gr.Row():
-                        gr.HTML(value="Beginners Guide:")
-                        gr.HTML(
-                            value="<a href=\"https://github.com/d8ahazard/sd_dreambooth_extension/wiki/ELI5-Training\">ELI5-Training</a>",
-                            elem_id="hyperlink"
-                        )
+                    with gr.Accordion(open=False, label="Resources"):
+                        with gr.Column():
+                            gr.HTML(
+                                value="<a class=\"hyperlink\" href=\"https://github.com/d8ahazard/sd_dreambooth_extension/wiki/ELI5-Training\">Beginners guide</a>",
+                            )
+                            gr.HTML(
+                                value="<a class=\"hyperlink\" href=\"https://github.com/d8ahazard/sd_dreambooth_extension/releases/latest\">Release notes</a>",
+                            )
             with gr.Column(variant="panel", elem_id="SettingsPanel"):
                 gr.HTML(value="<span class='hh'>Input</span>")
                 with gr.Tab("Settings", elem_id="TabSettings"):
@@ -1185,7 +1187,7 @@ def on_ui_tabs():
                     close_modal = gr.Button(value="X", elem_id="close_modal")
                 with gr.Row():
                     modal_release_notes = gr.HTML(
-                        "<h3><a href='https://github.com/d8ahazard/sd_dreambooth_extension/releases/tag/1.0.12'>Release notes</a></h3>",
+                        "<h3><a href='https://github.com/d8ahazard/sd_dreambooth_extension/releases/latest'>Release notes</a></h3>",
                         elem_id="modal_notes",
                     )
                 with gr.Column():

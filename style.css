@@ -161,6 +161,6 @@ button:disabled, input:disabled {
     display: none;
 }
 
-#hyperlink {
+.hyperlink {
     text-decoration: underline
 }
