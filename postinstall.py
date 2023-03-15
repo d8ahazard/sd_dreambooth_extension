@@ -200,7 +200,6 @@ def actual_install():
                 min_split = re.split(r"[.+]", min_ver)
                 error_detected = False
                 for (i_ver, m_ver) in zip(installed_split, min_split):
-                    print(i_ver)
                     if i_ver > m_ver:
                         break
                     if i_ver is None or i_ver < m_ver:
