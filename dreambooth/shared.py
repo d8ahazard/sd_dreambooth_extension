@@ -211,7 +211,7 @@ class DreamState:
         torch_gc()
 
     def end(self):
-        print("Training duration: " + format_time(time.time() - self.time_start))
+        print("Duration: " + format_time(time.time() - self.time_start))
         self.job = ""
         self.job_count = 0
         self.job_no = 0

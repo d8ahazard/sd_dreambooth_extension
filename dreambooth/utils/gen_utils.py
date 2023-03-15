@@ -101,7 +101,6 @@ def generate_classifiers(
         print(f"Exception generating dataset: {str(p)}")
         traceback.print_exc()
         if ui:
-            shared.status.end()
             return 0, []
         else:
             return 0, instance_prompts, class_prompts
@@ -110,7 +109,6 @@ def generate_classifiers(
     if set_len == 0:
         print("Nothing to generate.")
         if ui:
-            shared.status.end()
             return 0, []
         else:
             return 0, instance_prompts, class_prompts
@@ -193,7 +191,6 @@ def generate_classifiers(
     cleanup()
     print(f"Generated {generated} new class images.")
     if ui:
-        shared.status.end()
         return generated, out_images
     else:
         return generated, instance_prompts, class_prompts

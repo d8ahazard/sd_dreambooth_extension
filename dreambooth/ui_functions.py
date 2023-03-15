@@ -743,7 +743,6 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
         )
     except Exception as e:
         res = f"Exception training model: '{e}'."
-        status.end()
         traceback.print_exc()
         pass
 
@@ -925,7 +924,6 @@ def start_crop(
         out_status = (
             f"{'Saved' if not dry_run else 'Previewed'} {total_images} cropped images."
         )
-    shared.status.end()
     return out_status, out_images
 
 
@@ -971,7 +969,6 @@ def create_model(
     cleanup()
     reload_system_models()
     printm("Extraction complete.")
-    status.end()
     return result
 
 
@@ -1077,7 +1074,6 @@ def debug_buckets(model_name, num_epochs, batch_size):
     bucket_file = os.path.join(samples_dir, "prompts.json")
     with open(bucket_file, "w") as outfile:
         json.dump(lines, outfile, indent=4)
-    status.end()
     try:
         del dataloader
         del dataset.tokenizer

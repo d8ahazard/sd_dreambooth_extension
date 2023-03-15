@@ -1441,7 +1441,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         result.config = args
         result.samples = last_samples
         stop_profiler(profiler)
-        status.end()
         return result
 
     return inner_loop()

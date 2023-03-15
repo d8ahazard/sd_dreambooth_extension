@@ -223,7 +223,6 @@ def dreambooth_api(_, app: FastAPI):
             active = True
             ckpt_result = compile_checkpoint(model_name, reload_models=False, log=False)
             active = False
-            shared.status.end()
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()
                 logger.debug(f"Checkpoint aved to path: {path}")
@@ -658,8 +657,6 @@ def dreambooth_api(_, app: FastAPI):
             class_gen_method=class_gen_method,
             scheduler=scheduler
         )
-
-        shared.status.end()
 
         if len(images) > 1:
             return zip_files(model_name, images, "_sample")
