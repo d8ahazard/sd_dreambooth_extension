@@ -106,37 +106,37 @@ def list_optimizer():
     try:
         from bitsandbytes.optim import AdamW8bit
         optimizer_list.append("8bit AdamW")
-    except ImportError:
+    except:
         pass
 
     try:
         from lion_pytorch import Lion
         optimizer_list.append("Lion")
-    except ImportError:
+    except:
         pass
 
     # try:
     #     from dadaptation import DAdaptSGD
     #     optimizer_list.append("SGD Dadaptation")
-    # except ImportError:
+    # except:
     #     pass
     #
     # try:
     #     from dadaptation import DAdaptAdaGrad
     #     optimizer_list.append("AdaGrad Dadaptation")
-    # except ImportError:
+    # except:
     #     pass
     #
     # try:
     #     from dadaptation import DAdaptAdam
     #     optimizer_list.append("AdamW Dadaptation")
-    # except ImportError:
+    # except:
     #     pass
     #
     # try:
     #     from dreambooth.dadapt_adan import DAdaptAdan
     #     optimizer_list.append("Adan Dadaptation")
-    # except ImportError:
+    # except:
     #     pass
 
     return optimizer_list

@@ -183,7 +183,7 @@ def train_imagic(args: DreamboothConfig):
         try:
             import bitsandbytes as bnb
             optimizer_class = bnb.optim.Adam8bit
-        except ImportError:
+        except:
             raise ImportError(
                 "To use 8-bit Adam, please install the bitsandbytes library: `pip install bitsandbytes`."
             )
