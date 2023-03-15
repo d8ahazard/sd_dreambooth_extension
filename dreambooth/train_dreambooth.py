@@ -148,7 +148,7 @@ def stop_profiler(profiler):
 
 def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
     """
-    @param class_gen_method: Class image generation method.
+    @param class_gen_method: Image Generation Library.
     @return: TrainResult
     """
     args = shared.db_model_config

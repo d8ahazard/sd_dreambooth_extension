@@ -418,7 +418,7 @@ let db_titles = {
     "Save separate diffusers snapshots when training is cancelled.": "When enabled, a unique snapshot of the diffusion weights will be saved when training is canceled. This uses more HDD space, but allows resuming from training including the optimizer state.",
     "Save EMA Weights to Generated Models": "If a model was extracted or trained with EMA weights, these will be appended separately to the model for use in training later.",
     "Scale Position": "The percent in training where the 'final' learning rate should be achieved. If training at 100 epochs and this is set to 0.25, the final LR will be reached at epoch 25.",
-    "Scheduler": "Model scheduler to use. Only applies to models before 2.0.",
+    "Image Generation Scheduler": "Model scheduler to use. Only applies to models before 2.0.",
     "Set Gradients to None When Zeroing": "When performing the backwards pass, gradients will be set to none, instead of creating a new empty tensor. This will slightly improve VRAM.",
     "Shuffle After Epoch": "When enabled, will shuffle the dataset after the first epoch. Will enable text encoder training and latent caching (More VRAM).",
     "Shuffle Tags": "When enabled, tags after the first ',' in a prompt will be randomly ordered, which can potentially improve training.",

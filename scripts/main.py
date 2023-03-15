@@ -845,7 +845,7 @@ def on_ui_tabs():
                             label="Generate lora weights for extra networks."
                         )
                     with gr.Column():
-                        gr.HTML("Diffusion Weights")
+                        gr.HTML("Diffusion Weights (training snapshots)")
                         db_save_state_during = gr.Checkbox(
                             label="Save separate diffusers snapshots when saving during training."
                         )
@@ -858,7 +858,7 @@ def on_ui_tabs():
                 with gr.Tab("Generate", elem_id="TabGenerate"):
                     gr.HTML(value="Class Generation Schedulers")
                     db_class_gen_method = gr.Dropdown(
-                        label="Class Image Generation Method",
+                        label="Image Generation Library",
                         value="Native Diffusers",
                         choices=[
                             "A1111 txt2img (Euler a)",
@@ -866,7 +866,7 @@ def on_ui_tabs():
                         ]
                     )
                     db_scheduler = gr.Dropdown(
-                        label="Scheduler",
+                        label="Image Generation Scheduler",
                         value="DEISMultistep",
                         choices=get_scheduler_names(),
                     )
@@ -1720,21 +1720,21 @@ def build_concept_panel(concept: int):
             placeholder="Optionally use [filewords] to read image "
             "captions from files.",
         )
-        save_sample_prompt = gr.Textbox(
-            label="Sample Image Prompt",
-            placeholder="Leave blank to use instance prompt. "
-            "Optionally use [filewords] to base "
-            "sample captions on instance images.",
-        )
         class_negative_prompt = gr.Textbox(label="Classification Image Negative Prompt")
         sample_template = gr.Textbox(
             label="Sample Prompt Template File",
             placeholder="Enter the path to a txt file containing sample prompts.",
         )
+        save_sample_prompt = gr.Textbox(
+            label="Sample Image Prompt",
+            placeholder="Leave blank to use instance prompt. "
+                        "Optionally use [filewords] to base "
+                        "sample captions on instance images.",
+        )
         save_sample_negative_prompt = gr.Textbox(label="Sample Negative Prompt")
 
     with gr.Column():
-        gr.HTML("Image Generation")
+        gr.HTML("Class Image Generation")
         num_class_images_per = gr.Slider(
             label="Class Images Per Instance Image", value=0, precision=0
         )
@@ -1744,6 +1744,9 @@ def build_concept_panel(concept: int):
         class_infer_steps = gr.Slider(
             label="Classification Steps", value=40, minimum=10, maximum=200, step=1
         )
+
+    with gr.Column():
+        gr.HTML("Sample Image Generation")
         n_save_sample = gr.Slider(
             label="Number of Samples to Generate", value=1, maximum=100, step=1
         )

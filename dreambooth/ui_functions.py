@@ -659,7 +659,7 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
     """
 
     @param model_dir: The directory containing the dreambooth model/config
-    @param class_gen_method: Class image generation method.
+    @param class_gen_method: Image Generation Library.
     @return:
     lora_model_name: If using lora, this will be the model name of the saved weights. (For resuming further training)
     revision: The model revision after training.
@@ -799,7 +799,7 @@ def ui_classifiers(model_name: str, class_gen_method: str = "Native Diffusers"):
     """
     UI method for generating class images.
     @param model_name: The model to generate classes for.
-    @param class_gen_method" Class image generation method.
+    @param class_gen_method" Image Generation Library.
     @return:
     """
     if model_name == "" or model_name is None:
