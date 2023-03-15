@@ -1709,7 +1709,7 @@ def build_concept_panel(concept: int):
         )
 
     with gr.Column():
-        gr.HTML(value="Prompts")
+        gr.HTML(value="Training Prompts")
         instance_prompt = gr.Textbox(
             label="Instance Prompt",
             placeholder="Optionally use [filewords] to read image "
@@ -1720,7 +1720,11 @@ def build_concept_panel(concept: int):
             placeholder="Optionally use [filewords] to read image "
             "captions from files.",
         )
-        class_negative_prompt = gr.Textbox(label="Classification Image Negative Prompt")
+        class_negative_prompt = gr.Textbox(
+            label="Classification Image Negative Prompt"
+        )
+    with gr.Column():
+        gr.HTML(value="Sample Prompts")
         sample_template = gr.Textbox(
             label="Sample Prompt Template File",
             placeholder="Enter the path to a txt file containing sample prompts.",
@@ -1731,7 +1735,9 @@ def build_concept_panel(concept: int):
                         "Optionally use [filewords] to base "
                         "sample captions on instance images.",
         )
-        save_sample_negative_prompt = gr.Textbox(label="Sample Negative Prompt")
+        save_sample_negative_prompt = gr.Textbox(
+            label="Sample Negative Prompt"
+        )
 
     with gr.Column():
         gr.HTML("Class Image Generation")
