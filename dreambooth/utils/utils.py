@@ -101,7 +101,13 @@ def xformers_check():
 
 
 def list_optimizer():
-    optimizer_list = ["8bit AdamW"]
+    optimizer_list = ["Torch AdamW"]
+
+    try:
+        from bitsandbytes.optim import AdamW8bit
+        optimizer_list.append("8bit AdamW")
+    except ImportError:
+        pass
 
     try:
         from lion_pytorch import Lion
@@ -180,6 +186,7 @@ def wrap_gpu_call(func, extra_outputs=None):
             status.end()
 
         except Exception as e:
+            status.end()
             # When printing out our debug argument list, do not print out more than a MB of text
             max_debug_str_len = 131072  # (1024*1024)/8
 
