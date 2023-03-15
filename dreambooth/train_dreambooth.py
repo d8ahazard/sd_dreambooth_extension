@@ -448,7 +448,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     weight_decay=args.adamw_weight_decay,
                 )
 
-            if args.optimizer == "8bit AdamW":
+            elif args.optimizer == "8bit AdamW":
                 from bitsandbytes.optim import AdamW8bit
                 optimizer = AdamW8bit(
                     params_to_optimize,
