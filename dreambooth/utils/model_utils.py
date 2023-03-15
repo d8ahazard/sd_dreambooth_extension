@@ -8,8 +8,8 @@ import torch
 from diffusers.utils import is_xformers_available
 from transformers import PretrainedConfig
 
-from dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
 from dreambooth import shared  # noqa
+from dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
 from dreambooth.utils.utils import cleanup  # noqa
 
 checkpoints_list = {}

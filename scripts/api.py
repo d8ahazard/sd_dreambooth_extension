@@ -223,7 +223,6 @@ def dreambooth_api(_, app: FastAPI):
             active = True
             ckpt_result = compile_checkpoint(model_name, reload_models=False, log=False)
             active = False
-            shared.status.end()
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()
                 logger.debug(f"Checkpoint aved to path: {path}")
@@ -261,7 +260,7 @@ def dreambooth_api(_, app: FastAPI):
     @app.post("/dreambooth/classifiers")
     async def generate_classes(
             model_name: str = Form(description="The model name to generate classifiers for."),
-            use_txt2img: bool = Form("", description="Use Txt2Image to generate classifiers."),
+            class_gen_method: str = Form("Native Diffusers", description="Class image generation method."),
             api_key: str = Form("", description="If an API key is set, this must be present.")
     ):
         """
@@ -285,7 +284,7 @@ def dreambooth_api(_, app: FastAPI):
         run_in_background(
             generate_classifiers,
             config,
-            use_txt2img
+            class_gen_method
         )
         active = False
         return JSONResponse(content={"message": "Generating classifiers..."})
@@ -623,7 +622,7 @@ def dreambooth_api(_, app: FastAPI):
             seed: int = Query(-1, description="The seed to use when generating samples"),
             steps: int = Query(60, description="Number of sampling steps to use when generating images."),
             scale: float = Query(7.5, description="CFG scale to use when generating images."),
-            use_txt2img: bool = Query(True, description="Use txt2img to generate samples"),
+            class_gen_method: str = Query("Native Diffusers", description="Class image generation method."),
             scheduler: str = Query("DEISMultistep", description="Sampler to use if not using txt2img"),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ):
@@ -655,11 +654,9 @@ def dreambooth_api(_, app: FastAPI):
             seed=seed,
             scale=scale,
             steps=steps,
-            use_txt2img=use_txt2img,
+            class_gen_method=class_gen_method,
             scheduler=scheduler
         )
-
-        shared.status.end()
 
         if len(images) > 1:
             return zip_files(model_name, images, "_sample")

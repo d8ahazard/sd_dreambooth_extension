@@ -15,7 +15,6 @@ import torch
 from diffusers import UNet2DConditionModel
 from torch import Tensor, nn
 
-
 from dreambooth import shared as shared
 from dreambooth.dataclasses.db_config import from_file, DreamboothConfig
 from dreambooth.shared import status

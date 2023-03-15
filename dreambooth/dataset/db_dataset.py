@@ -17,6 +17,7 @@ from dreambooth.utils.image_utils import make_bucket_resolutions, \
 from dreambooth.utils.text_utils import build_strict_tokens
 from helpers.mytqdm import mytqdm
 
+
 class DbDataset(torch.utils.data.Dataset):
     """
     Dataset for handling training data
