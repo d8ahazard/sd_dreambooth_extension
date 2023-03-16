@@ -229,7 +229,7 @@ def get_scheduler_class(scheduler_name):
     return scheduler_class
 
 
-def make_bucket_resolutions(max_resolution, divisible=64) -> List[Tuple[int, int]]:
+def make_bucket_resolutions(max_resolution, divisible=32) -> List[Tuple[int, int]]:
     aspect_ratios = [(16, 9), (5, 4), (4, 3), (3, 2), (2, 1), (1, 1)]
     resos = set()
 
@@ -427,7 +427,9 @@ def open_and_trim(image_path: str, reso: Tuple[int, int], return_pil: bool = Fal
 
     # Crop image to target resolution
     if image.width != reso[0] or image.height != reso[1]:
-        box = (0, 0, reso[0], reso[1])
+        w = int((image.width - reso[0]) / 2)
+        h = int((image.height - reso[1]) / 2)
+        box = (w, h, reso[0] + w, reso[1] + h)
         image = image.crop(box)
 
     # Return as np array or PIL image

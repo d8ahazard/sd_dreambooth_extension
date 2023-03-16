@@ -49,62 +49,62 @@ def actual_install():
 
     req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
 
-    def install_torch(torch_command, use_torch2):
-        try:
-            install_cmd = f'"{python}" -m {torch_command}'
-            print(f"Torch install command: {install_cmd}")
-            run(install_cmd, f"Installing torch{'2' if use_torch2 else ''} and torchvision.", "Couldn't install torch.")
-            has_torch = importlib.util.find_spec("torch") is not None
-            has_torch_vision = importlib.util.find_spec("torchvision") is not None
-            if use_torch2:
-                run(f"{python} -m pip install sympy==1.11.1")
-            torch_check = str(importlib_metadata.version("torch")) if has_torch else None
-            torch_vision_check = str(importlib_metadata.version("torchvision")) if has_torch_vision else None
-            return torch_check, torch_vision_check
-        except Exception as e:
-            print(f"Exception upgrading torch/torchvision: {e}")
-            return None, None
-
-    def set_torch2_paths():
-        # Get the URL for the latest release
-        url = "https://github.com/ArrowM/xformers/releases/latest"
-        response = requests.get(url)
-        resolved_url = response.url
-        last_portion = resolved_url.split("/")[-1]
-        d_index = last_portion.index('.d')
-        revisions = last_portion[d_index + 2:]
-        revisions = revisions.split("-")
-        if len(revisions) != 3:
-            print("Unable to parse revision information.")
-            return None
-        torch_version = revisions[0]
-        python_version = revisions[1]
-        cuda_version = revisions[2]
-        xformers_ver = last_portion.replace(f"-{python_version}-{cuda_version}", "")
-        os_string = "win_amd64" if os.name == "nt" else "linux_x86_64"
-        torch_ver = f"2.0.0.dev{torch_version}+{cuda_version}"
-        torch_vis_ver = f"0.15.0.dev{torch_version}+{cuda_version}"
-        xformers_url = f"{resolved_url}/{xformers_ver}-{python_version}-{python_version}-{os_string}.whl".replace(
-            "/tag/", "/download/")
-        torch2_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}/torch-2.0.0.dev{torch_version}%2B{cuda_version}-{python_version}-{python_version}-{os_string}.whl"
-        torchvision2_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}/torchvision-0.15.0.dev{torch_version}%2B{cuda_version}-{python_version}-{python_version}-{os_string}.whl"
-        triton_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}/pytorch_triton-2.0.0%2B0d7e753227-{python_version}-{python_version}-linux_x86_64.whl"
-        xformers_ver = xformers_ver.replace("xformers-", "")
-        print(f"Xformers version: {xformers_ver}")
-        print(f"Torch version: {torch_ver}")
-        print(f"Torch vision version: {torch_vis_ver}")
-        print(f"xu: {xformers_url}")
-        print(f"tu: {torch2_url}")
-        print(f"tvu: {torchvision2_url}")
-        print(f"tru: {triton_url}")
-        torch_final = f"{torch2_url} {torchvision2_url}"
-        if os.name != "nt":
-            torch_final += f" {triton_url}"
-        return xformers_ver, torch_ver, torch_vis_ver, xformers_url, torch_final
+    # def install_torch(torch_command, use_torch2):
+    #     try:
+    #         install_cmd = f'"{python}" -m {torch_command}'
+    #         print(f"Torch install command: {install_cmd}")
+    #         run(install_cmd, f"Installing torch{'2' if use_torch2 else ''} and torchvision.", "Couldn't install torch.")
+    #         has_torch = importlib.util.find_spec("torch") is not None
+    #         has_torch_vision = importlib.util.find_spec("torchvision") is not None
+    #         if use_torch2:
+    #             run(f"{python} -m pip install sympy==1.11.1")
+    #         torch_installed_ver = str(importlib_metadata.version("torch")) if has_torch else None
+    #         torch_vision_check = str(importlib_metadata.version("torchvision")) if has_torch_vision else None
+    #         return torch_installed_ver, torch_vision_check
+    #     except Exception as e:
+    #         print(f"Exception upgrading torch/torchvision: {e}")
+    #         return None, None
+    #
+    # def set_torch2_paths():
+    #     # Get the URL for the latest release
+    #     url = "https://github.com/ArrowM/xformers/releases/latest"
+    #     response = requests.get(url)
+    #     resolved_url = response.url
+    #     last_portion = resolved_url.split("/")[-1]
+    #     d_index = last_portion.index('.d')
+    #     revisions = last_portion[d_index + 2:]
+    #     revisions = revisions.split("-")
+    #     if len(revisions) != 3:
+    #         print("Unable to parse revision information.")
+    #         return None
+    #     torch_version = revisions[0]
+    #     python_version = revisions[1]
+    #     cuda_version = revisions[2]
+    #     xformers_ver = last_portion.replace(f"-{python_version}-{cuda_version}", "")
+    #     os_string = "win_amd64" if os.name == "nt" else "linux_x86_64"
+    #     torch_ver = f"2.0.0.dev{torch_version}+{cuda_version}"
+    #     torch_vis_ver = f"0.15.0.dev{torch_version}+{cuda_version}"
+    #     xformers_url = f"{resolved_url}/{xformers_ver}-{python_version}-{python_version}-{os_string}.whl".replace(
+    #         "/tag/", "/download/")
+    #     torch2_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}/torch-2.0.0.dev{torch_version}%2B{cuda_version}-{python_version}-{python_version}-{os_string}.whl"
+    #     torchvision2_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}/torchvision-0.15.0.dev{torch_version}%2B{cuda_version}-{python_version}-{python_version}-{os_string}.whl"
+    #     triton_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}/pytorch_triton-2.0.0%2B0d7e753227-{python_version}-{python_version}-linux_x86_64.whl"
+    #     xformers_ver = xformers_ver.replace("xformers-", "")
+    #     print(f"Xformers version: {xformers_ver}")
+    #     print(f"Torch version: {torch_ver}")
+    #     print(f"Torch vision version: {torch_vis_ver}")
+    #     print(f"xu: {xformers_url}")
+    #     print(f"tu: {torch2_url}")
+    #     print(f"tvu: {torchvision2_url}")
+    #     print(f"tru: {triton_url}")
+    #     torch_final = f"{torch2_url} {torchvision2_url}"
+    #     if os.name != "nt":
+    #         torch_final += f" {triton_url}"
+    #     return xformers_ver, torch_ver, torch_vis_ver, xformers_url, torch_final
 
     def check_versions():
         launch_errors = []
-        use_torch2 = False
+        # use_torch2 = False
         # try:
         #     print(f"ARGS: {sys.argv}")
         #     if "--torch2" in sys.argv:
@@ -151,10 +151,9 @@ def actual_install():
                 # Add package name and version tuple to dictionary
                 reqs_dict[package_name] = version_tuple
 
-        checks = ["accelerate", "bitsandbytes", "diffusers", "transformers", "xformers"]
-        torch_ver = "1.13.1+cu117"
-        torch_vis_ver = "0.14.1+cu117"
-        xformers_ver = "0.0.17.dev464"
+        torch_min_ver = "1.13.1+cu116"
+        torch_vis_min_ver = "0.14.1+cu116"
+        # xformers_ver = "0.0.17.dev464"
 
         # if use_torch2:
         #     xformers_ver, torch_ver, torch_vis_ver, xformers_url, torch_final = set_torch2_paths()
@@ -182,55 +181,64 @@ def actual_install():
         has_torch_vision = importlib.util.find_spec("torchvision") is not None
         # has_xformers = importlib.util.find_spec("xformers") is not None
 
-        torch_check = str(importlib_metadata.version("torch")) if has_torch else None
-        torch_vision_check = str(importlib_metadata.version("torchvision")) if has_torch_vision else None
+        torch_installed_ver = str(importlib_metadata.version("torch")) if has_torch else None
+        torch_vis_installed_ver = str(importlib_metadata.version("torchvision")) if has_torch_vision else None
         # xformers_check = str(importlib_metadata.version("xformers")) if has_xformers else None
 
-        # if torch_check != torch_ver or torch_vision_check != torch_vis_ver:
+        # if torch_installed_ver != torch_ver or torch_vision_check != torch_vis_ver:
         #     torch_ver, torch_vis_ver = install_torch(torch_cmd, use_torch2)
 
-        for check, ver, module in [(torch_check, torch_ver, "torch"),
-                                   (torch_vision_check, torch_vis_ver, "torchvision")]:
-
-            if check != ver:
-                if not check:
-                    print(f"[!] {module} NOT installed.")
-                    launch_errors.append(f"{module} not installed.")
-
-                else:
-                    print(f"[!] {module} version {check} installed.")
-                    launch_errors.append(f"Incorrect version of {module} installed.")
+        for installed_ver, min_ver, module in [
+            (torch_installed_ver, torch_min_ver, "torch"),
+            (torch_vis_installed_ver, torch_vis_min_ver, "torchvision")
+        ]:
+            if not installed_ver:
+                print(f"[!] {module} NOT installed.")
+                launch_errors.append(f"{module} not installed.")
             else:
-                print(f"[+] {module} version {check} installed.")
+                installed_split = re.split(r"[.+]", installed_ver)
+                min_split = re.split(r"[.+]", min_ver)
+                error_detected = False
+                for (i_ver, m_ver) in zip(installed_split, min_split):
+                    if i_ver > m_ver:
+                        break
+                    if i_ver is None or i_ver < m_ver:
+                        error_detected = True
+                        break
+                if error_detected:
+                    print(f"[!] {module} version {installed_ver} installed.")
+                    launch_errors.append(f"Incorrect version of {module} installed.")
+                else:
+                    print(f"[+] {module} version {installed_ver} installed.")
 
         # Loop through each required package and check if it is installed
-        for check in checks:
+        non_torch_checks = ["accelerate", "bitsandbytes", "diffusers", "transformers", "xformers"]
+        for installed_ver in non_torch_checks:
             check_ver = "N/A"
             status = "[ ]"
             try:
-                check_available = importlib.util.find_spec(check) is not None
+                check_available = importlib.util.find_spec(installed_ver) is not None
                 if check_available:
-                    check_ver = importlib_metadata.version(check)
-                    check_version = tuple(map(int, re.split(r"[\.\+]", check_ver)[:3]))
+                    check_ver = importlib_metadata.version(installed_ver)
+                    check_version = tuple(map(int, re.split(r"[.+]", check_ver)[:3]))
 
-                    if check in reqs_dict:
-                        req_version = reqs_dict[check]
+                    if installed_ver in reqs_dict:
+                        req_version = reqs_dict[installed_ver]
                         if req_version is None or check_version >= req_version:
                             status = "[+]"
                         else:
                             status = "[!]"
-                            launch_errors.append(f"Incorrect version of {check} installed.")
-
+                            launch_errors.append(f"Incorrect version of {installed_ver} installed.")
 
             except importlib_metadata.PackageNotFoundError:
-                print(f"No package for {check}")
+                print(f"No package for {installed_ver}")
                 check_available = False
             if not check_available:
                 status = "[!]"
-                print(f"{status} {check} NOT installed.")
-                launch_errors.append(f"{check} not installed.")
+                print(f"{status} {installed_ver} NOT installed.")
+                launch_errors.append(f"{installed_ver} not installed.")
             else:
-                print(f"{status} {check} version {check_ver} installed.")
+                print(f"{status} {installed_ver} version {check_ver} installed.")
 
         try:
             from modules.shared import cmd_opts
@@ -243,7 +251,8 @@ def actual_install():
             pass
 
         if len(launch_errors):
-            print(f"Launch errors detected: {launch_errors}")
+            print("Launch errors detected: ")
+            print("\n".join(launch_errors))
             os.environ["ERRORS"] = json.dumps(launch_errors)
         else:
             os.environ["ERRORS"] = ""
@@ -316,7 +325,10 @@ def actual_install():
 def install_requirements(req_file, package_name):
     try:
         print(f"Checking {package_name} requirements...")
-        output = subprocess.check_output([sys.executable, "-m", "pip", "install", "-r", req_file], universal_newlines=True)
+        output = subprocess.check_output(
+            [sys.executable, "-m", "pip", "install", "-r", req_file],
+            universal_newlines=True
+        )
         for line in output.split('\n'):
             if 'already satisfied' not in line:
                 print(line)
