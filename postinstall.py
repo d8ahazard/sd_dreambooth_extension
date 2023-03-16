@@ -153,7 +153,7 @@ def actual_install():
 
         torch_min_ver = "1.13.1+cu116"
         torch_vis_min_ver = "0.14.1+cu116"
-        # xformers_ver = "0.0.17.dev464"
+        xformers_min_ver = "0.0.17"
 
         # if use_torch2:
         #     xformers_ver, torch_ver, torch_vis_ver, xformers_url, torch_final = set_torch2_paths()
@@ -179,18 +179,19 @@ def actual_install():
 
         has_torch = importlib.util.find_spec("torch") is not None
         has_torch_vision = importlib.util.find_spec("torchvision") is not None
-        # has_xformers = importlib.util.find_spec("xformers") is not None
+        has_xformers = importlib.util.find_spec("xformers") is not None
 
         torch_installed_ver = str(importlib_metadata.version("torch")) if has_torch else None
         torch_vis_installed_ver = str(importlib_metadata.version("torchvision")) if has_torch_vision else None
-        # xformers_check = str(importlib_metadata.version("xformers")) if has_xformers else None
+        xformers_install_ver = str(importlib_metadata.version("xformers")) if has_xformers else None
 
         # if torch_installed_ver != torch_ver or torch_vision_check != torch_vis_ver:
         #     torch_ver, torch_vis_ver = install_torch(torch_cmd, use_torch2)
 
         for installed_ver, min_ver, module in [
             (torch_installed_ver, torch_min_ver, "torch"),
-            (torch_vis_installed_ver, torch_vis_min_ver, "torchvision")
+            (torch_vis_installed_ver, torch_vis_min_ver, "torchvision"),
+            (xformers_install_ver, xformers_min_ver, "xformers"),
         ]:
             if not installed_ver:
                 print(f"[!] {module} NOT installed.")
@@ -212,7 +213,7 @@ def actual_install():
                     print(f"[+] {module} version {installed_ver} installed.")
 
         # Loop through each required package and check if it is installed
-        non_torch_checks = ["accelerate", "bitsandbytes", "diffusers", "transformers", "xformers"]
+        non_torch_checks = ["accelerate", "bitsandbytes", "diffusers", "transformers"]
         for installed_ver in non_torch_checks:
             check_ver = "N/A"
             status = "[ ]"
