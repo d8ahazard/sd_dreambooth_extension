@@ -217,6 +217,12 @@ class DreamboothConfig(BaseModel):
                 self.epoch = 0
             self.model_name = "".join(x for x in self.model_name if (x.isalnum() or x in "._- "))
             models_path = shared.dreambooth_models_path
+            try:
+                from core.handlers.models import ModelHandler
+                mh = ModelHandler()
+                models_path = mh.models_path
+            except:
+                pass
             if models_path == "" or models_path is None:
                 models_path = os.path.join(shared.models_path, "dreambooth")
             model_dir = os.path.join(models_path, self.model_name)

@@ -840,10 +840,20 @@ def create_model(new_model_name: str, ckpt_path: str, from_hub=False, new_model_
                  new_model_token="", extract_ema=False, train_unfrozen=False, is_512=True):
     printm("Extracting model.")
     res = 512 if is_512 else 768
+    sh = None
+    try:
+        from core.handlers.status import StatusHandler
+        sh = StatusHandler()
+        sh.start(5, "Extracting model")
+    except:
+        pass
     status.begin()
     if new_model_name is None or new_model_name == "":
         print("No model name.")
         err_msg = "Please select a model"
+        if sh is not None:
+            sh.end(desc=err_msg)
+
         return "", "", 0, 0, "", "", "", "", res, "", err_msg
 
     new_model_name = sanitize_name(new_model_name)
@@ -853,15 +863,26 @@ def create_model(new_model_name: str, ckpt_path: str, from_hub=False, new_model_
         if checkpoint_info is None or not os.path.exists(checkpoint_info.filename):
             err_msg = "Unable to find checkpoint file!"
             print(err_msg)
+            if sh is not None:
+                sh.end(desc=err_msg)
             return "", "", 0, 0, "", "", "", "", res, "", err_msg
         ckpt_path = checkpoint_info.filename
 
     unload_system_models()
     result = extract_checkpoint(new_model_name, ckpt_path, from_hub, new_model_url, new_model_token,
                                 extract_ema, train_unfrozen, is_512)
+    try:
+        from core.handlers.models import ModelHandler
+        mh = ModelHandler()
+        mh.refresh("dreambooth")
+    except:
+        pass
+
     cleanup()
     reload_system_models()
     printm("Extraction complete.")
+    if sh is not None:
+        sh.end(desc="Extraction complete.")
     status.end()
     return result
 
