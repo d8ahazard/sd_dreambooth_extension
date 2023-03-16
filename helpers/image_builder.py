@@ -8,35 +8,24 @@ from PIL import Image
 from accelerate import Accelerator
 from diffusers import DiffusionPipeline, AutoencoderKL, UNet2DConditionModel
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-    from extensions.sd_dreambooth_extension.dreambooth.shared import disable_safe_unpickle
-    from extensions.sd_dreambooth_extension.dreambooth.utils import image_utils
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import process_txt2img, get_scheduler_class
-    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_checkpoint_match, \
+from dreambooth import shared
+from dreambooth.dataclasses.db_config import DreamboothConfig
+from dreambooth.dataclasses.prompt_data import PromptData
+from dreambooth.shared import disable_safe_unpickle
+from dreambooth.utils import image_utils
+from dreambooth.utils.image_utils import process_txt2img, get_scheduler_class
+from dreambooth.utils.model_utils import get_checkpoint_match, \
     reload_system_models, \
     enable_safe_unpickle, disable_safe_unpickle, unload_system_models, xformerify
-    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-    from extensions.sd_dreambooth_extension.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, \
-        get_target_module
-except:
-    from dreambooth.dreambooth import shared  # noqa
-    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
-    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
-    from dreambooth.dreambooth.shared import disable_safe_unpickle  # noqa
-    from dreambooth.dreambooth.utils import image_utils  # noqa
-    from dreambooth.dreambooth.utils.image_utils import process_txt2img, get_scheduler_class  # noqa
-    from dreambooth.dreambooth.utils.model_utils import get_checkpoint_match, reload_system_models, enable_safe_unpickle, disable_safe_unpickle, unload_system_models  # noqa
-    from dreambooth.helpers.mytqdm import mytqdm  # noqa
-    from dreambooth.lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, get_target_module  # noqa
+from helpers.mytqdm import mytqdm
+from lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, \
+    get_target_module
 
 
 class ImageBuilder:
     def __init__(
             self, config: DreamboothConfig,
-            use_txt2img: bool,
+            class_gen_method: str = "Native Diffusers",
             lora_model: str = None,
             batch_size: int = 1,
             accelerator: Accelerator = None,
@@ -51,6 +40,7 @@ class ImageBuilder:
         self.last_model = None
         self.batch_size = batch_size
         self.exception_count = 0
+        use_txt2img = class_gen_method == "A1111 txt2img (Euler a)"
 
         if not image_utils.txt2img_available and use_txt2img:
             print("No txt2img available.")
@@ -200,7 +190,7 @@ class ImageBuilder:
                 from modules import shared as auto_shared
 
                 p = StableDiffusionProcessingTxt2Img(
-                    sampler_name='DPM++ 2S a Karras',
+                    sampler_name='Euler a',
                     sd_model=auto_shared.sd_model,
                     prompt=positive_prompts,
                     negative_prompt=negative_prompts,

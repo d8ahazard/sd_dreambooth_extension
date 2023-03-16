@@ -2,6 +2,7 @@
 # *Only* converts the UNet, VAE, and Text Encoder.
 # Does not convert optimizer state or any other thing.
 import copy
+import logging
 import os
 import os.path as osp
 import re
@@ -14,25 +15,17 @@ import torch
 from diffusers import UNet2DConditionModel
 from torch import Tensor, nn
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared as shared
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig
-    from extensions.sd_dreambooth_extension.dreambooth.shared import status
-    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
-        reload_system_models, \
-        disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path
-    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
-    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-    from extensions.sd_dreambooth_extension.lora_diffusion.lora import merge_lora_to_model
-except:
-    from dreambooth.dreambooth import shared as shared  # noqa
-    from dreambooth.dreambooth.dataclasses.db_config import from_file, DreamboothConfig  # noqa
-    from dreambooth.dreambooth.shared import status  # noqa
-    from dreambooth.dreambooth.utils.model_utils import unload_system_models, reload_system_models, \
-        disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path  # noqa
-    from dreambooth.dreambooth.utils.utils import printi  # noqa
-    from dreambooth.helpers.mytqdm import mytqdm  # noqa
-    from dreambooth.lora_diffusion.lora import merge_lora_to_model  # noqa
+from dreambooth import shared as shared
+from dreambooth.dataclasses.db_config import from_file, DreamboothConfig
+from dreambooth.shared import status
+from dreambooth.utils.model_utils import unload_system_models, \
+    reload_system_models, \
+    disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path
+from dreambooth.utils.utils import printi
+from helpers.mytqdm import mytqdm
+from lora_diffusion.lora import merge_lora_to_model
+
+logger = logging.getLogger(__name__)
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -336,6 +329,25 @@ def get_model_path(working_dir: str, model_name: str = "", file_extra: str = "")
     if model_name != "ema_unet" and not file_extra:
         print(f"Unable to find model file: {model_base}")
     return None
+
+
+def copy_diffusion_model(model_name: str, dst_dir: str):
+    model = from_file(model_name)
+    if model is not None:
+        src_dir = model.pretrained_model_name_or_path
+        logger.debug(f"Exporting: {src_dir}")
+        if not os.path.exists(dst_dir):
+            os.makedirs(dst_dir)
+        src_yaml = os.path.basename(os.path.join(src_dir, "..", f"{model_name}.yaml"))
+        if os.path.exists(src_yaml):
+            shutil.copyfile(src_yaml, dst_dir)
+        for item in os.listdir(src_dir):
+            src_path = os.path.join(src_dir, item)
+            dst_path = os.path.join(dst_dir, item)
+            if os.path.isdir(src_path):
+                shutil.copytree(src_path, dst_path)
+            else:
+                shutil.copy2(src_path, dst_path)
 
 
 def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_models: bool = True, log: bool = True,

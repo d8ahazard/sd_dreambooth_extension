@@ -1,13 +1,10 @@
 import json
-from safetensors.torch import save_file as safe_save
 from typing import Optional, Set
+
 import torch.nn as nn
+from safetensors.torch import save_file as safe_save
 
-
-try:
-    from extensions.sd_dreambooth_extension.lora_diffusion.lora import DEFAULT_TARGET_REPLACE, LoraInjectedLinear, LoraInjectedConv2d
-except:
-    from dreambooth.lora_diffusion.lora import DEFAULT_TARGET_REPLACE, LoraInjectedLinear, LoraInjectedConv2d  # noqa
+from lora_diffusion.lora import DEFAULT_TARGET_REPLACE, LoraInjectedLinear, LoraInjectedConv2d
 
 
 def _find_modules_with_ancestor(

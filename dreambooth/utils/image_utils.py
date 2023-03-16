@@ -20,18 +20,11 @@ import numpy as np
 import torch
 import torch.utils.checkpoint
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-
-    from extensions.sd_dreambooth_extension.dreambooth import shared
-    from extensions.sd_dreambooth_extension.dreambooth.shared import status
-except:
-    from dreambooth.dreambooth.dataclasses.db_concept import Concept  # noqa
-    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
-    from dreambooth.helpers.mytqdm import mytqdm  # noqa
-    from dreambooth.dreambooth.shared import status  # noqa
+from dreambooth.dataclasses.db_concept import Concept
+from dreambooth.dataclasses.prompt_data import PromptData
+from helpers.mytqdm import mytqdm
+from dreambooth import shared
+from dreambooth.shared import status
 
 
 def get_dim(filename, max_res):
@@ -236,7 +229,7 @@ def get_scheduler_class(scheduler_name):
     return scheduler_class
 
 
-def make_bucket_resolutions(max_resolution, divisible=64) -> List[Tuple[int, int]]:
+def make_bucket_resolutions(max_resolution, divisible=32) -> List[Tuple[int, int]]:
     aspect_ratios = [(16, 9), (5, 4), (4, 3), (3, 2), (2, 1), (1, 1)]
     resos = set()
 
@@ -434,7 +427,9 @@ def open_and_trim(image_path: str, reso: Tuple[int, int], return_pil: bool = Fal
 
     # Crop image to target resolution
     if image.width != reso[0] or image.height != reso[1]:
-        box = (0, 0, reso[0], reso[1])
+        w = int((image.width - reso[0]) / 2)
+        h = int((image.height - reso[1]) / 2)
+        box = (w, h, reso[0] + w, reso[1] + h)
         image = image.crop(box)
 
     # Return as np array or PIL image
