@@ -1204,6 +1204,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, from_hub=False
 
         if converted_ema_checkpoint is not None:
             print("Saving EMA unet.")
+            has_ema = True
             ema_unet = UNet2DConditionModel(**unet_config)
             ema_unet.load_state_dict(converted_ema_checkpoint)
             ema_unet.save_pretrained(os.path.join(db_config.pretrained_model_name_or_path, "ema_unet"),
@@ -1327,7 +1328,6 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, from_hub=False
 
     enable_safe_unpickle()
     printi(result_status)
-
 
     return gr_update(choices=sorted(get_db_models()), value=new_model_name), \
         model_dir, \

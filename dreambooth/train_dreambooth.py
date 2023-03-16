@@ -502,22 +502,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     growth_rate=args.adaptation_growth_rate,
                 )
 
-            elif args.optimizer == "8bit AdamW":
-                from bitsandbytes.optim import AdamW8bit
-                optimizer = AdamW8bit(
-                    params_to_optimize,
-                    lr=args.learning_rate,
-                    weight_decay=args.adamw_weight_decay,
-                )
-
-            elif args.optimizer == "Lion":
-                from lion_pytorch import Lion
-                optimizer = Lion(
-                    params_to_optimize,
-                    lr=args.learning_rate,
-                    weight_decay=args.adamw_weight_decay,
-                )
-
         except Exception as a:
             logger.warning(f"Exception importing {args.optimizer}: {a}")
             traceback.print_exc()
