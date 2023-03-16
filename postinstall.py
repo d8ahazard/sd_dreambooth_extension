@@ -151,47 +151,16 @@ def actual_install():
                 # Add package name and version tuple to dictionary
                 reqs_dict[package_name] = version_tuple
 
-        torch_min_ver = "1.13.1+cu116"
-        torch_vis_min_ver = "0.14.1+cu116"
-        # xformers_ver = "0.0.17.dev464"
+        versioned_libs = {
+            "torch": "1.13.1+cu116",
+            "torchvision": "0.14.1+cu116",
+            "xformers": "0.0.17",
+        }
 
-        # if use_torch2:
-        #     xformers_ver, torch_ver, torch_vis_ver, xformers_url, torch_final = set_torch2_paths()
-        #     print("Setting torch2 vars...")
-        #     torch_cmd = f"pip install --no-deps {torch_final}"
-        #     xformers_cmd = f"pip install {xformers_url}"
-        #
-        # else:
-        #     xformers_ver = "0.0.17.dev447"
-        #     torch_ver = "1.13.1+cu117"
-        #     torch_vis_ver = "0.14.1+cu117"
-        #     torch_cmd = "pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117"
-        #     xformers_cmd = "pip install xformers==0.0.17.dev464"
+        for module, min_ver in versioned_libs.items():
+            has_module = importlib.util.find_spec(module) is not None
+            installed_ver = str(importlib_metadata.version(module)) if has_module else None
 
-        # # Check/install xformers
-        # has_xformers = importlib.util.find_spec("xformers") is not None
-        # xformers_check = str(importlib_metadata.version("xformers")) if has_xformers else None
-
-        # if xformers_check != xformers_ver:
-        #     run(f'"{python}" -m {xformers_cmd}', f"Installing xformers {xformers_ver} from {'pypi' if '==' in xformers_cmd else 'github'}.", "Couldn't install torch.")
-
-        # torch check
-
-        has_torch = importlib.util.find_spec("torch") is not None
-        has_torch_vision = importlib.util.find_spec("torchvision") is not None
-        # has_xformers = importlib.util.find_spec("xformers") is not None
-
-        torch_installed_ver = str(importlib_metadata.version("torch")) if has_torch else None
-        torch_vis_installed_ver = str(importlib_metadata.version("torchvision")) if has_torch_vision else None
-        # xformers_check = str(importlib_metadata.version("xformers")) if has_xformers else None
-
-        # if torch_installed_ver != torch_ver or torch_vision_check != torch_vis_ver:
-        #     torch_ver, torch_vis_ver = install_torch(torch_cmd, use_torch2)
-
-        for installed_ver, min_ver, module in [
-            (torch_installed_ver, torch_min_ver, "torch"),
-            (torch_vis_installed_ver, torch_vis_min_ver, "torchvision")
-        ]:
             if not installed_ver:
                 print(f"[!] {module} NOT installed.")
                 launch_errors.append(f"{module} not installed.")
@@ -212,7 +181,7 @@ def actual_install():
                     print(f"[+] {module} version {installed_ver} installed.")
 
         # Loop through each required package and check if it is installed
-        non_torch_checks = ["accelerate", "bitsandbytes", "diffusers", "transformers", "xformers"]
+        non_torch_checks = ["accelerate", "bitsandbytes", "diffusers", "transformers"]
         for installed_ver in non_torch_checks:
             check_ver = "N/A"
             status = "[ ]"

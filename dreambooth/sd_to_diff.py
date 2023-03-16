@@ -311,6 +311,8 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
         for key in keys:
             if key.startswith("model.diffusion_model"):
                 flat_ema_key = "model_ema." + "".join(key.split(".")[1:])
+                if not hasattr(checkpoint, flat_ema_key):
+                    flat_ema_key = flat_ema_key.replace("diffusion_model", "")
                 ema_state_dict[key.replace(unet_key, "")] = checkpoint.pop(flat_ema_key)
     ema_checkpoint = None
     for key in keys:
