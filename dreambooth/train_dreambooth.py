@@ -55,6 +55,7 @@ from dreambooth.utils.model_utils import (
 from dreambooth.utils.text_utils import encode_hidden_state
 from dreambooth.utils.utils import cleanup, printm
 from dreambooth.webhook import send_training_update
+from dreambooth.xattention import optim_to
 from helpers.ema_model import EMAModel
 from helpers.log_parser import LogParser
 from helpers.mytqdm import mytqdm
@@ -863,6 +864,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             # Create the pipeline using the trained modules and save it.
             if accelerator.is_main_process:
                 printm("Pre-cleanup.")
+                optim_to(profiler, optimizer)
                 if profiler is not None:
                     cleanup()
 
@@ -1124,6 +1126,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
                 status.current_image = last_samples
                 printm("Cleanup.")
+                optim_to(profiler, optimizer, accelerator.device)
                 cleanup()
                 printm("Cleanup completed.")
 
