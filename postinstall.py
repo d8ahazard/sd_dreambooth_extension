@@ -13,29 +13,6 @@ from packaging.version import Version
 from dreambooth import shared
 
 
-def run(command, desc=None, errdesc=None, custom_env=None, live=True):
-    if desc:
-        print(desc)
-
-    if live:
-        result = subprocess.run(command, shell=True, env=custom_env or os.environ)
-        if result.returncode:
-            raise RuntimeError(
-                f"{errdesc or 'Error running command'}. Command: {command} Error code: {result.returncode}")
-        return ""
-
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True,
-                            env=custom_env or os.environ)
-
-    if result.returncode:
-        message = f"{errdesc or 'Error running command'}. Command: {command} Error code: {result.returncode}\n"
-        message += f"stdout: {result.stdout.decode(encoding='utf8', errors='ignore') or '<empty>'}\n"
-        message += f"stderr: {result.stderr.decode(encoding='utf8', errors='ignore') or '<empty>'}\n"
-        raise RuntimeError(message)
-
-    return result.stdout.decode(encoding='utf8', errors='ignore')
-
-
 def actual_install():
     if os.environ.get("PUBLIC_KEY", None):
         print("Docker, returning.")
@@ -119,24 +96,24 @@ def actual_install():
             has_module = importlib.util.find_spec(module) is not None
             installed_ver = str(importlib_metadata.version(module)) if has_module else None
 
-            try:
-                if not installed_ver:
-                    print(f"[!] {module} NOT installed.")
-                    if module != "xformers":
-                        raise ValueError(f"{module} not installed.")
+            if not installed_ver:
+                if module != "xformers":
+                    launch_errors.append(f"{module} not installed.")
 
-                req_type, req_ver = req
-                if req_type == "min" and Version(installed_ver) < Version(req_ver):
-                    raise ValueError(f"{module} is below the required {req_ver} version.")
+                print(f"[!] {module} NOT installed.")
+                continue
 
-                elif req_type == "exact" and Version(installed_ver) != Version(req_ver):
-                    raise ValueError(f"{module} is not the required {req_ver} version.")
-
-                print(f"[+] {module} version {installed_ver} installed.")
-
-            except Exception as e:
-                launch_errors.append(str(e))
+            req_type, req_ver = req
+            if req_type == "min" and Version(installed_ver) < Version(req_ver):
                 print(f"[!] {module} version {installed_ver} installed.")
+                launch_errors.append(f"{module} is below the required {req_ver} version.")
+
+            elif req_type == "exact" and Version(installed_ver) != Version(req_ver):
+                print(f"[!] {module} version {installed_ver} installed.")
+                launch_errors.append(f"{module} is not the required {req_ver} version.")
+
+            else:
+                print(f"[+] {module} version {installed_ver} installed.")
 
         try:
             from modules.shared import cmd_opts
@@ -148,28 +125,43 @@ def actual_install():
         except:
             pass
 
-        if len(launch_errors):
-            print()
-            print("#######################################################################################################")
-            print("#                                       LIBRARY ISSUE DETECTED                                        #")
-            print("#######################################################################################################")
-            print("#")
-            print("# " + "\n# ".join(launch_errors))
-            print("#")
-            print("# Dreambooth may not work properly.")
-            print("#")
-            print("# TROUBLESHOOTING")
-            print("# 1. Fully restart your project (not just the webpage)")
-            print("# 2. Update your A1111 project and extensions")
-            print("# 3. Dreambooth requirements should have installed automatically, but you can try manually install them")
-            print("#    by running the following command from the A1111 project root")
-            print("./venv/Scripts/activate")
-            print("pip install -r ./extensions/sd_dreambooth_extension/requirements.txt")
-            print("#######################################################################################################")
+        try:
+            if len(launch_errors):
+                print()
+                print("#######################################################################################################")
+                print("#                                       LIBRARY ISSUE DETECTED                                        #")
+                print("#######################################################################################################")
+                print("#")
+                print("# " + "\n# ".join(launch_errors))
+                print("#")
+                try:
+                    installed_xformers_version = importlib_metadata.version("xformers")
+                    if Version(installed_xformers_version) < Version("0.0.17"):
+                        print("# A newer version of xformers is required. Please run the following 4 commands to install it:")
+                        print("cd venv/Scripts")
+                        print("activate")
+                        print("pip install xformers==0.0.17.dev476")
+                        print("#")
+                except:
+                    pass
+                print("# Dreambooth may not work properly.")
+                print("#")
+                print("# TROUBLESHOOTING")
+                print("# 1. Fully restart your project (not just the webpage)")
+                print("# 2. Update your A1111 project and extensions")
+                print("# 3. Dreambooth requirements should have installed automatically, but you can try manually install them")
+                print("#    by running the following 4 commands from the A1111 project root:")
+                print("cd venv/Scripts")
+                print("activate")
+                print("cd ../..")
+                print("pip install -r ./extensions/sd_dreambooth_extension/requirements.txt")
+                print("#######################################################################################################")
 
-            os.environ["ERRORS"] = json.dumps(launch_errors)
-        else:
-            os.environ["ERRORS"] = ""
+                os.environ["ERRORS"] = json.dumps(launch_errors)
+            else:
+                os.environ["ERRORS"] = ""
+        except Exception as e:
+            print(e)
 
     base_dir = os.path.dirname(os.path.realpath(__file__))
     revision = ""
@@ -191,18 +183,16 @@ def actual_install():
     print(f"Dreambooth revision: {revision}")
     print(f"SD-WebUI revision: {app_revision}")
     print("")
-    dreambooth_skip_install = os.environ.get('DREAMBOOTH_SKIP_INSTALL', False)
 
+    dreambooth_skip_install = os.environ.get('DREAMBOOTH_SKIP_INSTALL', False)
     try:
         requirements_file = os.environ.get('REQS_FILE', "requirements_versions.txt")
         if requirements_file == req_file:
             dreambooth_skip_install = True
     except:
         pass
-
     if not dreambooth_skip_install:
-        name = "Dreambooth"
-        install_requirements(req_file, name)
+        install_requirements(req_file)
 
     # Check for "different" B&B Files and copy only if necessary
     if os.name == "nt":
@@ -231,15 +221,14 @@ def actual_install():
         pass
 
 
-def install_requirements(req_file, package_name):
+def install_requirements(req_file):
     try:
-        print(f"Checking {package_name} requirements...")
         output = subprocess.check_output(
             [sys.executable, "-m", "pip", "install", "-r", req_file],
-            universal_newlines=True,
         )
         for line in output.split('\n'):
             if 'already satisfied' not in line:
                 print(line)
     except subprocess.CalledProcessError:
-        print(f"Failed to install {package_name} requirements.")
+        print("Failed to install Dreambooth requirements")
+
