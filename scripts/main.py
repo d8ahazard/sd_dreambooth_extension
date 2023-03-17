@@ -440,10 +440,10 @@ def on_ui_tabs():
                             gr.HTML(value="Learning Rate")
                             with gr.Row(visible=False) as lora_lr_row:
                                 db_lora_learning_rate = gr.Number(
-                                    label="Lora UNET Learning Rate", value=2e-4
+                                    label="Lora UNET Learning Rate", value=1e-4
                                 )
                                 db_lora_txt_learning_rate = gr.Number(
-                                    label="Lora Text Encoder Learning Rate", value=2e-4
+                                    label="Lora Text Encoder Learning Rate", value=5e-5
                                 )
                             with gr.Row() as standard_lr_row:
                                 db_learning_rate = gr.Number(
