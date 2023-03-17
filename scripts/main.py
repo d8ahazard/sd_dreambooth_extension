@@ -147,7 +147,7 @@ def check_progress_call():
         progress += status.job_no / status.job_count
 
     time_left = calc_time_left(progress, 1, " ETA: ", status.time_left_force_display)
-    if time_left != "":
+    if time_left:
         status.time_left_force_display = True
 
     progress = min(progress, 1)

@@ -31,10 +31,10 @@ class SampleDataset:
             seed = concept.sample_seed
             neg = concept.save_sample_negative_prompt
             # If no sample file, look for filewords
-            if sample_file != "" and sample_file is not None and os.path.exists(sample_file):
+            if sample_file and os.path.exists(sample_file):
                 with open(sample_file, "r") as samples:
                     lines = samples.readlines()
-                    prompts = [(line, (config.resolution, config.resolution)) for line in lines if line.strip() != ""]
+                    prompts = [(line, (config.resolution, config.resolution)) for line in lines if line.strip()]
             elif "[filewords]" in sample_prompt:
                 prompts = []
                 images = get_images(concept.instance_data_dir)

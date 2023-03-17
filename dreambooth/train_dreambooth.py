@@ -1035,10 +1035,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                 sd = SampleDataset(args)
                                 prompts = sd.prompts
                                 concepts = args.concepts()
-                                if (
-                                        args.sanity_prompt != ""
-                                        and args.sanity_prompt is not None
-                                ):
+                                if args.sanity_prompt:
                                     epd = PromptData(
                                         prompt=args.sanity_prompt,
                                         seed=args.sanity_seed,
@@ -1139,7 +1136,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         progress_bar.set_postfix(refresh=True)
         args.revision = (
             args.revision if isinstance(args.revision, int) else
-            int(args.revision) if str.strip(args.revision) != "" else
+            int(args.revision) if str(args.revision).strip() else
             0
         )
         lifetime_step = args.revision
