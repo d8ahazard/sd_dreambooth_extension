@@ -430,7 +430,8 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
                 pass
 
         # Apply LoRA to the unet
-        if lora_file_name is not None and lora_file_name != "":
+        print("### lora_file_name: ", lora_file_name)
+        if lora_file_name is not None and lora_file_name != "" and lora_file_name != []:
             unet_model = UNet2DConditionModel().from_pretrained(os.path.dirname(unet_path))
             lora_rev = apply_lora(config, unet_model, lora_file_name, "cpu", False)
             unet_state_dict = copy.deepcopy(unet_model.state_dict())
@@ -459,7 +460,7 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
         printi("Converting text encoder...", log=log)
 
         # Apply lora weights to the tenc
-        if lora_file_name is not None and lora_file_name != "":
+        if lora_file_name is not None and lora_file_name != "" and lora_file_name != []:
             lora_paths = lora_file_name.split(".")
             lora_txt_file_name = f"{lora_paths[0]}_txt.{lora_paths[1]}"
             text_encoder_cls = import_model_class_from_model_name_or_path(config.pretrained_model_name_or_path,
