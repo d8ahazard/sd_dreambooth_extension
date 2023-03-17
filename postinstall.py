@@ -226,7 +226,7 @@ def install_requirements(req_file):
         output = subprocess.check_output(
             [sys.executable, "-m", "pip", "install", "-r", req_file],
         )
-        for line in output.split('\n'):
+        for line in output.decode().split('\n'):
             if 'already satisfied' not in line:
                 print(line)
     except subprocess.CalledProcessError:
