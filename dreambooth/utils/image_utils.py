@@ -158,7 +158,7 @@ class FilenameTextGetter:
     def create_text(self, prompt, file_text, instance_token, class_token, is_class=True):
         output = prompt.replace("[filewords]", file_text)
 
-        if instance_token != "" and class_token != "":
+        if instance_token and class_token:
             instance_regex = re.compile(f"\\b{instance_token}\\b", flags=re.IGNORECASE)
             class_regex = re.compile(f"\\b{class_token}\\b", flags=re.IGNORECASE)
 
@@ -190,10 +190,10 @@ class FilenameTextGetter:
                         # Description only, insert both at the front?
                         output = f"{instance_token} {class_token}, {output}"
 
-        elif instance_token != "" and not is_class:
+        elif instance_token and not is_class:
             output = f"{instance_token}, {output}"
 
-        elif class_token != "" and is_class:
+        elif class_token and is_class:
             output = f"{class_token}, {output}"
 
         output = re.sub(r"\s+", " ", output)
