@@ -985,7 +985,6 @@ def create_model(
     printm("Extraction complete.")
     if sh is not None:
         sh.end(desc="Extraction complete.")
-    status.end()
 
     return result
 
