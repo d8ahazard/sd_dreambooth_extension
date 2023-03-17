@@ -180,8 +180,8 @@ class FilenameTextGetter:
                             token_regex = re.compile(f"\\b{token}\\b", flags=re.IGNORECASE)
                             output = token_regex.sub(class_token, output)
 
-                    # Now, replace class with instance + class tokens
-                    output = class_regex.sub(f"{instance_token} {class_token}", output)
+                        # Now, replace class with instance + class tokens
+                        output = class_regex.sub(f"{instance_token} {class_token}", output)
                 else:
                     # If class is not in the string, check if instance is
                     if instance_regex.search(output):

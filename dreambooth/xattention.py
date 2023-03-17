@@ -61,3 +61,21 @@ def get_scheduler(
         )
 
     return schedule_func(optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
+
+
+def optim_to(profiler, optim: torch.optim.Optimizer, device="cpu"):
+    def inplace_move(obj: torch.Tensor, target):
+        if hasattr(obj, 'data'):
+            obj.data = obj.data.to(target)
+        if hasattr(obj, '_grad') and obj._grad is not None:
+            obj._grad.data = obj._grad.data.to(target)
+
+    if isinstance(optim, torch.optim.Optimizer):
+        for group in optim.param_groups:
+            for param in group['params']:
+                inplace_move(param, device)
+        for key, value in optim.state.items():
+            if isinstance(value, torch.Tensor):
+                inplace_move(value, device)
+    if profiler is None:
+        torch.cuda.empty_cache()
