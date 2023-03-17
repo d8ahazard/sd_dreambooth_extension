@@ -990,7 +990,7 @@ def on_ui_tabs():
                         db_crop_bucket_step = gr.Slider(
                             label="Bucket Steps", value=32, step=32, maximum=4096
                         )
-                        db_crop_dry = gr.Checkbox(label="Dry Run", value=True)
+                        db_crop_dry = gr.Checkbox(label="Dry Run")
                         db_start_crop = gr.Button("Start Cropping")
             with gr.Column(variant="panel"):
                 gr.HTML(value="<span class='hh'>Output</span>")
@@ -1725,10 +1725,6 @@ def build_concept_panel(concept: int):
         )
     with gr.Column():
         gr.HTML(value="Sample Prompts")
-        sample_template = gr.Textbox(
-            label="Sample Prompt Template File",
-            placeholder="Enter the path to a txt file containing sample prompts.",
-        )
         save_sample_prompt = gr.Textbox(
             label="Sample Image Prompt",
             placeholder="Leave blank to use instance prompt. "
@@ -1737,6 +1733,10 @@ def build_concept_panel(concept: int):
         )
         save_sample_negative_prompt = gr.Textbox(
             label="Sample Negative Prompt"
+        )
+        sample_template = gr.Textbox(
+            label="Sample Prompt Template File",
+            placeholder="Enter the path to a txt file containing sample prompts.",
         )
 
     with gr.Column():
