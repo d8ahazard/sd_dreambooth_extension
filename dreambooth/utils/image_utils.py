@@ -161,24 +161,26 @@ class FilenameTextGetter:
         if instance_token and class_token:
             instance_regex = re.compile(f"\\b{instance_token}\\b", flags=re.IGNORECASE)
             class_regex = re.compile(f"\\b{class_token}\\b", flags=re.IGNORECASE)
+            extended_class_regexes = list(re.compile(r) for r in [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token])
 
-            if is_class and instance_regex.search(output):
-                if class_regex.search(output):
-                    output = instance_regex.sub("", output)
-                else:
-                    output = instance_regex.sub(class_token, output)
+            if is_class:
+                if instance_regex.search(output):
+                    if class_regex.search(output):
+                        output = instance_regex.sub("", output)
+                    else:
+                        output = instance_regex.sub(class_token, output)
+                if not class_regex.search(output):
+                    output = f"{class_token}, {output}"
 
-            if not is_class:
+            else:
                 if class_regex.search(output):
                     # Do nothing if we already have class and instance in string
                     if instance_regex.search(output):
                         pass
                     # Otherwise, substitute class tokens for the base token
                     else:
-                        class_tokens = [f"a {class_token}", f"the {class_token}", f"an {class_token}", class_token]
-                        for token in class_tokens:
-                            token_regex = re.compile(f"\\b{token}\\b", flags=re.IGNORECASE)
-                            output = token_regex.sub(class_token, output)
+                        for extended_class_regex in extended_class_regexes:
+                            output = extended_class_regex.sub(class_token, output)
 
                         # Now, replace class with instance + class tokens
                         output = class_regex.sub(f"{instance_token} {class_token}", output)
