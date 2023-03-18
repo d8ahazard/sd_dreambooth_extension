@@ -15,6 +15,7 @@ from packaging import version
 
 logger = logging.getLogger(__name__)
 
+
 def load_auto_settings():
     global models_path, script_path, ckpt_dir, device_id, disable_safe_unpickle, dataset_filename_word_regex, \
         dataset_filename_join_string, show_progress_every_n_steps, parallel_processing_allowed, state, ckptfix, medvram, \
@@ -130,6 +131,11 @@ def torch_gc():
             torch.cuda.ipc_collect()
 
 
+def format_time(seconds: float):
+    date = datetime.datetime.utcfromtimestamp(seconds)
+    return datetime.datetime.strftime(date, "%H:%M:%S")
+
+
 class DreamState:
     interrupted = False
     interrupted_after_save = False
@@ -204,6 +210,7 @@ class DreamState:
         torch_gc()
 
     def end(self):
+        print("Duration: " + format_time(time.time() - self.time_start))
         self.job = ""
         self.job_count = 0
         self.job_no = 0
@@ -298,7 +305,7 @@ def load_vars(root_path = None):
     embeddings_dir = os.path.join(script_path, "embeddings")
     dreambooth_models_path = os.path.join(models_path, "dreambooth")
     ckpt_dir = os.path.join(models_path, "Stable-diffusion")
-    ui_lora_models_path = os.path.join(models_path, "lora")
+    ui_lora_models_path = os.path.join(models_path, "Lora")
     db_model_config = None
     data_path = os.path.join(script_path, ".cache")
     show_progress_every_n_steps = 10
@@ -397,7 +404,7 @@ orig_tensor_to = torch.Tensor.to
 orig_layer_norm = torch.nn.functional.layer_norm
 orig_tensor_numpy = torch.Tensor.numpy
 extension_path = ""
-
+status = None
 orig_cumsum = torch.cumsum
 orig_Tensor_cumsum = torch.Tensor.cumsum
 

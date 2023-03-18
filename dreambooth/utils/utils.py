@@ -11,9 +11,7 @@ from typing import Optional
 import importlib_metadata
 from packaging import version
 
-from dreambooth import shared
-
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import torch
 from huggingface_hub import HfFolder, whoami
 
@@ -47,9 +45,11 @@ def sanitize_name(name):
 
 
 def printm(msg=""):
+    from dreambooth import shared
+
     if shared.debug:
-        allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
-        cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
+        allocated = round(torch.cuda.memory_allocated(0) / 1024**3, 1)
+        cached = round(torch.cuda.memory_reserved(0) / 1024**3, 1)
         print(f"{msg}({allocated}/{cached})")
 
 
@@ -60,18 +60,21 @@ def cleanup(do_print: bool = False):
             torch.cuda.ipc_collect()
         gc.collect()
     except:
-        print('cleanup exception')
+        print("cleanup exception")
     if do_print:
         print("Cleanup completed.")
 
 
 def xformers_check():
-    ENV_VARS_TRUE_VALUES = {"1", "ON", "YES", "TRUE"}
-    ENV_VARS_TRUE_AND_AUTO_VALUES = ENV_VARS_TRUE_VALUES.union({"AUTO"})
+    env_vars_true_values = {"1", "ON", "YES", "TRUE"}
+    env_vars_true_and_auto_values = env_vars_true_values.union({"AUTO"})
 
-    USE_TF = os.environ.get("USE_TF", "AUTO").upper()
-    USE_TORCH = os.environ.get("USE_TORCH", "AUTO").upper()
-    if USE_TORCH in ENV_VARS_TRUE_AND_AUTO_VALUES and USE_TF not in ENV_VARS_TRUE_VALUES:
+    use_tf = os.environ.get("USE_TF", "AUTO").upper()
+    use_torch = os.environ.get("USE_TORCH", "AUTO").upper()
+    if (
+        use_torch in env_vars_true_and_auto_values
+        and use_tf not in env_vars_true_values
+    ):
         _torch_available = importlib.util.find_spec("torch") is not None
 
         if _torch_available:
@@ -88,25 +91,63 @@ def xformers_check():
         if _torch_available:
             import torch
             if version.Version(torch.__version__) < version.Version("1.12"):
-                raise ValueError("PyTorch should be >= 1.12")
+                raise ValueError("PyTorch version must be >= 1.12")
+            if version.Version(_xformers_version) < version.Version("0.0.17"):
+                raise ValueError("Xformers version must be >= 0.0.17")
         has_xformers = True
     except Exception as e:
         print(f"Exception importing xformers: {e}")
         has_xformers = False
+
     return has_xformers
 
 
 def list_optimizer():
+    optimizer_list = ["Torch AdamW"]
+
+    try:
+        from bitsandbytes.optim import AdamW8bit
+        optimizer_list.append("8bit AdamW")
+    except:
+        pass
+
     try:
         from lion_pytorch import Lion
-        return ["8Bit Adam", "Lion"]
+        optimizer_list.append("Lion")
     except:
-        return ["8Bit Adam"]
+        pass
+
+    # try:
+    #     from dadaptation import DAdaptSGD
+    #     optimizer_list.append("SGD Dadaptation")
+    # except:
+    #     pass
+    #
+    # try:
+    #     from dadaptation import DAdaptAdaGrad
+    #     optimizer_list.append("AdaGrad Dadaptation")
+    # except:
+    #     pass
+    #
+    # try:
+    #     from dadaptation import DAdaptAdam
+    #     optimizer_list.append("AdamW Dadaptation")
+    # except:
+    #     pass
+    #
+    # try:
+    #     from dreambooth.dadapt_adan import DAdaptAdan
+    #     optimizer_list.append("Adan Dadaptation")
+    # except:
+    #     pass
+
+    return optimizer_list
 
 
 def list_attention():
     has_xformers = xformers_check()
     import diffusers.utils
+
     diffusers.utils.is_xformers_available = xformers_check
     if has_xformers:
         return ["default", "xformers"]
@@ -114,16 +155,29 @@ def list_attention():
         return ["default"]
 
 
-def list_floats():
-    has_bf16 = False
+def list_precisions():
+    precisions = ["no", "fp16"]
     try:
-        has_bf16 = torch.cuda.is_bf16_supported()
+        if torch.cuda.is_bf16_supported():
+            precisions.append("bf16")
     except:
         pass
-    if has_bf16:
-        return ["no", "fp16", "bf16"]
-    else:
-        return ["no", "fp16"]
+
+    return precisions
+
+
+def list_schedulers():
+    return [
+        "linear",
+        "linear_with_warmup",
+        "cosine",
+        "cosine_annealing",
+        "cosine_annealing_with_restarts",
+        "cosine_with_restarts",
+        "polynomial",
+        "constant",
+        "constant_with_warmup",
+    ]
 
 
 def wrap_gpu_call(func, extra_outputs=None):
@@ -134,6 +188,7 @@ def wrap_gpu_call(func, extra_outputs=None):
             status.end()
 
         except Exception as e:
+            status.end()
             # When printing out our debug argument list, do not print out more than a MB of text
             max_debug_str_len = 131072  # (1024*1024)/8
 
@@ -141,7 +196,10 @@ def wrap_gpu_call(func, extra_outputs=None):
             arg_str = f"Arguments: {str(args)} {str(kwargs)}"
             print(arg_str[:max_debug_str_len], file=sys.stderr)
             if len(arg_str) > max_debug_str_len:
-                print(f"(Argument list truncated at {max_debug_str_len}/{len(arg_str)} characters)", file=sys.stderr)
+                print(
+                    f"(Argument list truncated at {max_debug_str_len}/{len(arg_str)} characters)",
+                    file=sys.stderr,
+                )
 
             print(traceback.format_exc(), file=sys.stderr)
 
@@ -149,16 +207,20 @@ def wrap_gpu_call(func, extra_outputs=None):
             status.job_count = 0
 
             if extra_outputs_array is None:
-                extra_outputs_array = [None, '']
+                extra_outputs_array = [None, ""]
 
-            res = extra_outputs_array + [f"<div class='error'>{html.escape(type(e).__name__ + ': ' + str(e))}</div>"]
+            res = extra_outputs_array + [
+                f"<div class='error'>{html.escape(type(e).__name__ + ': ' + str(e))}</div>"
+            ]
 
         return res
 
     return f
 
 
-def get_full_repo_name(model_id: str, organization: Optional[str] = None, token: Optional[str] = None):
+def get_full_repo_name(
+    model_id: str, organization: Optional[str] = None, token: Optional[str] = None
+):
     if token is None:
         token = HfFolder.get_token()
     if organization is None:
