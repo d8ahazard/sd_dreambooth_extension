@@ -22,30 +22,20 @@ from starlette import status
 from starlette.requests import Request
 
 try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig
-    from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
-    from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
-    from extensions.sd_dreambooth_extension.dreambooth.shared import DreamState
-    from extensions.sd_dreambooth_extension.dreambooth.ui_functions import create_model, generate_samples, \
+    from dreambooth import shared
+    from dreambooth.dataclasses.db_concept import Concept
+    from dreambooth.dataclasses.db_config import from_file, DreamboothConfig
+    from dreambooth.diff_to_sd import compile_checkpoint
+    from dreambooth.secret import get_secret
+    from dreambooth.shared import DreamState
+    from dreambooth.ui_functions import create_model, generate_samples, \
         start_training
-    from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images
-    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
+    from dreambooth.utils.gen_utils import generate_classifiers
+    from dreambooth.utils.image_utils import get_images
+    from dreambooth.utils.model_utils import get_db_models, get_lora_models
 except:
-    from dreambooth.dreambooth import shared  # noqa
-    from dreambooth.dreambooth.dataclasses.db_concept import Concept  # noqa
-    from dreambooth.dreambooth.dataclasses.db_config import from_file, DreamboothConfig  # noqa
-    from dreambooth.dreambooth.diff_to_sd import compile_checkpoint  # noqa
-    from dreambooth.dreambooth.secret import get_secret  # noqa
-    from dreambooth.dreambooth.shared import DreamState  # noqa
-    from dreambooth.dreambooth.ui_functions import create_model, generate_samples, start_training  # noqa
-    from dreambooth.dreambooth.utils.gen_utils import generate_classifiers  # noqa
-    from dreambooth.dreambooth.utils.image_utils import get_images  # noqa
-    from dreambooth.dreambooth.utils.model_utils import get_db_models, get_lora_models  # noqa
-
-    pass
+    print("Exception importing api")
+    traceback.print_exc()
 
 if os.environ.get("DEBUG_API", False):
     logging.basicConfig(level=logging.DEBUG)
@@ -156,6 +146,7 @@ def file_to_base64(file_path) -> str:
 
 
 def dreambooth_api(_, app: FastAPI):
+    logger.debug("Loading Dreambooth API Endpoints.")
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         return JSONResponse(
@@ -232,7 +223,6 @@ def dreambooth_api(_, app: FastAPI):
             active = True
             ckpt_result = compile_checkpoint(model_name, reload_models=False, log=False)
             active = False
-            shared.status.end()
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()
                 logger.debug(f"Checkpoint aved to path: {path}")
@@ -270,7 +260,7 @@ def dreambooth_api(_, app: FastAPI):
     @app.post("/dreambooth/classifiers")
     async def generate_classes(
             model_name: str = Form(description="The model name to generate classifiers for."),
-            use_txt2img: bool = Form("", description="Use Txt2Image to generate classifiers."),
+            class_gen_method: str = Form("Native Diffusers", description="Image Generation Library."),
             api_key: str = Form("", description="If an API key is set, this must be present.")
     ):
         """
@@ -294,7 +284,7 @@ def dreambooth_api(_, app: FastAPI):
         run_in_background(
             generate_classifiers,
             config,
-            use_txt2img
+            class_gen_method
         )
         active = False
         return JSONResponse(content={"message": "Generating classifiers..."})
@@ -597,11 +587,13 @@ def dreambooth_api(_, app: FastAPI):
     @app.get("/dreambooth/models_lora")
     async def get_models_lora(
             api_key: str = Query("", description="If an API key is set, this must be present."),
+            model_name: str = Query(description="The model name to query for lora files."),
     ) -> JSONResponse:
         """
 
         Args:
             api_key: API Key.
+            model_name: The model name to query for lora files.
 
         Returns: A list of LoRA Models.
 
@@ -609,7 +601,12 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        models = get_lora_models()
+
+        config = from_file(model_name)
+        if model_name and config is None:
+            return JSONResponse("Config not found")
+
+        models = get_lora_models(config)
         return JSONResponse(models)
 
     @app.get("/dreambooth/samples")
@@ -625,7 +622,7 @@ def dreambooth_api(_, app: FastAPI):
             seed: int = Query(-1, description="The seed to use when generating samples"),
             steps: int = Query(60, description="Number of sampling steps to use when generating images."),
             scale: float = Query(7.5, description="CFG scale to use when generating images."),
-            use_txt2img: bool = Query(True, description="Use txt2img to generate samples"),
+            class_gen_method: str = Query("Native Diffusers", description="Image Generation Library."),
             scheduler: str = Query("DEISMultistep", description="Sampler to use if not using txt2img"),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ):
@@ -657,11 +654,9 @@ def dreambooth_api(_, app: FastAPI):
             seed=seed,
             scale=scale,
             steps=steps,
-            use_txt2img=use_txt2img,
+            class_gen_method=class_gen_method,
             scheduler=scheduler
         )
-
-        shared.status.end()
 
         if len(images) > 1:
             return zip_files(model_name, images, "_sample")
@@ -934,4 +929,5 @@ try:
     script_callbacks.on_app_started(dreambooth_api)
     logger.debug("SD-Webui API layer loaded")
 except:
+    logger.debug("Unable to import script callbacks.")
     pass

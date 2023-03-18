@@ -2,7 +2,7 @@ import argparse
 
 
 def preload(parser: argparse.ArgumentParser):
-    # from extensions.sd_dreambooth_extension.postinstall import actual_install
+    # from postinstall import actual_install
 
     parser.add_argument("--dreambooth-models-path", type=str, help="Path to directory to store Dreambooth model file("
                                                                    "s).", default=None)

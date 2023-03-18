@@ -187,9 +187,7 @@ Also, you *cannot* use 8Bit-Adam with CPU Training, or you'll have a bad time.
 *Use EMA* - Use estimated moving averages when training the unet. Purportedly, this is better for generating images, but
 seems to have a minimal effect on training results. Uses more VRAM.
 
-*Use 8Bit Adam* - Enable this to save VRAM. Should now work on both windows and Linux without needing WSL.
-
-*Mixed Precision* - When using 8Bit Adam, you *must* set this to fp16 or bf16. Bf16 precision is only supported by newer
+*Mixed Precision* - When using 8bit AdamW, you *must* set this to fp16 or bf16. Bf16 precision is only supported by newer
 GPUs, and enabled/disabled by default.
 
 *Memory Attention* - Type of attention to use. Choices are: 'default': usually fastest, but use most VRAM; 'xformers':
@@ -345,6 +343,8 @@ they'll help me help you faster.
 [Bug Report](https://github.com/d8ahazard/sd_dreambooth_extension/issues/new?assignees=&labels=&template=bug_report.md&title=)
 
 [Feature Request](https://github.com/d8ahazard/sd_dreambooth_extension/issues/new?assignees=&labels=&template=feature_request.md&title=)
+
+[Discord](https://discord.gg/q8dtpfRD5w)
 
 # Credits
 

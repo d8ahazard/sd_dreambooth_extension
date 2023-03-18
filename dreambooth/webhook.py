@@ -6,12 +6,8 @@ from typing import Union, List
 import discord_webhook
 from PIL import Image
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import image_grid
-except:
-    from dreambooth.dreambooth import shared  # noqa
-    from dreambooth.dreambooth.utils.image_utils import image_grid  # noqa
+from dreambooth import shared
+from dreambooth.utils.image_utils import image_grid
 
 
 class DreamboothWebhookTarget(Enum):

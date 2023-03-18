@@ -9,21 +9,13 @@ import torch.utils.data
 from torchvision.transforms import transforms
 from transformers import CLIPTokenizer
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-    from extensions.sd_dreambooth_extension.dreambooth.shared import status
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import make_bucket_resolutions, \
-        closest_resolution, shuffle_tags, open_and_trim
-    from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import build_strict_tokens
-    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-except:
-    from dreambooth.dreambooth import shared  # noqa
-    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
-    from dreambooth.dreambooth.shared import status  # noqa
-    from dreambooth.dreambooth.utils.image_utils import make_bucket_resolutions, closest_resolution, open_and_trim  # noqa
-    from dreambooth.dreambooth.utils.text_utils import build_strict_tokens  # noqa
-    from dreambooth.helpers.mytqdm import mytqdm  # noqa
+from dreambooth import shared
+from dreambooth.dataclasses.prompt_data import PromptData
+from dreambooth.shared import status
+from dreambooth.utils.image_utils import make_bucket_resolutions, \
+    closest_resolution, shuffle_tags, open_and_trim
+from dreambooth.utils.text_utils import build_strict_tokens
+from helpers.mytqdm import mytqdm
 
 
 class DbDataset(torch.utils.data.Dataset):
@@ -153,7 +145,7 @@ class DbDataset(torch.utils.data.Dataset):
                 self.caption_cache[image_path] = input_ids
         return caption, input_ids
 
-    def make_buckets_with_caching(self, vae, min_size):
+    def make_buckets_with_caching(self, vae):
         self.vae = vae
         self.cache_latents = vae is not None
         state = f"Preparing Dataset ({'With Caching' if self.cache_latents else 'Without Caching'})"
@@ -161,7 +153,7 @@ class DbDataset(torch.utils.data.Dataset):
         status.textinfo = state
 
         # Create a list of resolutions
-        bucket_resos = make_bucket_resolutions(self.resolution, min_size)
+        bucket_resos = make_bucket_resolutions(self.resolution)
         self.train_dict = {}
 
         def sort_images(img_data: List[PromptData], resos, target_dict, is_class_img):

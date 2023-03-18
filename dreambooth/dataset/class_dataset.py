@@ -3,22 +3,14 @@ import random
 
 from torch.utils.data import Dataset
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-    from extensions.sd_dreambooth_extension.dreambooth.shared import status
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import FilenameTextGetter, \
-        make_bucket_resolutions, \
-        sort_prompts, get_images
-    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-except:
-    from dreambooth.dreambooth import shared  # noqa
-    from dreambooth.dreambooth.dataclasses.db_concept import Concept  # noqa
-    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
-    from dreambooth.dreambooth.shared import status  # noqa
-    from dreambooth.dreambooth.utils.image_utils import FilenameTextGetter, make_bucket_resolutions, sort_prompts, get_images  # noqa
-    from dreambooth.helpers.mytqdm import mytqdm  # noqa
+from dreambooth import shared
+from dreambooth.dataclasses.db_concept import Concept
+from dreambooth.dataclasses.prompt_data import PromptData
+from dreambooth.shared import status
+from dreambooth.utils.image_utils import FilenameTextGetter, \
+    make_bucket_resolutions, \
+    sort_prompts, get_images
+from helpers.mytqdm import mytqdm
 
 
 class ClassDataset(Dataset):
@@ -32,14 +24,12 @@ class ClassDataset(Dataset):
         # Data for new prompts to generate
         self.new_prompts = {}
         self.required_prompts = 0
-        # Calculate minimum width
-        min_width = (int(max_width * 0.28125) // 64) * 64
 
         # Thingy to build prompts
         text_getter = FilenameTextGetter(shuffle)
 
         # Create available resolutions
-        bucket_resos = make_bucket_resolutions(max_width, min_width)
+        bucket_resos = make_bucket_resolutions(max_width)
         c_idx = 0
         c_images = {}
         i_images = {}
@@ -80,6 +70,9 @@ class ClassDataset(Dataset):
                 class_prompt_datas = sort_prompts(concept, text_getter, class_dir, c_images[c_idx], bucket_resos, c_idx,
                                                   True, pbar)
 
+            # Create list of filewords from instance images
+            instance_img_filewords = [text_getter.read_text(img) for img in i_images[c_idx]]
+
             # Iterate over each resolution of images, per concept
             for res, i_prompt_datas in instance_prompt_datas.items():
                 # Extend instance prompts by the instance data
@@ -103,14 +96,13 @@ class ClassDataset(Dataset):
 
                 # Otherwise, generate and append new class images
                 else:
-                    class_prompts = [img.prompt for img in c_prompt_datas]
-                    instance_prompts = [img.prompt for img in i_prompt_datas]
+                    existing_class_prompts = [img.prompt for img in c_prompt_datas]
 
                     if "[filewords]" in concept.class_prompt:
-                        for prompt in instance_prompts:
+                        for prompt in instance_img_filewords:
                             sample_prompt = text_getter.create_text(
                                 concept.class_prompt, prompt, concept.instance_token, concept.class_token, True)
-                            num_to_gen = concept.num_class_images_per - class_prompts.count(sample_prompt)
+                            num_to_gen = concept.num_class_images_per - existing_class_prompts.count(sample_prompt)
                             for _ in range(num_to_gen):
                                 pd = PromptData(
                                     prompt=sample_prompt,
@@ -127,8 +119,7 @@ class ClassDataset(Dataset):
                     else:
                         sample_prompt = text_getter.create_text(
                             concept.class_prompt, "", concept.instance_token, concept.class_token, True)
-                        num_to_gen = concept.num_class_images_per * len(i_prompt_datas) - class_prompts.count(
-                            sample_prompt)
+                        num_to_gen = concept.num_class_images_per * len(i_prompt_datas) - existing_class_prompts.count(sample_prompt)
                         for _ in range(num_to_gen):
                             pd = PromptData(
                                 prompt=sample_prompt,

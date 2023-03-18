@@ -3,15 +3,10 @@ import random
 
 from PIL import Image
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, FilenameTextGetter, \
-        closest_resolution, make_bucket_resolutions
-except:
-    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
-    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
-    from dreambooth.dreambooth.utils.image_utils import get_images, FilenameTextGetter, closest_resolution, make_bucket_resolutions  # noqa
+from dreambooth.dataclasses.db_config import DreamboothConfig
+from dreambooth.dataclasses.prompt_data import PromptData
+from dreambooth.utils.image_utils import get_images, FilenameTextGetter, \
+    closest_resolution, make_bucket_resolutions
 
 
 class SampleDataset:

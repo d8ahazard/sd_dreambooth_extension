@@ -5,34 +5,24 @@ from typing import List
 from accelerate import Accelerator
 from transformers import AutoTokenizer
 
-try:
-    from extensions.sd_dreambooth_extension.dreambooth import shared
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig, from_file
-    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
-    from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import ClassDataset
-    from extensions.sd_dreambooth_extension.dreambooth.shared import status
-    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image
-    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup
-    from extensions.sd_dreambooth_extension.helpers.image_builder import ImageBuilder
-    from extensions.sd_dreambooth_extension.helpers.mytqdm import mytqdm
-except:
-    from dreambooth.dreambooth import shared  # noqa
-    from dreambooth.dreambooth.dataclasses.db_config import DreamboothConfig, from_file  # noqa
-    from dreambooth.dreambooth.dataclasses.prompt_data import PromptData  # noqa
-    from dreambooth.dreambooth.dataset.class_dataset import ClassDataset  # noqa
-    from dreambooth.dreambooth.shared import status  # noqa
-    from dreambooth.dreambooth.utils.image_utils import db_save_image  # noqa
-    from dreambooth.dreambooth.utils.utils import cleanup  # noqa
-    from dreambooth.helpers.image_builder import ImageBuilder  # noqa
-    from dreambooth.helpers.mytqdm import mytqdm  # noqa
+from dreambooth import shared
+from dreambooth.dataclasses.db_config import DreamboothConfig, from_file
+from dreambooth.dataclasses.prompt_data import PromptData
+from dreambooth.dataset.class_dataset import ClassDataset
+from dreambooth.dataset.db_dataset import DbDataset
+from dreambooth.shared import status
+from dreambooth.utils.image_utils import db_save_image
+from dreambooth.utils.utils import cleanup
+from helpers.image_builder import ImageBuilder
+from helpers.mytqdm import mytqdm
 
 
 def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None, class_prompts: List[PromptData] = None,
                      batch_size=None, tokenizer=None, vae=None, debug=True, model_dir=""):
     if debug:
         print("Generating dataset.")
+    from dreambooth.ui_functions import gr_update
 
-    from extensions.sd_dreambooth_extension.dreambooth.ui_functions import gr_update
     db_gallery = gr_update(value=None)
     db_prompt_list = gr_update(value=None)
     db_status = gr_update(value=None)
@@ -58,12 +48,6 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
 
     print(f"Found {len(class_prompts)} reg images.")
 
-    min_bucket_reso = (int(args.resolution * 0.28125) // 64) * 64
-    try:
-        from extensions.sd_dreambooth_extension.dreambooth.dataset.db_dataset import DbDataset
-    except:
-        from dreambooth.dreambooth.dataset.db_dataset import DbDataset
-
     print("Preparing dataset...")
 
     if args.strict_tokens: print("Building prompts with strict tokens enabled.")
@@ -82,18 +66,22 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
         debug_dataset=debug,
         model_dir=model_dir
     )
-    train_dataset.make_buckets_with_caching(vae, min_bucket_reso)
+    train_dataset.make_buckets_with_caching(vae)
 
     # train_dataset = train_dataset.pin_memory()
     print(f"Total dataset length (steps): {len(train_dataset)}")
     return train_dataset
 
 
-def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accelerator: Accelerator = None, ui=True):
+def generate_classifiers(
+        args: DreamboothConfig,
+        class_gen_method: str = "Native Diffusers",
+        accelerator: Accelerator = None,
+        ui=True):
     """
 
     @param args: A DreamboothConfig
-    @param use_txt2img: Generate images using txt2image. Does not use lora.
+    @param class_gen_method
     @param accelerator: An optional existing accelerator to use.
     @param ui: Whether this was called by th UI, or is being run during training.
     @return:
@@ -113,7 +101,6 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
         print(f"Exception generating dataset: {str(p)}")
         traceback.print_exc()
         if ui:
-            shared.status.end()
             return 0, []
         else:
             return 0, instance_prompts, class_prompts
@@ -122,7 +109,6 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     if set_len == 0:
         print("Nothing to generate.")
         if ui:
-            shared.status.end()
             return 0, []
         else:
             return 0, instance_prompts, class_prompts
@@ -133,7 +119,7 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     shared.status.job_no = 0
     builder = ImageBuilder(
         args,
-        use_txt2img=use_txt2img,
+        class_gen_method=class_gen_method,
         lora_model=args.lora_model_name,
         batch_size=args.sample_batch_size,
         accelerator=accelerator,
@@ -205,7 +191,6 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     cleanup()
     print(f"Generated {generated} new class images.")
     if ui:
-        shared.status.end()
         return generated, out_images
     else:
         return generated, instance_prompts, class_prompts
