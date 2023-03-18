@@ -1076,7 +1076,7 @@ def on_ui_tabs():
                         db_crop_bucket_step,
                         db_crop_dry,
                     ],
-                    outputs=[db_gallery, db_status],
+                    outputs=[db_status, db_gallery],
                 )
 
                 db_update_params.click(

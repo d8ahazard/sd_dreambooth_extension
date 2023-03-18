@@ -919,6 +919,7 @@ def start_crop(
         out_status = (
             f"{'Saved' if not dry_run else 'Previewed'} {total_images} cropped images."
         )
+    status.end()
     return out_status, out_images
 
 
