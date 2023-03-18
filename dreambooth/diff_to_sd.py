@@ -320,7 +320,7 @@ def convert_text_enc_state_dict(text_enc_dict: Dict[str, torch.Tensor]):
 
 
 def get_model_path(working_dir: str, model_name: str = "", file_extra: str = ""):
-    model_base = osp.join(working_dir, model_name) if model_name != "" else working_dir
+    model_base = osp.join(working_dir, model_name) if model_name else working_dir
     if os.path.exists(model_base) and os.path.isdir(model_base):
         file_name_regex = re.compile(f"model_?{file_extra}\\.(safetensors|bin)$")
         for f in os.listdir(model_base):
@@ -398,7 +398,7 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
     model_path = config.pretrained_model_name_or_path
 
     new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{snap_rev}")
-    if snap_rev != "" and os.path.exists(new_hotness) and os.path.isdir(new_hotness):
+    if snap_rev and os.path.exists(new_hotness) and os.path.isdir(new_hotness):
         mytqdm.write(f"Loading snapshot paths from {new_hotness}")
         unet_path = get_model_path(new_hotness)
         text_enc_path = get_model_path(new_hotness, file_extra="1")
@@ -430,7 +430,7 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
                 pass
 
         # Apply LoRA to the unet
-        if lora_file_name is not None and lora_file_name != "":
+        if lora_file_name:
             unet_model = UNet2DConditionModel().from_pretrained(os.path.dirname(unet_path))
             lora_rev = apply_lora(config, unet_model, lora_file_name, "cpu", False)
             unet_state_dict = copy.deepcopy(unet_model.state_dict())
@@ -459,7 +459,7 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
         printi("Converting text encoder...", log=log)
 
         # Apply lora weights to the tenc
-        if lora_file_name is not None and lora_file_name != "":
+        if lora_file_name:
             lora_paths = lora_file_name.split(".")
             lora_txt_file_name = f"{lora_paths[0]}_txt.{lora_paths[1]}"
             text_encoder_cls = import_model_class_from_model_name_or_path(config.pretrained_model_name_or_path,
@@ -563,7 +563,7 @@ def load_model(model_path: str, map_location: str):
 
 def apply_lora(config: DreamboothConfig, model: nn.Module, lora_file_name: str, device: str, is_tenc: bool):
     lora_rev = None
-    if lora_file_name is not None and lora_file_name != "":
+    if lora_file_name:
         if not os.path.exists(lora_file_name):
             lora_file_name = os.path.join(config.model_dir, "loras", lora_file_name)
         if os.path.exists(lora_file_name):

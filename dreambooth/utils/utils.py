@@ -66,14 +66,14 @@ def cleanup(do_print: bool = False):
 
 
 def xformers_check():
-    ENV_VARS_TRUE_VALUES = {"1", "ON", "YES", "TRUE"}
-    ENV_VARS_TRUE_AND_AUTO_VALUES = ENV_VARS_TRUE_VALUES.union({"AUTO"})
+    env_vars_true_values = {"1", "ON", "YES", "TRUE"}
+    env_vars_true_and_auto_values = env_vars_true_values.union({"AUTO"})
 
-    USE_TF = os.environ.get("USE_TF", "AUTO").upper()
-    USE_TORCH = os.environ.get("USE_TORCH", "AUTO").upper()
+    use_tf = os.environ.get("USE_TF", "AUTO").upper()
+    use_torch = os.environ.get("USE_TORCH", "AUTO").upper()
     if (
-        USE_TORCH in ENV_VARS_TRUE_AND_AUTO_VALUES
-        and USE_TF not in ENV_VARS_TRUE_VALUES
+        use_torch in env_vars_true_and_auto_values
+        and use_tf not in env_vars_true_values
     ):
         _torch_available = importlib.util.find_spec("torch") is not None
 
@@ -90,13 +90,15 @@ def xformers_check():
         _xformers_version = importlib_metadata.version("xformers")
         if _torch_available:
             import torch
-
             if version.Version(torch.__version__) < version.Version("1.12"):
-                raise ValueError("PyTorch should be >= 1.12")
+                raise ValueError("PyTorch version must be >= 1.12")
+            if version.Version(_xformers_version) < version.Version("0.0.17"):
+                raise ValueError("Xformers version must be >= 0.0.17")
         has_xformers = True
     except Exception as e:
         print(f"Exception importing xformers: {e}")
         has_xformers = False
+
     return has_xformers
 
 

@@ -123,8 +123,8 @@ def zip_files(db_model_name, files, name_part=""):
 
 def check_api_key(key):
     current_key = get_secret()
-    if current_key is not None and current_key != "":
-        if key is None or key == "":
+    if current_key is not None and current_key:
+        if not key:
             return JSONResponse(status_code=401, content={"message": "API Key Required."})
         if key != current_key:
             return JSONResponse(status_code=403, content={"message": "Invalid API Key."})
@@ -182,7 +182,7 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if model_name is None or model_name == "":
+        if not model_name:
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
         config = from_file(model_name)
         if config is None:
@@ -269,7 +269,7 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if model_name is None or model_name == "":
+        if not model_name:
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
         config = from_file(model_name)
         if config is None:
@@ -348,13 +348,13 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if model_name is None or model_name == "":
+        if not model_name:
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
         new_concepts = []
-        if concept is None and instance_dir != "":
+        if concept is None and instance_dir:
             new_concept = Concept()
             new_concept.instance_data_dir = instance_dir
             new_concept.instance_token = instance_token
@@ -389,7 +389,7 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if model_name is None or model_name == "":
+        if not model_name:
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
         config = from_file(model_name)
         if config is None:
@@ -409,7 +409,7 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if model_name is None or model_name == "":
+        if not model_name:
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
         config = from_file(model_name)
         if config is None:
@@ -444,7 +444,7 @@ def dreambooth_api(_, app: FastAPI):
         if key_check is not None:
             return key_check
 
-        if new_model_name is None or new_model_name == "":
+        if not new_model_name:
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
 
         status = is_running()
@@ -471,14 +471,14 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if model_name is None or model_name == "":
+        if not model_name:
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
         model_dir = config.model_dir
         models_path = os.path.join(shared.models_path, "stable-diffusion")
-        model_base = config.custom_model_name if config.custom_model_name != "" else config.model_name
+        model_base = config.custom_model_name if config.custom_model_name else config.model_name
         if config.use_subdir:
             models_path = os.path.join(models_path, model_base)
 

@@ -134,6 +134,9 @@ class DreamboothConfig(BaseModel):
         if len(shared.paths):
             models_path = os.path.join(shared.paths["models"], "dreambooth")
 
+        if not self.use_lora:
+            self.lora_model_name = ""
+
         model_dir = os.path.join(models_path, model_name)
         print(f"Model dir set to: {model_dir}")
         working_dir = os.path.join(model_dir, "working")
@@ -253,7 +256,7 @@ class DreamboothConfig(BaseModel):
 
     # Set default values
     def check_defaults(self):
-        if self.model_name is not None and self.model_name != "":
+        if self.model_name:
             if self.revision == "" or self.revision is None:
                 self.revision = 0
             if self.epoch == "" or self.epoch is None:
