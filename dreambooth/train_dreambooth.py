@@ -864,7 +864,14 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             # Create the pipeline using the trained modules and save it.
             if accelerator.is_main_process:
                 printm("Pre-cleanup.")
+                
+                # Save random states so sample generation doesn't impact training.
+                torch_rng_state = torch.get_rng_state()
+                cuda_gpu_rng_state = torch.cuda.get_rng_state(device="cuda")
+                cuda_cpu_rng_state = torch.cuda.get_rng_state(device="cpu")
+
                 optim_to(profiler, optimizer)
+                
                 if profiler is not None:
                     cleanup()
 
@@ -1123,7 +1130,14 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
                 status.current_image = last_samples
                 printm("Cleanup.")
+
                 optim_to(profiler, optimizer, accelerator.device)
+
+                # Resotre all random states to avoid having sampling impact training.
+                torch.set_rng_state(torch_rng_state)
+                torch.cuda.set_rng_state(cuda_cpu_rng_state, device="cpu")
+                torch.cuda.set_rng_state(cuda_gpu_rng_state, device="cuda")
+
                 cleanup()
                 printm("Cleanup completed.")
 
