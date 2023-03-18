@@ -60,13 +60,17 @@ def actual_install():
 
 
 def pip_install(args: List[str]):
-    output = subprocess.check_output(
-        [sys.executable, "-m", "pip", "install"] + args,
-        ).decode()
-    if output:
-        for line in output.split("\n"):
+    try:
+        output = subprocess.check_output(
+            [sys.executable, "-m", "pip", "install"] + args,
+            stderr=subprocess.STDOUT,
+            )
+        for line in output.decode().split("\n"):
             if "Successfully installed" in line:
                 print(line)
+    except subprocess.CalledProcessError as grepexc:
+        error_msg = grepexc.output.decode()
+        return error_msg
 
 
 def install_requirements():
@@ -77,10 +81,14 @@ def install_requirements():
     if dreambooth_skip_install or req_file == req_file_startup_arg:
         return
 
-    try:
-        pip_install(["-r", req_file])
-    except subprocess.CalledProcessError:
-        print("Failed to install Dreambooth requirements")
+    # NOT USING:
+    # return pip_install(["-r", req_file])
+    # because pip is dumb and it causes errors
+
+    req_contents = open(req_file, "r").read()
+    for line in req_contents.split("\n"):
+        pip_install([line])
+    print()
 
 
 def check_xformers():
@@ -89,7 +97,7 @@ def check_xformers():
     """
     try:
         xformers_version = importlib_metadata.version("xformers")
-        is_xformers_outdated = Version(xformers_version) < Version("0.0.17")
+        is_xformers_outdated = Version(xformers_version) < Version("0.0.17.dev")
         if is_xformers_outdated:
             pip_install(["--no-deps", "xformers==0.0.17.dev476"])
             pip_install(["numpy"])
