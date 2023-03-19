@@ -70,7 +70,7 @@ def pip_install(args: List[str]):
                 print(line)
     except subprocess.CalledProcessError as grepexc:
         error_msg = grepexc.output.decode()
-        return error_msg
+        print(error_msg)
 
 
 def install_requirements():
