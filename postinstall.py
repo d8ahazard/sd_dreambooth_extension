@@ -59,10 +59,10 @@ def actual_install():
     check_torch_unsafe_load()
 
 
-def pip_install(name, *args):
+def pip_install(*args):
     try:
         output = subprocess.check_output(
-                [sys.executable, "-m", "pip", "install"] + [name] + list(args),
+                [sys.executable, "-m", "pip", "install"] + list(args),
                 stderr=subprocess.STDOUT,
             )
         for line in output.decode().split("\n"):
@@ -81,14 +81,10 @@ def install_requirements():
     if dreambooth_skip_install or req_file == req_file_startup_arg:
         return
 
-    # NOT USING:
-    # return pip_install(["-r", req_file])
-    # because pip -r is error-prone
-
     # Necessary for the loop below
-    from sys import platform as sys_platform
     import platform
     platform_machine = platform.machine()
+    from sys import platform as sys_platform
     lines = open(req_file, "r").read().split("\n")
 
     for line in lines:
