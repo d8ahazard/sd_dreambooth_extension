@@ -59,10 +59,10 @@ def actual_install():
     check_torch_unsafe_load()
 
 
-def pip_install(args: List[str]):
+def pip_install(name, *args):
     try:
         output = subprocess.check_output(
-                [sys.executable, "-m", "pip", "install"] + args,
+                [sys.executable, "-m", "pip", "install"] + [name] + list(args),
                 stderr=subprocess.STDOUT,
             )
         for line in output.decode().split("\n"):
@@ -99,7 +99,7 @@ def install_requirements():
         else:
             lib = line
 
-        pip_install([lib])
+        pip_install(lib)
 
     print()
 
@@ -112,9 +112,9 @@ def check_xformers():
         xformers_version = importlib_metadata.version("xformers")
         is_xformers_outdated = Version(xformers_version) < Version("0.0.17.dev")
         if is_xformers_outdated:
-            pip_install(["--no-deps", "xformers==0.0.17.dev476"])
-            pip_install(["numpy"])
-            pip_install(["pyre-extensions"])
+            pip_install("--no-deps", "xformers==0.0.17.dev476")
+            pip_install("numpy")
+            pip_install("pyre-extensions")
     except:
         pass
 
