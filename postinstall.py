@@ -62,8 +62,8 @@ def actual_install():
 def pip_install(args: List[str]):
     try:
         output = subprocess.check_output(
-            [sys.executable, "-m", "pip", "install"] + args,
-            stderr=subprocess.STDOUT,
+                [sys.executable, "-m", "pip", "install"] + args,
+                stderr=subprocess.STDOUT,
             )
         for line in output.decode().split("\n"):
             if "Successfully installed" in line:
@@ -83,11 +83,24 @@ def install_requirements():
 
     # NOT USING:
     # return pip_install(["-r", req_file])
-    # because pip is dumb and it causes errors
+    # because pip -r is error-prone
 
-    req_contents = open(req_file, "r").read()
-    for line in req_contents.split("\n"):
-        pip_install([line])
+    # Necessary for the loop below
+    from sys import platform as sys_platform
+    import platform
+    platform_machine = platform.machine()
+    lines = open(req_file, "r").read().split("\n")
+
+    for line in lines:
+        if ";" in line:
+            [lib, cond] = line.split(";")
+            if not eval(cond):
+                continue
+        else:
+            lib = line
+
+        pip_install([lib])
+
     print()
 
 

@@ -3,9 +3,9 @@ from dataclasses import dataclass
 from typing import Tuple, List, Union
 
 import matplotlib
-from matplotlib import axes
 import pandas as pd
 from PIL import Image
+from matplotlib import axes
 from pandas import DataFrame
 from pandas.plotting._matplotlib.style import get_standard_colors
 from tensorboard.compat.proto import event_pb2
