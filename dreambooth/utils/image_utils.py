@@ -251,12 +251,13 @@ def make_bucket_resolutions(max_resolution, divisible=32) -> List[Tuple[int, int
     return resos
 
 
-def closest_resolution(width, height, resos) -> Tuple[int, int]:
-    def distance(reso):
-        w, h = reso
-        if w > width + 7 or h > height + 7:
-            return float("inf")
-        return (w - width) ** 2 + (h - height) ** 2
+def closest_resolution(img_w, img_h, resos) -> Tuple[int, int]:
+    img_ratio = img_w / img_h
+
+    def distance(res):
+        res_w, res_h = res
+        res_ratio = res_w / res_h
+        return abs(img_ratio - res_ratio)
 
     return min(resos, key=distance)
 

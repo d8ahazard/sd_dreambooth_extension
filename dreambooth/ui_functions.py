@@ -919,6 +919,7 @@ def start_crop(
         out_status = (
             f"{'Saved' if not dry_run else 'Previewed'} {total_images} cropped images."
         )
+    status.end()
     return out_status, out_images
 
 
@@ -993,7 +994,7 @@ def debug_collate_fn(examples):
     input_ids = [example["input_ids"] for example in examples]
     pixel_values = [example["image"] for example in examples]
     loss_weights = torch.tensor(
-        [example["loss_weight"] for example in examples], dtype=torch.float32
+        [example["res"] for example in examples], dtype=torch.float32
     )
     batch = {
         "input_ids": input_ids,
@@ -1007,9 +1008,11 @@ def debug_buckets(model_name, num_epochs, batch_size):
     print("Debug click?")
     status.textinfo = "Preparing dataset..."
     if model_name == "" or model_name is None:
+        status.end()
         return "No model selected."
     args = from_file(model_name)
     if args is None:
+        status.end()
         return "Invalid config."
     print("Preparing prompt dataset...")
 
@@ -1100,4 +1103,5 @@ def debug_buckets(model_name, num_epochs, batch_size):
         cleanup()
     except:
         pass
+    status.end()
     return "", f"Debug output saved to {bucket_file}"

@@ -59,18 +59,18 @@ def actual_install():
     check_torch_unsafe_load()
 
 
-def pip_install(args: List[str]):
+def pip_install(*args):
     try:
         output = subprocess.check_output(
-            [sys.executable, "-m", "pip", "install"] + args,
-            stderr=subprocess.STDOUT,
+                [sys.executable, "-m", "pip", "install"] + list(args),
+                stderr=subprocess.STDOUT,
             )
         for line in output.decode().split("\n"):
             if "Successfully installed" in line:
                 print(line)
     except subprocess.CalledProcessError as grepexc:
         error_msg = grepexc.output.decode()
-        return error_msg
+        print(error_msg)
 
 
 def install_requirements():
@@ -81,13 +81,22 @@ def install_requirements():
     if dreambooth_skip_install or req_file == req_file_startup_arg:
         return
 
-    # NOT USING:
-    # return pip_install(["-r", req_file])
-    # because pip is dumb and it causes errors
+    # Necessary for the loop below
+    import platform
+    platform_machine = platform.machine()
+    from sys import platform as sys_platform
+    lines = open(req_file, "r").read().split("\n")
 
-    req_contents = open(req_file, "r").read()
-    for line in req_contents.split("\n"):
-        pip_install([line])
+    for line in lines:
+        if ";" in line:
+            [lib, cond] = line.split(";")
+            if not eval(cond):
+                continue
+        else:
+            lib = line
+
+        pip_install(lib)
+
     print()
 
 
@@ -99,9 +108,9 @@ def check_xformers():
         xformers_version = importlib_metadata.version("xformers")
         is_xformers_outdated = Version(xformers_version) < Version("0.0.17.dev")
         if is_xformers_outdated:
-            pip_install(["--no-deps", "xformers==0.0.17.dev476"])
-            pip_install(["numpy"])
-            pip_install(["pyre-extensions"])
+            pip_install("--no-deps", "xformers==0.0.17.dev476")
+            pip_install("numpy")
+            pip_install("pyre-extensions")
     except:
         pass
 

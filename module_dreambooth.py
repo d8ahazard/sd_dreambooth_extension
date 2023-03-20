@@ -3,12 +3,12 @@ import logging
 import os
 import shutil
 
-from fastapi import FastAPI, Query
-
-import scripts.api
 from core.handlers.models import ModelHandler
 from core.handlers.websocket import SocketHandler
 from core.modules.base.module_base import BaseModule
+from fastapi import FastAPI
+
+import scripts.api
 from dreambooth.dataclasses.db_config import DreamboothConfig
 from dreambooth.sd_to_diff import extract_checkpoint
 
