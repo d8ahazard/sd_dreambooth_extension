@@ -1063,8 +1063,8 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                         num_inference_steps=c.steps,
                                         guidance_scale=c.scale,
                                         negative_prompt=c.negative_prompt,
-                                        height=c.resolution[0],
-                                        width=c.resolution[1],
+                                        height=c.resolution[1],
+                                        width=c.resolution[0],
                                         generator=generator,
                                     ).images[0]
                                     sample_prompts.append(c.prompt)
