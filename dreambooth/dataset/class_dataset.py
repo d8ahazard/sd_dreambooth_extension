@@ -137,12 +137,12 @@ class ClassDataset(Dataset):
                 # Extend class prompts by the proper amount
                 self.class_prompts.extend(c_prompt_datas)
 
-                if len(new_prompts):
-                    self.required_prompts += len(new_prompts)
-                    if res in self.new_prompts:
-                        self.new_prompts[res].extend(new_prompts)
-                    else:
-                        self.new_prompts[res] = new_prompts
+            if len(new_prompts):
+                self.required_prompts += len(new_prompts)
+                if res in self.new_prompts:
+                    self.new_prompts[res].extend(new_prompts)
+                else:
+                    self.new_prompts[res] = new_prompts
             c_idx += 1
         pbar.reset(0)
         if self.required_prompts > 0:

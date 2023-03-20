@@ -73,11 +73,15 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
     return train_dataset
 
 
-def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accelerator: Accelerator = None, ui=True):
+def generate_classifiers(
+        args: DreamboothConfig,
+        class_gen_method: str = "Native Diffusers",
+        accelerator: Accelerator = None,
+        ui=True):
     """
 
     @param args: A DreamboothConfig
-    @param use_txt2img: Generate images using txt2image. Does not use lora.
+    @param class_gen_method
     @param accelerator: An optional existing accelerator to use.
     @param ui: Whether this was called by th UI, or is being run during training.
     @return:
@@ -97,7 +101,6 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
         print(f"Exception generating dataset: {str(p)}")
         traceback.print_exc()
         if ui:
-            shared.status.end()
             return 0, []
         else:
             return 0, instance_prompts, class_prompts
@@ -106,7 +109,6 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     if set_len == 0:
         print("Nothing to generate.")
         if ui:
-            shared.status.end()
             return 0, []
         else:
             return 0, instance_prompts, class_prompts
@@ -117,7 +119,7 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     shared.status.job_no = 0
     builder = ImageBuilder(
         args,
-        use_txt2img=use_txt2img,
+        class_gen_method=class_gen_method,
         lora_model=args.lora_model_name,
         batch_size=args.sample_batch_size,
         accelerator=accelerator,
@@ -189,7 +191,6 @@ def generate_classifiers(args: DreamboothConfig, use_txt2img: bool = True, accel
     cleanup()
     print(f"Generated {generated} new class images.")
     if ui:
-        shared.status.end()
         return generated, out_images
     else:
         return generated, instance_prompts, class_prompts

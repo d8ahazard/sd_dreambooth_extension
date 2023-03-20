@@ -1,5 +1,6 @@
 import glob
 import importlib
+import importlib.util
 import json
 import logging
 import math
@@ -14,28 +15,36 @@ import torch.utils.checkpoint
 import torch.utils.data.dataloader
 from accelerate import find_executable_batch_size
 from diffusers.utils import logging as dl
+from torch.optim import AdamW
 
 from dreambooth import shared
 from dreambooth.dataclasses import db_config
-from dreambooth.dataclasses.db_config import from_file, DreamboothConfig, \
-    sanitize_name
+from dreambooth.dataclasses.db_config import from_file, sanitize_name
 from dreambooth.dataclasses.prompt_data import PromptData
 from dreambooth.dataset.bucket_sampler import BucketSampler
 from dreambooth.dataset.class_dataset import ClassDataset
 from dreambooth.optimization import UniversalScheduler
 from dreambooth.sd_to_diff import extract_checkpoint
 from dreambooth.shared import status, run
-from dreambooth.train_dreambooth import main
-from dreambooth.train_imagic import train_imagic
 from dreambooth.utils.gen_utils import generate_dataset, generate_classifiers
-from dreambooth.utils.image_utils import get_images, db_save_image, \
-    make_bucket_resolutions, get_dim, closest_resolution, open_and_trim
-from dreambooth.utils.model_utils import unload_system_models, \
-    reload_system_models, get_lora_models, get_checkpoint_match, get_model_snapshots
+from dreambooth.utils.image_utils import (
+    get_images,
+    db_save_image,
+    make_bucket_resolutions,
+    get_dim,
+    closest_resolution,
+    open_and_trim,
+)
+from dreambooth.utils.model_utils import (
+    unload_system_models,
+    reload_system_models,
+    get_lora_models,
+    get_checkpoint_match,
+    get_model_snapshots,
+)
 from dreambooth.utils.utils import printm, cleanup
 from helpers.image_builder import ImageBuilder
 from helpers.mytqdm import mytqdm
-from postinstall import actual_install
 
 logger = logging.getLogger(__name__)
 console = logging.StreamHandler()
@@ -48,15 +57,14 @@ dl.set_verbosity_error()
 def gr_update(default=None, **kwargs):
     try:
         import gradio
+
         return gradio.update(visible=True, **kwargs)
     except:
         return kwargs["value"] if "value" in kwargs else default
 
 
 def training_wizard_person(model_dir):
-    return training_wizard(
-        model_dir,
-        is_person=True)
+    return training_wizard(model_dir, is_person=True)
 
 
 def training_wizard(model_dir, is_person=False):
@@ -164,10 +172,10 @@ def performance_wizard(model_name):
     msg: Stuff to show in the UI
     """
     attention = "flash_attention"
-    optimizer = "8Bit Adam"
+    optimizer = "8bit AdamW"
     gradient_checkpointing = False
     gradient_accumulation_steps = 1
-    mixed_precision = 'fp16'
+    mixed_precision = "fp16"
     cache_latents = True
     sample_batch_size = 1
     train_batch_size = 1
@@ -183,20 +191,28 @@ def performance_wizard(model_name):
     save_weights_every = gr_update(config.save_embedding_every)
 
     if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
-        mixed_precision = 'bf16'
+        mixed_precision = "bf16"
     if config is not None:
         total_images = 0
         for concept in config.concepts():
             idd = concept.instance_data_dir
-            if idd != "" and idd is not None and os.path.exists(idd):
+            if idd and os.path.exists(idd):
                 images = get_images(idd)
                 total_images += len(images)
         print(f"Total images: {total_images}")
         if total_images != 0:
             best_factors = closest_factors_to_sqrt(total_images)
             largest_prime = largest_prime_factor(total_images)
-            largest_factor = best_factors[0] if best_factors[0] > best_factors[1] else best_factors[1]
-            smallest_factor = best_factors[0] if best_factors[0] < best_factors[1] else best_factors[1]
+            largest_factor = (
+                best_factors[0]
+                if best_factors[0] > best_factors[1]
+                else best_factors[1]
+            )
+            smallest_factor = (
+                best_factors[0]
+                if best_factors[0] < best_factors[1]
+                else best_factors[1]
+            )
             factor_diff = largest_factor - smallest_factor
             print(f"Largest prime: {largest_prime}")
             print(f"Best factors: {best_factors}")
@@ -210,6 +226,7 @@ def performance_wizard(model_name):
     has_xformers = False
     try:
         from diffusers.utils.import_utils import is_xformers_available
+
         has_xformers = is_xformers_available()
     except:
         pass
@@ -244,17 +261,38 @@ def performance_wizard(model_name):
         msg = f"An exception occurred calculating performance values: {e}"
         pass
 
-    log_dict = {"Attention": attention, "Gradient Checkpointing": gradient_checkpointing,
-                "Accumulation Steps": gradient_accumulation_steps, "Precision": mixed_precision,
-                "Cache Latents": cache_latents, "Training Batch Size": train_batch_size,
-                "Class Generation Batch Size": sample_batch_size,
-                "Text Encoder Ratio": stop_text_encoder, "Optimizer": optimizer,
-                "EMA": use_ema, "LORA": use_lora}
+    log_dict = {
+        "Attention": attention,
+        "Gradient Checkpointing": gradient_checkpointing,
+        "Accumulation Steps": gradient_accumulation_steps,
+        "Precision": mixed_precision,
+        "Cache Latents": cache_latents,
+        "Training Batch Size": train_batch_size,
+        "Class Generation Batch Size": sample_batch_size,
+        "Text Encoder Ratio": stop_text_encoder,
+        "Optimizer": optimizer,
+        "EMA": use_ema,
+        "LORA": use_lora,
+    }
     for key in log_dict:
         msg += f"<br>{key}: {log_dict[key]}"
-    return attention, gradient_checkpointing, gradient_accumulation_steps, mixed_precision, cache_latents, \
-        optimizer, sample_batch_size, train_batch_size, stop_text_encoder, use_lora, use_ema, \
-        save_samples_every, save_weights_every, msg
+    return (
+        attention,
+        gradient_checkpointing,
+        gradient_accumulation_steps,
+        mixed_precision,
+        cache_latents,
+        optimizer,
+        sample_batch_size,
+        train_batch_size,
+        stop_text_encoder,
+        use_lora,
+        use_ema,
+        save_samples_every,
+        save_weights_every,
+        msg,
+    )
+
 
 # p,
 # overrideDenoising,
@@ -292,46 +330,49 @@ def performance_wizard(model_name):
 
 
 def get_swap_parameters():
-    return OrderedDict([
-        ("overrideDenoising", True),
-        ("overrideMaskBlur", True),
-        ("path", "./"),
-        ("searchSubdir", False),
-        ("divider", 1),
-        ("howSplit", "Both ▦"),
-        ("saveMask", False),
-        ("pathToSave", "./"),
-        ("viewResults", False),
-        ("saveNoFace", False),
-        ("onlyMask", False),
-        ("invertMask", False),
-        ("singleMaskPerImage", False),
-        ("countFaces", False),
-        ("maskSize", 0),
-        ("keepOriginalName", False),
-        ("pathExisting", ""),
-        ("pathMasksExisting", ""),
-        ("pathToSaveExisting", ""),
-        ("selectedTab", "generateMasksTab"),
-        ("faceDetectMode", "Normal (OpenCV + FaceMesh)"),
-        ("face_x_scale", 1.0),
-        ("face_y_scale", 1.0),
-        ("minFace", 50),
-        ("multiScale", 1.03),
-        ("multiScale2", 1.0),
-        ("multiScale3", 1.0),
-        ("minNeighbors", 5),
-        ("mpconfidence", 0.5),
-        ("mpcount", 1),
-        ("debugSave", False),
-        ("optimizeDetect", True)
-    ])
+    return OrderedDict(
+        [
+            ("overrideDenoising", True),
+            ("overrideMaskBlur", True),
+            ("path", "./"),
+            ("searchSubdir", False),
+            ("divider", 1),
+            ("howSplit", "Both ▦"),
+            ("saveMask", False),
+            ("pathToSave", "./"),
+            ("viewResults", False),
+            ("saveNoFace", False),
+            ("onlyMask", False),
+            ("invertMask", False),
+            ("singleMaskPerImage", False),
+            ("countFaces", False),
+            ("maskSize", 0),
+            ("keepOriginalName", False),
+            ("pathExisting", ""),
+            ("pathMasksExisting", ""),
+            ("pathToSaveExisting", ""),
+            ("selectedTab", "generateMasksTab"),
+            ("faceDetectMode", "Normal (OpenCV + FaceMesh)"),
+            ("face_x_scale", 1.0),
+            ("face_y_scale", 1.0),
+            ("minFace", 50),
+            ("multiScale", 1.03),
+            ("multiScale2", 1.0),
+            ("multiScale3", 1.0),
+            ("minNeighbors", 5),
+            ("mpconfidence", 0.5),
+            ("mpcount", 1),
+            ("debugSave", False),
+            ("optimizeDetect", True),
+        ]
+    )
 
 
 def get_script_class():
     script_class = None
     try:
         from modules.scripts import list_scripts
+
         scripts = list_scripts("scripts", ".py")
         for script_file in scripts:
             if script_file.filename == "batch_face_swap.py":
@@ -346,25 +387,27 @@ def get_script_class():
         print(f"Can't check face swap: {f}")
     return script_class
 
-def generate_samples(model_name: str,
-                     prompt: str,
-                     prompt_file: str,
-                     negative_prompt: str,
-                     width: int,
-                     height: int,
-                     num_samples: int,
-                     batch_size: int,
-                     seed: int,
-                     steps: int,
-                     scale: float,
-                     use_txt2img: bool,
-                     scheduler: str = "UniPCMultistep",
-                     swap_faces:bool = False,
-                     swap_prompt: str = "",
-                     swap_negative: str = "",
-                     swap_steps: int = 40,
-                     swap_batch: int = 1
-                     ):
+
+def generate_samples(
+        model_name: str,
+        prompt: str,
+        prompt_file: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        num_samples: int,
+        batch_size: int,
+        seed: int,
+        steps: int,
+        scale: float,
+        class_gen_method: str = "Native Diffusers",
+        scheduler: str = "UniPCMultistep",
+        swap_faces: bool = False,
+        swap_prompt: str = "",
+        swap_negative: str = "",
+        swap_steps: int = 40,
+        swap_batch: int = 1,
+):
     if batch_size > num_samples:
         batch_size = num_samples
 
@@ -375,13 +418,21 @@ def generate_samples(model_name: str,
         config = from_file(model_name)
         source_model = None
 
-        if use_txt2img:
-            tgt_name = model_name if not config.custom_model_name else config.custom_model_name
+        if class_gen_method == "A1111 txt2img (Euler a)":
+            tgt_name = (
+                model_name if not config.custom_model_name else config.custom_model_name
+            )
             tgt_ext = ".safetensors" if config.save_safetensors else ".ckpt"
             if config.use_subdir:
-                tgt_file = os.path.join(tgt_name, f"{tgt_name}_{config.revision}{tgt_ext}")
-                tgt_file_ema = os.path.join(tgt_name, f"{tgt_name}_{config.revision}_ema{tgt_ext}")
-                tgt_file_lora = os.path.join(tgt_name, f"{tgt_name}_{config.revision}_lora{tgt_ext}")
+                tgt_file = os.path.join(
+                    tgt_name, f"{tgt_name}_{config.revision}{tgt_ext}"
+                )
+                tgt_file_ema = os.path.join(
+                    tgt_name, f"{tgt_name}_{config.revision}_ema{tgt_ext}"
+                )
+                tgt_file_lora = os.path.join(
+                    tgt_name, f"{tgt_name}_{config.revision}_lora{tgt_ext}"
+                )
             else:
                 tgt_file = f"{tgt_name}{config.revision}{tgt_ext}"
                 tgt_file_ema = f"{tgt_name}{config.revision}_ema{tgt_ext}"
@@ -414,20 +465,22 @@ def generate_samples(model_name: str,
                 prompts = prompt_data.readlines()
                 for i in range(len(prompts)):
                     file_prompt = prompts[i]
-                    prompts[i] = file_prompt.replace("[filewords]", prompt).replace("[name]", prompt)
+                    prompts[i] = file_prompt.replace("[filewords]", prompt).replace(
+                        "[name]", prompt
+                    )
 
         try:
             status.textinfo = "Loading diffusion model..."
 
             img_builder = ImageBuilder(
                 config=config,
-                use_txt2img=use_txt2img,
+                class_gen_method=class_gen_method,
                 lora_model=config.lora_model_name,
                 batch_size=batch_size,
                 lora_unet_rank=config.lora_unet_rank,
                 lora_txt_rank=config.lora_txt_rank,
                 source_checkpoint=source_model,
-                scheduler=scheduler
+                scheduler=scheduler,
             )
 
             prompt_data = []
@@ -440,11 +493,13 @@ def generate_samples(model_name: str,
                     scale=scale,
                     out_dir=os.path.join(config.model_dir, "samples"),
                     seed=seed,
-                    resolution=(width, height)
+                    resolution=(width, height),
                 )
                 prompt_data.append(pd)
 
-            status.textinfo = f"Generating sample image for model {config.model_name}..."
+            status.textinfo = (
+                f"Generating sample image for model {config.model_name}..."
+            )
 
             pbar = mytqdm("Generating samples")
             pbar.reset(num_samples * steps)
@@ -588,22 +643,24 @@ def load_model_params(model_name):
         db_lora_models = gr_update(choices=loras)
 
         msg = f"Selected model: '{model_name}'."
-        return config.model_dir, \
-            config.revision, \
-            config.epoch, \
-            "True" if config.v2 else "False", \
-            "True" if config.has_ema else "False", \
-            config.src, \
-            db_model_snapshots, \
-            db_lora_models, \
-            msg
+        return (
+            config.model_dir,
+            config.revision,
+            config.epoch,
+            "True" if config.v2 else "False",
+            "True" if config.has_ema else "False",
+            config.src,
+            db_model_snapshots,
+            db_lora_models,
+            msg,
+        )
 
 
-def start_training(model_dir: str, use_txt2img: bool = True):
+def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
     """
 
     @param model_dir: The directory containing the dreambooth model/config
-    @param use_txt2img: Whether to use txt2img or diffusion pipeline for image generation.
+    @param class_gen_method: Image Generation Library.
     @return:
     lora_model_name: If using lora, this will be the model name of the saved weights. (For resuming further training)
     revision: The model revision after training.
@@ -629,7 +686,7 @@ def start_training(model_dir: str, use_txt2img: bool = True):
         msg = "Please configure some concepts."
     if not os.path.exists(config.pretrained_model_name_or_path):
         msg = "Invalid training data directory."
-    if config.pretrained_vae_name_or_path != "" and config.pretrained_vae_name_or_path is not None:
+    if config.pretrained_vae_name_or_path:
         if not os.path.exists(config.pretrained_vae_name_or_path):
             msg = "Invalid Pretrained VAE Path."
     if config.resolution <= 0:
@@ -651,11 +708,20 @@ def start_training(model_dir: str, use_txt2img: bool = True):
         if config.train_imagic:
             status.textinfo = "Initializing imagic training..."
             print(status.textinfo)
+            try:
+                from dreambooth.train_imagic import train_imagic  # noqa
+            except:
+                from dreambooth.train_imagic import train_imagic  # noqa
+
             result = train_imagic(config)
         else:
             status.textinfo = "Initializing dreambooth training..."
             print(status.textinfo)
-            result = main(use_txt2img=use_txt2img)
+            try:
+                from dreambooth.train_dreambooth import main  # noqa
+            except:
+                from dreambooth.train_dreambooth import main  # noqa
+            result = main(class_gen_method=class_gen_method)
 
         config = result.config
         images = result.samples
@@ -669,18 +735,19 @@ def start_training(model_dir: str, use_txt2img: bool = True):
                 print(f"No training was completed, deleting log: {latest_file}")
                 os.remove(latest_file)
         total_steps = config.revision
-        res = f"Training {'interrupted' if status.interrupted else 'finished'}. " \
-              f"Total lifetime steps: {total_steps} \n"
+        res = (
+            f"Training {'interrupted' if status.interrupted else 'finished'}. "
+            f"Total lifetime steps: {total_steps} \n"
+        )
     except Exception as e:
         res = f"Exception training model: '{e}'."
-        status.end()
         traceback.print_exc()
         pass
 
     cleanup()
     reload_system_models()
     lora_model_name = ""
-    if config.lora_model_name != "" and config.lora_model_name is not None:
+    if config.lora_model_name:
         lora_model_name = f"{config.model_name}_{total_steps}.pt"
     dirs = get_lora_models()
     lora_model_name = gr_update(choices=sorted(dirs), value=lora_model_name)
@@ -702,24 +769,35 @@ def reload_extension():
 
         except Exception as e:
             print(f"Couldn't import module: {re_add}")
+    try:
+        from postinstall import actual_install  # noqa
+    except:
+        from dreambooth.postinstall import actual_install  # noqa
 
     actual_install()
 
 
 def update_extension():
-    git = os.environ.get('GIT', "git")
+    git = os.environ.get("GIT", "git")
     ext_dir = os.path.join(shared.script_path, "extensions", "sd_dreambooth_extension")
-    run(f'"{git}" -C "{ext_dir}" fetch', f"Fetching updates...", f"Couldn't fetch updates...")
-    run(f'"{git}" -C "{ext_dir}" pull', f"Pulling updates...", f"Couldn't pull updates...")
+    run(
+        f'"{git}" -C "{ext_dir}" fetch',
+        f"Fetching updates...",
+        f"Couldn't fetch updates...",
+    )
+    run(
+        f'"{git}" -C "{ext_dir}" pull',
+        f"Pulling updates...",
+        f"Couldn't pull updates...",
+    )
     reload_extension()
 
 
-def ui_classifiers(model_name: str,
-                   use_txt2img: bool):
+def ui_classifiers(model_name: str, class_gen_method: str = "Native Diffusers"):
     """
     UI method for generating class images.
     @param model_name: The model to generate classes for.
-    @param use_txt2img: Use txt2image when generating concepts.
+    @param class_gen_method" Image Generation Library.
     @return:
     """
     if model_name == "" or model_name is None:
@@ -740,7 +818,7 @@ def ui_classifiers(model_name: str,
         msg = "Please configure some concepts."
     if not os.path.exists(config.pretrained_model_name_or_path):
         msg = "Invalid training data directory."
-    if config.pretrained_vae_name_or_path != "" and config.pretrained_vae_name_or_path is not None:
+    if config.pretrained_vae_name_or_path:
         if not os.path.exists(config.pretrained_vae_name_or_path):
             msg = "Invalid Pretrained VAE Path."
     if config.resolution <= 0:
@@ -754,7 +832,7 @@ def ui_classifiers(model_name: str,
     images = []
     try:
         unload_system_models()
-        count, images = generate_classifiers(config, use_txt2img=use_txt2img, ui=True)
+        count, images = generate_classifiers(config, ui=True)
         reload_system_models()
         msg = f"Generated {count} class images."
     except Exception as e:
@@ -765,11 +843,12 @@ def ui_classifiers(model_name: str,
     return images, msg
 
 
-def start_crop(src_dir: str, dest_dir: str, max_res: int, bucket_step: int, dry_run: bool):
+def start_crop(
+        src_dir: str, dest_dir: str, max_res: int, bucket_step: int, dry_run: bool
+):
     src_images = get_images(src_dir)
-    min_res = (int(max_res * 0.28125) // 64) * 64
 
-    bucket_resos = make_bucket_resolutions(max_res)
+    bucket_resos = make_bucket_resolutions(max_res, bucket_step)
 
     max_dim = 0
     for (w, h) in bucket_resos:
@@ -805,11 +884,15 @@ def start_crop(src_dir: str, dest_dir: str, max_res: int, bucket_step: int, dry_
         else:
             return 2, -res[0]
 
-    sorted_counts = sorted(out_counts.items(), key=lambda x: sort_key(x[0]), reverse=True)
+    sorted_counts = sorted(
+        out_counts.items(), key=lambda x: sort_key(x[0]), reverse=True
+    )
     total_images = 0
     for res, count in sorted_counts:
         total_images += count
-        print(f"RES: {res}  -  {count}  - {[os.path.basename(file) for file in out_paths[res]]}")
+        print(
+            f"RES: {res}  -  {count}  - {[os.path.basename(file) for file in out_paths[res]]}"
+        )
 
     out_images = []
     out_status = ""
@@ -823,7 +906,9 @@ def start_crop(src_dir: str, dest_dir: str, max_res: int, bucket_step: int, dry_
     for res, images in out_paths.items():
         for image in images:
             pbar.update()
-            out_img = os.path.join(dest_dir, os.path.splitext(os.path.basename(image))[0] + ".png")
+            out_img = os.path.join(
+                dest_dir, os.path.splitext(os.path.basename(image))[0] + ".png"
+            )
             cropped = open_and_trim(image, res, True)
             if not dry_run:
                 print(f"\nSaving to {out_img}")
@@ -831,19 +916,39 @@ def start_crop(src_dir: str, dest_dir: str, max_res: int, bucket_step: int, dry_
             out_images.append(cropped)
             shared.status.current_image = [cropped]
 
-        out_status = f"{'Saved' if not dry_run else 'Previewed'} {total_images} cropped images."
-    shared.status.end()
+        out_status = (
+            f"{'Saved' if not dry_run else 'Previewed'} {total_images} cropped images."
+        )
+    status.end()
     return out_status, out_images
 
 
-def create_model(new_model_name: str, ckpt_path: str, from_hub=False, new_model_url="",
-                 new_model_token="", extract_ema=False, train_unfrozen=False, is_512=True):
+def create_model(
+        new_model_name: str,
+        ckpt_path: str,
+        from_hub=False,
+        new_model_url="",
+        new_model_token="",
+        extract_ema=False,
+        train_unfrozen=False,
+        is_512=True,
+):
     printm("Extracting model.")
     res = 512 if is_512 else 768
+    sh = None
+    try:
+        from core.handlers.status import StatusHandler
+        sh = StatusHandler()
+        sh.start(5, "Extracting model")
+    except:
+        pass
     status.begin()
     if new_model_name is None or new_model_name == "":
         print("No model name.")
         err_msg = "Please select a model"
+        if sh is not None:
+            sh.end(desc=err_msg)
+
         return "", "", 0, 0, "", "", "", "", res, "", err_msg
 
     new_model_name = sanitize_name(new_model_name)
@@ -853,27 +958,48 @@ def create_model(new_model_name: str, ckpt_path: str, from_hub=False, new_model_
         if checkpoint_info is None or not os.path.exists(checkpoint_info.filename):
             err_msg = "Unable to find checkpoint file!"
             print(err_msg)
+            if sh is not None:
+                sh.end(desc=err_msg)
             return "", "", 0, 0, "", "", "", "", res, "", err_msg
         ckpt_path = checkpoint_info.filename
 
     unload_system_models()
-    result = extract_checkpoint(new_model_name, ckpt_path, from_hub, new_model_url, new_model_token,
-                                extract_ema, train_unfrozen, is_512)
+    result = extract_checkpoint(
+        new_model_name,
+        ckpt_path,
+        from_hub,
+        new_model_url,
+        new_model_token,
+        extract_ema,
+        train_unfrozen,
+        is_512,
+    )
+    try:
+        from core.handlers.models import ModelHandler
+        mh = ModelHandler()
+        mh.refresh("dreambooth")
+    except:
+        pass
+
     cleanup()
     reload_system_models()
     printm("Extraction complete.")
-    status.end()
+    if sh is not None:
+        sh.end(desc="Extraction complete.")
+
     return result
 
 
 def debug_collate_fn(examples):
     input_ids = [example["input_ids"] for example in examples]
     pixel_values = [example["image"] for example in examples]
-    loss_weights = torch.tensor([example["loss_weight"] for example in examples], dtype=torch.float32)
+    loss_weights = torch.tensor(
+        [example["res"] for example in examples], dtype=torch.float32
+    )
     batch = {
         "input_ids": input_ids,
         "images": pixel_values,
-        "loss_weights": loss_weights
+        "loss_weights": loss_weights,
     }
     return batch
 
@@ -882,24 +1008,34 @@ def debug_buckets(model_name, num_epochs, batch_size):
     print("Debug click?")
     status.textinfo = "Preparing dataset..."
     if model_name == "" or model_name is None:
+        status.end()
         return "No model selected."
     args = from_file(model_name)
     if args is None:
+        status.end()
         return "Invalid config."
     print("Preparing prompt dataset...")
 
-    prompt_dataset = ClassDataset(args.concepts(), args.model_dir, args.resolution, False)
+    prompt_dataset = ClassDataset(
+        args.concepts(), args.model_dir, args.resolution, False
+    )
     inst_paths = prompt_dataset.instance_prompts
     class_paths = prompt_dataset.class_prompts
     print("Generating training dataset...")
-    dataset = generate_dataset(model_name, inst_paths, class_paths, batch_size, debug=True, model_dir=args.model_dir)
-    optimizer_class = torch.optim.AdamW
+    dataset = generate_dataset(
+        model_name,
+        inst_paths,
+        class_paths,
+        batch_size,
+        debug=True,
+        model_dir=args.model_dir,
+    )
+
     placeholder = [torch.Tensor(10, 20)]
     sched_train_steps = args.num_train_epochs * dataset.__len__()
-    optimizer = optimizer_class(
-        placeholder,
-        lr=args.learning_rate,
-        weight_decay=args.adamw_weight_decay
+
+    optimizer = AdamW(
+        placeholder, lr=args.learning_rate, weight_decay=args.adamw_weight_decay
     )
 
     lr_scheduler = UniversalScheduler(
@@ -912,7 +1048,7 @@ def debug_buckets(model_name, num_epochs, batch_size):
         power=args.lr_power,
         factor=args.lr_factor,
         scale_pos=args.lr_scale_pos,
-        min_lr=args.learning_rate_min
+        min_lr=args.learning_rate_min,
     )
 
     sampler = BucketSampler(dataset, args.train_batch_size, True)
@@ -926,12 +1062,15 @@ def debug_buckets(model_name, num_epochs, batch_size):
         drop_last=False,
         collate_fn=debug_collate_fn,
         pin_memory=True,
-        num_workers=n_workers)
+        num_workers=n_workers,
+    )
 
     lines = []
     test_epochs = num_epochs
     sim_train_steps = test_epochs * (dataloader.__len__() // batch_size)
-    print(f"Simulating training for {test_epochs} epochs, batch size of {batch_size}, total steps {sim_train_steps}.")
+    print(
+        f"Simulating training for {test_epochs} epochs, batch size of {batch_size}, total steps {sim_train_steps}."
+    )
     for epoch in mytqdm(range(test_epochs), desc="Simulating training."):
         for step, batch in enumerate(dataloader):
             image_names = batch["images"]
@@ -955,7 +1094,6 @@ def debug_buckets(model_name, num_epochs, batch_size):
     bucket_file = os.path.join(samples_dir, "prompts.json")
     with open(bucket_file, "w") as outfile:
         json.dump(lines, outfile, indent=4)
-    status.end()
     try:
         del dataloader
         del dataset.tokenizer
@@ -965,4 +1103,5 @@ def debug_buckets(model_name, num_epochs, batch_size):
         cleanup()
     except:
         pass
+    status.end()
     return "", f"Debug output saved to {bucket_file}"

@@ -63,7 +63,7 @@ def get_scheduler(
     return schedule_func(optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
 
 
-def optim_to(torch, profiler, optim: torch.optim.Optimizer, device="cpu"):
+def optim_to(profiler, optim: torch.optim.Optimizer, device="cpu"):
     def inplace_move(obj: torch.Tensor, target):
         if hasattr(obj, 'data'):
             obj.data = obj.data.to(target)

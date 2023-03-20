@@ -123,8 +123,8 @@ def zip_files(db_model_name, files, name_part=""):
 
 def check_api_key(key):
     current_key = get_secret()
-    if current_key is not None and current_key != "":
-        if key is None or key == "":
+    if current_key is not None and current_key:
+        if not key:
             return JSONResponse(status_code=401, content={"message": "API Key Required."})
         if key != current_key:
             return JSONResponse(status_code=403, content={"message": "Invalid API Key."})
@@ -182,7 +182,7 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if model_name is None or model_name == "":
+        if not model_name:
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
         config = from_file(model_name)
         if config is None:
@@ -223,7 +223,6 @@ def dreambooth_api(_, app: FastAPI):
             active = True
             ckpt_result = compile_checkpoint(model_name, reload_models=False, log=False)
             active = False
-            shared.status.end()
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()
                 logger.debug(f"Checkpoint aved to path: {path}")
@@ -261,7 +260,7 @@ def dreambooth_api(_, app: FastAPI):
     @app.post("/dreambooth/classifiers")
     async def generate_classes(
             model_name: str = Form(description="The model name to generate classifiers for."),
-            use_txt2img: bool = Form("", description="Use Txt2Image to generate classifiers."),
+            class_gen_method: str = Form("Native Diffusers", description="Image Generation Library."),
             api_key: str = Form("", description="If an API key is set, this must be present.")
     ):
         """
@@ -270,7 +269,7 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if model_name is None or model_name == "":
+        if not model_name:
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
         config = from_file(model_name)
         if config is None:
@@ -285,7 +284,7 @@ def dreambooth_api(_, app: FastAPI):
         run_in_background(
             generate_classifiers,
             config,
-            use_txt2img
+            class_gen_method
         )
         active = False
         return JSONResponse(content={"message": "Generating classifiers..."})
@@ -349,13 +348,13 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if model_name is None or model_name == "":
+        if not model_name:
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
         new_concepts = []
-        if concept is None and instance_dir != "":
+        if concept is None and instance_dir:
             new_concept = Concept()
             new_concept.instance_data_dir = instance_dir
             new_concept.instance_token = instance_token
@@ -390,7 +389,7 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if model_name is None or model_name == "":
+        if not model_name:
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
         config = from_file(model_name)
         if config is None:
@@ -410,7 +409,7 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if model_name is None or model_name == "":
+        if not model_name:
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
         config = from_file(model_name)
         if config is None:
@@ -445,7 +444,7 @@ def dreambooth_api(_, app: FastAPI):
         if key_check is not None:
             return key_check
 
-        if new_model_name is None or new_model_name == "":
+        if not new_model_name:
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
 
         status = is_running()
@@ -472,14 +471,14 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        if model_name is None or model_name == "":
+        if not model_name:
             return JSONResponse(status_code=422, content={"message": "Invalid model name."})
         config = from_file(model_name)
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
         model_dir = config.model_dir
         models_path = os.path.join(shared.models_path, "stable-diffusion")
-        model_base = config.custom_model_name if config.custom_model_name != "" else config.model_name
+        model_base = config.custom_model_name if config.custom_model_name else config.model_name
         if config.use_subdir:
             models_path = os.path.join(models_path, model_base)
 
@@ -623,7 +622,7 @@ def dreambooth_api(_, app: FastAPI):
             seed: int = Query(-1, description="The seed to use when generating samples"),
             steps: int = Query(60, description="Number of sampling steps to use when generating images."),
             scale: float = Query(7.5, description="CFG scale to use when generating images."),
-            use_txt2img: bool = Query(True, description="Use txt2img to generate samples"),
+            class_gen_method: str = Query("Native Diffusers", description="Image Generation Library."),
             scheduler: str = Query("DEISMultistep", description="Sampler to use if not using txt2img"),
             api_key: str = Query("", description="If an API key is set, this must be present.", )
     ):
@@ -655,11 +654,9 @@ def dreambooth_api(_, app: FastAPI):
             seed=seed,
             scale=scale,
             steps=steps,
-            use_txt2img=use_txt2img,
+            class_gen_method=class_gen_method,
             scheduler=scheduler
         )
-
-        shared.status.end()
 
         if len(images) > 1:
             return zip_files(model_name, images, "_sample")

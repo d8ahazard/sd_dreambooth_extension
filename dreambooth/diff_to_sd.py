@@ -2,6 +2,7 @@
 # *Only* converts the UNet, VAE, and Text Encoder.
 # Does not convert optimizer state or any other thing.
 import copy
+import logging
 import os
 import os.path as osp
 import re
@@ -14,7 +15,6 @@ import torch
 from diffusers import UNet2DConditionModel
 from torch import Tensor, nn
 
-
 from dreambooth import shared as shared
 from dreambooth.dataclasses.db_config import from_file, DreamboothConfig
 from dreambooth.shared import status
@@ -24,6 +24,8 @@ from dreambooth.utils.model_utils import unload_system_models, \
 from dreambooth.utils.utils import printi
 from helpers.mytqdm import mytqdm
 from lora_diffusion.lora import merge_lora_to_model
+
+logger = logging.getLogger(__name__)
 
 unet_conversion_map = [
     # (stable-diffusion, HF Diffusers)
@@ -318,7 +320,7 @@ def convert_text_enc_state_dict(text_enc_dict: Dict[str, torch.Tensor]):
 
 
 def get_model_path(working_dir: str, model_name: str = "", file_extra: str = ""):
-    model_base = osp.join(working_dir, model_name) if model_name != "" else working_dir
+    model_base = osp.join(working_dir, model_name) if model_name else working_dir
     if os.path.exists(model_base) and os.path.isdir(model_base):
         file_name_regex = re.compile(f"model_?{file_extra}\\.(safetensors|bin)$")
         for f in os.listdir(model_base):
@@ -327,6 +329,25 @@ def get_model_path(working_dir: str, model_name: str = "", file_extra: str = "")
     if model_name != "ema_unet" and not file_extra:
         print(f"Unable to find model file: {model_base}")
     return None
+
+
+def copy_diffusion_model(model_name: str, dst_dir: str):
+    model = from_file(model_name)
+    if model is not None:
+        src_dir = model.pretrained_model_name_or_path
+        logger.debug(f"Exporting: {src_dir}")
+        if not os.path.exists(dst_dir):
+            os.makedirs(dst_dir)
+        src_yaml = os.path.basename(os.path.join(src_dir, "..", f"{model_name}.yaml"))
+        if os.path.exists(src_yaml):
+            shutil.copyfile(src_yaml, dst_dir)
+        for item in os.listdir(src_dir):
+            src_path = os.path.join(src_dir, item)
+            dst_path = os.path.join(dst_dir, item)
+            if os.path.isdir(src_path):
+                shutil.copytree(src_path, dst_path)
+            else:
+                shutil.copy2(src_path, dst_path)
 
 
 def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_models: bool = True, log: bool = True,
@@ -377,7 +398,7 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
     model_path = config.pretrained_model_name_or_path
 
     new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{snap_rev}")
-    if snap_rev != "" and os.path.exists(new_hotness) and os.path.isdir(new_hotness):
+    if snap_rev and os.path.exists(new_hotness) and os.path.isdir(new_hotness):
         mytqdm.write(f"Loading snapshot paths from {new_hotness}")
         unet_path = get_model_path(new_hotness)
         text_enc_path = get_model_path(new_hotness, file_extra="1")
@@ -409,7 +430,7 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
                 pass
 
         # Apply LoRA to the unet
-        if lora_file_name is not None and lora_file_name != "":
+        if lora_file_name:
             unet_model = UNet2DConditionModel().from_pretrained(os.path.dirname(unet_path))
             lora_rev = apply_lora(config, unet_model, lora_file_name, "cpu", False)
             unet_state_dict = copy.deepcopy(unet_model.state_dict())
@@ -438,7 +459,7 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
         printi("Converting text encoder...", log=log)
 
         # Apply lora weights to the tenc
-        if lora_file_name is not None and lora_file_name != "":
+        if lora_file_name:
             lora_paths = lora_file_name.split(".")
             lora_txt_file_name = f"{lora_paths[0]}_txt.{lora_paths[1]}"
             text_encoder_cls = import_model_class_from_model_name_or_path(config.pretrained_model_name_or_path,
@@ -542,7 +563,7 @@ def load_model(model_path: str, map_location: str):
 
 def apply_lora(config: DreamboothConfig, model: nn.Module, lora_file_name: str, device: str, is_tenc: bool):
     lora_rev = None
-    if lora_file_name is not None and lora_file_name != "":
+    if lora_file_name:
         if not os.path.exists(lora_file_name):
             lora_file_name = os.path.join(config.model_dir, "loras", lora_file_name)
         if os.path.exists(lora_file_name):
