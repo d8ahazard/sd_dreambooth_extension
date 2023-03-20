@@ -64,7 +64,13 @@ class ClassDataset(Dataset):
             if class_dir == "" or class_dir is None or class_dir == shared.script_path:
                 class_dir = os.path.join(model_dir, f"classifiers_{concept_idx}")
 
-            # Sort existing prompts
+            # ===== Instance =====
+            instance_prompt_buckets = sort_prompts(concept, text_getter, instance_dir, instance_images[concept_idx], bucket_resos, concept_idx, False, pbar)
+            for _, instance_prompt_datas in instance_prompt_buckets.items():
+                # Extend instance prompts by the instance data
+                self.instance_prompts.extend(instance_prompt_datas)
+
+            # ===== Class =====
             if concept.num_class_images_per <= 0 or not class_dir:
                 continue
 
@@ -73,9 +79,6 @@ class ClassDataset(Dataset):
 
             # Iterate over each resolution of images, per concept
             for res, required_prompt_datas in required_prompt_buckets.items():
-                # Extend instance prompts by the instance data
-                self.instance_prompts.extend(required_prompt_datas)
-
                 classes_per_bucket = len(required_prompt_datas) * concept.num_class_images_per
                 # Don't do anything else if we don't need class images
 
