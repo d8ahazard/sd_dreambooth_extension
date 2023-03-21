@@ -491,17 +491,6 @@ def on_ui_tabs():
                                 maximum=10000,
                             )
 
-                            with gr.Column(visible=False) as adaptation_lr_row:
-                                # Hide all other scheduler params and scheduler dropdown
-                                db_adaptation_growth_rate = gr.Number(
-                                    label="Adaptation Growth Rate",
-                                    value=1.02,
-                                )
-                                db_adaptation_momentum = gr.Number(
-                                    label="Adaptation Momentum",
-                                    value=0.9,
-                                )
-
                         with gr.Column():
                             gr.HTML(value="Image Processing")
                             db_resolution = gr.Slider(
@@ -1200,8 +1189,6 @@ def on_ui_tabs():
         # db_model_name must be first due to save_config() parsing
         params_to_save = [
             db_model_name,
-            db_adaptation_growth_rate,
-            db_adaptation_momentum,
             db_attention,
             db_cache_latents,
             db_clip_skip,
@@ -1490,12 +1477,6 @@ def on_ui_tabs():
                 db_learning_rate_min,
                 db_lr_warmup_steps,
             ],
-        )
-
-        db_optimizer.change(
-            fn=optimizer_changed,
-            inputs=[db_optimizer],
-            outputs=[adaptation_lr_row],
         )
 
         db_class_gen_method.change(

@@ -28,8 +28,6 @@ class DreamboothConfig(BaseModel):
     adaptation_beta2: int = 0
     adaptation_d0: float = 1e-8
     adaptation_eps: float = 1e-8
-    adaptation_growth_rate: float = 1e-8
-    adaptation_momentum: int = 0
     attention: str = "xformers"
     cache_latents: bool = True
     clip_skip: int = 1
