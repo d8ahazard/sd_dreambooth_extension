@@ -200,12 +200,6 @@ class DreamboothConfig(BaseModel):
             #       "new": "..."
             #   }]
             # }
-            "optimizer": {
-                "values": [{
-                    "old": ["8Bit Adam"],
-                    "new": "8bit AdamW"
-                }],
-            },
             "deis_train_scheduler": {
                 "new_key": "noise_scheduler",
                 "values": [{
@@ -213,6 +207,18 @@ class DreamboothConfig(BaseModel):
                     "new": "DDPM"
                 }],
             },
+            "optimizer": {
+                "values": [{
+                    "old": ["8Bit Adam"],
+                    "new": "8bit AdamW"
+                }],
+            },
+            "save_safetensors": {
+                "values": [{
+                    "old": [False],
+                    "new": True
+                }],
+            }
         }
 
         if key in replaced_params.keys():
