@@ -1,7 +1,7 @@
 # Borrowed heavily from https://github.com/bmaltais/kohya_ss/blob/master/train_db.py and
 # https://github.com/ShivamShrirao/diffusers/tree/main/examples/dreambooth
 # With some custom bits sprinkled in and some stuff from OG diffusers as well.
-
+import copy
 import itertools
 import logging
 import os
@@ -1383,7 +1383,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             status.job_count = max_train_steps
             status.job_no = global_step
 
-            check_save(progress_bar, True)
+            pbar = copy.copy(progress_bar)
+            check_save(pbar, True)
+            del pbar
 
             if args.num_train_epochs > 1:
                 training_complete = session_epoch >= max_train_epochs
