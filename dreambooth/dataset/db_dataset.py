@@ -326,9 +326,8 @@ class DbDataset(torch.utils.data.Dataset):
         if not self.debug_dataset:
             image_data, input_ids = self.load_image(image_path, caption, self.active_resolution)
         else:
-            # Pretty sure this path is broken
             image_data = image_path
-            print(f"Recoding: {caption}")
+            # print(f"Recoding: {caption}")
             caption, cap_tokens = self.cache_caption(image_path, caption)
             rebuilt = self.tokenizer.decode(cap_tokens.tolist()[0])
             input_ids = (caption, rebuilt)
