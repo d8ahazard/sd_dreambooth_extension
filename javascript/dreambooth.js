@@ -126,7 +126,7 @@ function updateInputValue(elements, newValue) {
 // Fix steps on sliders. God this is a lot of work for one stupid thing...
 function handleNumberInputs() {
     const numberInputs = gradioApp()
-       .querySelectorAll('#tab_dreambooth_interface')[0]
+       .querySelector('#tab_dreambooth_interface')
        .querySelectorAll('input[type="number"]');
     numberInputs.forEach((numberInput) => {
         const step = Number(numberInput.step) || 1;
