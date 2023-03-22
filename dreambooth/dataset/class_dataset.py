@@ -52,7 +52,7 @@ class ClassDataset(Dataset):
 
         concept_idx = 0
         status.textinfo = "Sorting images..."
-        pbar = mytqdm(desc="Pre-processing images.")
+        pbar = mytqdm(desc="Pre-processing images.", position=0)
         pbar.reset(total_images)
 
         for concept in concepts:

@@ -114,7 +114,7 @@ def generate_classifiers(
             return 0, instance_prompts, class_prompts
 
     print(f"Generating {set_len} class images for training...")
-    pbar = mytqdm(total=set_len, desc=f"Generating class images 0/{set_len}:")
+    pbar = mytqdm(total=set_len, desc=f"Generating class images 0/{set_len}:", position=0)
     shared.status.job_count = set_len
     shared.status.job_no = 0
     builder = ImageBuilder(
