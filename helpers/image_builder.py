@@ -1,5 +1,6 @@
 import os
 import random
+import time
 import traceback
 from typing import List, Union
 
@@ -217,7 +218,8 @@ class ImageBuilder:
         else:
             with self.accelerator.autocast(), torch.inference_mode():
                 if seed is None or seed == '' or seed == -1:
-                    seed = int(random.randrange(21474836147))
+                    seed = int(random.randrange(0, 21474836147))
+
                 generator = torch.manual_seed(seed)
                 try:
                     output = self.image_pipe(

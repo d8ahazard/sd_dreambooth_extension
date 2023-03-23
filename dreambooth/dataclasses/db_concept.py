@@ -25,7 +25,11 @@ class Concept(BaseModel):
     save_sample_prompt: str = ""
     save_sample_template: str = ""
 
-    def __init__(self, input_dict: Union[Dict, None] = None, **kwargs):
+    def __init__(
+            self,
+            input_dict: Union[Dict, None] = None,
+            **kwargs
+    ):
         super().__init__(**kwargs)
         if input_dict is not None:
             self.load_params(input_dict)

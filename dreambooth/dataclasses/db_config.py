@@ -119,8 +119,14 @@ class DreamboothConfig(BaseModel):
     use_subdir: bool = False
     v2: bool = False
 
-    def __init__(self, model_name: str = "", v2: bool = False, src: str = "",
-                 resolution: int = 512, **kwargs):
+    def __init__(
+            self,
+            model_name: str = "",
+            v2: bool = False,
+            src: str = "",
+            resolution: int = 512,
+            **kwargs
+    ):
 
         super().__init__(**kwargs)
         model_name = sanitize_name(model_name)
