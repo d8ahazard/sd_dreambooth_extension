@@ -114,11 +114,11 @@ def sort_prompts(
     for img in images:
         # Get prompt
         pbar.set_description(f"Pre-processing images: {dirr}")
-        prompt = text_getter.read_text(img)
+        file_text = text_getter.read_text(img)
         if not verbatim:
             prompt = text_getter.create_text(
                 concept.class_prompt if is_class else concept.instance_prompt,
-                prompt,
+                file_text,
                 concept,
                 is_class
             )
@@ -417,10 +417,10 @@ def load_image_directory(db_dir, concept: Concept, is_class: bool = True) -> Lis
     captions = []
     text_getter = FilenameTextGetter()
     for img_path in img_paths:
-        caption = text_getter.read_text(img_path)
+        file_text = text_getter.read_text(img_path)
         final_caption = text_getter.create_text(
-            caption,
             concept.instance_prompt,
+            file_text,
             concept,
             is_class
         )
