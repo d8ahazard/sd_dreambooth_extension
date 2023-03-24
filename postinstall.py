@@ -68,13 +68,13 @@ def install_requirements():
         return
 
     has_diffusers = importlib.util.find_spec("diffusers") is not None
-    has_tdqm = importlib.util.find_spec("tqdm") is not None
+    has_tqdm = importlib.util.find_spec("tqdm") is not None
     transformers_version = importlib_metadata.version("transformers")
 
     try:
         pip_install("-r", req_file)
 
-        if has_diffusers and has_tdqm and Version(transformers_version) < Version("4.26.1"):
+        if has_diffusers and has_tqdm and Version(transformers_version) < Version("4.26.1"):
             print()
             print("Does your project take forever to startup?")
             print("Repetitive dependency installation may be the reason.")
@@ -233,6 +233,7 @@ def print_xformers_error(err):
             print(line)
     print("#")
     print("#######################################################################################################")
+
 
 def print_launch_errors(launch_errors):
     print()

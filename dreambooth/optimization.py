@@ -20,8 +20,6 @@
 import math
 from enum import Enum
 from typing import Optional, Tuple, Union, List
-
-import torch.optim.lr_scheduler
 from diffusers.utils import logging
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import (
@@ -368,12 +366,6 @@ def get_scheduler(
     power: float = 1.0,
     factor: float = 0.5,
     scale_pos: float = 0.5,
-    betas: Tuple[float, float] = (0.9, 0.999),
-    momentum: float = 0.9,
-    eps: float = 1e-8,
-    weight_decay: float = 0.0,
-    d0: float = 1e-6,
-    growth_rate: float = float("inf"),
 ):
     """
     Unified API to get any scheduler from its name.
@@ -403,20 +395,6 @@ def get_scheduler(
         scale_pos (`float`, *optional*, defaults to 0.5):
             If a lr scheduler has an adjustment point, this is the percentage of training steps at which to
             adjust the LR.
-        betas (Tuple[float, float], optional): coefficients used for computing
-            running averages of gradient and its square (default: (0.9, 0.999))
-        momentum (float):
-            Momentum value in  the range [0,1) (default: 0.9).
-        eps (float):
-            Term added to the denominator outside of the root operation to improve numerical stability. (default: 1e-8).
-        weight_decay (float):
-            Weight decay, i.e. a L2 penalty (default: 0).
-        d0 (float):
-            Initial D estimate for D-adaptation (default 1e-6). Rarely needs changing.
-        growth_rate (float):
-            prevent the D estimate from growing faster than this multiplicative rate.
-            Default is inf, for unrestricted. Values like 1.02 give a kind of learning
-            rate warmup effect.
     """
     name = SchedulerType(name)
     break_steps = int(total_training_steps * scale_pos)
@@ -475,24 +453,18 @@ def get_scheduler(
 
 class UniversalScheduler:
     def __init__(
-        self,
-        name: Union[str, SchedulerType],
-        optimizer: Optional[Optimizer],
-        num_warmup_steps: int,
-        total_training_steps: int,
-        total_epochs: int,
-        num_cycles: int = 1,
-        power: float = 1.0,
-        factor: float = 0.5,
-        lr: float = 1e-6,
-        min_lr: float = 1e-6,
-        scale_pos: float = 0.5,
-        betas: Tuple[float, float] = (0.9, 0.999),
-        momentum: float = 0.9,
-        eps: float = 1e-8,
-        weight_decay: float = 0.0,
-        d0: float = 1e-6,
-        growth_rate: float = float("inf"),
+            self,
+            name: Union[str, SchedulerType],
+            optimizer: Optional[Optimizer],
+            num_warmup_steps: int,
+            total_training_steps: int,
+            total_epochs: int,
+            num_cycles: int = 1,
+            power: float = 1.0,
+            factor: float = 0.5,
+            lr: float = 1e-6,
+            min_lr: float = 1e-6,
+            scale_pos: float = 0.5,
     ):
         self.current_step = 0
         og_schedulers = [
@@ -518,12 +490,6 @@ class UniversalScheduler:
             power=power,
             factor=factor,
             scale_pos=scale_pos,
-            betas=betas,
-            momentum=momentum,
-            eps=eps,
-            weight_decay=weight_decay,
-            d0=d0,
-            growth_rate=growth_rate,
         )
 
     def step(self, steps: int = 1, is_epoch: bool = False):

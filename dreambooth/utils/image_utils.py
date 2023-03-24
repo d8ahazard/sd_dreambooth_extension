@@ -114,14 +114,18 @@ def sort_prompts(
     for img in images:
         # Get prompt
         pbar.set_description(f"Pre-processing images: {dirr}")
+
         file_text = text_getter.read_text(img)
-        if not verbatim:
+        if verbatim:
+            prompt = file_text
+        else:
             prompt = text_getter.create_text(
                 concept.class_prompt if is_class else concept.instance_prompt,
                 file_text,
                 concept,
                 is_class
             )
+
         w, h = get_dim(img, max_dim)
         reso = closest_resolution(w, h, bucket_resos)
         prompt_list = prompts[reso] if reso in prompts else []
