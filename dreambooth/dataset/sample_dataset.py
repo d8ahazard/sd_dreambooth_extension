@@ -40,17 +40,8 @@ class SampleDataset:
                 images = get_images(concept.instance_data_dir)
                 getter = FilenameTextGetter(shuffle_tags)
                 for image in images:
-                    base = getter.read_text(image)
-                    prompt = getter.create_text(
-                        sample_prompt,
-                        base,
-                        concept.instance_token,
-                        concept.class_token,
-                        False
-                    )
-                    if prompt == "[filewords]":
-                        print(f"Invalid prompt generation: {image}/{base}")
-                        continue
+                    file_text = getter.read_text(image)
+                    prompt = getter.create_text(sample_prompt, file_text, concept, False)
                     img = Image.open(image)
                     res = img.size
                     closest = closest_resolution(res[0], res[1], bucket_resos)

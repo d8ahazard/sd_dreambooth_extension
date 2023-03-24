@@ -161,9 +161,9 @@ class ImageBuilder:
             )
 
         if iterable is not None:
-            return mytqdm(iterable, **self._progress_bar_config)
+            return mytqdm(iterable, **self._progress_bar_config, position=0)
         elif total is not None:
-            return mytqdm(total=total, **self._progress_bar_config)
+            return mytqdm(total=total, **self._progress_bar_config, position=0)
         else:
             raise ValueError("Either `total` or `iterable` has to be defined.")
 

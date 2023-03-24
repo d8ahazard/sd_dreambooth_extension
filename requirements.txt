@@ -11,4 +11,4 @@ tensorflow==2.11.1; sys_platform != 'darwin' or platform_machine != 'arm64'
 tensorflow-macos==2.11.0; sys_platform == 'darwin' and platform_machine == 'arm64'
 tensorflow-metal; sys_platform == 'darwin' and platform_machine == 'arm64'
 tqdm~=4.64.1
-transformers==4.27.2
+transformers==4.26.1

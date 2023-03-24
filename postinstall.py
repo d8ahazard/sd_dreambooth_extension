@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 import sysconfig
-from typing import List
+from dataclasses import dataclass
 
 import git
 from packaging.version import Version
@@ -84,7 +84,6 @@ def install_requirements():
     # Necessary for the loop below
     import platform
     platform_machine = platform.machine()
-    from sys import platform as sys_platform
     lines = open(req_file, "r").read().split("\n")
 
     for line in lines:
@@ -108,9 +107,18 @@ def check_xformers():
         xformers_version = importlib_metadata.version("xformers")
         is_xformers_outdated = Version(xformers_version) < Version("0.0.17.dev")
         if is_xformers_outdated:
-            pip_install("--no-deps", "xformers==0.0.17.dev476")
-            pip_install("numpy")
-            pip_install("pyre-extensions")
+            has_torch = importlib.util.find_spec("torch") is not None
+            torch_ver = str(importlib_metadata.version("torch")) if has_torch else None
+            if Version(torch_ver) >= Version("2"):
+                pip_install("--no-deps", "https://github.com/ArrowM/xformers/releases/download/xformers-0.0.17"
+                                         "+b6be33a.d20230315-cp310-cu118/xformers-0.0.17+b6be33a.d20230315-cp310"
+                                         "-cp310-win_amd64.whl")
+                pip_install("numpy")
+                pip_install("pyre-extensions")
+            else:
+                pip_install("--no-deps", "xformers==0.0.17.dev476")
+                pip_install("numpy")
+                pip_install("pyre-extensions")
     except:
         pass
 
@@ -135,21 +143,30 @@ def check_bitsandbytes():
             pass
 
 
-def check_versions():
-    required_libs = {
-        "torch": ["min", "1.13.1+cu116"],
-        "torchvision": ["min", "0.14.1+cu116"],
-        "xformers": ["min", "0.0.17.dev"],
-        "accelerate": ["min", "0.17.1"],
-        "diffusers": ["min", "0.14.0"],
-        "transformers": ["min", "4.25.1"],
+@dataclass
+class Dependency:
+    module: str
+    version: str
+    version_comparison: str = "min"
+    required: bool = True
 
-        "bitsandbytes": ["exact", "0.35.4"],
-    }
+
+def check_versions():
+    dependencies = [
+        Dependency(module="torch", version="1.13.1+cu116"),
+        Dependency(module="torchvision", version="0.14.1+cu116"),
+        Dependency(module="xformers", version="0.0.17.dev", required=False),
+        Dependency(module="accelerate", version="0.17.1"),
+        Dependency(module="diffusers", version="0.14.0"),
+        Dependency(module="transformers", version="4.25.1"),
+        Dependency(module="bitsandbytes",  version="0.35.4", version_comparison="exact"),
+    ]
 
     launch_errors = []
 
-    for module, req in required_libs.items():
+    for dependency in dependencies:
+        module = dependency.module
+
         has_module = importlib.util.find_spec(module) is not None
         installed_ver = str(importlib_metadata.version(module)) if has_module else None
 
@@ -160,45 +177,64 @@ def check_versions():
             print(f"[!] {module} NOT installed.")
             continue
 
-        req_type, req_ver = req
-        if req_type == "min" and Version(installed_ver) < Version(req_ver):
-            print(f"[!] {module} version {installed_ver} installed.")
-            launch_errors.append(f"{module} is below the required {req_ver} version.")
+        required_version = dependency.version
+        required_comparison = dependency.version_comparison
 
-        elif req_type == "exact" and Version(installed_ver) != Version(req_ver):
+        if required_comparison == "min" and Version(installed_ver) < Version(required_version):
             print(f"[!] {module} version {installed_ver} installed.")
-            launch_errors.append(f"{module} is not the required {req_ver} version.")
+            if "xformers" == module:
+                print_xformers_error()
+            else:
+                launch_errors.append(f"{module} is below the required {required_version} version.")
+
+        elif required_comparison == "exact" and Version(installed_ver) != Version(required_version):
+            print(f"[!] {module} version {installed_ver} installed.")
+            launch_errors.append(f"{module} is not the required {required_version} version.")
 
         else:
             print(f"[+] {module} version {installed_ver} installed.")
 
     try:
         if len(launch_errors):
-            print()
-            print("#######################################################################################################")
-            print("#                                       LIBRARY ISSUE DETECTED                                        #")
-            print("#######################################################################################################")
-            print("#")
-            print("# " + "\n# ".join(launch_errors))
-            print("#")
-            print("# Dreambooth may not work properly.")
-            print("#")
-            print("# TROUBLESHOOTING")
-            print("# 1. Fully restart your project (not just the webpage)")
-            print("# 2. Update your A1111 project and extensions")
-            print("# 3. Dreambooth requirements should have installed automatically, but you can manually install them")
-            print("#    by running the following 4 commands from the A1111 project root:")
-            print("cd venv/Scripts")
-            print("activate")
-            print("cd ../..")
-            print("pip install -r ./extensions/sd_dreambooth_extension/requirements.txt")
-            print("#######################################################################################################")
-
+            print_launch_errors(launch_errors)
             os.environ["ERRORS"] = json.dumps(launch_errors)
         else:
             os.environ["ERRORS"] = ""
     except Exception as e:
         print(e)
+
+
+def print_xformers_error():
+    print()
+    print("#######################################################################################################")
+    print("#                                       XFORMERS ISSUE DETECTED                                       #")
+    print("#######################################################################################################")
+    print("#")
+    print("# Dreambooth Extension was not able to update your xformers to a compatible version.")
+    print("# xformers will not be available for Dreambooth.")
+    print("#")
+    print("#######################################################################################################")
+
+def print_launch_errors(launch_errors):
+    print()
+    print("#######################################################################################################")
+    print("#                                       LIBRARY ISSUE DETECTED                                        #")
+    print("#######################################################################################################")
+    print("#")
+    print("# " + "\n# ".join(launch_errors))
+    print("#")
+    print("# Dreambooth may not work properly.")
+    print("#")
+    print("# TROUBLESHOOTING")
+    print("# 1. Fully restart your project (not just the webpage)")
+    print("# 2. Update your A1111 project and extensions")
+    print("# 3. Dreambooth requirements should have installed automatically, but you can manually install them")
+    print("#    by running the following 4 commands from the A1111 project root:")
+    print("cd venv/Scripts")
+    print("activate")
+    print("cd ../..")
+    print("pip install -r ./extensions/sd_dreambooth_extension/requirements.txt")
+    print("#######################################################################################################")
 
 
 def check_torch_unsafe_load():

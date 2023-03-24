@@ -250,7 +250,7 @@ def check_weight_type(k: str) -> str:
     return "other"
 
 
-def split_dict(state_dict):
+def split_dict(state_dict, pbar: mytqdm = None):
     ok = {}
     json_dict = {}
 
@@ -263,12 +263,16 @@ def split_dict(state_dict):
             if isinstance(t, str):
                 json_dict[wk] = t
             if isinstance(t, Dict):
-                moar_ok, moar_json = split_dict(t)
+                moar_ok, moar_json = split_dict(t, pbar)
                 ok.update(moar_ok)
                 json_dict.update(moar_json)
-
-    for k, v in mytqdm(state_dict.items()):
-        _hf(k, v)
+    if pbar:
+        for k, v in state_dict.items():
+            _hf(k, v)
+        pbar.update()
+    else:
+        for k, v in mytqdm(state_dict.items(), desc="Compiling checkpoint", position=1):
+            _hf(k, v)
 
     return ok, json_dict
 
@@ -351,7 +355,7 @@ def copy_diffusion_model(model_name: str, dst_dir: str):
 
 
 def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_models: bool = True, log: bool = True,
-                       snap_rev: str = ""):
+                       snap_rev: str = "", pbar: mytqdm = None):
     """
 
     @param model_name: The model name to compile
@@ -359,6 +363,7 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
     @param lora_file_name: The path to a lora pt file to merge with the unet. Auto set during training.
     @param log: Whether to print messages to console/UI.
     @param snap_rev: The revision of snapshot to load from
+    @param pbar: progress bar
     @return: status: What happened, path: Checkpoint path
     """
     unload_system_models()
@@ -499,7 +504,7 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
         state_dict = {"db_global_step": config.revision, "db_epoch": config.epoch, "state_dict": state_dict}
         printi(f"Saving checkpoint to {checkpoint_path}...", log=log)
         if save_safetensors:
-            safe_dict, json_dict = split_dict(state_dict)
+            safe_dict, json_dict = split_dict(state_dict, pbar)
             safetensors.torch.save_file(safe_dict, checkpoint_path, json_dict)
         else:
             torch.save(state_dict, checkpoint_path)

@@ -92,9 +92,17 @@ def is_image(path: str, feats=None):
     return is_img
 
 
-def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str, images: List[str],
-                 bucket_resos: List[Tuple[int, int]],
-                 concept_index: int, is_class: bool, pbar: mytqdm) -> Dict[Tuple[int, int], PromptData]:
+def sort_prompts(
+        concept: Concept,
+        text_getter: FilenameTextGetter,
+        img_dir: str,
+        images: List[str],
+        bucket_resos: List[Tuple[int, int]],
+        concept_index: int,
+        is_class: bool,
+        pbar: mytqdm,
+        verbatim=False
+) -> Dict[Tuple[int, int], PromptData]:
     prompts = {}
     max_dim = 0
     for (w, h) in bucket_resos:
@@ -106,10 +114,14 @@ def sort_prompts(concept: Concept, text_getter: FilenameTextGetter, img_dir: str
     for img in images:
         # Get prompt
         pbar.set_description(f"Pre-processing images: {dirr}")
-        text = text_getter.read_text(img)
-        prompt = text_getter.create_text(
-            concept.class_prompt if is_class else concept.instance_prompt,
-            text, concept.instance_token, concept.class_token, is_class)
+        file_text = text_getter.read_text(img)
+        if not verbatim:
+            prompt = text_getter.create_text(
+                concept.class_prompt if is_class else concept.instance_prompt,
+                file_text,
+                concept,
+                is_class
+            )
         w, h = get_dim(img, max_dim)
         reso = closest_resolution(w, h, bucket_resos)
         prompt_list = prompts[reso] if reso in prompts else []
@@ -155,7 +167,9 @@ class FilenameTextGetter:
         filename_text = re.sub(r'\\', "", filename_text)  # work with \(franchies\)
         return filename_text
 
-    def create_text(self, prompt, file_text, instance_token, class_token, is_class=True):
+    def create_text(self, prompt, file_text, concept, is_class=True):
+        instance_token = concept.instance_token
+        class_token = concept.class_token
         output = prompt.replace("[filewords]", file_text)
 
         if instance_token and class_token:
@@ -236,8 +250,8 @@ def make_bucket_resolutions(max_resolution, divisible=8) -> List[Tuple[int, int]
     resos = set()
 
     for ar in aspect_ratios:
-        w = int(max_resolution * math.sqrt(ar[0]/ar[1]) // divisible) * divisible
-        h = int(max_resolution * math.sqrt(ar[1]/ar[0]) // divisible) * divisible
+        w = int(max_resolution * math.sqrt(ar[0] / ar[1]) // divisible) * divisible
+        h = int(max_resolution * math.sqrt(ar[1] / ar[0]) // divisible) * divisible
 
         resos.add((w, h))
         resos.add((h, w))
@@ -402,9 +416,8 @@ def load_image_directory(db_dir, concept: Concept, is_class: bool = True) -> Lis
     captions = []
     text_getter = FilenameTextGetter()
     for img_path in img_paths:
-        cap_for_img = text_getter.read_text(img_path)
-        final_caption = text_getter.create_text(concept.instance_prompt, cap_for_img, concept.instance_token,
-                                                concept.class_token, is_class)
+        file_text = text_getter.read_text(img_path)
+        final_caption = text_getter.create_text(concept.instance_prompt, file_text, concept, is_class)
         captions.append(final_caption)
 
     return list(zip(img_paths, captions))
@@ -440,13 +453,13 @@ def open_and_trim(image_path: str, reso: Tuple[int, int], return_pil: bool = Fal
 
 def db_save_image(image: Image, prompt_data: PromptData = None, save_txt: bool = True, custom_name: str = None):
     image_base = hashlib.sha1(image.tobytes()).hexdigest()
-        
+
     file_name = image_base
     if custom_name is not None:
         file_name = custom_name
 
     file_name = re.sub(r"[^\w \-_.]", "", file_name)
-    
+
     image_filename = os.path.join(prompt_data.out_dir, f"{file_name}.tmp")
     pnginfo_data = PngImagePlugin.PngInfo()
     if prompt_data is not None:

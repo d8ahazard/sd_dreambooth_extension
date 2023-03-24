@@ -541,7 +541,7 @@ def on_ui_tabs():
                             )
                             db_offset_noise = gr.Slider(
                                 label="Offset Noise",
-                                minimum=0,
+                                minimum=-1,
                                 maximum=1,
                                 step=0.01,
                                 value=0,
