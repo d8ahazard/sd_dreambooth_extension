@@ -6,7 +6,6 @@ import shutil
 import subprocess
 import sys
 import sysconfig
-import traceback
 from dataclasses import dataclass
 
 import git
@@ -34,15 +33,12 @@ def actual_install():
     except:
         revision = ""
 
+    print("If submitting an issue on github, please provide the full startup log for debugging purposes.")
     print("")
     print("Initializing Dreambooth")
     print(f"Dreambooth revision: {revision}")
-    print("If submitting an issue on github, please provide the full startup log for debugging purposes.")
-    print("")
 
     install_requirements()
-
-    check_torch()
 
     check_xformers()
 
@@ -54,40 +50,13 @@ def actual_install():
 
 
 def pip_install(*args):
-    try:
-        output = subprocess.check_output(
-            [sys.executable, "-m", "pip", "install"] + list(args),
-            stderr=subprocess.STDOUT,
+    output = subprocess.check_output(
+        [sys.executable, "-m", "pip", "install"] + list(args),
+        stderr=subprocess.STDOUT,
         )
-        for line in output.decode().split("\n"):
-            if "Successfully installed" in line:
-                print(line)
-    except subprocess.CalledProcessError as grepexc:
-        print("pip_install Exception:")
-        print("[Args]========================")
-        print(list(args))
-        print("[Message]=======================")
-        try:
-            error_msg = grepexc.stdout.decode()
-            error_msg = [line for line in error_msg.split('\n') if line.strip()]
-            print(error_msg)
-        except Exception as e:
-            print(e)
-        print("===============================")
-        try:
-            error_msg = grepexc.stderr.decode()
-            error_msg = [line for line in error_msg.split('\n') if line.strip()]
-            print(error_msg)
-        except Exception as e:
-            print(e)
-        print("===============================")
-        try:
-            error_msg = grepexc.output.decode()
-            error_msg = [line for line in error_msg.split('\n') if line.strip()]
-            print(error_msg)
-        except Exception as e:
-            print(e)
-        print("===============================")
+    for line in output.decode().split("\n"):
+        if "Successfully installed" in line:
+            print(line)
 
 
 def install_requirements():
@@ -98,36 +67,25 @@ def install_requirements():
     if dreambooth_skip_install or req_file == req_file_startup_arg:
         return
 
-    pip_install("-r", req_file)
+    has_diffusers = importlib.util.find_spec("diffusers") is not None
+    has_tdqm = importlib.util.find_spec("tqdm") is not None
+    transformers_version = importlib_metadata.version("transformers")
 
+    try:
+        pip_install("-r", req_file)
 
-def check_torch():
-    torch2_install = os.environ.get("TORCH2", False)
-    if torch2_install:
-        # torch
-        try:
-            torch_version = importlib_metadata.version("torch")
-            torch_outdated = Version(torch_version) < Version("2")
-            if torch_outdated:
-                pip_install("--pre", "--force-reinstall", "torch", "--index-url", "https://download.pytorch.org/whl/cu118")
-        except:
-            pass
-        # torchvision
-        try:
-            torch_vision_version = importlib_metadata.version("torchvision")
-            torch_outdated = Version(torch_vision_version) < Version("0.15")
-            if torch_outdated:
-                pip_install("--pre", "--force-reinstall", "torchvision", "--index-url", "https://download.pytorch.org/whl/cu118")
-        except:
-            pass
-        # xformers
-        try:
-            xformers_version = importlib_metadata.version("xformers")
-            xformers_outdated = Version(xformers_version) < Version("0.0.17.dev")
-            if xformers_outdated:
-                pip_install("--pre", "--force-reinstall", "--no-deps", "xformers")
-        except:
-            pass
+        if has_diffusers and has_tdqm and Version(transformers_version) < Version("4.26.1"):
+            print()
+            print("Does your project take forever to startup?")
+            print("Repetitive dependency installation may be the reason.")
+            print("Automatic1111's base project sets strict requirements on outdated dependencies.")
+            print("If an extension is using a newer version, the dependency is uninstalled and reinstalled twice every startup.")
+            print()
+    except subprocess.CalledProcessError as grepexc:
+        error_msg = grepexc.stdout.decode()
+        if "Access is denied" in error_msg:
+            print_access_denied_error()
+        raise grepexc
 
 
 def check_xformers():
@@ -138,12 +96,16 @@ def check_xformers():
         xformers_version = importlib_metadata.version("xformers")
         xformers_outdated = Version(xformers_version) < Version("0.0.17.dev")
         if xformers_outdated:
-            torch_version = importlib_metadata.version("torch")
-            is_torch_1 = Version(torch_version) < Version("2")
-            if is_torch_1:
-                pip_install("xformers==0.0.17.dev476")
-            else:
-                pip_install("xformers", "--pre")
+            try:
+                torch_version = importlib_metadata.version("torch")
+                is_torch_1 = Version(torch_version) < Version("2")
+                if is_torch_1:
+                    pip_install("xformers==0.0.17.dev476")
+                else:
+                    pip_install("xformers", "--pre")
+            except subprocess.CalledProcessError as grepexc:
+                error_msg = grepexc.stdout.decode()
+                print_xformers_error(error_msg)
     except:
         pass
 
@@ -206,9 +168,7 @@ def check_versions():
         required_comparison = dependency.version_comparison
 
         if required_comparison == "min" and Version(installed_ver) < Version(required_version):
-            if "xformers" == module:
-                print_xformers_error()
-            else:
+            if dependency.required:
                 launch_errors.append(f"{module} is below the required {required_version} version.")
             print(f"[!] {module} version {installed_ver} installed.")
 
@@ -229,14 +189,48 @@ def check_versions():
         print(e)
 
 
-def print_xformers_error():
+def print_access_denied_error():
+    print()
+    print("#######################################################################################################")
+    print("#                                       INSTALL ISSUE DETECTED                                        #")
+    print("#######################################################################################################")
+    print("#")
+    print("# Dreambooth failed to install a required library.")
+    print("# This may be due to an issue in the base project, which already has a fix waiting to be merged (#8797).")
+    print("# If you would like to locally install the fix on your own:")
+    if os.name == "nt":
+        print("# 1. Open your A1111 project root in file explorer (you probably have already done this)")
+        print("# 2. Click on the blank space in the file explorer address bar. Replace the contents with \"cmd\" and hit enter")
+        print("# 3. Paste the following the following 3 commands:")
+    else:
+        print("# 1. cd to the A1111 project root and run the following 3 commands:")
+
+    print("git remote add ArrowM-master https://github.com/ArrowM/stable-diffusion-webui")
+    print("git fetch ArrowM-master")
+    print("git cherry-pick -m 00bd271faffbdfd2988b6cfc9117c67681ee14b7")
+
+    if os.name == "nt":
+        print("# 4. Restart your project")
+    else:
+        print("# 2. Restart your project")
+    print("#######################################################################################################")
+
+
+def print_xformers_error(err):
+    torch_ver = importlib_metadata.version("torch")
     print()
     print("#######################################################################################################")
     print("#                                       XFORMERS ISSUE DETECTED                                       #")
     print("#######################################################################################################")
     print("#")
-    print("# Dreambooth Extension was not able to update your xformers to a compatible version.")
+    print(f"# Dreambooth could not find a compatible version of xformers (>= 0.0.17.dev built with torch {torch_ver})")
     print("# xformers will not be available for Dreambooth.")
+    print("#")
+    print("# Exception:")
+    for line in err.split('\n'):
+        line = line.strip()
+        if line:
+            print(line)
     print("#")
     print("#######################################################################################################")
 
