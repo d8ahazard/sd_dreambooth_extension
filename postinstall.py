@@ -224,7 +224,7 @@ def print_xformers_error(err):
     print("#######################################################################################################")
     print("#")
     print(f"# Dreambooth could not find a compatible version of xformers (>= 0.0.17.dev built with torch {torch_ver})")
-    print("# xformers will not be available for Dreambooth.")
+    print("# xformers will not be available for Dreambooth. Consider upgrading to Torch 2.")
     print("#")
     print("# Exception:")
     for line in err.split('\n'):
