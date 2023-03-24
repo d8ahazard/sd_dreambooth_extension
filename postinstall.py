@@ -110,15 +110,9 @@ def check_xformers():
             has_torch = importlib.util.find_spec("torch") is not None
             torch_ver = str(importlib_metadata.version("torch")) if has_torch else None
             if Version(torch_ver) >= Version("2"):
-                pip_install("--no-deps", "https://github.com/ArrowM/xformers/releases/download/xformers-0.0.17"
-                                         "+b6be33a.d20230315-cp310-cu118/xformers-0.0.17+b6be33a.d20230315-cp310"
-                                         "-cp310-win_amd64.whl")
-                pip_install("numpy")
-                pip_install("pyre-extensions")
+                pip_install("xformers", "--pre")
             else:
-                pip_install("--no-deps", "xformers==0.0.17.dev476")
-                pip_install("numpy")
-                pip_install("pyre-extensions")
+                pip_install("xformers==0.0.17.dev476")
     except:
         pass
 
