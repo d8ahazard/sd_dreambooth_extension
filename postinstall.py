@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import sysconfig
+import traceback
 from dataclasses import dataclass
 
 import git
@@ -33,22 +34,15 @@ def actual_install():
     except:
         revision = ""
 
-    try:
-        app_repo = git.Repo(os.path.join(base_dir, "../.."))
-        app_revision = app_repo.rev_parse("HEAD")
-    except:
-        app_revision = ""
-
     print("")
     print("Initializing Dreambooth")
-    print("If submitting an issue on github, please provide the below text for debugging purposes:")
-    print("")
-    print(f"Python revision: {sys.version}")
     print(f"Dreambooth revision: {revision}")
-    print(f"SD-WebUI revision: {app_revision}")
+    print("If submitting an issue on github, please provide the full startup log for debugging purposes.")
     print("")
 
     install_requirements()
+
+    check_torch()
 
     check_xformers()
 
@@ -62,15 +56,38 @@ def actual_install():
 def pip_install(*args):
     try:
         output = subprocess.check_output(
-                [sys.executable, "-m", "pip", "install"] + list(args),
-                stderr=subprocess.STDOUT,
-            )
+            [sys.executable, "-m", "pip", "install"] + list(args),
+            stderr=subprocess.STDOUT,
+        )
         for line in output.decode().split("\n"):
             if "Successfully installed" in line:
                 print(line)
     except subprocess.CalledProcessError as grepexc:
-        error_msg = grepexc.output.decode()
-        print(error_msg)
+        print("pip_install Exception:")
+        print("[Args]========================")
+        print(list(args))
+        print("[Message]=======================")
+        try:
+            error_msg = grepexc.stdout.decode()
+            error_msg = [line for line in error_msg.split('\n') if line.strip()]
+            print(error_msg)
+        except Exception as e:
+            print(e)
+        print("===============================")
+        try:
+            error_msg = grepexc.output.decode()
+            error_msg = [line for line in error_msg.split('\n') if line.strip()]
+            print(error_msg)
+        except Exception as e:
+            print(e)
+        print("===============================")
+        try:
+            error_msg = grepexc.output.decode()
+            error_msg = [line for line in error_msg.split('\n') if line.strip()]
+            print(error_msg)
+        except Exception as e:
+            print(e)
+        print("===============================")
 
 
 def install_requirements():
@@ -81,22 +98,36 @@ def install_requirements():
     if dreambooth_skip_install or req_file == req_file_startup_arg:
         return
 
-    # Necessary for the loop below
-    import platform
-    platform_machine = platform.machine()
-    lines = open(req_file, "r").read().split("\n")
+    pip_install("-r", req_file)
 
-    for line in lines:
-        if ";" in line:
-            [lib, cond] = line.split(";")
-            if not eval(cond):
-                continue
-        else:
-            lib = line
 
-        pip_install(lib)
-
-    print()
+def check_torch():
+    torch2_install = os.environ.get("TORCH2", False)
+    if torch2_install:
+        # torch
+        try:
+            torch_version = importlib_metadata.version("torch")
+            torch_outdated = Version(torch_version) < Version("2")
+            if torch_outdated:
+                pip_install("--pre", "--force-reinstall", "torch", "--index-url", "https://download.pytorch.org/whl/cu118")
+        except:
+            pass
+        # torchvision
+        try:
+            torch_vision_version = importlib_metadata.version("torchvision")
+            torch_outdated = Version(torch_vision_version) < Version("0.15")
+            if torch_outdated:
+                pip_install("--pre", "--force-reinstall", "torchvision", "--index-url", "https://download.pytorch.org/whl/cu118")
+        except:
+            pass
+        # xformers
+        try:
+            xformers_version = importlib_metadata.version("xformers")
+            xformers_outdated = Version(xformers_version) < Version("0.0.17.dev")
+            if xformers_outdated:
+                pip_install("--pre", "--force-reinstall", "--no-deps", "xformers")
+        except:
+            pass
 
 
 def check_xformers():
@@ -105,14 +136,14 @@ def check_xformers():
     """
     try:
         xformers_version = importlib_metadata.version("xformers")
-        is_xformers_outdated = Version(xformers_version) < Version("0.0.17.dev")
-        if is_xformers_outdated:
-            has_torch = importlib.util.find_spec("torch") is not None
-            torch_ver = str(importlib_metadata.version("torch")) if has_torch else None
-            if Version(torch_ver) >= Version("2"):
-                pip_install("xformers", "--pre")
-            else:
+        xformers_outdated = Version(xformers_version) < Version("0.0.17.dev")
+        if xformers_outdated:
+            torch_version = importlib_metadata.version("torch")
+            is_torch_1 = Version(torch_version) < Version("2")
+            if is_torch_1:
                 pip_install("xformers==0.0.17.dev476")
+            else:
+                pip_install("xformers", "--pre")
     except:
         pass
 
@@ -147,9 +178,9 @@ class Dependency:
 
 def check_versions():
     dependencies = [
+        Dependency(module="xformers", version="0.0.17.dev", required=False),
         Dependency(module="torch", version="1.13.1+cu116"),
         Dependency(module="torchvision", version="0.14.1+cu116"),
-        Dependency(module="xformers", version="0.0.17.dev", required=False),
         Dependency(module="accelerate", version="0.17.1"),
         Dependency(module="diffusers", version="0.14.0"),
         Dependency(module="transformers", version="4.25.1"),
@@ -175,15 +206,15 @@ def check_versions():
         required_comparison = dependency.version_comparison
 
         if required_comparison == "min" and Version(installed_ver) < Version(required_version):
-            print(f"[!] {module} version {installed_ver} installed.")
             if "xformers" == module:
                 print_xformers_error()
             else:
                 launch_errors.append(f"{module} is below the required {required_version} version.")
+            print(f"[!] {module} version {installed_ver} installed.")
 
         elif required_comparison == "exact" and Version(installed_ver) != Version(required_version):
-            print(f"[!] {module} version {installed_ver} installed.")
             launch_errors.append(f"{module} is not the required {required_version} version.")
+            print(f"[!] {module} version {installed_ver} installed.")
 
         else:
             print(f"[+] {module} version {installed_ver} installed.")
@@ -239,57 +270,3 @@ def check_torch_unsafe_load():
         torch.load = safe.unsafe_torch_load
     except:
         pass
-
-
-# def install_torch(torch_command, use_torch2):
-#     try:
-#         install_cmd = f""{python}" -m {torch_command}"
-#         print(f"Torch install command: {install_cmd}")
-#         run(install_cmd, f"Installing torch{"2" if use_torch2 else ""} and torchvision.", "Couldn"t install torch.")
-#         has_torch = importlib.util.find_spec("torch") is not None
-#         has_torch_vision = importlib.util.find_spec("torchvision") is not None
-#         if use_torch2:
-#             run(f"{python} -m pip install sympy==1.11.1")
-#         torch_installed_ver = str(importlib_metadata.version("torch")) if has_torch else None
-#         torch_vision_check = str(importlib_metadata.version("torchvision")) if has_torch_vision else None
-#         return torch_installed_ver, torch_vision_check
-#     except Exception as e:
-#         print(f"Exception upgrading torch/torchvision: {e}")
-#         return None, None
-#
-# def set_torch2_paths():
-#     # Get the URL for the latest release
-#     url = "https://github.com/ArrowM/xformers/releases/latest"
-#     response = requests.get(url)
-#     resolved_url = response.url
-#     last_portion = resolved_url.split("/")[-1]
-#     d_index = last_portion.index(".d")
-#     revisions = last_portion[d_index + 2:]
-#     revisions = revisions.split("-")
-#     if len(revisions) != 3:
-#         print("Unable to parse revision information.")
-#         return None
-#     torch_version = revisions[0]
-#     python_version = revisions[1]
-#     cuda_version = revisions[2]
-#     xformers_ver = last_portion.replace(f"-{python_version}-{cuda_version}", "")
-#     os_string = "win_amd64" if os.name == "nt" else "linux_x86_64"
-#     torch_ver = f"2.0.0.dev{torch_version}+{cuda_version}"
-#     torch_vis_ver = f"0.15.0.dev{torch_version}+{cuda_version}"
-#     xformers_url = f"{resolved_url}/{xformers_ver}-{python_version}-{python_version}-{os_string}.whl".replace(
-#         "/tag/", "/download/")
-#     torch2_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}/torch-2.0.0.dev{torch_version}%2B{cuda_version}-{python_version}-{python_version}-{os_string}.whl"
-#     torchvision2_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}/torchvision-0.15.0.dev{torch_version}%2B{cuda_version}-{python_version}-{python_version}-{os_string}.whl"
-#     triton_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}/pytorch_triton-2.0.0%2B0d7e753227-{python_version}-{python_version}-linux_x86_64.whl"
-#     xformers_ver = xformers_ver.replace("xformers-", "")
-#     print(f"Xformers version: {xformers_ver}")
-#     print(f"Torch version: {torch_ver}")
-#     print(f"Torch vision version: {torch_vis_ver}")
-#     print(f"xu: {xformers_url}")
-#     print(f"tu: {torch2_url}")
-#     print(f"tvu: {torchvision2_url}")
-#     print(f"tru: {triton_url}")
-#     torch_final = f"{torch2_url} {torchvision2_url}"
-#     if os.name != "nt":
-#         torch_final += f" {triton_url}"
-#     return xformers_ver, torch_ver, torch_vis_ver, xformers_url, torch_final
