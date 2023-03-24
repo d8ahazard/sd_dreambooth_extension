@@ -96,7 +96,7 @@ def xformers_check():
                 raise ValueError("Xformers version must be >= 0.0.17.dev")
         has_xformers = True
     except Exception as e:
-        print(f"Exception importing xformers: {e}")
+        # print(f"Exception importing xformers: {e}")
         has_xformers = False
 
     return has_xformers
