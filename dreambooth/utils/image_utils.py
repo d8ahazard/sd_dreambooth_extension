@@ -197,14 +197,14 @@ class FilenameTextGetter:
                             output = extended_class_regex.sub(class_token, output)
 
                         # Now, replace class with instance + class tokens
-                        output = class_regex.sub(f"{instance_token} {class_token}", output)
+                        output = class_regex.sub(f"{instance_token}", output)
                 else:
                     # If class is not in the string, check if instance is
                     if instance_regex.search(output):
-                        output = instance_regex.sub(f"{instance_token} {class_token}", output)
+                        output = instance_regex.sub(f"{instance_token}", output)
                     else:
                         # Description only, insert both at the front?
-                        output = f"{instance_token} {class_token}, {output}"
+                        output = f"{instance_token}, {output}"
 
         elif instance_token and not is_class:
             output = f"{instance_token}, {output}"
@@ -213,6 +213,7 @@ class FilenameTextGetter:
             output = f"{class_token}, {output}"
 
         output = re.sub(r"\s+", " ", output)
+        output = re.sub(r"\\", "", output)
 
         if self.shuffle_tags:
             output = shuffle_tags(output)
