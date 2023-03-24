@@ -75,7 +75,7 @@ def pip_install(*args):
             print(e)
         print("===============================")
         try:
-            error_msg = grepexc.output.decode()
+            error_msg = grepexc.stderr.decode()
             error_msg = [line for line in error_msg.split('\n') if line.strip()]
             print(error_msg)
         except Exception as e:
