@@ -906,7 +906,7 @@ def download_model(db_config: DreamboothConfig, token, extract_ema: bool = False
 
     huggingface_hub.utils.tqdm.tqdm = mytqdm
     out_model = None
-    for repo_file in mytqdm(files_to_fetch, desc=f"Fetching {len(files_to_fetch)} files"):
+    for repo_file in mytqdm(files_to_fetch, desc=f"Fetching {len(files_to_fetch)} files", position=1):
         if not os.path.exists(repo_file):
             out = hf_hub_download(
                 hub_url,

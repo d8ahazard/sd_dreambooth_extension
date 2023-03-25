@@ -501,7 +501,7 @@ def generate_samples(
                 f"Generating sample image for model {config.model_name}..."
             )
 
-            pbar = mytqdm("Generating samples")
+            pbar = mytqdm(range(num_samples), desc="Generating samples", position=0)
             pbar.reset(num_samples * steps)
             sample_index = 0
             while len(images) < num_samples and not shared.status.interrupted:
@@ -858,7 +858,7 @@ def start_crop(
             max_dim = h
     _, dirr = os.path.split(src_dir)
     shared.status.begin()
-    pbar = mytqdm(src_images, desc=f"Sorting images in directory: {dirr}")
+    pbar = mytqdm(src_images, desc=f"Sorting images in directory: {dirr}", position=0)
 
     out_counts = {}
     out_paths = {}
@@ -1071,7 +1071,7 @@ def debug_buckets(model_name, num_epochs, batch_size):
     print(
         f"Simulating training for {test_epochs} epochs, batch size of {batch_size}, total steps {sim_train_steps}."
     )
-    for epoch in mytqdm(range(test_epochs), desc="Simulating training."):
+    for epoch in mytqdm(range(test_epochs), desc="Simulating training.", position=0):
         for step, batch in enumerate(dataloader):
             image_names = batch["images"]
             captions = batch["input_ids"]

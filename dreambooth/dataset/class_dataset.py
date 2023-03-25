@@ -52,7 +52,7 @@ class ClassDataset(Dataset):
 
         concept_idx = 0
         status.textinfo = "Sorting images..."
-        pbar = mytqdm(desc="Pre-processing images.")
+        pbar = mytqdm(desc="Pre-processing images.", position=0)
         pbar.reset(total_images)
 
         for concept in concepts:
@@ -75,20 +75,16 @@ class ClassDataset(Dataset):
                 continue
 
             required_prompt_buckets = sort_prompts(concept, text_getter, class_dir, instance_images[concept_idx], bucket_resos, concept_idx, True, pbar)
-            existing_prompt_buckets = sort_prompts(concept, text_getter, class_dir, class_images[concept_idx], bucket_resos, concept_idx, True, pbar)
+            existing_prompt_buckets = sort_prompts(concept, text_getter, class_dir, class_images[concept_idx], bucket_resos, concept_idx, True, pbar, True)
 
             # Iterate over each resolution of images, per concept
             for res, required_prompt_datas in required_prompt_buckets.items():
                 classes_per_bucket = len(required_prompt_datas) * concept.num_class_images_per
-                # Don't do anything else if we don't need class images
-
-                if concept.num_class_images_per == 0 or classes_per_bucket == 0:
+                if classes_per_bucket == 0:
                     continue
 
+                new_prompts_datas = []
                 existing_prompt_datas = existing_prompt_buckets[res] if res in existing_prompt_buckets.keys() else []
-
-                # We may not need this, so initialize it here
-                new_prompts = []
 
                 # If we have enough or more classes already, randomly select the required amount
                 if len(existing_prompt_datas) >= classes_per_bucket:
@@ -99,49 +95,31 @@ class ClassDataset(Dataset):
                     existing_prompts = [img.prompt for img in existing_prompt_datas]
                     required_prompts = [img.prompt for img in required_prompt_datas]
 
-                    if "[filewords]" in concept.class_prompt:
-                        for prompt in required_prompts:
-                            sample_prompt = text_getter.create_text(concept.class_prompt, prompt, concept.instance_token, concept.class_token, True)
-                            num_to_gen = concept.num_class_images_per - existing_prompts.count(sample_prompt)
-                            for _ in range(num_to_gen):
-                                pd = PromptData(
-                                    prompt=sample_prompt,
-                                    negative_prompt=concept.class_negative_prompt,
-                                    instance_token=concept.instance_token,
-                                    class_token=concept.class_token,
-                                    steps=concept.class_infer_steps,
-                                    scale=concept.class_guidance_scale,
-                                    out_dir=class_dir,
-                                    seed=-1,
-                                    concept_index=concept_idx,
-                                    resolution=res)
-                                new_prompts.append(pd)
-                    else:
-                        sample_prompt = text_getter.create_text(concept.class_prompt, "", concept.instance_token, concept.class_token, True)
-                        num_to_gen = concept.num_class_images_per * len(required_prompt_datas) - existing_prompts.count(sample_prompt)
+                    for prompt in required_prompts:
+                        num_to_gen = concept.num_class_images_per * required_prompts.count(prompt) - existing_prompts.count(prompt)
                         for _ in range(num_to_gen):
                             pd = PromptData(
-                                prompt=sample_prompt,
+                                prompt=prompt,
                                 negative_prompt=concept.class_negative_prompt,
                                 instance_token=concept.instance_token,
                                 class_token=concept.class_token,
                                 steps=concept.class_infer_steps,
                                 scale=concept.class_guidance_scale,
                                 out_dir=class_dir,
-                                seed=-1,
                                 concept_index=concept_idx,
                                 resolution=res)
-                            new_prompts.append(pd)
+                            existing_prompts.append(prompt)
+                            new_prompts_datas.append(pd)
 
                 # Extend class prompts by the proper amount
                 self.class_prompts.extend(existing_prompt_datas)
 
-                if len(new_prompts):
-                    self.required_prompts += len(new_prompts)
+                if len(new_prompts_datas):
+                    self.required_prompts += len(new_prompts_datas)
                     if res in self.new_prompts:
-                        self.new_prompts[res].extend(new_prompts)
+                        self.new_prompts[res].extend(new_prompts_datas)
                     else:
-                        self.new_prompts[res] = new_prompts
+                        self.new_prompts[res] = new_prompts_datas
             concept_idx += 1
         pbar.reset(0)
         if self.required_prompts > 0:
