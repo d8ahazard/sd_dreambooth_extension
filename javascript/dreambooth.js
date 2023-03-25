@@ -560,6 +560,7 @@ function checkPrompts() {
 let progressTimeout = null;
 let galleryObserver = null;
 let gallerySet = false;
+let mutationObserver = null;
 
 function db_progressbar() {
     // gradio 3.8's enlightened approach allows them to create two nested div elements inside each other with same id
@@ -605,7 +606,7 @@ function db_progressbar() {
     }
 
     if (progressbar != null) {
-        let mutationObserver = new MutationObserver(function (m) {
+        mutationObserver = mutationObserver || new MutationObserver(function (m) {
             if (progressTimeout) {
                 return;
             }
@@ -667,7 +668,7 @@ function checkDbGallery() {
         let prevSelectedIndex = selected_gallery_index();
 
         // Make things clickable?
-        galleryObserver = new MutationObserver(function () {
+        galleryObserver = galleryObserver || new MutationObserver(function () {
             let galleryButtons = gradioApp().querySelectorAll('#db_gallery .gallery-item');
             let galleryBtnSelected = gradioApp().querySelector('#db_gallery .gallery-item.\\!ring-2');
             let gallery = gradioApp().getElementById("db_gallery");
