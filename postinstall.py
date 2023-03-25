@@ -83,8 +83,7 @@ def install_requirements():
             print()
     except subprocess.CalledProcessError as grepexc:
         error_msg = grepexc.stdout.decode()
-        if "Access is denied" in error_msg:
-            print_access_denied_error()
+        print_requirement_installation_error(error_msg)
         raise grepexc
 
 
@@ -105,7 +104,7 @@ def check_xformers():
                     pip_install("xformers", "--pre")
             except subprocess.CalledProcessError as grepexc:
                 error_msg = grepexc.stdout.decode()
-                print_xformers_error(error_msg)
+                print_xformers_installation_error(error_msg)
     except:
         pass
 
@@ -189,34 +188,15 @@ def check_versions():
         print(e)
 
 
-def print_access_denied_error():
-    print()
-    print("#######################################################################################################")
-    print("#                                       INSTALL ISSUE DETECTED                                        #")
-    print("#######################################################################################################")
-    print("#")
-    print("# Dreambooth failed to install a required library.")
-    print("# This may be due to an issue in the base project, which already has a fix waiting to be merged (#8797).")
-    print("# If you would like to locally install the fix on your own:")
-    if os.name == "nt":
-        print("# 1. Open your A1111 project root in file explorer (you probably have already done this)")
-        print("# 2. Click on the blank space in the file explorer address bar. Replace the contents with \"cmd\" and hit enter")
-        print("# 3. Paste the following the following 3 commands:")
-    else:
-        print("# 1. cd to the A1111 project root and run the following 3 commands:")
-
-    print("git remote add ArrowM-master https://github.com/ArrowM/stable-diffusion-webui")
-    print("git fetch ArrowM-master")
-    print("git cherry-pick -m 00bd271faffbdfd2988b6cfc9117c67681ee14b7")
-
-    if os.name == "nt":
-        print("# 4. Restart your project")
-    else:
-        print("# 2. Restart your project")
-    print("#######################################################################################################")
+def print_requirement_installation_error(err):
+    print("# Requirement installation exception:")
+    for line in err.split('\n'):
+        line = line.strip()
+        if line:
+            print(line)
 
 
-def print_xformers_error(err):
+def print_xformers_installation_error(err):
     torch_ver = importlib_metadata.version("torch")
     print()
     print("#######################################################################################################")
@@ -226,7 +206,7 @@ def print_xformers_error(err):
     print(f"# Dreambooth could not find a compatible version of xformers (>= 0.0.17.dev built with torch {torch_ver})")
     print("# xformers will not be available for Dreambooth. Consider upgrading to Torch 2.")
     print("#")
-    print("# Exception:")
+    print("# Xformers installation exception:")
     for line in err.split('\n'):
         line = line.strip()
         if line:
