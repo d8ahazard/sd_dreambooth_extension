@@ -30,11 +30,10 @@ class ClassDataset(Dataset):
 
         # Create available resolutions
         bucket_resos = make_bucket_resolutions(max_width)
-        concept_idx = 0
         class_images = {}
         instance_images = {}
         total_images = 0
-        for concept in concepts:
+        for concept_idx, concept in enumerate(concepts):
             if not concept.is_valid:
                 continue
 
@@ -48,14 +47,12 @@ class ClassDataset(Dataset):
             class_images[concept_idx] = get_images(class_dir)
             total_images += len(instance_images[concept_idx])
             total_images += len(class_images[concept_idx])
-            concept_idx += 1
 
-        concept_idx = 0
         status.textinfo = "Sorting images..."
         pbar = mytqdm(desc="Pre-processing images.", position=0)
         pbar.reset(total_images)
 
-        for concept in concepts:
+        for concept_idx, concept in enumerate(concepts):
             if not concept.is_valid:
                 continue
 
@@ -120,7 +117,7 @@ class ClassDataset(Dataset):
                         self.new_prompts[res].extend(new_prompts_datas)
                     else:
                         self.new_prompts[res] = new_prompts_datas
-            concept_idx += 1
+
         pbar.reset(0)
         if self.required_prompts > 0:
             print(f"We need a total of {self.required_prompts} class images.")
