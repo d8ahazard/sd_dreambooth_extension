@@ -374,6 +374,9 @@ def from_file(model_name):
     Returns: Dict | None
 
     """
+    if isinstance(model_name, list) and len(model_name) > 0:
+        model_name = model_name[0]
+        
     if model_name == "" or model_name is None:
         return None
 
