@@ -4,6 +4,7 @@
 
 import itertools
 import logging
+import math
 import os
 import time
 import traceback
@@ -1307,6 +1308,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     f"Steps: {global_step}/{max_train_steps} (Current),"
                     f" {args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
                 )
+
+                if math.isnan(loss_step):
+                    print("Loss is NaN, your model is dead. Cancelling training.")
+                    status.interrupted = True
 
                 # Log completion message
                 if training_complete or status.interrupted:

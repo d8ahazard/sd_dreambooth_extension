@@ -1,4 +1,4 @@
-accelerate==0.17.1
+accelerate==0.18.0
 bitsandbytes==0.35.4
 dadaptation==1.5.0
 diffusers~=0.14.0
