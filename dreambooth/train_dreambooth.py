@@ -53,7 +53,7 @@ from dreambooth.utils.model_utils import (
     torch2ify,
 )
 from dreambooth.utils.text_utils import encode_hidden_state
-from dreambooth.utils.utils import cleanup, printm
+from dreambooth.utils.utils import cleanup, printm, verify_locon_installed
 from dreambooth.webhook import send_training_update
 from dreambooth.xattention import optim_to
 from helpers.ema_model import EMAModel
@@ -165,9 +165,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         starting_grad_size=args.gradient_accumulation_steps,
         logging_dir=logging_dir,
     )
-    def inner_loop(
-            train_batch_size: int, gradient_accumulation_steps: int, profiler: profile
-    ):
+    def inner_loop(train_batch_size: int, gradient_accumulation_steps: int, profiler: profile):
 
         text_encoder = None
         global last_samples
@@ -179,6 +177,8 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         args.max_token_length = int(args.max_token_length)
         if not args.pad_tokens and args.max_token_length > 75:
             print("Cannot raise token length limit above 75 when pad_tokens=False")
+
+        verify_locon_installed(args)
 
         precision = args.mixed_precision if not shared.force_cpu else "no"
 
@@ -428,13 +428,13 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             else:
                 params_to_optimize = itertools.chain(*unet_lora_params)
 
-        else:
-            if stop_text_percentage != 0 and not args.train_unet:
-                params_to_optimize = itertools.chain(text_encoder.parameters())
-            elif stop_text_percentage != 0:
+        elif stop_text_percentage != 0:
+            if args.train_unet:
                 params_to_optimize = itertools.chain(unet.parameters(), text_encoder.parameters())
             else:
-                params_to_optimize = unet.parameters()
+                params_to_optimize = itertools.chain(text_encoder.parameters())
+        else:
+            params_to_optimize = unet.parameters()
 
         optimizer = get_optimizer(args, params_to_optimize)
 
@@ -721,13 +721,14 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             save_lora = False
             save_checkpoint = False
 
-            if shared.status.do_save_samples and is_epoch_check:
-                save_image = True
-                shared.status.do_save_samples = False
+            if is_epoch_check:
+                if shared.status.do_save_samples:
+                    save_image = True
+                    shared.status.do_save_samples = False
 
-            if shared.status.do_save_model and is_epoch_check:
-                save_model = True
-                shared.status.do_save_model = False
+                if shared.status.do_save_model:
+                    save_model = True
+                    shared.status.do_save_model = False
 
             if save_model:
                 if save_canceled:
@@ -872,11 +873,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                 loras_dir = os.path.join(args.model_dir, "loras")
                                 os.makedirs(loras_dir, exist_ok=True)
                                 # setup pt path
-                                lora_model_name = (
-                                    args.model_name
-                                    if args.custom_model_name == ""
-                                    else args.custom_model_name
-                                )
+                                if args.custom_model_name == "":
+                                    lora_model_name = args.model_name
+                                else:
+                                    lora_model_name = args.custom_model_name
                                 lora_file_prefix = f"{lora_model_name}_{args.revision}"
                                 out_file = os.path.join(
                                     loras_dir, f"{lora_file_prefix}.pt"
@@ -903,19 +903,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                     pbar.update()
                                 # save extra_net
                                 if args.save_lora_for_extra_net:
-                                    if args.use_lora_extended:
-                                        if not os.path.exists(
-                                                os.path.join(
-                                                    shared.script_path,
-                                                    "extensions",
-                                                    "a1111-sd-webui-locon",
-                                                )
-                                        ):
-                                            raise Exception(
-                                                r"a1111-sd-webui-locon extension is required to save "
-                                                r"extra net for extended lora. Please install "
-                                                r"https://github.com/KohakuBlueleaf/a1111-sd-webui-locon"
-                                            )
                                     os.makedirs(
                                         shared.ui_lora_models_path, exist_ok=True
                                     )
@@ -1091,10 +1078,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             if stop_text_percentage == 0:
                 train_tenc = False
 
-            if not args.freeze_clip_normalization:
-                text_encoder.train(train_tenc)
-            else:
+            if args.freeze_clip_normalization:
                 text_encoder.eval()
+            else:
+                text_encoder.train(train_tenc)
 
             if not args.use_lora:
                 text_encoder.requires_grad_(train_tenc)
@@ -1240,15 +1227,14 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                             loss = instance_loss
                         else:
                             loss = prior_loss * current_prior_loss_weight
+
                     accelerator.backward(loss)
+
                     if accelerator.sync_gradients and not args.use_lora:
-                        params_to_clip = (
-                            itertools.chain(
-                                unet.parameters(), text_encoder.parameters()
-                            )
-                            if train_tenc
-                            else unet.parameters()
-                        )
+                        if train_tenc:
+                            params_to_clip = itertools.chain(unet.parameters(), text_encoder.parameters())
+                        else:
+                            unet.parameters()
                         accelerator.clip_grad_norm_(params_to_clip, 1)
 
                     optimizer.step()
@@ -1263,9 +1249,11 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
                 last_lr = lr_scheduler.get_last_lr()[0]
+
                 global_step += train_batch_size
                 args.revision += train_batch_size
                 status.job_no += train_batch_size
+
                 del noise_pred
                 del latents
                 del encoder_hidden_states
