@@ -39,7 +39,7 @@ from dreambooth.dataset.sample_dataset import SampleDataset
 from dreambooth.deis_velocity import get_velocity
 from dreambooth.diff_to_sd import compile_checkpoint, copy_diffusion_model
 from dreambooth.memory import find_executable_batch_size
-from dreambooth.optimization import UniversalScheduler, get_optimizer, get_scheduler
+from dreambooth.optimization import UniversalScheduler, get_optimizer, get_noise_scheduler
 from dreambooth.shared import status
 from dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
 from dreambooth.utils.image_utils import db_save_image, get_scheduler_class
@@ -437,7 +437,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
         optimizer = get_optimizer(args, params_to_optimize)
 
-        noise_scheduler = get_scheduler(args)
+        noise_scheduler = get_noise_scheduler(args)
 
         def cleanup_memory():
             try:

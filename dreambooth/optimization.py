@@ -577,7 +577,7 @@ def get_optimizer(args, params_to_optimize):
     )
 
 
-def get_scheduler(args):
+def get_noise_scheduler(args):
     if args.noise_scheduler == "DEIS":
         scheduler_class = DEISMultistepScheduler
 
