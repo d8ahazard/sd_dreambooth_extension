@@ -246,10 +246,7 @@ def xformerify(obj):
 def torch2ify(unet):
     if hasattr(torch, 'compile'):
         try:
-            if shared.device.type == "mps":
-                unet = torch.compile(unet, mode="max-autotune", fullgraph=False, backend=aot_eager)
-            else:
-                unet = torch.compile(unet, mode="max-autotune", fullgraph=False)
+            unet = torch.compile(unet, mode="max-autotune", fullgraph=False)
         except:
             pass
     return unet
