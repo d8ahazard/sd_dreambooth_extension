@@ -154,7 +154,7 @@ def check_versions():
         module = dependency.module
 
         has_module = importlib.util.find_spec(module) is not None
-        installed_ver = str(importlib_metadata.version(module)) if has_module else None
+        installed_ver = importlib_metadata.version(module) if has_module else None
 
         if not installed_ver:
             if module != "xformers":

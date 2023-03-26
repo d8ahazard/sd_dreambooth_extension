@@ -78,7 +78,7 @@ last_samples = []
 last_prompts = []
 
 try:
-    diff_version = str(importlib_metadata.version("diffusers"))
+    diff_version = importlib_metadata.version("diffusers")
     version_string = diff_version.split(".")
     major_version = int(version_string[0])
     minor_version = int(version_string[1])
