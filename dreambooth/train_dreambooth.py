@@ -21,7 +21,6 @@ from diffusers import (
     AutoencoderKL,
     DiffusionPipeline,
     UNet2DConditionModel,
-    DDPMScheduler,
     DEISMultistepScheduler,
     UniPCMultistepScheduler
 )
@@ -40,7 +39,7 @@ from dreambooth.dataset.sample_dataset import SampleDataset
 from dreambooth.deis_velocity import get_velocity
 from dreambooth.diff_to_sd import compile_checkpoint, copy_diffusion_model
 from dreambooth.memory import find_executable_batch_size
-from dreambooth.optimization import UniversalScheduler
+from dreambooth.optimization import UniversalScheduler, get_optimizer, get_scheduler
 from dreambooth.shared import status
 from dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
 from dreambooth.utils.image_utils import db_save_image, get_scheduler_class
@@ -88,6 +87,7 @@ try:
             "The version of diffusers is less than or equal to 0.14.0. Performing monkey-patch..."
         )
         DEISMultistepScheduler.get_velocity = get_velocity
+        UniPCMultistepScheduler.get_velocity = get_velocity
     else:
         print(
             "The version of diffusers is greater than 0.14.0, hopefully they merged the PR by now"
@@ -372,13 +372,15 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     unet, device=accelerator.device, dtype=weight_dtype
                 )
 
+        if args.use_lora or not args.train_unet:
+            unet.requires_grad_(False)
+
         unet_lora_params = None
         text_encoder_lora_params = None
-
         lora_path = None
         lora_txt = None
+
         if args.use_lora:
-            unet.requires_grad_(False)
             if args.lora_model_name:
                 lora_path = os.path.join(args.model_dir, "loras", args.lora_model_name)
                 lora_txt = lora_path.replace(".pt", "_txt.pt")
@@ -409,14 +411,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             printm("Lora loaded")
             cleanup()
             printm("Cleaned")
-        else:
-            if not args.train_unet:
-                unet.requires_grad_(False)
 
-        if args.use_lora:
             args.learning_rate = args.lora_learning_rate
-            params_to_optimize = (
-                [
+            if stop_text_percentage != 0:
+                params_to_optimize = [
                     {
                         "params": itertools.chain(*unet_lora_params),
                         "lr": args.lora_learning_rate,
@@ -426,71 +424,20 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                         "lr": args.lora_txt_learning_rate,
                     },
                 ]
-                if stop_text_percentage != 0
-                else itertools.chain(*unet_lora_params)
-            )
-        else:
-            params_to_optimize = (
-                itertools.chain(text_encoder.parameters())
-                if stop_text_percentage != 0 and not args.train_unet
-                else itertools.chain(unet.parameters(), text_encoder.parameters())
-                if stop_text_percentage != 0
-                else unet.parameters()
-            )
-
-        try:
-            if args.optimizer == "8bit AdamW":
-                from bitsandbytes.optim import AdamW8bit
-                optimizer_class = AdamW8bit
-
-            elif args.optimizer == "Lion":
-                from lion_pytorch import Lion
-                optimizer_class = Lion
-
-            elif args.optimizer == "SGD Dadaptation":
-                from dadaptation import DAdaptSGD
-                optimizer_class = DAdaptSGD
-
-            elif args.optimizer == "AdamW Dadaptation":
-                from dadaptation import DAdaptAdam
-                optimizer_class = DAdaptAdam
-
-            elif args.optimizer == "Adagrad Dadaptation":
-                from dadaptation import DAdaptAdaGrad
-                optimizer_class = DAdaptAdaGrad
-
-            elif args.optimizer == "Adan Dadaptation":
-                from dreambooth.dadapt_adan import DAdaptAdan
-                optimizer_class = DAdaptAdan
-
             else:
-                optimizer_class = torch.optim.AdamW
+                params_to_optimize = itertools.chain(*unet_lora_params)
 
-        except Exception as e:
-            logger.warning(f"Exception importing {args.optimizer}: {e}")
-            traceback.print_exc()
-            print(str(e))
-            print("WARNING: Using default optimizer (AdamW from Torch)")
-            optimizer_class = torch.optim.AdamW
-
-        optimizer = optimizer_class(
-            params_to_optimize,
-            lr=args.learning_rate,
-            weight_decay=args.adamw_weight_decay,
-        )
-
-        if args.noise_scheduler == "DEIS":
-            noise_scheduler = DEISMultistepScheduler.from_pretrained(
-                args.pretrained_model_name_or_path, subfolder="scheduler"
-            )
-        elif args.noise_scheduler == "UniPC":
-            noise_scheduler = UniPCMultistepScheduler.from_pretrained(
-                args.pretrained_model_name_or_path, subfolder="scheduler"
-            )
         else:
-            noise_scheduler = DDPMScheduler.from_pretrained(
-                args.pretrained_model_name_or_path, subfolder="scheduler"
-            )
+            if stop_text_percentage != 0 and not args.train_unet:
+                params_to_optimize = itertools.chain(text_encoder.parameters())
+            elif stop_text_percentage != 0:
+                params_to_optimize = itertools.chain(unet.parameters(), text_encoder.parameters())
+            else:
+                params_to_optimize = unet.parameters()
+
+        optimizer = get_optimizer(args, params_to_optimize)
+
+        noise_scheduler = get_scheduler(args)
 
         def cleanup_memory():
             try:
