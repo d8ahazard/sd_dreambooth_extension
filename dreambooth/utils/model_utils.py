@@ -6,6 +6,7 @@ import re
 
 import torch
 from diffusers.utils import is_xformers_available
+from torch._dynamo.backends.debugging import aot_eager
 from transformers import PretrainedConfig
 
 from dreambooth import shared  # noqa
@@ -245,7 +246,10 @@ def xformerify(obj):
 def torch2ify(unet):
     if hasattr(torch, 'compile'):
         try:
-            unet = torch.compile(unet, mode="max-autotune", fullgraph=False)
+            if shared.device.type == "mps":
+                unet = torch.compile(unet, mode="max-autotune", fullgraph=False, backend=aot_eager)
+            else:
+                unet = torch.compile(unet, mode="max-autotune", fullgraph=False)
         except:
             pass
     return unet

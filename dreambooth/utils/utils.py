@@ -108,8 +108,9 @@ def list_optimizer():
     optimizer_list = ["Torch AdamW"]
 
     try:
-        from bitsandbytes.optim import AdamW8bit
-        optimizer_list.append("8bit AdamW")
+        if shared.device.type != "mps":
+            from bitsandbytes.optim import AdamW8bit
+            optimizer_list.append("8bit AdamW")
     except:
         pass
 
