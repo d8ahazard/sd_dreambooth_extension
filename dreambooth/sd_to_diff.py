@@ -299,11 +299,10 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
     """
 
     # extract state_dict for UNet
-    unet_state_dict = {}
     ema_state_dict = {}
     keys = list(checkpoint.keys())
     has_ema = False
-    unet_key = "model.diffusion_model."
+
     # at least a 100 parameters have to start with `model_ema` in order for the checkpoint to be EMA
     if extract_ema and sum(k.startswith("model_ema") for k in keys) > 100:
         print(f"Checkpoint {path} has both EMA and non-EMA weights.")
@@ -313,8 +312,12 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
                 flat_ema_key = "model_ema." + "".join(key.split(".")[1:])
                 if not hasattr(checkpoint, flat_ema_key):
                     flat_ema_key = flat_ema_key.replace("diffusion_model", "")
-                ema_state_dict[key.replace(unet_key, "")] = checkpoint.pop(flat_ema_key)
+                ema_state_dict[key] = checkpoint.pop(flat_ema_key)
+
     ema_checkpoint = None
+    unet_state_dict = {}
+    unet_key = "model.diffusion_model."
+
     for key in keys:
         if key.startswith(unet_key):
             unet_state_dict[key.replace(unet_key, "")] = checkpoint.pop(key)

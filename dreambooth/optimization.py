@@ -569,6 +569,7 @@ def get_optimizer(args, params_to_optimize):
         print(str(e))
         print("WARNING: Using default optimizer (AdamW from Torch)")
 
+    args.optimizer = "Torch AdamW"
     from torch.optim import AdamW
     return AdamW(
         params_to_optimize,
