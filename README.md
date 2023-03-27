@@ -47,10 +47,9 @@ Stable-diffusion-webui, not just reload it.
 
 ## Several Tutorial Videos For Dreambooth
 
-[![Zero To Hero Stable Diffusion DreamBooth Tutorial By Using Automatic1111 Web UI - Ultra Detailed](https://i.imgur.com/zzavDGW.png)](https://youtu.be/Bdl-jWR3Ukc)
-[![DreamBooth Got Buffed - 22 January Update - Much Better Success Train Stable Diffusion Models Web UI](https://i.imgur.com/TtJKKOn.png)](https://youtu.be/KwxNcGhHuLY)
-[![How to Inject Your Trained Subject e.g. Your Face Into Any Custom Stable Diffusion Model By Web UI](https://i.imgur.com/gPGWr3S.png)](https://youtu.be/s25hcW4zq4M)
-[![8 GB LoRA Training - Fix CUDA Version For DreamBooth and Textual Inversion Training By Automatic1111](https://i.imgur.com/leOwdWy.png)](https://youtu.be/O01BrQwOd-Q)
+[![Zero To Hero Stable Diffusion DreamBooth Tutorial By Using Automatic1111 Web UI - Ultra Detailed](https://i.imgur.com/zzavDGW.png)](https://youtu.be/Bdl-jWR3Ukc) [![How to Inject Your Trained Subject e.g. Your Face Into Any Custom Stable Diffusion Model By Web UI](https://i.imgur.com/gPGWr3S.png)](https://youtu.be/s25hcW4zq4M)
+[![8 GB LoRA Training - Fix CUDA Version For DreamBooth and Textual Inversion Training By Automatic1111](https://i.imgur.com/leOwdWy.png)](https://youtu.be/O01BrQwOd-Q) [![Automatic1111 Stable Diffusion DreamBooth Guide: Optimal Classification Images Count Comparison Test](https://i.imgur.com/kp10x2p.png)](https://youtu.be/Tb4IYIYm4os)
+[![Epic Web UI DreamBooth Update - New Best Settings - 10 Stable Diffusion Training Compared on RunPods](https://i.imgur.com/i5FmRcu.png)](https://youtu.be/sRdtVanSRl4) [![How To Install New DREAMBOOTH & Torch 2 On Automatic1111 Web UI PC For Epic Performance Gains Guide](https://i.imgur.com/oFL7TyX.png)](https://youtu.be/pom3nQejaTs)
 
 ## Usage
 

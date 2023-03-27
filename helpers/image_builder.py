@@ -1,5 +1,6 @@
 import os
 import random
+import time
 import traceback
 from typing import List, Union
 
@@ -161,9 +162,9 @@ class ImageBuilder:
             )
 
         if iterable is not None:
-            return mytqdm(iterable, **self._progress_bar_config)
+            return mytqdm(iterable, **self._progress_bar_config, position=0)
         elif total is not None:
-            return mytqdm(total=total, **self._progress_bar_config)
+            return mytqdm(total=total, **self._progress_bar_config, position=0)
         else:
             raise ValueError("Either `total` or `iterable` has to be defined.")
 
@@ -217,7 +218,8 @@ class ImageBuilder:
         else:
             with self.accelerator.autocast(), torch.inference_mode():
                 if seed is None or seed == '' or seed == -1:
-                    seed = int(random.randrange(21474836147))
+                    seed = int(random.randrange(0, 21474836147))
+
                 generator = torch.manual_seed(seed)
                 try:
                     output = self.image_pipe(

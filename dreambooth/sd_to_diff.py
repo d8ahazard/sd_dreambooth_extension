@@ -774,7 +774,7 @@ def replace_symlinks(path, base):
         # Get the target of the symlink
         src = os.readlink(path)
         blob = os.path.basename(src)
-        path_parts = path.split("/") if "/" in path else path.split("\\")
+        path_parts = path.split(os.pathsep)
         model_name = None
         dir_name = None
         save_next = False
@@ -843,7 +843,7 @@ def download_model(db_config: DreamboothConfig, token, extract_ema: bool = False
             print(f'Found model index: {name}')
             model_index = local_name
             continue
-        if (".ckpt" in name or ".safetensors" in name) and not "/" in name:
+        if (".ckpt" in name or ".safetensors" in name) and os.pathsep not in name:
             print(f'Found model: {name}')
             model_files.append(local_name)
             continue
@@ -906,7 +906,7 @@ def download_model(db_config: DreamboothConfig, token, extract_ema: bool = False
 
     huggingface_hub.utils.tqdm.tqdm = mytqdm
     out_model = None
-    for repo_file in mytqdm(files_to_fetch, desc=f"Fetching {len(files_to_fetch)} files"):
+    for repo_file in mytqdm(files_to_fetch, desc=f"Fetching {len(files_to_fetch)} files", position=1):
         if not os.path.exists(repo_file):
             out = hf_hub_download(
                 hub_url,
