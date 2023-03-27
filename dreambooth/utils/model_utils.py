@@ -47,12 +47,12 @@ class CheckpointInfo:
         else:
             name = os.path.basename(filename)
 
-        if name.startswith("\\") or name.startswith("/"):
+        if name.startswith(os.pathsep) or name.startswith(os.pathsep):
             name = name[1:]
 
         self.name = name
         self.name_for_extra = os.path.splitext(os.path.basename(filename))[0]
-        self.model_name = os.path.splitext(name.replace("/", "_").replace("\\", "_"))[0]
+        self.model_name = os.path.splitext(name.replace(os.pathsep, "_"))[0]
         self.hash = model_hash(filename)
 
         self.sha256 = hashes.sha256_from_cache(self.filename, "checkpoint/" + name)

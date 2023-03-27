@@ -438,82 +438,46 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 else unet.parameters()
             )
 
-        optimizer = None
         try:
-            if args.optimizer == "Torch AdamW":
-                optimizer = torch.optim.AdamW(
-                    params_to_optimize,
-                    lr=args.learning_rate,
-                    weight_decay=args.adamw_weight_decay,
-                )
-
-            elif args.optimizer == "8bit AdamW":
+            if args.optimizer == "8bit AdamW":
                 from bitsandbytes.optim import AdamW8bit
-                optimizer = AdamW8bit(
-                    params_to_optimize,
-                    lr=args.learning_rate,
-                    weight_decay=args.adamw_weight_decay,
-                )
+                optimizer_class = AdamW8bit
 
             elif args.optimizer == "Lion":
                 from lion_pytorch import Lion
-                optimizer = Lion(
-                    params_to_optimize,
-                    lr=args.learning_rate,
-                    weight_decay=args.adamw_weight_decay,
-                )
+                optimizer_class = Lion
 
             elif args.optimizer == "SGD Dadaptation":
                 from dadaptation import DAdaptSGD
-                optimizer = DAdaptSGD(
-                    params_to_optimize,
-                    lr=args.learning_rate,
-                    momentum=args.adaptation_momentum,
-                    weight_decay=args.adamw_weight_decay,
-                    growth_rate=args.adaptation_growth_rate,
-                )
+                optimizer_class = DAdaptSGD
 
             elif args.optimizer == "AdamW Dadaptation":
                 from dadaptation import DAdaptAdam
-                optimizer = DAdaptAdam(
-                    params_to_optimize,
-                    lr=args.learning_rate,
-                    weight_decay=args.adamw_weight_decay,
-                    decouple=False,
-                    growth_rate=args.adaptation_growth_rate,
-                )
+                optimizer_class = DAdaptAdam
 
             elif args.optimizer == "Adagrad Dadaptation":
                 from dadaptation import DAdaptAdaGrad
-                optimizer = DAdaptAdaGrad(
-                    params_to_optimize,
-                    lr=args.learning_rate,
-                    momentum=args.adaptation_momentum,
-                    weight_decay=args.adamw_weight_decay,
-                    growth_rate=args.adaptation_growth_rate,
-                )
+                optimizer_class = DAdaptAdaGrad
 
             elif args.optimizer == "Adan Dadaptation":
                 from dreambooth.dadapt_adan import DAdaptAdan
-                optimizer = DAdaptAdan(
-                    params_to_optimize,
-                    lr=args.learning_rate,
-                    weight_decay=args.adamw_weight_decay,
-                    no_prox=False,
-                    growth_rate=args.adaptation_growth_rate,
-                )
+                optimizer_class = DAdaptAdan
 
-        except Exception as a:
-            logger.warning(f"Exception importing {args.optimizer}: {a}")
+            else:
+                optimizer_class = torch.optim.AdamW
+
+        except Exception as e:
+            logger.warning(f"Exception importing {args.optimizer}: {e}")
             traceback.print_exc()
-
-        if optimizer is None:
+            print(str(e))
             print("WARNING: Using default optimizer (AdamW from Torch)")
-            optimizer = torch.optim.AdamW(
-                params_to_optimize,
-                lr=args.learning_rate,
-                weight_decay=args.adamw_weight_decay,
-            )
+            optimizer_class = torch.optim.AdamW
+
+        optimizer = optimizer_class(
+            params_to_optimize,
+            lr=args.learning_rate,
+            weight_decay=args.adamw_weight_decay,
+        )
 
         if args.noise_scheduler == "DEIS":
             noise_scheduler = DEISMultistepScheduler.from_pretrained(
@@ -640,6 +604,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         # affected by batch size
         sched_train_steps = args.num_train_epochs * train_dataset.num_train_images
 
+        lr_scale_pos = args.lr_scale_pos
+        if class_prompts:
+            lr_scale_pos *= 2
+
         lr_scheduler = UniversalScheduler(
             name=args.lr_scheduler,
             optimizer=optimizer,
@@ -650,7 +618,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             num_cycles=args.lr_cycles,
             power=args.lr_power,
             factor=args.lr_factor,
-            scale_pos=args.lr_scale_pos,
+            scale_pos=lr_scale_pos,
         )
 
         # create ema, fix OOM
@@ -775,7 +743,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
         os.environ.__setattr__("CUDA_LAUNCH_BLOCKING", 1)
 
-        def check_save(pbar: mytqdm, is_epoch_check=False):
+        def check_save(is_epoch_check=False):
             nonlocal last_model_save
             nonlocal last_image_save
             save_model_interval = args.save_embedding_every
@@ -838,28 +806,31 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     or save_image
                     or save_model
             ):
-                printm(" Saving weights.")
                 save_weights(
                     save_image,
                     save_model,
                     save_snapshot,
                     save_checkpoint,
                     save_lora,
-                    pbar,
                 )
-                pbar.set_description("Steps")
-                pbar.reset(max_train_steps)
-                pbar.update(global_step)
-                printm(" Complete.")
 
             return save_model
 
         def save_weights(
-                save_image, save_model, save_snapshot, save_checkpoint, save_lora, pbar
+                save_image, save_model, save_snapshot, save_checkpoint, save_lora
         ):
             global last_samples
             global last_prompts
             nonlocal vae
+
+            printm(" Saving weights.")
+            pbar = mytqdm(
+                range(4),
+                desc="Saving weights",
+                disable=not accelerator.is_local_main_process,
+                position=1
+            )
+            pbar.set_postfix(refresh=True)
 
             # Create the pipeline using the trained modules and save it.
             if accelerator.is_main_process:
@@ -910,9 +881,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     if save_model:
                         # We are saving weights, we need to ensure revision is saved
                         args.save()
-                        pbar.set_description("Saving Weights")
-                        pbar.reset(4)
-                        pbar.update()
                         try:
                             out_file = None
                             # Loras resume from pt
@@ -1015,10 +983,8 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                 if export_diffusers:
                                     copy_diffusion_model(args.model_name, diffusers_dir)
                                 else:
-                                    compile_checkpoint(args.model_name, reload_models=False, lora_file_name=out_file, log=False,
-                                                       snap_rev=snap_rev,
-                                )
-                                pbar.update()
+                                    compile_checkpoint(args.model_name, reload_models=False, lora_file_name=out_file,
+                                                       log=False, snap_rev=snap_rev, pbar=pbar)
                                 printm("Restored, moved to acc.device.")
                         except Exception as ex:
                             print(f"Exception saving checkpoint/model: {ex}")
@@ -1133,18 +1099,19 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
                 optim_to(profiler, optimizer, accelerator.device)
 
-                # Resotre all random states to avoid having sampling impact training.
+                # Restore all random states to avoid having sampling impact training.
                 torch.set_rng_state(torch_rng_state)
                 torch.cuda.set_rng_state(cuda_cpu_rng_state, device="cpu")
                 torch.cuda.set_rng_state(cuda_gpu_rng_state, device="cuda")
 
                 cleanup()
-                printm("Cleanup completed.")
+                printm("Completed saving weights.")
 
         # Only show the progress bar once on each machine.
         progress_bar = mytqdm(
             range(global_step, max_train_steps),
             disable=not accelerator.is_local_main_process,
+            position=0,
         )
         progress_bar.set_description("Steps")
         progress_bar.set_postfix(refresh=True)
@@ -1419,7 +1386,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             status.job_count = max_train_steps
             status.job_no = global_step
 
-            check_save(progress_bar, True)
+            check_save(True)
 
             if args.num_train_epochs > 1:
                 training_complete = session_epoch >= max_train_epochs
