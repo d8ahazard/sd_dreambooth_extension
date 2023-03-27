@@ -1234,7 +1234,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                         if train_tenc:
                             params_to_clip = itertools.chain(unet.parameters(), text_encoder.parameters())
                         else:
-                            unet.parameters()
+                            params_to_clip = unet.parameters()
                         accelerator.clip_grad_norm_(params_to_clip, 1)
 
                     optimizer.step()
