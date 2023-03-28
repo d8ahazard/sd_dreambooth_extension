@@ -99,7 +99,7 @@ def check_xformers():
                 torch_version = importlib_metadata.version("torch")
                 is_torch_1 = Version(torch_version) < Version("2")
                 if is_torch_1:
-                    pip_install("xformers==0.0.17.dev476")
+                    pip_install("xformers==0.0.17.dev481")
                 else:
                     pip_install("xformers", "--pre")
             except subprocess.CalledProcessError as grepexc:
