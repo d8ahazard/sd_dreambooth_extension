@@ -628,6 +628,9 @@ def load_model_params(model_name):
     db_model_snapshots: A gradio dropdown containing the available snapshots for the model
     db_outcome: The result of loading model params
     """
+    if isinstance(model_name, list) and len(model_name) > 0:
+        model_name = model_name[0]
+
     config = from_file(model_name)
     db_model_snapshots = gr_update(choices=[], value="")
     if config is None:

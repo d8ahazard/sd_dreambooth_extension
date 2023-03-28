@@ -111,11 +111,12 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
 def get_db_models():
+    rgx = re.compile(r"\[.*\]")
     output = [""]
     out_dir = shared.dreambooth_models_path
     if os.path.exists(out_dir):
         for item in os.listdir(out_dir):
-            if os.path.isdir(os.path.join(out_dir, item)):
+            if os.path.isdir(os.path.join(out_dir, item)) and not rgx.search(item):
                 output.append(item)
     return output
 
