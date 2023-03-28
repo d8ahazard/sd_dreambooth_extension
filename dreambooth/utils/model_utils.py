@@ -6,7 +6,6 @@ import re
 
 import torch
 from diffusers.utils import is_xformers_available
-from torch._dynamo.backends.debugging import aot_eager
 from transformers import PretrainedConfig
 
 from dreambooth import shared  # noqa
