@@ -100,7 +100,7 @@ def check_xformers():
                 torch_version = importlib_metadata.version("torch")
                 is_torch_1 = Version(torch_version) < Version("2")
                 if is_torch_1:
-                    print(f"Your version of xformers ({xformers_version}) is <= 0.0.17.dev")
+                    print(f"Your version of xformers ({xformers_version}) is < 0.0.17.dev")
                     print("Officially hosted Torch 1 wheels are no longer available for xformers >= 0.0.17.dev. So the available options are:")
                     print("1. Proceed to use Dreambooth without xformers (you are currently doing this)")
                     print("2. Upgrade to Torch 2 (recommended):")
@@ -108,9 +108,9 @@ def check_xformers():
                         print("pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu118")
                     else:
                         print("pip3 install torch torchvision")
-                    print("3. Build your own Torch 1 Xformers wheel")
+                    print("3. Build your own Torch 1 xformers wheel")
                 else:
-                    pip_install("xformers")
+                    pip_install("--force-reinstall", "xformers")
             except subprocess.CalledProcessError as grepexc:
                 error_msg = grepexc.stdout.decode()
                 print_xformers_installation_error(error_msg)
