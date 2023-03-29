@@ -1012,7 +1012,10 @@ def load_checkpoint(checkpoint_file: str, map_location: str):
     else:
         disable_safe_unpickle()
         print("Loading ckpt...")
-        checkpoint = torch.load(checkpoint_file, map_location=('cpu' if map_location == 'mps' else map_location))
+        try:
+            checkpoint = torch.load(checkpoint_file, map_location=('cpu' if map_location == 'mps' else map_location))
+        except:
+            checkpoint = torch.load(checkpoint_file, map_location=map_location)
         checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
         enable_safe_unpickle()
     return checkpoint
