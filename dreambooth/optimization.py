@@ -589,5 +589,5 @@ def get_noise_scheduler(args):
         scheduler_class = DDPMScheduler
 
     return scheduler_class.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="scheduler"
+        args.get_pretrained_model_name_or_path(), subfolder="scheduler"
     )
