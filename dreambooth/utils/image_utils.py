@@ -54,8 +54,8 @@ def rotate_image_straight(image: Image) -> Image:
         }.get(orientation)
         if degree:
             image = image.rotate(degree, expand=True)
-    else:
-        print(f"No exif data for {image.filename}. Using default orientation.")
+    # else:
+    #     print(f"No exif data for {image.filename}. Using default orientation.")
     return image
 
 

@@ -686,7 +686,7 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
         if config.mixed_precision == "no":
             msg = "Using xformers, please set mixed precision to 'fp16' or 'bf16' to continue."
     if not len(config.concepts()):
-        msg = "Please configure some concepts."
+        msg = "Please check your dataset directories."
     if not os.path.exists(config.pretrained_model_name_or_path):
         msg = "Invalid training data directory."
     if config.pretrained_vae_name_or_path:
@@ -818,7 +818,7 @@ def ui_classifiers(model_name: str, class_gen_method: str = "Native Diffusers"):
         if config.mixed_precision == "no":
             msg = "Using xformers, please set mixed precision to 'fp16' or 'bf16' to continue."
     if not len(config.concepts()):
-        msg = "Please configure some concepts."
+        msg = "Please check your dataset directories."
     if not os.path.exists(config.pretrained_model_name_or_path):
         msg = "Invalid training data directory."
     if config.pretrained_vae_name_or_path:

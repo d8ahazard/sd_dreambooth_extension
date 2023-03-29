@@ -142,7 +142,7 @@ class DreamboothConfig(BaseModel):
             self.lora_model_name = ""
 
         model_dir = os.path.join(models_path, model_name)
-        print(f"Model dir set to: {model_dir}")
+        # print(f"Model dir set to: {model_dir}")
         working_dir = os.path.join(model_dir, "working")
 
         if not os.path.exists(working_dir):

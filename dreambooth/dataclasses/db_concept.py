@@ -44,7 +44,7 @@ class Concept(BaseModel):
         for key, value in params_dict.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-            if self.instance_data_dir:
-                self.is_valid = os.path.isdir(self.instance_data_dir)
-            else:
-                self.is_valid = False
+        if self.instance_data_dir:
+            self.is_valid = os.path.isdir(self.instance_data_dir)
+        if not self.is_valid:
+            print(f"Invalid Dataset Directory: {self.instance_data_dir}")
