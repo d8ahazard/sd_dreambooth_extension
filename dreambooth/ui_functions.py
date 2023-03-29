@@ -630,6 +630,9 @@ def load_model_params(model_name):
     db_model_snapshots: A gradio dropdown containing the available snapshots for the model
     db_outcome: The result of loading model params
     """
+    if isinstance(model_name, list) and len(model_name) > 0:
+        model_name = model_name[0]
+
     config = from_file(model_name)
     db_model_snapshots = gr_update(choices=[], value="")
     if config is None:
@@ -686,7 +689,7 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
         if config.mixed_precision == "no":
             msg = "Using xformers, please set mixed precision to 'fp16' or 'bf16' to continue."
     if not len(config.concepts()):
-        msg = "Please configure some concepts."
+        msg = "Please check your dataset directories."
     if not os.path.exists(config.get_pretrained_model_name_or_path()):
         msg = "Invalid training data directory."
     if config.pretrained_vae_name_or_path:
@@ -818,7 +821,7 @@ def ui_classifiers(model_name: str, class_gen_method: str = "Native Diffusers"):
         if config.mixed_precision == "no":
             msg = "Using xformers, please set mixed precision to 'fp16' or 'bf16' to continue."
     if not len(config.concepts()):
-        msg = "Please configure some concepts."
+        msg = "Please check your dataset directories."
     if not os.path.exists(config.pretrained_model_name_or_path):
         msg = "Invalid training data directory."
     if config.pretrained_vae_name_or_path:

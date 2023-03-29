@@ -127,8 +127,8 @@ function updateInputValue(elements, newValue) {
 function handleNumberInputs() {
     const numberInputs = gradioApp()
        .querySelector('#tab_dreambooth_interface')
-       .querySelectorAll('input[type="number"]');
-    numberInputs.forEach((numberInput) => {
+       ?.querySelectorAll('input[type="number"]');
+    numberInputs?.forEach((numberInput) => {
         const step = Number(numberInput.step) || 1;
         const parentDiv = numberInput.parentElement;
         const labelFor = parentDiv.querySelector('label');

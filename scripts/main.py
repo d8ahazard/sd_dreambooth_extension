@@ -630,6 +630,7 @@ def on_ui_tabs():
                     with gr.Accordion(open=False, label="Advanced"):
                         with gr.Row():
                             with gr.Column():
+                                gr.HTML(value="Sanity Samples")
                                 db_sanity_prompt = gr.Textbox(
                                     label="Sanity Sample Prompt",
                                     placeholder="A generic prompt used to generate a sample image "
@@ -650,7 +651,6 @@ def on_ui_tabs():
                                     placeholder="Leave blank to use base model VAE.",
                                     value="",
                                 )
-
                                 db_use_concepts = gr.Checkbox(
                                     label="Use Concepts List", value=False
                                 )
@@ -668,18 +668,19 @@ def on_ui_tabs():
                                     db_clear_secret = gr.Button(
                                         value=delete_symbol, elem_id="clear_secret"
                                     )
-                                with gr.Column():
-                                    # In the future change this to something more generic and list the supported types
-                                    # from DreamboothWebhookTarget enum; for now, Discord is what I use ;)
-                                    # Add options to include notifications on training complete and exceptions that halt training
-                                    db_notification_webhook_url = gr.Textbox(
-                                        label="Discord Webhook",
-                                        placeholder="https://discord.com/api/webhooks/XXX/XXXX",
-                                        value="",
-                                    )
-                                    notification_webhook_test_btn = gr.Button(
-                                        value="Save and Test Webhook"
-                                    )
+
+                            with gr.Column():
+                                # In the future change this to something more generic and list the supported types
+                                # from DreamboothWebhookTarget enum; for now, Discord is what I use ;)
+                                # Add options to include notifications on training complete and exceptions that halt training
+                                db_notification_webhook_url = gr.Textbox(
+                                    label="Discord Webhook",
+                                    placeholder="https://discord.com/api/webhooks/XXX/XXXX",
+                                    value="",
+                                )
+                                notification_webhook_test_btn = gr.Button(
+                                    value="Save and Test Webhook"
+                                )
 
                     with gr.Row():
                         with gr.Column(scale=2):

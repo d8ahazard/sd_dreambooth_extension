@@ -11,7 +11,7 @@ from io import StringIO
 from diffusers.schedulers import KarrasDiffusionSchedulers
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-from PIL import features, PngImagePlugin, Image
+from PIL import features, PngImagePlugin, Image, ExifTags
 
 import os
 from typing import List, Tuple, Dict, Union
@@ -29,24 +29,34 @@ from dreambooth.shared import status
 
 def get_dim(filename, max_res):
     with Image.open(filename) as im:
+        im = rotate_image_straight(im)
         width, height = im.size
-        try:
-            exif = im.getexif()
-            if exif:
-                orientation = exif.get(274)
-                if orientation == 3 or orientation == 6:
-                    width, height = height, width
-            if width > max_res or height > max_res:
-                aspect_ratio = width / height
-                if width > height:
-                    width = max_res
-                    height = int(max_res / aspect_ratio)
-                else:
-                    height = max_res
-                    width = int(max_res * aspect_ratio)
-        except:
-            print(f"No exif data for {filename}. Using default orientation.")
+        if width > max_res or height > max_res:
+            aspect_ratio = width / height
+            if width > height:
+                width = max_res
+                height = int(max_res / aspect_ratio)
+            else:
+                height = max_res
+                width = int(max_res * aspect_ratio)
         return width, height
+
+
+def rotate_image_straight(image: Image) -> Image:
+    exif: Image.Exif = image.getexif()
+    if exif:
+        orientation_tag = {v: k for k, v in ExifTags.TAGS.items()}['Orientation']
+        orientation = exif.get(orientation_tag)
+        degree = {
+            3: 180,
+            6: 270,
+            8: 90,
+        }.get(orientation)
+        if degree:
+            image = image.rotate(degree, expand=True)
+    # else:
+    #     print(f"No exif data for {image.filename}. Using default orientation.")
+    return image
 
 
 def get_images(image_path: str):
@@ -436,6 +446,7 @@ def load_image_directory(db_dir, concept: Concept, is_class: bool = True) -> Lis
 def open_and_trim(image_path: str, reso: Tuple[int, int], return_pil: bool = False) -> Union[np.ndarray, Image]:
     # Open image with PIL
     image = Image.open(image_path)
+    image = rotate_image_straight(image)
 
     # Convert to RGB if necessary
     if image.mode != "RGB":
