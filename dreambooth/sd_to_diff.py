@@ -434,38 +434,28 @@ def unet_dict_to_checkpoint(unet_state_dict, config):
             )
 
             output_block_list = {k: sorted(v) for k, v in output_block_list.items()}
-            try:
-                if ["conv.bias", "conv.weight"] in output_block_list.values():
-                    index = list(output_block_list.values()).index(["conv.bias", "conv.weight"])
-                    new_checkpoint[f"up_blocks.{block_id}.upsamplers.0.conv.weight"] = unet_state_dict[
-                        f"output_blocks.{i}.{index}.conv.weight"
-                    ]
-                    new_checkpoint[f"up_blocks.{block_id}.upsamplers.0.conv.bias"] = unet_state_dict[
-                        f"output_blocks.{i}.{index}.conv.bias"
-                    ]
+            if ["conv.bias", "conv.weight"] in output_block_list.values():
+                index = list(output_block_list.values()).index(["conv.bias", "conv.weight"])
+                new_checkpoint[f"up_blocks.{block_id}.upsamplers.0.conv.weight"] = unet_state_dict[
+                    f"output_blocks.{i}.{index}.conv.weight"
+                ]
+                new_checkpoint[f"up_blocks.{block_id}.upsamplers.0.conv.bias"] = unet_state_dict[
+                    f"output_blocks.{i}.{index}.conv.bias"
+                ]
 
-                    # Clear attentions as they have been attributed above.
-                    if len(attentions) == 2:
-                        attentions = []
+                # Clear attentions as they have been attributed above.
+                if len(attentions) == 2:
+                    attentions = []
 
-                if len(attentions):
-                    paths = renew_attention_paths(attentions)
-                    meta_path = {
-                        "old": f"output_blocks.{i}.1",
-                        "new": f"up_blocks.{block_id}.attentions.{layer_in_block_id}",
-                    }
-                    assign_to_checkpoint(
-                        paths, new_checkpoint, unet_state_dict, additional_replacements=[meta_path], config=config
-                    )
-            except Exception as e:
-                print("######################################################################################")
-                print("# ! UNET DICTIONARY ERROR !")
-                print("# Try installing the Model Toolkit Extension")
-                print("#     https://github.com/arenatemp/stable-diffusion-webui-model-toolkit")
-                print("# and running your model through the toolkit.")
-                print("# Then use that model as your source.")
-                print("######################################################################################")
-                raise e
+            if len(attentions):
+                paths = renew_attention_paths(attentions)
+                meta_path = {
+                    "old": f"output_blocks.{i}.1",
+                    "new": f"up_blocks.{block_id}.attentions.{layer_in_block_id}",
+                }
+                assign_to_checkpoint(
+                    paths, new_checkpoint, unet_state_dict, additional_replacements=[meta_path], config=config
+                )
         else:
             resnet_0_paths = renew_resnet_paths(output_block_layers, n_shave_prefix_segments=1)
             for path in resnet_0_paths:
