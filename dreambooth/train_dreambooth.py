@@ -838,8 +838,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 
                 # Save random states so sample generation doesn't impact training.
                 torch_rng_state = torch.get_rng_state()
-                cuda_gpu_rng_state = torch.cuda.get_rng_state(device="cuda")
-                cuda_cpu_rng_state = torch.cuda.get_rng_state(device="cpu")
+                if not shared.force_cpu:
+                    cuda_gpu_rng_state = torch.cuda.get_rng_state(device="cuda")
+                    cuda_cpu_rng_state = torch.cuda.get_rng_state(device="cpu")
 
                 optim_to(profiler, optimizer)
                 
@@ -1101,8 +1102,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
                 # Restore all random states to avoid having sampling impact training.
                 torch.set_rng_state(torch_rng_state)
-                torch.cuda.set_rng_state(cuda_cpu_rng_state, device="cpu")
-                torch.cuda.set_rng_state(cuda_gpu_rng_state, device="cuda")
+                if not shared.force_cpu:
+                    torch.cuda.set_rng_state(cuda_cpu_rng_state, device="cpu")
+                    torch.cuda.set_rng_state(cuda_gpu_rng_state, device="cuda")
 
                 cleanup()
                 printm("Completed saving weights.")
