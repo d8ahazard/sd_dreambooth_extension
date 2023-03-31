@@ -1019,7 +1019,13 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                     )
                                     prompts.append(epd)
                                 pbar.set_description("Generating Samples")
-                                pbar.reset(len(prompts) + 2)
+                                
+                                prompt_lengths = len(prompts)
+                                if args.disable_logging:
+                                    pbar.reset(prompt_lengths)
+                                else:
+                                    pbar.reset(prompt_lengths + 2)
+                                    
                                 ci = 0
                                 for c in prompts:
                                     c.out_dir = os.path.join(args.model_dir, "samples")
@@ -1060,30 +1066,34 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 if save_image:
                     if "generator" in locals():
                         del generator
-                    try:
-                        printm("Parse logs.")
-                        log_images, log_names = log_parser.parse_logs(
-                            model_name=args.model_name
-                        )
-                        pbar.update()
-                        for log_image in log_images:
-                            last_samples.append(log_image)
-                        for log_name in log_names:
-                            last_prompts.append(log_name)
-                        send_training_update(
-                            last_samples,
-                            args.model_name,
-                            last_prompts,
-                            global_step,
-                            args.revision,
-                        )
+                    
+                    if not args.disable_logging:
+                        try:
+                            printm("Parse logs.")
+                            log_images, log_names = log_parser.parse_logs(
+                                model_name=args.model_name
+                            )
+                            pbar.update()
+                            for log_image in log_images:
+                                last_samples.append(log_image)
+                            for log_name in log_names:
+                                last_prompts.append(log_name)
 
-                        del log_images
-                        del log_names
-                    except Exception as l:
-                        traceback.print_exc()
-                        print(f"Exception parsing logz: {l}")
-                        pass
+                            del log_images
+                            del log_names
+                        except Exception as l:
+                            traceback.print_exc()
+                            print(f"Exception parsing logz: {l}")
+                            pass
+                        
+                    send_training_update(
+                        last_samples,
+                        args.model_name,
+                        last_prompts,
+                        global_step,
+                        args.revision
+                    )
+                    
                     status.sample_prompts = last_prompts
                     status.current_image = last_samples
                     pbar.update()

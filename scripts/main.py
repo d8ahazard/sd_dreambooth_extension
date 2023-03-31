@@ -949,6 +949,7 @@ def on_ui_tabs():
                         )
                 with gr.Tab("Testing", elem_id="TabDebug"):
                     gr.HTML(value="Experimental Settings")
+                    db_disable_logging = gr.Checkbox(label="Disable Logging")
                     db_deterministic = gr.Checkbox(label="Deterministic")
                     db_ema_predict = gr.Checkbox(label="Use EMA for prediction")
                     db_split_loss = gr.Checkbox(
@@ -1196,6 +1197,7 @@ def on_ui_tabs():
             db_concepts_path,
             db_custom_model_name,
             db_noise_scheduler,
+            db_disable_logging,
             db_deterministic,
             db_ema_predict,
             db_epochs,
