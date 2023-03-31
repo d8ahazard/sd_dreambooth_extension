@@ -241,7 +241,8 @@ def get_cosine_schedule_with_warmup(
             max(1, num_training_steps - num_warmup_steps)
         )
         return max(
-            0.0, 0.5 * (1.0 + math.cos(math.pi * float(num_cycles) * 2.0 * progress))
+            0.0, 0.5 * (1.0 + math.cos(math.pi *
+                        float(num_cycles) * 2.0 * progress))
         )
 
     return LambdaLR(optimizer, lr_lambda, last_epoch)
@@ -530,13 +531,13 @@ def get_optimizer(args, params_to_optimize):
                 weight_decay=args.adamw_weight_decay,
             )
 
-        elif args.optimizer == "SGD Dadaptation":
-            from dadaptation import DAdaptSGD
-            return DAdaptSGD(
-                params_to_optimize,
-                lr=args.learning_rate,
-                weight_decay=args.adamw_weight_decay,
-            )
+        # elif args.optimizer == "SGD Dadaptation":
+        #    from dadaptation import DAdaptSGD
+        #    return DAdaptSGD(
+        #        params_to_optimize,
+        #        lr=args.learning_rate,
+        #        weight_decay=args.adamw_weight_decay,
+        #    )
 
         elif args.optimizer == "AdamW Dadaptation":
             from dadaptation import DAdaptAdam
@@ -547,13 +548,13 @@ def get_optimizer(args, params_to_optimize):
                 decouple=True,
             )
 
-        elif args.optimizer == "Adagrad Dadaptation":
-            from dadaptation import DAdaptAdaGrad
-            return DAdaptAdaGrad(
-                params_to_optimize,
-                lr=args.learning_rate,
-                weight_decay=args.adamw_weight_decay,
-            )
+        # elif args.optimizer == "Adagrad Dadaptation":
+        #    from dadaptation import DAdaptAdaGrad
+        #    return DAdaptAdaGrad(
+        #        params_to_optimize,
+        #        lr=args.learning_rate,
+        #        weight_decay=args.adamw_weight_decay,
+        #    )
 
         elif args.optimizer == "Adan Dadaptation":
             from dreambooth.dadapt_adan import DAdaptAdan
@@ -561,7 +562,18 @@ def get_optimizer(args, params_to_optimize):
                 params_to_optimize,
                 lr=args.learning_rate,
                 weight_decay=args.adamw_weight_decay,
+                log_every=5,
             )
+
+        elif args.optimizer == "AdanIP Dadaptation":
+            from dreambooth.dadapt_adan_ip import DAdaptAdanIP
+            return DAdaptAdanIP(
+                params_to_optimize,
+                lr=args.learning_rate,
+                weight_decay=args.adamw_weight_decay,
+                log_every=5,
+            )
+
 
     except Exception as e:
         logger.warning(f"Exception importing {args.optimizer}: {e}")

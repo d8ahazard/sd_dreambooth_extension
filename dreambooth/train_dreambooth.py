@@ -435,9 +435,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 params_to_optimize = itertools.chain(text_encoder.parameters())
         else:
             params_to_optimize = unet.parameters()
-
+    
         optimizer = get_optimizer(args, params_to_optimize)
-
+        tenc_weight_decay = optimizer.param_groups[1]["weight_decay"]
+        tenc_weight_decay = args.adamw_weight_decay + 0.02
         noise_scheduler = get_noise_scheduler(args)
 
         def cleanup_memory():
@@ -784,7 +785,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             # Create the pipeline using the trained modules and save it.
             if accelerator.is_main_process:
                 printm("Pre-cleanup.")
-                
+
                 # Save random states so sample generation doesn't impact training.
                 if shared.device.type == 'cuda':
                     torch_rng_state = torch.get_rng_state()
@@ -792,7 +793,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     cuda_cpu_rng_state = torch.cuda.get_rng_state(device="cpu")
 
                 optim_to(profiler, optimizer)
-                
+
                 if profiler is not None:
                     cleanup()
 
