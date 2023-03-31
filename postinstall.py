@@ -9,7 +9,6 @@ import sysconfig
 from dataclasses import dataclass
 
 import git
-import torch.cuda
 from packaging.version import Version
 
 from dreambooth import shared
@@ -100,15 +99,7 @@ def check_xformers():
                 torch_version = importlib_metadata.version("torch")
                 is_torch_1 = Version(torch_version) < Version("2")
                 if is_torch_1:
-                    print(f"Your version of xformers ({xformers_version}) is < 0.0.17.dev")
-                    print("Officially hosted Torch 1 wheels are no longer available for xformers >= 0.0.17.dev. So the available options are:")
-                    print("1. Proceed to use Dreambooth without xformers (you are currently doing this)")
-                    print("2. Upgrade to Torch 2 (recommended):")
-                    if torch.cuda.is_available():
-                        print("pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu118")
-                    else:
-                        print("pip3 install torch torchvision")
-                    print("3. Build your own Torch 1 xformers wheel")
+                    print_xformers_torch1_instructions(xformers_version)
                 else:
                     pip_install("--force-reinstall", "xformers")
             except subprocess.CalledProcessError as grepexc:
@@ -258,3 +249,19 @@ def check_torch_unsafe_load():
         torch.load = safe.unsafe_torch_load
     except:
         pass
+
+
+def print_xformers_torch1_instructions(xformers_version):
+    print(f"# Your version of xformers is {xformers_version}.")
+    print("# xformers >= 0.0.17.dev is required to be available on the Dreambooth tab.")
+    print("# Torch 1 wheels of xformers >= 0.0.17.dev are no longer available on PyPI,")
+    print("# but you can manually download them by going to:")
+    print("https://github.com/facebookresearch/xformers/actions")
+    print("# Click on the most recent action tagged with a release (middle column).")
+    print("# Select a download based on your environment.")
+    print("# Unzip your download")
+    print("# Activate your venv and install the wheel: (from A1111 project root)")
+    print("cd venv/Scripts")
+    print("activate")
+    print("pip install {REPLACE WITH PATH TO YOUR UNZIPPED .whl file}")
+    print("# Then restart your project.")
