@@ -1,6 +1,5 @@
 import os
 import random
-import time
 import traceback
 from typing import List, Union
 
@@ -122,7 +121,7 @@ class ImageBuilder:
                 enable_safe_unpickle()
 
             if config.use_lora and lora_model:
-                lora_model_path = os.path.join(shared.models_path, "lora", lora_model)
+                lora_model_path = shared.ui_lora_models_path
                 if os.path.exists(lora_model_path):
                     patch_pipe(
                         pipe=self.image_pipe,

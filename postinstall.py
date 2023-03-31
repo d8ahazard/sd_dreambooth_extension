@@ -89,7 +89,7 @@ def install_requirements():
 
 def check_xformers():
     """
-    Install xformers 0.0.17 if necessary
+    Install xformers if necessary
     """
     try:
         xformers_version = importlib_metadata.version("xformers")
@@ -99,9 +99,9 @@ def check_xformers():
                 torch_version = importlib_metadata.version("torch")
                 is_torch_1 = Version(torch_version) < Version("2")
                 if is_torch_1:
-                    pip_install("xformers==0.0.17.dev476")
+                    print_xformers_torch1_instructions(xformers_version)
                 else:
-                    pip_install("xformers", "--pre")
+                    pip_install("--force-reinstall", "xformers")
             except subprocess.CalledProcessError as grepexc:
                 error_msg = grepexc.stdout.decode()
                 print_xformers_installation_error(error_msg)
@@ -138,10 +138,14 @@ class Dependency:
 
 
 def check_versions():
+    import platform
+    from sys import platform as sys_platform
+    is_mac = sys_platform == 'darwin' and platform.machine() == 'arm64'
+
     dependencies = [
         Dependency(module="xformers", version="0.0.17.dev", required=False),
-        Dependency(module="torch", version="1.13.1+cu116"),
-        Dependency(module="torchvision", version="0.14.1+cu116"),
+        Dependency(module="torch", version="1.13.1" if is_mac else "1.13.1+cu116"),
+        Dependency(module="torchvision", version="0.14.1" if is_mac else "0.14.1+cu116"),
         Dependency(module="accelerate", version="0.17.1"),
         Dependency(module="diffusers", version="0.14.0"),
         Dependency(module="transformers", version="4.25.1"),
@@ -154,7 +158,7 @@ def check_versions():
         module = dependency.module
 
         has_module = importlib.util.find_spec(module) is not None
-        installed_ver = str(importlib_metadata.version(module)) if has_module else None
+        installed_ver = importlib_metadata.version(module) if has_module else None
 
         if not installed_ver:
             if module != "xformers":
@@ -245,3 +249,19 @@ def check_torch_unsafe_load():
         torch.load = safe.unsafe_torch_load
     except:
         pass
+
+
+def print_xformers_torch1_instructions(xformers_version):
+    print(f"# Your version of xformers is {xformers_version}.")
+    print("# xformers >= 0.0.17.dev is required to be available on the Dreambooth tab.")
+    print("# Torch 1 wheels of xformers >= 0.0.17.dev are no longer available on PyPI,")
+    print("# but you can manually download them by going to:")
+    print("https://github.com/facebookresearch/xformers/actions")
+    print("# Click on the most recent action tagged with a release (middle column).")
+    print("# Select a download based on your environment.")
+    print("# Unzip your download")
+    print("# Activate your venv and install the wheel: (from A1111 project root)")
+    print("cd venv/Scripts")
+    print("activate")
+    print("pip install {REPLACE WITH PATH TO YOUR UNZIPPED .whl file}")
+    print("# Then restart your project.")
