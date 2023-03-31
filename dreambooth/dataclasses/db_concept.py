@@ -46,5 +46,4 @@ class Concept(BaseModel):
                 setattr(self, key, value)
         if self.instance_data_dir:
             self.is_valid = os.path.isdir(self.instance_data_dir)
-        if not self.is_valid:
             print(f"Invalid Dataset Directory: {self.instance_data_dir}")
