@@ -34,6 +34,7 @@ class DreamboothModule(BaseModule):
         self.logger.debug(f"Create model called: {data}")
         model_name = data["new_model_name"] if "new_model_name" in data else None
         src = data["new_model_src"]["path"]
+        shared_src = data["new_model_shared_src"]["path"]
         from_hub = data["create_from_hub"] if "create_from_hub" in data else False
         self.logger.debug(f"SRC - {src} and {from_hub}")
         if src and not from_hub:
@@ -43,6 +44,7 @@ class DreamboothModule(BaseModule):
             loop.create_task(extract_checkpoint(
                 model_name,
                 src,
+                shared_src,
                 True,
                 data["new_model_url"],
                 data["new_model_token"],

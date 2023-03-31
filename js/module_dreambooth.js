@@ -41,6 +41,14 @@ document.addEventListener("DOMContentLoaded", function () {
        }
     });
 
+    $("#db_use_shared_src").change(function(){
+        if ($(this).is(":checked")) {
+            $("#shared_row").show();
+        } else {
+            $("#shared_row").hide();
+        }
+     });
+
     // Register the module with the UI. Icon is from boxicons by default.
     registerModule("Dreambooth", "moduleDreambooth", "cloud", false);
 
