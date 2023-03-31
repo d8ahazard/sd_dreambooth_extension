@@ -147,10 +147,14 @@ class Dependency:
 
 
 def check_versions():
+    import platform
+    from sys import platform as sys_platform
+    is_mac = sys_platform == 'darwin' and platform.machine() == 'arm64'
+
     dependencies = [
         Dependency(module="xformers", version="0.0.17.dev", required=False),
-        Dependency(module="torch", version="1.13.1+cu116"),
-        Dependency(module="torchvision", version="0.14.1+cu116"),
+        Dependency(module="torch", version="1.13.1" if is_mac else "1.13.1+cu116"),
+        Dependency(module="torchvision", version="0.14.1" if is_mac else "0.14.1+cu116"),
         Dependency(module="accelerate", version="0.17.1"),
         Dependency(module="diffusers", version="0.14.0"),
         Dependency(module="transformers", version="4.25.1"),
