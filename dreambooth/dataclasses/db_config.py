@@ -35,6 +35,7 @@ class DreamboothConfig(BaseModel):
     concepts_path: str = ""
     custom_model_name: str = ""
     noise_scheduler: str = "DDPM"
+    disable_logging: bool = False
     deterministic: bool = False
     ema_predict: bool = False
     epoch: int = 0
