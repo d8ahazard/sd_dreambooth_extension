@@ -1,5 +1,6 @@
 let dreamModelSelect;
 let newDreamModelSelect;
+let inputBrowser;
 $(".hide").hide();
 document.addEventListener("DOMContentLoaded", function () {
 
@@ -41,8 +42,35 @@ document.addEventListener("DOMContentLoaded", function () {
        }
     });
 
+    inputBrowser = new FileBrowser(document.getElementById("dreamInputBrowser"),
+    {
+        "dropdown": true,
+        "showInfo": false,
+        "showTitle": false,
+        "showSelectButton": true
+        }
+    );
+
+    inferProgress = new ProgressGroup(document.getElementById("dreamProgress"), {
+        "primary_status": "Status 1", // Status 1 text
+        "secondary_status": "Status 2", // Status 2...
+        "bar1_progress": 0, // Progressbar 1 position
+        "bar2_progress": 0 // etc
+    });
+
+    // Gallery creation. Options can also be passed to .update()
+    gallery = new InlineGallery(document.getElementById('dreamGallery'),
+        {
+            "thumbnail": true,
+            "closeable": false,
+            "show_maximize": true,
+            "start_open": true
+        }
+    );
+
+    $(".db-slider").BootstrapSlider();
     // Register the module with the UI. Icon is from boxicons by default.
-    registerModule("Dreambooth", "moduleDreambooth", "cloud", false);
+    registerModule("Dreambooth", "moduleDreambooth", "cloud", false, 2);
 
 
     registerSocketMethod("train_dreambooth", "train_dreambooth", dreamResponse);
