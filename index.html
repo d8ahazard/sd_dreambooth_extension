@@ -90,6 +90,13 @@
                                                 <label class="form-check-label" for="db_512_model">512x Model</label>
                                             </div>
                                         </div>
+                                        <div class="col-6">
+                                            <div class="form-check">
+                                                <input type="checkbox" class="form-check-input newModelParam" id="db_use_shared_src" data-key="use_shared_src"
+                                                       checked>
+                                                <label class="form-check-label" for="db_use_shared_src">Experimental Shared Src</label>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div class="row">
                                         <div class="col-12">
@@ -111,6 +118,14 @@
                                                      data-model_type="diffusers"
                                                      data-label="Source Checkpoint"
                                                      data-key="new_model_src"></div>
+                                            </div>
+                                            <div class="form-group" id="shared_row">
+                                                <div class="sharedModelSelect"
+                                                     id="new_model_shared_src"
+                                                     data-add_class="newModelParam"
+                                                     data-model_type="diffusers"
+                                                     data-label="EXPERIMENTAL: LoRA Shared Diffusers Source"
+                                                     data-key="new_model_shared_src"></div>
                                             </div>
                                         </div>
                                     </div>

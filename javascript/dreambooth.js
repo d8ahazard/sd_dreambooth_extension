@@ -127,8 +127,8 @@ function updateInputValue(elements, newValue) {
 function handleNumberInputs() {
     const numberInputs = gradioApp()
        .querySelector('#tab_dreambooth_interface')
-       .querySelectorAll('input[type="number"]');
-    numberInputs.forEach((numberInput) => {
+       ?.querySelectorAll('input[type="number"]');
+    numberInputs?.forEach((numberInput) => {
         const step = Number(numberInput.step) || 1;
         const parentDiv = numberInput.parentElement;
         const labelFor = parentDiv.querySelector('label');
@@ -285,7 +285,7 @@ function db_start_load_params() {
 // Create new checkpoint
 function db_start_create() {
     clear_loaded();
-    return db_start(8, false, true, arguments);
+    return db_start(9, false, true, arguments);
 }
 
 // Train!
@@ -560,6 +560,7 @@ function checkPrompts() {
 let progressTimeout = null;
 let galleryObserver = null;
 let gallerySet = false;
+let mutationObserver = null;
 
 function db_progressbar() {
     // gradio 3.8's enlightened approach allows them to create two nested div elements inside each other with same id
@@ -605,7 +606,7 @@ function db_progressbar() {
     }
 
     if (progressbar != null) {
-        let mutationObserver = new MutationObserver(function (m) {
+        mutationObserver = mutationObserver || new MutationObserver(function (m) {
             if (progressTimeout) {
                 return;
             }
@@ -667,7 +668,7 @@ function checkDbGallery() {
         let prevSelectedIndex = selected_gallery_index();
 
         // Make things clickable?
-        galleryObserver = new MutationObserver(function () {
+        galleryObserver = galleryObserver || new MutationObserver(function () {
             let galleryButtons = gradioApp().querySelectorAll('#db_gallery .gallery-item');
             let galleryBtnSelected = gradioApp().querySelector('#db_gallery .gallery-item.\\!ring-2');
             let gallery = gradioApp().getElementById("db_gallery");

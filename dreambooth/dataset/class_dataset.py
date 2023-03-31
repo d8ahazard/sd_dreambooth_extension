@@ -15,25 +15,25 @@ from helpers.mytqdm import mytqdm
 
 class ClassDataset(Dataset):
     """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
-    # Existing training image data
-    instance_prompts = []
-    # Existing class image data
-    class_prompts = []
-    # Data for new prompts to generate
-    new_prompts = {}
-    required_prompts = 0
 
     def __init__(self, concepts: [Concept], model_dir: str, max_width: int, shuffle: bool):
+        # Existing training image data
+        self.instance_prompts = []
+        # Existing class image data
+        self.class_prompts = []
+        # Data for new prompts to generate
+        self.new_prompts = {}
+        self.required_prompts = 0
+
         # Thingy to build prompts
         text_getter = FilenameTextGetter(shuffle)
 
         # Create available resolutions
         bucket_resos = make_bucket_resolutions(max_width)
-        concept_idx = 0
         class_images = {}
         instance_images = {}
         total_images = 0
-        for concept in concepts:
+        for concept_idx, concept in enumerate(concepts):
             if not concept.is_valid:
                 continue
 
@@ -47,14 +47,12 @@ class ClassDataset(Dataset):
             class_images[concept_idx] = get_images(class_dir)
             total_images += len(instance_images[concept_idx])
             total_images += len(class_images[concept_idx])
-            concept_idx += 1
 
-        concept_idx = 0
         status.textinfo = "Sorting images..."
         pbar = mytqdm(desc="Pre-processing images.", position=0)
         pbar.reset(total_images)
 
-        for concept in concepts:
+        for concept_idx, concept in enumerate(concepts):
             if not concept.is_valid:
                 continue
 
@@ -79,9 +77,7 @@ class ClassDataset(Dataset):
             # Iterate over each resolution of images, per concept
             for res, required_prompt_datas in required_prompt_buckets.items():
                 classes_per_bucket = len(required_prompt_datas) * concept.num_class_images_per
-
-                # Don't do anything else if we don't need class images
-                if concept.num_class_images_per == 0 or classes_per_bucket == 0:
+                if classes_per_bucket == 0:
                     continue
 
                 new_prompts_datas = []
@@ -121,7 +117,7 @@ class ClassDataset(Dataset):
                         self.new_prompts[res].extend(new_prompts_datas)
                     else:
                         self.new_prompts[res] = new_prompts_datas
-            concept_idx += 1
+
         pbar.reset(0)
         if self.required_prompts > 0:
             print(f"We need a total of {self.required_prompts} class images.")

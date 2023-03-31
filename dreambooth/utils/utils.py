@@ -11,6 +11,8 @@ from typing import Optional
 import importlib_metadata
 from packaging import version
 
+from dreambooth import shared
+
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import torch
 from huggingface_hub import HfFolder, whoami
@@ -96,7 +98,7 @@ def xformers_check():
                 raise ValueError("Xformers version must be >= 0.0.17.dev")
         has_xformers = True
     except Exception as e:
-        print(f"Exception importing xformers: {e}")
+        # print(f"Exception importing xformers: {e}")
         has_xformers = False
 
     return has_xformers
@@ -106,8 +108,9 @@ def list_optimizer():
     optimizer_list = ["Torch AdamW"]
 
     try:
-        from bitsandbytes.optim import AdamW8bit
-        optimizer_list.append("8bit AdamW")
+        if shared.device.type != "mps":
+            from bitsandbytes.optim import AdamW8bit
+            optimizer_list.append("8bit AdamW")
     except:
         pass
 
@@ -129,17 +132,17 @@ def list_optimizer():
     # except:
     #     pass
     #
-    # try:
-    #     from dadaptation import DAdaptAdam
-    #     optimizer_list.append("AdamW Dadaptation")
-    # except:
-    #     pass
-    #
-    # try:
-    #     from dreambooth.dadapt_adan import DAdaptAdan
-    #     optimizer_list.append("Adan Dadaptation")
-    # except:
-    #     pass
+    try:
+        from dadaptation import DAdaptAdam
+        optimizer_list.append("AdamW Dadaptation")
+    except:
+        pass
+
+    try:
+        from dreambooth.dadapt_adan import DAdaptAdan
+        optimizer_list.append("Adan Dadaptation")
+    except:
+        pass
 
     return optimizer_list
 
@@ -228,3 +231,19 @@ def get_full_repo_name(
         return f"{username}/{model_id}"
     else:
         return f"{organization}/{model_id}"
+
+
+def verify_locon_installed(args):
+    is_locon_installed = os.path.exists(
+        os.path.join(
+            shared.script_path,
+            "extensions",
+            "a1111-sd-webui-locon",
+        )
+    )
+    if args.save_lora_for_extra_net and args.use_lora_extended and not is_locon_installed:
+        raise Exception(
+            r"a1111-sd-webui-locon extension is required to save "
+            r"extra net for extended lora. Please install "
+            r"https://github.com/KohakuBlueleaf/a1111-sd-webui-locon"
+        )

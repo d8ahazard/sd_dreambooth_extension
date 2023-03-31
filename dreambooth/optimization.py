@@ -18,10 +18,11 @@
 """PyTorch optimizations for diffusion models."""
 
 import math
+import traceback
 from enum import Enum
-from typing import Optional, Tuple, Union, List
+from typing import Optional, Union, List
 
-import torch.optim.lr_scheduler
+from diffusers import DEISMultistepScheduler, UniPCMultistepScheduler, DDPMScheduler
 from diffusers.utils import logging
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import (
@@ -49,7 +50,7 @@ class SchedulerType(Enum):
 
 # region Newer Schedulers
 def get_cosine_annealing_scheduler(
-    optimizer: Optimizer, max_iter: int = 500, eta_min: float = 1e-6
+        optimizer: Optimizer, max_iter: int = 500, eta_min: float = 1e-6
 ):
     """
     Adjust LR from initial rate to the minimum specified LR over the maximum number of steps.
@@ -69,7 +70,7 @@ def get_cosine_annealing_scheduler(
 
 
 def get_cosine_annealing_warm_restarts_scheduler(
-    optimizer: Optimizer, t_0: int = 25, t_mult: int = 1, eta_min: float = 1e-6
+        optimizer: Optimizer, t_0: int = 25, t_mult: int = 1, eta_min: float = 1e-6
 ):
     """
     Adjust LR from initial rate to the minimum specified LR over the maximum number of steps.
@@ -93,7 +94,7 @@ def get_cosine_annealing_warm_restarts_scheduler(
 
 
 def get_linear_schedule(
-    optimizer: Optimizer, start_factor: float = 0.5, total_iters: int = 500
+        optimizer: Optimizer, start_factor: float = 0.5, total_iters: int = 500
 ):
     """
     Create a schedule with a learning rate that decreases at a linear rate until it reaches the number of total iters,
@@ -115,7 +116,7 @@ def get_linear_schedule(
 
 
 def get_constant_schedule(
-    optimizer: Optimizer, factor: float = 1.0, total_iters: int = 500
+        optimizer: Optimizer, factor: float = 1.0, total_iters: int = 500
 ):
     """
     Create a schedule with a constant learning rate, using the learning rate set in optimizer.
@@ -138,7 +139,7 @@ def get_constant_schedule(
 
 # region originals
 def get_constant_schedule_with_warmup(
-    optimizer: Optimizer, num_warmup_steps: int, min_lr: float
+        optimizer: Optimizer, num_warmup_steps: int, min_lr: float
 ):
     """
     Create a schedule with a constant learning rate preceded by a warmup period during which the learning rate
@@ -166,7 +167,7 @@ def get_constant_schedule_with_warmup(
 
 
 def get_linear_schedule_with_warmup(
-    optimizer, num_warmup_steps, num_training_steps, min_lr, last_epoch=-1
+        optimizer, num_warmup_steps, num_training_steps, min_lr, last_epoch=-1
 ):
     """
     Create a schedule with a learning rate that decreases linearly from the initial lr set in the optimizer to 0, after
@@ -202,12 +203,12 @@ def get_linear_schedule_with_warmup(
 
 
 def get_cosine_schedule_with_warmup(
-    optimizer: Optimizer,
-    num_warmup_steps: int,
-    num_training_steps: int,
-    min_lr: float,
-    num_cycles: float = 0.5,
-    last_epoch: int = -1,
+        optimizer: Optimizer,
+        num_warmup_steps: int,
+        num_training_steps: int,
+        min_lr: float,
+        num_cycles: float = 0.5,
+        last_epoch: int = -1,
 ):
     """
     Create a schedule with a learning rate that decreases following the values of the cosine function between the
@@ -247,12 +248,12 @@ def get_cosine_schedule_with_warmup(
 
 
 def get_cosine_with_hard_restarts_schedule_with_warmup(
-    optimizer: Optimizer,
-    num_warmup_steps: int,
-    num_training_steps: int,
-    min_lr: float,
-    num_cycles: int = 1,
-    last_epoch: int = -1,
+        optimizer: Optimizer,
+        num_warmup_steps: int,
+        num_training_steps: int,
+        min_lr: float,
+        num_cycles: int = 1,
+        last_epoch: int = -1,
 ):
     """
     Create a schedule with a learning rate that decreases following the values of the cosine function between the
@@ -294,13 +295,13 @@ def get_cosine_with_hard_restarts_schedule_with_warmup(
 
 
 def get_polynomial_decay_schedule_with_warmup(
-    optimizer,
-    num_warmup_steps,
-    num_training_steps,
-    min_lr: float,
-    lr_end=1e-7,
-    power=1.0,
-    last_epoch=-1,
+        optimizer,
+        num_warmup_steps,
+        num_training_steps,
+        min_lr: float,
+        lr_end=1e-7,
+        power=1.0,
+        last_epoch=-1,
 ):
     """
     Create a schedule with a learning rate that decreases as a polynomial decay from the initial lr set in the
@@ -347,7 +348,7 @@ def get_polynomial_decay_schedule_with_warmup(
             lr_range = lr_init - lr_end
             decay_steps = num_training_steps - num_warmup_steps
             pct_remaining = 1 - (current_step - num_warmup_steps) / decay_steps
-            decay = lr_range * pct_remaining**power + lr_end
+            decay = lr_range * pct_remaining ** power + lr_end
             return decay / lr_init  # as LambdaLR multiplies by lr_init
 
     return LambdaLR(optimizer, lr_lambda, last_epoch)
@@ -357,23 +358,16 @@ def get_polynomial_decay_schedule_with_warmup(
 
 
 def get_scheduler(
-    name: Union[str, SchedulerType],
-    optimizer: Optimizer,
-    num_warmup_steps: Optional[int] = None,
-    total_training_steps: Optional[int] = None,
-    lr: float = 1e-6,
-    min_lr: float = 1e-6,
-    min_lr_scale: float = 0,
-    num_cycles: int = 1,
-    power: float = 1.0,
-    factor: float = 0.5,
-    scale_pos: float = 0.5,
-    betas: Tuple[float, float] = (0.9, 0.999),
-    momentum: float = 0.9,
-    eps: float = 1e-8,
-    weight_decay: float = 0.0,
-    d0: float = 1e-6,
-    growth_rate: float = float("inf"),
+        name: Union[str, SchedulerType],
+        optimizer: Optimizer,
+        num_warmup_steps: Optional[int] = None,
+        total_training_steps: Optional[int] = None,
+        min_lr: float = 1e-6,
+        min_lr_scale: float = 0,
+        num_cycles: int = 1,
+        power: float = 1.0,
+        factor: float = 0.5,
+        scale_pos: float = 0.5,
 ):
     """
     Unified API to get any scheduler from its name.
@@ -389,8 +383,6 @@ def get_scheduler(
         total_training_steps (`int``, *optional*):
             The number of training steps. This is not required by all schedulers (hence the argument being
             optional), the function will raise an error if it's unset and the scheduler type requires it.
-        lr (`float`, *optional*, defaults to 1e-6):
-            The learning rate.
         min_lr (`float`, *optional*, defaults to 1e-6):
             The minimum learning rate to use after the number of max iterations is reached.
         min_lr_scale('float', Target learning rate / min learning rate)
@@ -403,20 +395,6 @@ def get_scheduler(
         scale_pos (`float`, *optional*, defaults to 0.5):
             If a lr scheduler has an adjustment point, this is the percentage of training steps at which to
             adjust the LR.
-        betas (Tuple[float, float], optional): coefficients used for computing
-            running averages of gradient and its square (default: (0.9, 0.999))
-        momentum (float):
-            Momentum value in  the range [0,1) (default: 0.9).
-        eps (float):
-            Term added to the denominator outside of the root operation to improve numerical stability. (default: 1e-8).
-        weight_decay (float):
-            Weight decay, i.e. a L2 penalty (default: 0).
-        d0 (float):
-            Initial D estimate for D-adaptation (default 1e-6). Rarely needs changing.
-        growth_rate (float):
-            prevent the D estimate from growing faster than this multiplicative rate.
-            Default is inf, for unrestricted. Values like 1.02 give a kind of learning
-            rate warmup effect.
     """
     name = SchedulerType(name)
     break_steps = int(total_training_steps * scale_pos)
@@ -475,24 +453,18 @@ def get_scheduler(
 
 class UniversalScheduler:
     def __init__(
-        self,
-        name: Union[str, SchedulerType],
-        optimizer: Optional[Optimizer],
-        num_warmup_steps: int,
-        total_training_steps: int,
-        total_epochs: int,
-        num_cycles: int = 1,
-        power: float = 1.0,
-        factor: float = 0.5,
-        lr: float = 1e-6,
-        min_lr: float = 1e-6,
-        scale_pos: float = 0.5,
-        betas: Tuple[float, float] = (0.9, 0.999),
-        momentum: float = 0.9,
-        eps: float = 1e-8,
-        weight_decay: float = 0.0,
-        d0: float = 1e-6,
-        growth_rate: float = float("inf"),
+            self,
+            name: Union[str, SchedulerType],
+            optimizer: Optional[Optimizer],
+            num_warmup_steps: int,
+            total_training_steps: int,
+            total_epochs: int,
+            num_cycles: int = 1,
+            power: float = 1.0,
+            factor: float = 0.5,
+            lr: float = 1e-6,
+            min_lr: float = 1e-6,
+            scale_pos: float = 0.5,
     ):
         self.current_step = 0
         og_schedulers = [
@@ -512,18 +484,11 @@ class UniversalScheduler:
             optimizer=optimizer,
             num_warmup_steps=num_warmup_steps,
             total_training_steps=total_training_steps,
-            lr=lr,
             min_lr=min_lr,
             num_cycles=num_cycles,
             power=power,
             factor=factor,
             scale_pos=scale_pos,
-            betas=betas,
-            momentum=momentum,
-            eps=eps,
-            weight_decay=weight_decay,
-            d0=d0,
-            growth_rate=growth_rate,
         )
 
     def step(self, steps: int = 1, is_epoch: bool = False):
@@ -545,3 +510,84 @@ class UniversalScheduler:
 
     def get_lr(self) -> float:
         return self.scheduler.get_lr()
+
+
+def get_optimizer(args, params_to_optimize):
+    try:
+        if args.optimizer == "8bit AdamW":
+            from bitsandbytes.optim import AdamW8bit
+            return AdamW8bit(
+                params_to_optimize,
+                lr=args.learning_rate,
+                weight_decay=args.adamw_weight_decay,
+            )
+
+        elif args.optimizer == "Lion":
+            from lion_pytorch import Lion
+            return Lion(
+                params_to_optimize,
+                lr=args.learning_rate,
+                weight_decay=args.adamw_weight_decay,
+            )
+
+        elif args.optimizer == "SGD Dadaptation":
+            from dadaptation import DAdaptSGD
+            return DAdaptSGD(
+                params_to_optimize,
+                lr=args.learning_rate,
+                weight_decay=args.adamw_weight_decay,
+            )
+
+        elif args.optimizer == "AdamW Dadaptation":
+            from dadaptation import DAdaptAdam
+            return DAdaptAdam(
+                params_to_optimize,
+                lr=args.learning_rate,
+                weight_decay=args.adamw_weight_decay,
+                decouple=True,
+            )
+
+        elif args.optimizer == "Adagrad Dadaptation":
+            from dadaptation import DAdaptAdaGrad
+            return DAdaptAdaGrad(
+                params_to_optimize,
+                lr=args.learning_rate,
+                weight_decay=args.adamw_weight_decay,
+            )
+
+        elif args.optimizer == "Adan Dadaptation":
+            from dreambooth.dadapt_adan import DAdaptAdan
+            return DAdaptAdan(
+                params_to_optimize,
+                lr=args.learning_rate,
+                weight_decay=args.adamw_weight_decay,
+            )
+
+    except Exception as e:
+        logger.warning(f"Exception importing {args.optimizer}: {e}")
+        traceback.print_exc()
+        print(str(e))
+        print("WARNING: Using default optimizer (AdamW from Torch)")
+
+    args.optimizer = "Torch AdamW"
+    from torch.optim import AdamW
+    return AdamW(
+        params_to_optimize,
+        lr=args.learning_rate,
+        weight_decay=args.adamw_weight_decay,
+    )
+
+
+def get_noise_scheduler(args):
+    if args.noise_scheduler == "DEIS":
+        scheduler_class = DEISMultistepScheduler
+
+    elif args.noise_scheduler == "UniPC":
+        scheduler_class = UniPCMultistepScheduler
+
+    else:
+        scheduler_class = DDPMScheduler
+
+    return scheduler_class.from_pretrained(
+        args.get_pretrained_model_name_or_path(), subfolder="scheduler"
+    )

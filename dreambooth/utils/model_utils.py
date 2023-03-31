@@ -19,6 +19,7 @@ checkpoints_loaded = collections.OrderedDict()
 model_dir = "Stable-diffusion"
 model_path = os.path.abspath(os.path.join(shared.models_path, model_dir))
 
+LORA_SHARED_SRC_CREATE = " <create new>"
 
 def model_hash(filename):
     """old hash that only looks at a small part of the file and is prone to collisions"""
@@ -47,12 +48,12 @@ class CheckpointInfo:
         else:
             name = os.path.basename(filename)
 
-        if name.startswith(os.pathsep) or name.startswith(os.pathsep):
+        if name.startswith(os.sep) or name.startswith(os.sep):
             name = name[1:]
 
         self.name = name
         self.name_for_extra = os.path.splitext(os.path.basename(filename))[0]
-        self.model_name = os.path.splitext(name.replace(os.pathsep, "_"))[0]
+        self.model_name = os.path.splitext(name.replace(os.sep, "_"))[0]
         self.hash = model_hash(filename)
 
         self.sha256 = hashes.sha256_from_cache(self.filename, "checkpoint/" + name)
@@ -110,8 +111,19 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
 def get_db_models():
+    rgx = re.compile(r"\[.*\]")
     output = [""]
     out_dir = shared.dreambooth_models_path
+    if os.path.exists(out_dir):
+        for item in os.listdir(out_dir):
+            if os.path.isdir(os.path.join(out_dir, item)) and not rgx.search(item):
+                output.append(item)
+    return output
+
+
+def get_shared_models():
+    output = ["", LORA_SHARED_SRC_CREATE]
+    out_dir = os.path.join(shared.models_path, "diffusers")
     if os.path.exists(out_dir):
         for item in os.listdir(out_dir):
             if os.path.isdir(os.path.join(out_dir, item)):

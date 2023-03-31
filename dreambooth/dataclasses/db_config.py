@@ -102,6 +102,7 @@ class DreamboothConfig(BaseModel):
     save_state_cancel: bool = False
     save_state_during: bool = False
     scheduler: str = "ddim"
+    shared_diffusers_path: str = ""
     shuffle_tags: bool = True
     snapshot: str = ""
     split_loss: bool = True
@@ -142,7 +143,7 @@ class DreamboothConfig(BaseModel):
             self.lora_model_name = ""
 
         model_dir = os.path.join(models_path, model_name)
-        print(f"Model dir set to: {model_dir}")
+        # print(f"Model dir set to: {model_dir}")
         working_dir = os.path.join(model_dir, "working")
 
         if not os.path.exists(working_dir):
@@ -307,6 +308,11 @@ class DreamboothConfig(BaseModel):
             print(f"Exception loading config: {e}")
             traceback.print_exc()
             return None
+    
+    def get_pretrained_model_name_or_path(self):
+        if (self.shared_diffusers_path != "" and not self.use_lora):
+            raise Exception(f"shared_diffusers_path is \"{self.shared_diffusers_path}\" but use_lora is false")
+        return self.shared_diffusers_path if self.shared_diffusers_path != "" else self.pretrained_model_name_or_path
 
 
 def concepts_from_file(concepts_path: str):
@@ -374,6 +380,9 @@ def from_file(model_name):
     Returns: Dict | None
 
     """
+    if isinstance(model_name, list) and len(model_name) > 0:
+        model_name = model_name[0]
+        
     if model_name == "" or model_name is None:
         return None
 

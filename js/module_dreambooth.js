@@ -69,6 +69,7 @@ document.addEventListener("DOMContentLoaded", function () {
     );
 
     $(".db-slider").BootstrapSlider();
+
     // Register the module with the UI. Icon is from boxicons by default.
     registerModule("Dreambooth", "moduleDreambooth", "cloud", false, 2);
 

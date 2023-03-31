@@ -39,6 +39,7 @@ from dreambooth.utils.model_utils import (
     get_db_models,
     get_sorted_lora_models,
     get_model_snapshots,
+    get_shared_models,
 )
 from dreambooth.utils.utils import (
     list_attention,
@@ -310,6 +311,9 @@ def on_ui_tabs():
                         with gr.Row():
                             gr.HTML(value="Source Checkpoint:")
                             db_src = gr.HTML()
+                        with gr.Row():
+                            gr.HTML(value="Experimental Shared Source:")
+                            db_shared_diffusers_path = gr.HTML()
                     with gr.Tab("Create"):
                         with gr.Column():
                             db_create_model = gr.Button(
@@ -321,6 +325,9 @@ def on_ui_tabs():
                                 label="Create From Hub", value=False
                             )
                             db_512_model = gr.Checkbox(label="512x Model", value=True)
+                            db_use_shared_src = gr.Checkbox(
+                                label="Experimental Shared Src", value=False
+                            )
                         with gr.Column(visible=False) as hub_row:
                             db_new_model_url = gr.Textbox(
                                 label="Model Path",
@@ -340,6 +347,19 @@ def on_ui_tabs():
                                     get_sd_models,
                                     lambda: {"choices": sorted(get_sd_models())},
                                     "refresh_sd_models",
+                                )
+                        with gr.Column(visible=False) as shared_row:
+                            with gr.Row():
+                                db_new_model_shared_src = gr.Dropdown(
+                                    label="EXPERIMENTAL: LoRA Shared Diffusers Source",
+                                    choices=sorted(get_shared_models()),
+                                    value=""
+                                )
+                                create_refresh_button(
+                                    db_new_model_shared_src,
+                                    get_shared_models,
+                                    lambda: {"choices": sorted(get_shared_models())},
+                                    "refresh_shared_models",
                                 )
                         db_new_model_extract_ema = gr.Checkbox(
                             label="Extract EMA Weights", value=False
@@ -610,6 +630,7 @@ def on_ui_tabs():
                     with gr.Accordion(open=False, label="Advanced"):
                         with gr.Row():
                             with gr.Column():
+                                gr.HTML(value="Sanity Samples")
                                 db_sanity_prompt = gr.Textbox(
                                     label="Sanity Sample Prompt",
                                     placeholder="A generic prompt used to generate a sample image "
@@ -630,7 +651,6 @@ def on_ui_tabs():
                                     placeholder="Leave blank to use base model VAE.",
                                     value="",
                                 )
-
                                 db_use_concepts = gr.Checkbox(
                                     label="Use Concepts List", value=False
                                 )
@@ -648,18 +668,19 @@ def on_ui_tabs():
                                     db_clear_secret = gr.Button(
                                         value=delete_symbol, elem_id="clear_secret"
                                     )
-                                with gr.Column():
-                                    # In the future change this to something more generic and list the supported types
-                                    # from DreamboothWebhookTarget enum; for now, Discord is what I use ;)
-                                    # Add options to include notifications on training complete and exceptions that halt training
-                                    db_notification_webhook_url = gr.Textbox(
-                                        label="Discord Webhook",
-                                        placeholder="https://discord.com/api/webhooks/XXX/XXXX",
-                                        value="",
-                                    )
-                                    notification_webhook_test_btn = gr.Button(
-                                        value="Save and Test Webhook"
-                                    )
+
+                            with gr.Column():
+                                # In the future change this to something more generic and list the supported types
+                                # from DreamboothWebhookTarget enum; for now, Discord is what I use ;)
+                                # Add options to include notifications on training complete and exceptions that halt training
+                                db_notification_webhook_url = gr.Textbox(
+                                    label="Discord Webhook",
+                                    placeholder="https://discord.com/api/webhooks/XXX/XXXX",
+                                    value="",
+                                )
+                                notification_webhook_test_btn = gr.Button(
+                                    value="Save and Test Webhook"
+                                )
 
                     with gr.Row():
                         with gr.Column(scale=2):
@@ -1259,6 +1280,7 @@ def on_ui_tabs():
             db_scheduler,
             db_split_loss,
             db_strict_tokens,
+            db_shared_diffusers_path,
             db_shuffle_tags,
             db_snapshot,
             db_src,
@@ -1272,6 +1294,7 @@ def on_ui_tabs():
             db_use_ema,
             db_use_lora,
             db_use_lora_extended,
+            db_use_shared_src,
             db_use_subdir,
             c1_class_data_dir,
             c1_class_guidance_scale,
@@ -1349,6 +1372,7 @@ def on_ui_tabs():
             db_model_path,
             db_revision,
             db_src,
+            db_shared_diffusers_path,
         ]
 
         # Populate by the below method and handed out to other elements
@@ -1390,6 +1414,15 @@ def on_ui_tabs():
             fn=toggle_new_rows,
             inputs=[db_create_from_hub],
             outputs=[hub_row, local_row],
+        )
+
+        def toggle_shared_row(shared_row):
+            return gr.update(visible=shared_row),  gr.update(value="")
+
+        db_use_shared_src.change(
+            fn=toggle_shared_row,
+            inputs=[db_use_shared_src],
+            outputs=[shared_row, db_new_model_shared_src],
         )
 
         db_prior_loss_scale.change(
@@ -1497,6 +1530,7 @@ def on_ui_tabs():
                 db_v2,
                 db_has_ema,
                 db_src,
+                db_shared_diffusers_path,
                 db_snapshot,
                 db_lora_model_name,
                 db_status,
@@ -1622,6 +1656,7 @@ def on_ui_tabs():
             inputs=[
                 db_new_model_name,
                 db_new_model_src,
+                db_new_model_shared_src,
                 db_create_from_hub,
                 db_new_model_url,
                 db_new_model_token,
@@ -1635,6 +1670,7 @@ def on_ui_tabs():
                 db_revision,
                 db_epochs,
                 db_src,
+                db_shared_diffusers_path,
                 db_has_ema,
                 db_v2,
                 db_resolution,

@@ -1,9 +1,10 @@
 # Borrowed heavily from https://github.com/bmaltais/kohya_ss/blob/master/train_db.py and
 # https://github.com/ShivamShrirao/diffusers/tree/main/examples/dreambooth
 # With some custom bits sprinkled in and some stuff from OG diffusers as well.
-import copy
+
 import itertools
 import logging
+import math
 import os
 import time
 import traceback
@@ -21,7 +22,6 @@ from diffusers import (
     AutoencoderKL,
     DiffusionPipeline,
     UNet2DConditionModel,
-    DDPMScheduler,
     DEISMultistepScheduler,
     UniPCMultistepScheduler
 )
@@ -40,7 +40,7 @@ from dreambooth.dataset.sample_dataset import SampleDataset
 from dreambooth.deis_velocity import get_velocity
 from dreambooth.diff_to_sd import compile_checkpoint, copy_diffusion_model
 from dreambooth.memory import find_executable_batch_size
-from dreambooth.optimization import UniversalScheduler
+from dreambooth.optimization import UniversalScheduler, get_optimizer, get_noise_scheduler
 from dreambooth.shared import status
 from dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
 from dreambooth.utils.image_utils import db_save_image, get_scheduler_class
@@ -53,7 +53,7 @@ from dreambooth.utils.model_utils import (
     torch2ify,
 )
 from dreambooth.utils.text_utils import encode_hidden_state
-from dreambooth.utils.utils import cleanup, printm
+from dreambooth.utils.utils import cleanup, printm, verify_locon_installed
 from dreambooth.webhook import send_training_update
 from dreambooth.xattention import optim_to
 from helpers.ema_model import EMAModel
@@ -78,7 +78,7 @@ last_samples = []
 last_prompts = []
 
 try:
-    diff_version = str(importlib_metadata.version("diffusers"))
+    diff_version = importlib_metadata.version("diffusers")
     version_string = diff_version.split(".")
     major_version = int(version_string[0])
     minor_version = int(version_string[1])
@@ -88,6 +88,7 @@ try:
             "The version of diffusers is less than or equal to 0.14.0. Performing monkey-patch..."
         )
         DEISMultistepScheduler.get_velocity = get_velocity
+        UniPCMultistepScheduler.get_velocity = get_velocity
     else:
         print(
             "The version of diffusers is greater than 0.14.0, hopefully they merged the PR by now"
@@ -164,9 +165,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         starting_grad_size=args.gradient_accumulation_steps,
         logging_dir=logging_dir,
     )
-    def inner_loop(
-            train_batch_size: int, gradient_accumulation_steps: int, profiler: profile
-    ):
+    def inner_loop(train_batch_size: int, gradient_accumulation_steps: int, profiler: profile):
 
         text_encoder = None
         global last_samples
@@ -178,6 +177,8 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         args.max_token_length = int(args.max_token_length)
         if not args.pad_tokens and args.max_token_length > 75:
             print("Cannot raise token length limit above 75 when pad_tokens=False")
+
+        verify_locon_installed(args)
 
         precision = args.mixed_precision if not shared.force_cpu else "no"
 
@@ -241,7 +242,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             vae_path = (
                 args.pretrained_vae_name_or_path
                 if args.pretrained_vae_name_or_path
-                else args.pretrained_model_name_or_path
+                else args.get_pretrained_model_name_or_path()
             )
             disable_safe_unpickle()
             new_vae = AutoencoderKL.from_pretrained(
@@ -257,19 +258,19 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         disable_safe_unpickle()
         # Load the tokenizer
         tokenizer = AutoTokenizer.from_pretrained(
-            os.path.join(args.pretrained_model_name_or_path, "tokenizer"),
+            os.path.join(args.get_pretrained_model_name_or_path(), "tokenizer"),
             revision=args.revision,
             use_fast=False,
         )
 
         # import correct text encoder class
         text_encoder_cls = import_model_class_from_model_name_or_path(
-            args.pretrained_model_name_or_path, args.revision
+            args.get_pretrained_model_name_or_path(), args.revision
         )
 
         # Load models and create wrapper for stable diffusion
         text_encoder = text_encoder_cls.from_pretrained(
-            args.pretrained_model_name_or_path,
+            args.get_pretrained_model_name_or_path(),
             subfolder="text_encoder",
             revision=args.revision,
             torch_dtype=torch.float32,
@@ -279,7 +280,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         printm("Created vae")
 
         unet = UNet2DConditionModel.from_pretrained(
-            args.pretrained_model_name_or_path,
+            args.get_pretrained_model_name_or_path(),
             subfolder="unet",
             revision=args.revision,
             torch_dtype=torch.float32,
@@ -349,13 +350,13 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         if args.use_ema:
             if os.path.exists(
                     os.path.join(
-                        args.pretrained_model_name_or_path,
+                        args.get_pretrained_model_name_or_path(),
                         "ema_unet",
                         "diffusion_pytorch_model.safetensors",
                     )
             ):
                 ema_unet = UNet2DConditionModel.from_pretrained(
-                    args.pretrained_model_name_or_path,
+                    args.get_pretrained_model_name_or_path(),
                     subfolder="ema_unet",
                     revision=args.revision,
                     torch_dtype=torch.float32,
@@ -372,13 +373,15 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     unet, device=accelerator.device, dtype=weight_dtype
                 )
 
+        if args.use_lora or not args.train_unet:
+            unet.requires_grad_(False)
+
         unet_lora_params = None
         text_encoder_lora_params = None
-
         lora_path = None
         lora_txt = None
+
         if args.use_lora:
-            unet.requires_grad_(False)
             if args.lora_model_name:
                 lora_path = os.path.join(args.model_dir, "loras", args.lora_model_name)
                 lora_txt = lora_path.replace(".pt", "_txt.pt")
@@ -409,14 +412,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             printm("Lora loaded")
             cleanup()
             printm("Cleaned")
-        else:
-            if not args.train_unet:
-                unet.requires_grad_(False)
 
-        if args.use_lora:
             args.learning_rate = args.lora_learning_rate
-            params_to_optimize = (
-                [
+            if stop_text_percentage != 0:
+                params_to_optimize = [
                     {
                         "params": itertools.chain(*unet_lora_params),
                         "lr": args.lora_learning_rate,
@@ -426,71 +425,20 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                         "lr": args.lora_txt_learning_rate,
                     },
                 ]
-                if stop_text_percentage != 0
-                else itertools.chain(*unet_lora_params)
-            )
-        else:
-            params_to_optimize = (
-                itertools.chain(text_encoder.parameters())
-                if stop_text_percentage != 0 and not args.train_unet
-                else itertools.chain(unet.parameters(), text_encoder.parameters())
-                if stop_text_percentage != 0
-                else unet.parameters()
-            )
-
-        try:
-            if args.optimizer == "8bit AdamW":
-                from bitsandbytes.optim import AdamW8bit
-                optimizer_class = AdamW8bit
-
-            elif args.optimizer == "Lion":
-                from lion_pytorch import Lion
-                optimizer_class = Lion
-
-            elif args.optimizer == "SGD Dadaptation":
-                from dadaptation import DAdaptSGD
-                optimizer_class = DAdaptSGD
-
-            elif args.optimizer == "AdamW Dadaptation":
-                from dadaptation import DAdaptAdam
-                optimizer_class = DAdaptAdam
-
-            elif args.optimizer == "Adagrad Dadaptation":
-                from dadaptation import DAdaptAdaGrad
-                optimizer_class = DAdaptAdaGrad
-
-            elif args.optimizer == "Adan Dadaptation":
-                from dreambooth.dadapt_adan import DAdaptAdan
-                optimizer_class = DAdaptAdan
-
             else:
-                optimizer_class = torch.optim.AdamW
+                params_to_optimize = itertools.chain(*unet_lora_params)
 
-        except Exception as e:
-            logger.warning(f"Exception importing {args.optimizer}: {e}")
-            traceback.print_exc()
-            print(str(e))
-            print("WARNING: Using default optimizer (AdamW from Torch)")
-            optimizer_class = torch.optim.AdamW
-
-        optimizer = optimizer_class(
-            params_to_optimize,
-            lr=args.learning_rate,
-            weight_decay=args.adamw_weight_decay,
-        )
-
-        if args.noise_scheduler == "DEIS":
-            noise_scheduler = DEISMultistepScheduler.from_pretrained(
-                args.pretrained_model_name_or_path, subfolder="scheduler"
-            )
-        elif args.noise_scheduler == "UniPC":
-            noise_scheduler = UniPCMultistepScheduler.from_pretrained(
-                args.pretrained_model_name_or_path, subfolder="scheduler"
-            )
+        elif stop_text_percentage != 0:
+            if args.train_unet:
+                params_to_optimize = itertools.chain(unet.parameters(), text_encoder.parameters())
+            else:
+                params_to_optimize = itertools.chain(text_encoder.parameters())
         else:
-            noise_scheduler = DDPMScheduler.from_pretrained(
-                args.pretrained_model_name_or_path, subfolder="scheduler"
-            )
+            params_to_optimize = unet.parameters()
+
+        optimizer = get_optimizer(args, params_to_optimize)
+
+        noise_scheduler = get_noise_scheduler(args)
 
         def cleanup_memory():
             try:
@@ -773,13 +721,14 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             save_lora = False
             save_checkpoint = False
 
-            if shared.status.do_save_samples and is_epoch_check:
-                save_image = True
-                shared.status.do_save_samples = False
+            if is_epoch_check:
+                if shared.status.do_save_samples:
+                    save_image = True
+                    shared.status.do_save_samples = False
 
-            if shared.status.do_save_model and is_epoch_check:
-                save_model = True
-                shared.status.do_save_model = False
+                if shared.status.do_save_model:
+                    save_model = True
+                    shared.status.do_save_model = False
 
             if save_model:
                 if save_canceled:
@@ -837,9 +786,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 printm("Pre-cleanup.")
                 
                 # Save random states so sample generation doesn't impact training.
-                torch_rng_state = torch.get_rng_state()
-                cuda_gpu_rng_state = torch.cuda.get_rng_state(device="cuda")
-                cuda_cpu_rng_state = torch.cuda.get_rng_state(device="cpu")
+                if shared.device.type == 'cuda':
+                    torch_rng_state = torch.get_rng_state()
+                    cuda_gpu_rng_state = torch.cuda.get_rng_state(device="cuda")
+                    cuda_cpu_rng_state = torch.cuda.get_rng_state(device="cpu")
 
                 optim_to(profiler, optimizer)
                 
@@ -853,7 +803,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 printm("Creating pipeline.")
 
                 s_pipeline = DiffusionPipeline.from_pretrained(
-                    args.pretrained_model_name_or_path,
+                    args.get_pretrained_model_name_or_path(),
                     unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=True),
                     text_encoder=accelerator.unwrap_model(
                         text_encoder, keep_fp32_wrapper=True
@@ -911,7 +861,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                 if ema_model is not None:
                                     ema_model.save_pretrained(
                                         os.path.join(
-                                            args.pretrained_model_name_or_path,
+                                            args.get_pretrained_model_name_or_path(),
                                             "ema_unet",
                                         ),
                                         safe_serialization=True,
@@ -924,11 +874,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                 loras_dir = os.path.join(args.model_dir, "loras")
                                 os.makedirs(loras_dir, exist_ok=True)
                                 # setup pt path
-                                lora_model_name = (
-                                    args.model_name
-                                    if args.custom_model_name == ""
-                                    else args.custom_model_name
-                                )
+                                if args.custom_model_name == "":
+                                    lora_model_name = args.model_name
+                                else:
+                                    lora_model_name = args.custom_model_name
                                 lora_file_prefix = f"{lora_model_name}_{args.revision}"
                                 out_file = os.path.join(
                                     loras_dir, f"{lora_file_prefix}.pt"
@@ -955,19 +904,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                     pbar.update()
                                 # save extra_net
                                 if args.save_lora_for_extra_net:
-                                    if args.use_lora_extended:
-                                        if not os.path.exists(
-                                                os.path.join(
-                                                    shared.script_path,
-                                                    "extensions",
-                                                    "a1111-sd-webui-locon",
-                                                )
-                                        ):
-                                            raise Exception(
-                                                r"a1111-sd-webui-locon extension is required to save "
-                                                r"extra net for extended lora. Please install "
-                                                r"https://github.com/KohakuBlueleaf/a1111-sd-webui-locon"
-                                            )
                                     os.makedirs(
                                         shared.ui_lora_models_path, exist_ok=True
                                     )
@@ -1100,9 +1036,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 optim_to(profiler, optimizer, accelerator.device)
 
                 # Restore all random states to avoid having sampling impact training.
-                torch.set_rng_state(torch_rng_state)
-                torch.cuda.set_rng_state(cuda_cpu_rng_state, device="cpu")
-                torch.cuda.set_rng_state(cuda_gpu_rng_state, device="cuda")
+                if shared.device.type == 'cuda':
+                    torch.set_rng_state(torch_rng_state)
+                    torch.cuda.set_rng_state(cuda_cpu_rng_state, device="cpu")
+                    torch.cuda.set_rng_state(cuda_gpu_rng_state, device="cuda")
 
                 cleanup()
                 printm("Completed saving weights.")
@@ -1143,10 +1080,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             if stop_text_percentage == 0:
                 train_tenc = False
 
-            if not args.freeze_clip_normalization:
-                text_encoder.train(train_tenc)
-            else:
+            if args.freeze_clip_normalization:
                 text_encoder.eval()
+            else:
+                text_encoder.train(train_tenc)
 
             if not args.use_lora:
                 text_encoder.requires_grad_(train_tenc)
@@ -1292,15 +1229,14 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                             loss = instance_loss
                         else:
                             loss = prior_loss * current_prior_loss_weight
+
                     accelerator.backward(loss)
+
                     if accelerator.sync_gradients and not args.use_lora:
-                        params_to_clip = (
-                            itertools.chain(
-                                unet.parameters(), text_encoder.parameters()
-                            )
-                            if train_tenc
-                            else unet.parameters()
-                        )
+                        if train_tenc:
+                            params_to_clip = itertools.chain(unet.parameters(), text_encoder.parameters())
+                        else:
+                            params_to_clip = unet.parameters()
                         accelerator.clip_grad_norm_(params_to_clip, 1)
 
                     optimizer.step()
@@ -1315,9 +1251,11 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
                 last_lr = lr_scheduler.get_last_lr()[0]
+
                 global_step += train_batch_size
                 args.revision += train_batch_size
                 status.job_no += train_batch_size
+
                 del noise_pred
                 del latents
                 del encoder_hidden_states
@@ -1360,6 +1298,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     f"Steps: {global_step}/{max_train_steps} (Current),"
                     f" {args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
                 )
+
+                if math.isnan(loss_step):
+                    print("Loss is NaN, your model is dead. Cancelling training.")
+                    status.interrupted = True
 
                 # Log completion message
                 if training_complete or status.interrupted:
