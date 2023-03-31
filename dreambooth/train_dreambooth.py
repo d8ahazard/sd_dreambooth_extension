@@ -786,7 +786,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 printm("Pre-cleanup.")
                 
                 # Save random states so sample generation doesn't impact training.
-                if shared.device.type != 'mps':
+                if shared.device.type == 'cuda':
                     torch_rng_state = torch.get_rng_state()
                     cuda_gpu_rng_state = torch.cuda.get_rng_state(device="cuda")
                     cuda_cpu_rng_state = torch.cuda.get_rng_state(device="cpu")
@@ -1036,7 +1036,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 optim_to(profiler, optimizer, accelerator.device)
 
                 # Restore all random states to avoid having sampling impact training.
-                if shared.device.type != 'mps':
+                if shared.device.type == 'cuda':
                     torch.set_rng_state(torch_rng_state)
                     torch.cuda.set_rng_state(cuda_cpu_rng_state, device="cpu")
                     torch.cuda.set_rng_state(cuda_gpu_rng_state, device="cuda")
