@@ -35,6 +35,7 @@ class DreamboothConfig(BaseModel):
     concepts_path: str = ""
     custom_model_name: str = ""
     noise_scheduler: str = "DDPM"
+    disable_logging: bool = False
     deterministic: bool = False
     ema_predict: bool = False
     epoch: int = 0
@@ -102,6 +103,7 @@ class DreamboothConfig(BaseModel):
     save_state_cancel: bool = False
     save_state_during: bool = False
     scheduler: str = "ddim"
+    shared_diffusers_path: str = ""
     shuffle_tags: bool = True
     snapshot: str = ""
     split_loss: bool = True
@@ -307,6 +309,11 @@ class DreamboothConfig(BaseModel):
             print(f"Exception loading config: {e}")
             traceback.print_exc()
             return None
+    
+    def get_pretrained_model_name_or_path(self):
+        if (self.shared_diffusers_path != "" and not self.use_lora):
+            raise Exception(f"shared_diffusers_path is \"{self.shared_diffusers_path}\" but use_lora is false")
+        return self.shared_diffusers_path if self.shared_diffusers_path != "" else self.pretrained_model_name_or_path
 
 
 def concepts_from_file(concepts_path: str):

@@ -242,7 +242,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             vae_path = (
                 args.pretrained_vae_name_or_path
                 if args.pretrained_vae_name_or_path
-                else args.pretrained_model_name_or_path
+                else args.get_pretrained_model_name_or_path()
             )
             disable_safe_unpickle()
             new_vae = AutoencoderKL.from_pretrained(
@@ -258,19 +258,19 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         disable_safe_unpickle()
         # Load the tokenizer
         tokenizer = AutoTokenizer.from_pretrained(
-            os.path.join(args.pretrained_model_name_or_path, "tokenizer"),
+            os.path.join(args.get_pretrained_model_name_or_path(), "tokenizer"),
             revision=args.revision,
             use_fast=False,
         )
 
         # import correct text encoder class
         text_encoder_cls = import_model_class_from_model_name_or_path(
-            args.pretrained_model_name_or_path, args.revision
+            args.get_pretrained_model_name_or_path(), args.revision
         )
 
         # Load models and create wrapper for stable diffusion
         text_encoder = text_encoder_cls.from_pretrained(
-            args.pretrained_model_name_or_path,
+            args.get_pretrained_model_name_or_path(),
             subfolder="text_encoder",
             revision=args.revision,
             torch_dtype=torch.float32,
@@ -280,7 +280,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         printm("Created vae")
 
         unet = UNet2DConditionModel.from_pretrained(
-            args.pretrained_model_name_or_path,
+            args.get_pretrained_model_name_or_path(),
             subfolder="unet",
             revision=args.revision,
             torch_dtype=torch.float32,
@@ -350,13 +350,13 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         if args.use_ema:
             if os.path.exists(
                     os.path.join(
-                        args.pretrained_model_name_or_path,
+                        args.get_pretrained_model_name_or_path(),
                         "ema_unet",
                         "diffusion_pytorch_model.safetensors",
                     )
             ):
                 ema_unet = UNet2DConditionModel.from_pretrained(
-                    args.pretrained_model_name_or_path,
+                    args.get_pretrained_model_name_or_path(),
                     subfolder="ema_unet",
                     revision=args.revision,
                     torch_dtype=torch.float32,
@@ -804,7 +804,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 printm("Creating pipeline.")
 
                 s_pipeline = DiffusionPipeline.from_pretrained(
-                    args.pretrained_model_name_or_path,
+                    args.get_pretrained_model_name_or_path(),
                     unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=True),
                     text_encoder=accelerator.unwrap_model(
                         text_encoder, keep_fp32_wrapper=True
@@ -862,7 +862,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                 if ema_model is not None:
                                     ema_model.save_pretrained(
                                         os.path.join(
-                                            args.pretrained_model_name_or_path,
+                                            args.get_pretrained_model_name_or_path(),
                                             "ema_unet",
                                         ),
                                         safe_serialization=True,
@@ -956,7 +956,13 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                     )
                                     prompts.append(epd)
                                 pbar.set_description("Generating Samples")
-                                pbar.reset(len(prompts) + 2)
+                                
+                                prompt_lengths = len(prompts)
+                                if args.disable_logging:
+                                    pbar.reset(prompt_lengths)
+                                else:
+                                    pbar.reset(prompt_lengths + 2)
+                                    
                                 ci = 0
                                 for c in prompts:
                                     c.out_dir = os.path.join(args.model_dir, "samples")
@@ -997,30 +1003,34 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 if save_image:
                     if "generator" in locals():
                         del generator
-                    try:
-                        printm("Parse logs.")
-                        log_images, log_names = log_parser.parse_logs(
-                            model_name=args.model_name
-                        )
-                        pbar.update()
-                        for log_image in log_images:
-                            last_samples.append(log_image)
-                        for log_name in log_names:
-                            last_prompts.append(log_name)
-                        send_training_update(
-                            last_samples,
-                            args.model_name,
-                            last_prompts,
-                            global_step,
-                            args.revision,
-                        )
+                    
+                    if not args.disable_logging:
+                        try:
+                            printm("Parse logs.")
+                            log_images, log_names = log_parser.parse_logs(
+                                model_name=args.model_name
+                            )
+                            pbar.update()
+                            for log_image in log_images:
+                                last_samples.append(log_image)
+                            for log_name in log_names:
+                                last_prompts.append(log_name)
 
-                        del log_images
-                        del log_names
-                    except Exception as l:
-                        traceback.print_exc()
-                        print(f"Exception parsing logz: {l}")
-                        pass
+                            del log_images
+                            del log_names
+                        except Exception as l:
+                            traceback.print_exc()
+                            print(f"Exception parsing logz: {l}")
+                            pass
+                        
+                    send_training_update(
+                        last_samples,
+                        args.model_name,
+                        last_prompts,
+                        global_step,
+                        args.revision
+                    )
+                    
                     status.sample_prompts = last_prompts
                     status.current_image = last_samples
                     pbar.update()

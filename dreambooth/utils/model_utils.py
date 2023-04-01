@@ -19,6 +19,7 @@ checkpoints_loaded = collections.OrderedDict()
 model_dir = "Stable-diffusion"
 model_path = os.path.abspath(os.path.join(shared.models_path, model_dir))
 
+LORA_SHARED_SRC_CREATE = " <create new>"
 
 def model_hash(filename):
     """old hash that only looks at a small part of the file and is prone to collisions"""
@@ -116,6 +117,16 @@ def get_db_models():
     if os.path.exists(out_dir):
         for item in os.listdir(out_dir):
             if os.path.isdir(os.path.join(out_dir, item)) and not rgx.search(item):
+                output.append(item)
+    return output
+
+
+def get_shared_models():
+    output = ["", LORA_SHARED_SRC_CREATE]
+    out_dir = os.path.join(shared.models_path, "diffusers")
+    if os.path.exists(out_dir):
+        for item in os.listdir(out_dir):
+            if os.path.isdir(os.path.join(out_dir, item)):
                 output.append(item)
     return output
 

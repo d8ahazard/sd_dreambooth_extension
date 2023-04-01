@@ -64,7 +64,7 @@ def send_training_update(
 
     # Accept a list, make a grid
     if isinstance(imgs, List):
-        out_imgs = [Image.open(img) for img in imgs]
+        out_imgs = [Image.open(img) if isinstance(img, str) else img for img in imgs]
 
         image = image_grid(out_imgs)
 
@@ -73,7 +73,7 @@ def send_training_update(
 
         del out_imgs
     else:
-        image = Image.open(imgs)
+        image = Image.open(imgs) if isinstance(imgs, str) else imgs
 
     if isinstance(prompt, List):
         _prompts = prompt
