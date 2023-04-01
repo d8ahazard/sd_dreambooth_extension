@@ -187,7 +187,10 @@ class DreamState:
             "sampling_steps": self.sampling_steps,
             "last_status": self.textinfo,
             "sample_prompts": self.sample_prompts,
-            "active": self.active
+            "active": self.active,
+            "in_progress": self.in_progress,
+            "in_progress_epoch": self.in_progress_epoch,
+            "in_progress_step": self.in_progress_step,
         }
 
         return obj
@@ -207,6 +210,7 @@ class DreamState:
         self.textinfo2 = None
         self.time_left_force_display = False
         self.active = True
+        self.in_progress = True
         torch_gc()
 
     def end(self):
@@ -215,6 +219,7 @@ class DreamState:
         self.job_count = 0
         self.job_no = 0
         self.active = False
+        self.in_progress = False
         torch_gc()
 
     def nextjob(self):
@@ -297,7 +302,7 @@ def load_vars(root_path = None):
     data_path, show_progress_every_n_steps, parallel_processing_allowed, dataset_filename_word_regex, dataset_filename_join_string, \
     device_id, state, disable_safe_unpickle, ckptfix, medvram, lowvram, debug, profile_db, sub_quad_q_chunk_size, sub_quad_kv_chunk_size, \
     sub_quad_chunk_threshold, CLIP_stop_at_last_layers, sd_model, config, force_cpu, paths, is_auto, device, orig_tensor_to, orig_layer_norm, \
-    orig_tensor_numpy, extension_path, orig_cumsum, orig_Tensor_cumsum, status, state
+    orig_tensor_numpy, extension_path, orig_cumsum, orig_Tensor_cumsum, status, state, in_progress, in_progress_epoch, in_progress_step
 
     script_path = os.sep.join(__file__.split(os.sep)[0:-4]) if root_path is None else root_path
     logger.debug(f"Script path is {script_path}")
@@ -319,6 +324,9 @@ def load_vars(root_path = None):
     medvram = False
     lowvram = False
     debug = False
+    in_progress = False
+    in_progress_epoch = 0
+    in_progress_step = 0
     profile_db = False
     sub_quad_q_chunk_size = 1024
     sub_quad_kv_chunk_size = None
@@ -390,6 +398,9 @@ ckptfix = False
 medvram = False
 lowvram = False
 debug = False
+in_progress = False
+in_progress_epoch = 0
+in_progress_step = 0
 profile_db = False
 sub_quad_q_chunk_size = 1024
 sub_quad_kv_chunk_size = None
@@ -407,5 +418,6 @@ extension_path = ""
 status = None
 orig_cumsum = torch.cumsum
 orig_Tensor_cumsum = torch.Tensor.cumsum
+is_auto = load_auto_settings()
 
 load_vars()

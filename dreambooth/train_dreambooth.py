@@ -77,6 +77,10 @@ dl.set_verbosity_error()
 last_samples = []
 last_prompts = []
 
+in_progress = shared.in_progress
+in_progress_epoch = shared.in_progress_epoch
+in_progress_step = shared.in_progress_step
+
 try:
     diff_version = importlib_metadata.version("diffusers")
     version_string = diff_version.split(".")
@@ -84,6 +88,7 @@ try:
     minor_version = int(version_string[1])
     patch_version = int(version_string[2])
     if minor_version < 14 or (minor_version == 14 and patch_version <= 0):
+
         print(
             "The version of diffusers is less than or equal to 0.14.0. Performing monkey-patch..."
         )
@@ -293,20 +298,20 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             " doing mixed precision training. copy of the weights should still be float32."
         )
         if args.attention == "xformers" and not shared.force_cpu:
-            if is_xformers_available():
+           # if is_xformers_available():
                 import xformers
 
-                xformers_version = version.parse(xformers.__version__)
-                if xformers_version == version.parse("0.0.16"):
+              """   xformers_version = version.parse(xformers.__version__)
+o                if xformers_version == version.parse("0.0.16"):
                     logger.warning(
                         "xFormers 0.0.16 cannot be used for training in some GPUs. If you observe problems during training, please update xFormers to at least 0.0.17. See https://huggingface.co/docs/diffusers/main/en/optimization/xformers for more details."
                     )
             else:
                 raise ValueError(
                     "xformers is not available. Make sure it is installed correctly"
-                )
-            xformerify(unet)
-            xformerify(vae)
+                ) """
+        xformerify(unet)
+        xformerify(vae)
 
         if accelerator.unwrap_model(unet).dtype != torch.float32:
             print(
@@ -435,11 +440,12 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 params_to_optimize = itertools.chain(text_encoder.parameters())
         else:
             params_to_optimize = unet.parameters()
-    
+
         optimizer = get_optimizer(args, params_to_optimize)
-        tenc_weight_decay = optimizer.param_groups[1]["weight_decay"]
-        tenc_weight_decay = args.adamw_weight_decay + 0.02
+        optimizer.param_groups[1]["weight_decay"] = args.tenc_weight_decay
+        optimizer.param_groups[1]["grad_clip_norm"] = 1.0
         noise_scheduler = get_noise_scheduler(args)
+        in_progress = True
 
         def cleanup_memory():
             try:
@@ -956,13 +962,13 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                     )
                                     prompts.append(epd)
                                 pbar.set_description("Generating Samples")
-                                
+
                                 prompt_lengths = len(prompts)
                                 if args.disable_logging:
                                     pbar.reset(prompt_lengths)
                                 else:
                                     pbar.reset(prompt_lengths + 2)
-                                    
+
                                 ci = 0
                                 for c in prompts:
                                     c.out_dir = os.path.join(args.model_dir, "samples")
@@ -1003,7 +1009,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 if save_image:
                     if "generator" in locals():
                         del generator
-                    
+
                     if not args.disable_logging:
                         try:
                             printm("Parse logs.")
@@ -1022,7 +1028,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                             traceback.print_exc()
                             print(f"Exception parsing logz: {l}")
                             pass
-                        
+
                     send_training_update(
                         last_samples,
                         args.model_name,
@@ -1030,7 +1036,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                         global_step,
                         args.revision
                     )
-                    
+
                     status.sample_prompts = last_prompts
                     status.current_image = last_samples
                     pbar.update()
@@ -1106,6 +1112,8 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 cleanup()
 
             loss_total = 0
+
+
 
             current_prior_loss_weight = current_prior_loss(
                 args, current_epoch=global_epoch
@@ -1259,6 +1267,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
                     optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
 
+                    shared.in_progress_epoch = global_epoch
+                    shared.in_progress_steps = global_step
+
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
                 last_lr = lr_scheduler.get_last_lr()[0]
@@ -1274,12 +1285,17 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 del timesteps
                 del noisy_latents
                 del target
+                dlr_unet = optimizer.param_groups[0]["d"]*optimizer.param_groups[0]["lr"]
+                dlr_tenc = optimizer.param_groups[1]["d"]*optimizer.param_groups[1]["lr"]
+
 
                 loss_step = loss.detach().item()
                 loss_total += loss_step
                 if args.split_loss:
                     logs = {
                         "lr": float(last_lr),
+                        "dlr_unet": float(dlr_unet),
+                        "dlr_tenc": float(dlr_tenc),
                         "loss": float(loss_step),
                         "inst_loss": float(instance_loss.detach().item()),
                         "prior_loss": float(prior_loss.detach().item()),
@@ -1288,12 +1304,14 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 else:
                     logs = {
                         "lr": float(last_lr),
+                        "dlr_unet": float(dlr_unet),
+                        "dlr_tenc": float(dlr_tenc),
                         "loss": float(loss_step),
                         "vram": float(cached),
                     }
 
                 status.textinfo2 = (
-                    f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, "
+                    f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, UNET DLR: {'{:.2E}'.format(Decimal(dlr_unet))}, TENC DLR: {'{:.2E}'.format(Decimal(dlr_tenc))}, "
                     f"VRAM: {allocated}/{cached} GB"
                 )
                 progress_bar.update(train_batch_size)

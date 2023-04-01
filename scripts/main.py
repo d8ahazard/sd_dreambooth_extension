@@ -508,7 +508,7 @@ def on_ui_tabs():
                                 label="Learning Rate Warmup Steps",
                                 value=0,
                                 step=5,
-                                maximum=10000,
+                                maximum=1000,
                             )
 
                         with gr.Column():
@@ -582,8 +582,24 @@ def on_ui_tabs():
                                 label="Weight Decay",
                                 minimum=0,
                                 maximum=1,
-                                step=1e-7,
+                                step=1e-3,
                                 value=1e-2,
+                                visible=True,
+                            )
+                            db_tenc_weight_decay = gr.Slider(
+                                label="TENC Weight Decay",
+                                minimum=0,
+                                maximum=1,
+                                step=1e-3,
+                                value=1e-2,
+                                visible=True,
+                            )
+                            db_tenc_grad_clip_norm = gr.Slider(
+                                label="TENC Gradient Clip Norm",
+                                minimum=0,
+                                maximum=10,
+                                step=1e-3,
+                                value=1,
                                 visible=True,
                             )
                             db_pad_tokens = gr.Checkbox(
@@ -1225,6 +1241,7 @@ def on_ui_tabs():
             db_epoch_pause_frequency,
             db_epoch_pause_time,
             db_freeze_clip_normalization,
+            db_tenc_grad_clip_norm,
             db_gradient_accumulation_steps,
             db_gradient_checkpointing,
             db_gradient_set_to_none,
@@ -1250,6 +1267,7 @@ def on_ui_tabs():
             db_max_token_length,
             db_mixed_precision,
             db_adamw_weight_decay,
+            db_tenc_weight_decay,
             db_model_path,
             db_num_train_epochs,
             db_offset_noise,
@@ -1480,7 +1498,7 @@ def on_ui_tabs():
             )
 
         def optimizer_changed(opti):
-            show_adapt = opti in ["SGD Dadaptation", "AdaGrad Dadaptation", "AdamW Dadaptation", "Adan Dadaptation"]
+            show_adapt = opti in ["AdamW Dadaptation", "Adan Dadaptation", "AdanIP Dadaptation"]
             adaptation_lr = gr.update(visible=show_adapt)
             return adaptation_lr
 

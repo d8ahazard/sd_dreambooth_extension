@@ -24,10 +24,6 @@ def sanitize_name(name):
 class DreamboothConfig(BaseModel):
     # These properties MUST be sorted alphabetically
     adamw_weight_decay: float = 0.01
-    adaptation_beta1: int = 0
-    adaptation_beta2: int = 0
-    adaptation_d0: float = 1e-8
-    adaptation_eps: float = 1e-8
     attention: str = "xformers"
     cache_latents: bool = True
     clip_skip: int = 1
@@ -110,6 +106,8 @@ class DreamboothConfig(BaseModel):
     src: str = ""
     stop_text_encoder: float = 1.0
     strict_tokens: bool = False
+    tenc_weight_decay: float = 0.00
+    tenc_grad_clip_norm: float = 1.00
     tf32_enable: bool = False
     train_batch_size: int = 1
     train_imagic: bool = False
@@ -309,7 +307,7 @@ class DreamboothConfig(BaseModel):
             print(f"Exception loading config: {e}")
             traceback.print_exc()
             return None
-    
+
     def get_pretrained_model_name_or_path(self):
         if (self.shared_diffusers_path != "" and not self.use_lora):
             raise Exception(f"shared_diffusers_path is \"{self.shared_diffusers_path}\" but use_lora is false")
@@ -383,7 +381,7 @@ def from_file(model_name):
     """
     if isinstance(model_name, list) and len(model_name) > 0:
         model_name = model_name[0]
-        
+
     if model_name == "" or model_name is None:
         return None
 
