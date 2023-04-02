@@ -30,8 +30,6 @@ class PlotDefinition:
 class ParsedValues:
     loss: DataFrame
     lr: DataFrame
-    dlr_unet: DataFrame
-    dlr_tenc: DataFrame
     ram: DataFrame
     merged: bool
 
@@ -192,8 +190,6 @@ class LogParser:
         def convert_tfevent(filepath) -> Tuple[DataFrame, DataFrame, DataFrame, bool]:
             loss_events = []
             lr_events = []
-            dlr_unet_events = []
-            dlr_tenc_events = []
             ram_events = []
             instance_loss_events = []
             prior_loss_events = []
@@ -202,7 +198,7 @@ class LogParser:
                 import tensorflow
             except:
                 print("Unable to import tensorflow")
-                return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(dlr_unet.events), pd.DataFrame(dlr_tenc.events), pd.DataFrame(ram_events), has_all
+                return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events), has_all
 
             serialized_examples = tensorflow.data.TFRecordDataset(filepath)
 
@@ -212,10 +208,6 @@ class LogParser:
                     parsed = parse_tfevent(e)
                     if parsed["Name"] == "lr":
                         lr_events.append(parsed)
-                    elif parsed["Name"] == "dlr_unet":
-                        dlr_unet_events.append(parsed)
-                    elif parsed["Name"] == "dlr_tenc":
-                        dlr_tenc_events.append(parsed)
                     elif parsed["Name"] == "loss":
                         loss_events.append(parsed)
                     elif parsed["Name"] == "vram_usage" or parsed["Name"] == "vram":
@@ -230,14 +222,10 @@ class LogParser:
             has_all = True
             for le in loss_events:
                 lr = next((item for item in lr_events if item["Step"] == le["Step"]), None)
-                dlr_unet = next((item for item in dlr_unet_events if item["Step"] == le["Step"]), None)
-                dlr_tenc = next((item for item in dlr_tenc_events if item["Step"] == le["Step"]), None)
                 instance_loss = next((item for item in instance_loss_events if item["Step"] == le["Step"]), None)
                 prior_loss = next((item for item in prior_loss_events if item["Step"] == le["Step"]), None)
                 if lr is not None and instance_loss is not None and prior_loss is not None:
                     le["LR"] = lr["Value"]
-                    le["DLR UNET"] = lr["Value"]
-                    le["DLR TENC"] = lr["Value"]
                     le["Loss"] = le["Value"]
                     le["Instance_Loss"] = instance_loss["Value"]
                     le["Prior_Loss"] = prior_loss["Value"]
@@ -247,7 +235,7 @@ class LogParser:
             if has_all:
                 loss_events = merged_events
 
-            return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events), pd.DataFrame(dlr_unet_events), pd.DataFrame(dlr_tenc_events), has_all
+            return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events), has_all
 
         def parse_tfevent(tfevent):
             return {
@@ -296,40 +284,24 @@ class LogParser:
                         do_parse = False
                 if do_parse:
                     self.parsed_files[file_full_path] = f_time
-                    converted_loss, converted_lr, converted_ram, converted_dlr_unet, converted_dlr_tenc, merged = convert_tfevent(file_full_path)
-                    self.parsed[file_full_path] = ParsedValues(loss=converted_loss, lr=converted_lr, ram=converted_ram, merged=merged, dlr_unet=converted_dlr_unet, dlr_tenc=converted_dlr_tenc)
+                    converted_loss, converted_lr, converted_ram, merged = convert_tfevent(file_full_path)
+                    self.parsed[file_full_path] = ParsedValues(converted_loss, converted_lr, converted_ram, merged)
 
         out_loss = []
         out_lr = []
         out_ram = []
         has_all_lr = True
+
         for file, data in self.parsed.items():
-            out_ram.append(data.ram)
             out_loss.append(data.loss)
-        if data.merged:
             out_lr.append(data.lr)
-            out_lr.append(data.dlr_unet)
-            out_lr.append(data.dlr_tenc)
-
-        # Ensure that all DataFrames in out_lr have the required columns
-        filtered_out_lr = []
-        required_columns = {'LR', 'DLR UNET', 'DLR TENC'}
-
-        for df in out_lr:
-            if set(required_columns).issubset(df.columns):
-                filtered_out_lr.append(df)
-            else:
-                print(f"Warning: DataFrame with columns {df.columns} is missing one or more required columns {required_columns}.")
-
-            # Concatenate the filtered DataFrames
-        if filtered_out_lr:
-            concatenated_df = pd.concat(filtered_out_lr)[columns_order]
-        else:
-                print("Error: No DataFrame has all required columns.")
+            out_ram.append(data.ram)
+            if not data.merged:
+                has_all_lr = False
 
         loss_columns = columns_order
         if has_all_lr:
-            loss_columns = ['Wall_time', 'Name', 'Step', 'Loss', "LR", "DLR UNET", "DLR TENC", "Instance_Loss", "Prior_Loss"]
+            loss_columns = ['Wall_time', 'Name', 'Step', 'Loss', "LR", "Instance_Loss", "Prior_Loss"]
         # Concatenate (and sort) all partial individual dataframes
         all_df_loss = pd.concat(out_loss)[loss_columns]
         all_df_loss = all_df_loss.fillna(method="ffill")
@@ -344,30 +316,21 @@ class LogParser:
         status.job_no = 1
         status.textinfo = "Plotting data..."
         if has_all_lr:
-            all_df_lr = pd.concat(out_lr)[columns_order]
-            all_df_lr['LR'] = concatenated_df['LR']
-            all_df_lr['DLR UNET'] = concatenated_df['DLR UNET']
-            all_df_lr['DLR TENC'] = concatenated_df['DLR TENC']
+            plotted_loss = self.plot_multi_alt(
+                all_df_loss,
+                plot_definition=PlotDefinition(
+                    title=f"Loss Average/Learning Rate ({model_config.lr_scheduler})",
+                    x_axis="Step",
+                    y_axis=[
+                        YAxis(name="LR", columns=["LR"]),
+                        YAxis(name="Loss", columns=["Instance_Loss", "Prior_Loss", "Loss"]),
 
-          # all_df_lr['LR'] = pd.concat(out_lr)[columns_order]['Value']
-          # all_df_lr['DLR UNET'] = pd.concat(out_lr)[columns_order]['Value']
-                # all_df_lr['DLR TENC'] = pd.concat(out_lr)[columns_order]['Value']ll_df_loss, plotted_loss = self.plot_multi_alt(
-            all_df_lr,
-            plot_definition=PlotDefinition(
-                title=f"Loss Average/Learning Rate ({model_config.lr_scheduler})",
-                x_axis="Step",
-                y_axis=[
-                    YAxis(name="LR", columns=["LR", "DLR UNET", "DLR TENC"]),
-                    YAxis(
-                        name="Loss",
-                        columns=["Instance_Loss", "Prior_Loss", "Loss"],
-                        loss_name="Loss Average/Learning Rate",
-                    ),
-                ],
-            ),
-
+                    ]
+                )
+            )
+            loss_name = "Loss Average/Learning Rate"
         else:
-            plotted_los2s = all_df_loss.plot(x="Step", y="Value", title="Loss Averages")
+            plotted_loss = all_df_loss.plot(x="Step", y="Value", title="Loss Averages")
             loss_name = "Loss Averages"
             all_df_lr = pd.concat(out_lr)[columns_order]
             all_df_lr = all_df_lr.sort_values("Wall_time")
