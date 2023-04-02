@@ -1298,7 +1298,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
                 if dadapt(args.optimizer):
                     dlr_unet = optimizer.param_groups[0]["d"]*optimizer.param_groups[0]["lr"]
-                    dlr_tenc = optimizer.param_groups[1]["d"]*optimizer.param_groups[1]["lr"
+                    dlr_tenc = optimizer.param_groups[1]["d"]*optimizer.param_groups[1]["lr"]
 
                 loss_step = loss.detach().item()
                 loss_total += loss_step
