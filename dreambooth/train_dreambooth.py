@@ -1368,6 +1368,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
                 # Log completion message
                 if training_complete or status.interrupted:
+                    shared.in_progress = False
+                    shared.in_progress_step = 0
+                    shared.in_progress_epoch - 0
                     print("  Training complete (step check).")
                     if status.interrupted:
                         state = "cancelled"
@@ -1420,6 +1423,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                         if status.interrupted:
                             training_complete = True
                             print("Training complete, interrupted.")
+                            shared.in_progress = False
+                            shared.in_progress_step = 0
+                            shared.in_progress_epoch = 0
                             break
                         time.sleep(1)
 
