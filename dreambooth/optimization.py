@@ -530,14 +530,6 @@ def get_optimizer(args, params_to_optimize):
                 weight_decay=args.adamw_weight_decay,
             )
 
-        elif args.optimizer == "SGD Dadaptation":
-            from dadaptation import DAdaptSGD
-            return DAdaptSGD(
-                params_to_optimize,
-                lr=args.learning_rate,
-                weight_decay=args.adamw_weight_decay,
-            )
-
         elif args.optimizer == "AdamW Dadaptation":
             from dadaptation import DAdaptAdam
             return DAdaptAdam(
@@ -547,9 +539,9 @@ def get_optimizer(args, params_to_optimize):
                 decouple=True,
             )
 
-        elif args.optimizer == "Adagrad Dadaptation":
-            from dadaptation import DAdaptAdaGrad
-            return DAdaptAdaGrad(
+        elif args.optimizer == "AdanIP Dadaptation":
+            from dreambooth.dadapt_adan_ip import DAdaptAdanIP
+            return DAdaptAdanIP(
                 params_to_optimize,
                 lr=args.learning_rate,
                 weight_decay=args.adamw_weight_decay,

@@ -44,6 +44,9 @@ def load_auto_settings():
         config = ws.cmd_opts.config
         device = ws.device
         sd_model = ws.sd_model
+        in_progress = False
+        in_progress_epoch = 0
+        in_progress_step = 0
 
         def set_model(new_model):
             global sd_model
@@ -162,12 +165,15 @@ class DreamState:
 
     def interrupt(self):
         self.interrupted = True
-
+        self.in_progress = False
+        
     def interrupt_after_save(self):
         self.interrupted_after_save = True
+        self.in_progress = False
 
     def interrupt_after_epoch(self):
         self.interrupted_after_epoch = True
+        self.in_progress = False
 
     def save_samples(self):
         self.do_save_samples = True
@@ -210,7 +216,6 @@ class DreamState:
         self.textinfo2 = None
         self.time_left_force_display = False
         self.active = True
-        self.in_progress = True
         torch_gc()
 
     def end(self):

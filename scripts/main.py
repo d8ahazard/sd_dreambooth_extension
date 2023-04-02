@@ -590,7 +590,7 @@ def on_ui_tabs():
                                 label="TENC Weight Decay",
                                 minimum=0,
                                 maximum=1,
-                                step=1e-3,
+                                step=1e-2,
                                 value=1e-2,
                                 visible=True,
                             )
@@ -598,8 +598,8 @@ def on_ui_tabs():
                                 label="TENC Gradient Clip Norm",
                                 minimum=0,
                                 maximum=10,
-                                step=1e-3,
-                                value=1,
+                                step=1e-1,
+                                value=0,
                                 visible=True,
                             )
                             db_pad_tokens = gr.Checkbox(
@@ -1241,7 +1241,6 @@ def on_ui_tabs():
             db_epoch_pause_frequency,
             db_epoch_pause_time,
             db_freeze_clip_normalization,
-            db_tenc_grad_clip_norm,
             db_gradient_accumulation_steps,
             db_gradient_checkpointing,
             db_gradient_set_to_none,
@@ -1268,6 +1267,7 @@ def on_ui_tabs():
             db_mixed_precision,
             db_adamw_weight_decay,
             db_tenc_weight_decay,
+            db_tenc_grad_clip_norm,
             db_model_path,
             db_num_train_epochs,
             db_offset_noise,
