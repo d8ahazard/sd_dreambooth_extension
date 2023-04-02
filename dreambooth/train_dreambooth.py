@@ -437,9 +437,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             params_to_optimize = unet.parameters()
     
         optimizer = get_optimizer(args, params_to_optimize)
-        tenc_weight_decay = optimizer.param_groups[1]["weight_decay"]
-        tenc_weight_decay = args.adamw_weight_decay + 0.02
         noise_scheduler = get_noise_scheduler(args)
+
+        # tenc_weight_decay = optimizer.param_groups[1]["weight_decay"]
+        # tenc_weight_decay = args.adamw_weight_decay + 0.02
 
         def cleanup_memory():
             try:
