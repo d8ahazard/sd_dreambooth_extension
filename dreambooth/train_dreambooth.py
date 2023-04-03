@@ -111,7 +111,7 @@ except:
     pass
 
 def dadapt(optimizer):
-    if optimizer == "AdamW Dadaptation" or optimizer == "Adan Dadaptation" or optimizer == "AdanIP Dadaptation":
+    if optimizer == "AdamW Dadaptation" or optimizer == "Adan Dadaptation":
         return True
     else:
         return False
