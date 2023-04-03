@@ -671,14 +671,14 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             except Exception as lex:
                 print(f"Exception loading checkpoint: {lex}")
 
-        if shared.in_progress:
-            print("  ***** OOM detected. Resuming from last step *****")
-            max_train_steps = max_train_steps - shared.in_progress_step
-            max_train_epochs = max_train_epochs - shared.in_progress_epoch
-            session_epoch = shared.in_progress_epoch
-            text_encoder_epochs = (shared.in_progress_epoch/max_train_epochs)*text_encoder_epochs
-        else:
-            shared.in_progress = True
+        #if shared.in_progress:
+        #    print("  ***** OOM detected. Resuming from last step *****")
+        #    max_train_steps = max_train_steps - shared.in_progress_step
+        #    max_train_epochs = max_train_epochs - shared.in_progress_epoch
+        #    session_epoch = shared.in_progress_epoch
+        #    text_encoder_epochs = (shared.in_progress_epoch/max_train_epochs)*text_encoder_epochs
+        #else:
+        #    shared.in_progress = True
 
         print("  ***** Running training *****")
         if shared.force_cpu:
