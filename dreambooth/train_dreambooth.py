@@ -448,7 +448,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         optimizer.param_groups[1]["grad_clip_norm"] = args.tenc_grad_clip_norm
         noise_scheduler = get_noise_scheduler(args)
 
-
         def cleanup_memory():
             try:
                 if unet:

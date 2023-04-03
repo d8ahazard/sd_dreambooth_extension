@@ -43,19 +43,22 @@ def get_dim(filename, max_res):
 
 
 def rotate_image_straight(image: Image) -> Image:
-    exif: Image.Exif = image.getexif()
-    if exif:
-        orientation_tag = {v: k for k, v in ExifTags.TAGS.items()}['Orientation']
-        orientation = exif.get(orientation_tag)
-        degree = {
-            3: 180,
-            6: 270,
-            8: 90,
-        }.get(orientation)
-        if degree:
-            image = image.rotate(degree, expand=True)
-    # else:
-    #     print(f"No exif data for {image.filename}. Using default orientation.")
+    try:
+        exif: Image.Exif = image.getexif()
+        if exif:
+            orientation_tag = {v: k for k, v in ExifTags.TAGS.items()}['Orientation']
+            orientation = exif.get(orientation_tag)
+            degree = {
+                3: 180,
+                6: 270,
+                8: 90,
+            }.get(orientation)
+            if degree:
+                image = image.rotate(degree, expand=True)
+        # else:
+        #     print(f"No exif data for {image.filename}. Using default orientation.")
+    except:
+        pass
     return image
 
 
