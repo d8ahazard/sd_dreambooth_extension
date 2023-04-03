@@ -103,13 +103,13 @@ class DreamboothConfig(BaseModel):
     save_state_cancel: bool = False
     save_state_during: bool = False
     scheduler: str = "ddim"
-    shared_diffusers_path: str = ""
     shuffle_tags: bool = True
     snapshot: str = ""
     split_loss: bool = True
     src: str = ""
     stop_text_encoder: float = 1.0
     strict_tokens: bool = False
+    shared_diffusers_path: str = ""
     tf32_enable: bool = False
     train_batch_size: int = 1
     train_imagic: bool = False
@@ -118,6 +118,7 @@ class DreamboothConfig(BaseModel):
     use_ema: bool = True
     use_lora: bool = False
     use_lora_extended: bool = False
+    use_shared_src: bool = False,
     use_subdir: bool = False
     v2: bool = False
 
@@ -311,7 +312,7 @@ class DreamboothConfig(BaseModel):
             return None
     
     def get_pretrained_model_name_or_path(self):
-        if (self.shared_diffusers_path != "" and not self.use_lora):
+        if self.shared_diffusers_path != "" and not self.use_lora:
             raise Exception(f"shared_diffusers_path is \"{self.shared_diffusers_path}\" but use_lora is false")
         return self.shared_diffusers_path if self.shared_diffusers_path != "" else self.pretrained_model_name_or_path
 
