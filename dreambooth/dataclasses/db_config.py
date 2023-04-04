@@ -30,9 +30,8 @@ class DreamboothConfig(BaseModel):
     concepts_list: List[Dict] = []
     concepts_path: str = ""
     custom_model_name: str = ""
-    noise_scheduler: str = "DDPM"
-    disable_logging: bool = False
     deterministic: bool = False
+    disable_logging: bool = False
     ema_predict: bool = False
     epoch: int = 0
     epoch_pause_frequency: int = 0
@@ -43,7 +42,6 @@ class DreamboothConfig(BaseModel):
     gradient_set_to_none: bool = True
     graph_smoothing: int = 50
     half_model: bool = False
-    train_unfrozen: bool = True
     has_ema: bool = False
     hflip: bool = False
     infer_ema: bool = False
@@ -53,10 +51,10 @@ class DreamboothConfig(BaseModel):
     lifetime_revision: int = 0
     lora_learning_rate: float = 1e-4
     lora_model_name: str = ""
-    lora_unet_rank: int = 4
-    lora_txt_rank: int = 4
     lora_txt_learning_rate: float = 5e-5
+    lora_txt_rank: int = 4
     lora_txt_weight: float = 1.0
+    lora_unet_rank: int = 4
     lora_weight: float = 1.0
     lr_cycles: int = 1
     lr_factor: float = 0.5
@@ -66,9 +64,10 @@ class DreamboothConfig(BaseModel):
     lr_warmup_steps: int = 0
     max_token_length: int = 75
     mixed_precision: str = "fp16"
-    model_name: str = ""
     model_dir: str = ""
+    model_name: str = ""
     model_path: str = ""
+    noise_scheduler: str = "DDPM"
     num_train_epochs: int = 100
     offset_noise: float = 0
     optimizer: str = "8bit AdamW"
@@ -112,10 +111,12 @@ class DreamboothConfig(BaseModel):
     train_batch_size: int = 1
     train_imagic: bool = False
     train_unet: bool = True
+    train_unfrozen: bool = True
     use_concepts: bool = False
     use_ema: bool = True
     use_lora: bool = False
     use_lora_extended: bool = False
+    use_shared_src: bool = False,
     use_subdir: bool = False
     v2: bool = False
 
@@ -309,7 +310,7 @@ class DreamboothConfig(BaseModel):
             return None
 
     def get_pretrained_model_name_or_path(self):
-        if (self.shared_diffusers_path != "" and not self.use_lora):
+        if self.shared_diffusers_path != "" and not self.use_lora:
             raise Exception(f"shared_diffusers_path is \"{self.shared_diffusers_path}\" but use_lora is false")
         return self.shared_diffusers_path if self.shared_diffusers_path != "" else self.pretrained_model_name_or_path
 
@@ -339,7 +340,7 @@ def concepts_from_file(concepts_path: str):
 def save_config(*args):
     params = list(args)
     concept_keys = ["c1_", "c2_", "c3_", "c4_"]
-    model_name = params[0]
+    model_name = params[38]
     if model_name is None or model_name == "":
         print("Invalid model name.")
         return
@@ -385,7 +386,7 @@ def from_file(model_name):
     if model_name == "" or model_name is None:
         return None
 
-    model_name = sanitize_name(model_name)
+    #model_name = sanitize_name(model_name)
     models_path = shared.dreambooth_models_path
     if models_path == "" or models_path is None:
         models_path = os.path.join(shared.models_path, "dreambooth")

@@ -1114,7 +1114,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, shared_src_nam
         db_config.pretrained_model_name_or_path = ""
         original_config_file = os.path.join(shared.models_path, "diffusers", shared_src_name, ".yaml")
         db_config.src = db_config.shared_diffusers_path
-        
+
         unet_dir = os.path.join(db_config.shared_diffusers_path, "unet")
         db_config.v2 = is_v2_from_diffuers_unet(unet_dir)
         db_config.save()
@@ -1124,7 +1124,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, shared_src_nam
         shared.status.job_count = 11
 
         try:
-            
+
             if shared_src_name:
                 ckpt_basename = os.path.basename(checkpoint_file)
                 shared_src, _ = os.path.splitext(ckpt_basename)
@@ -1135,7 +1135,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, shared_src_nam
                     msg = f"<create new> failed. {db_config.pretrained_model_name_or_path} already exists."
                     printi(msg)
                     return "", "", 0, 0, "", "", "", "", image_size, "", msg
-            
+
             shared.status.job_no = 0
             checkpoint = None
             map_location = shared.device
@@ -1351,7 +1351,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, shared_src_nam
         except Exception as e:
             print(f"Exception setting up output: {e}")
             traceback.print_exc()
-        
+
 
 
         result_status = f"Checkpoint successfully extracted to {db_config.pretrained_model_name_or_path}"
@@ -1368,7 +1368,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, shared_src_nam
                          shared_src)
         original_config_file = os.path.join(shared.models_path, "diffusers", shared_src, ".yaml")
         db_config.pretrained_model_name_or_path = ""
-    
+
     copy_config_file(original_config_file, db_config.model_dir, db_config.model_name)
 
     for req_dir in required_dirs:
