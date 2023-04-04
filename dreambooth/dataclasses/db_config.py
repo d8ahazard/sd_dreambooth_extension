@@ -24,19 +24,14 @@ def sanitize_name(name):
 class DreamboothConfig(BaseModel):
     # These properties MUST be sorted alphabetically
     adamw_weight_decay: float = 0.01
-    adaptation_beta1: int = 0
-    adaptation_beta2: int = 0
-    adaptation_d0: float = 1e-8
-    adaptation_eps: float = 1e-8
     attention: str = "xformers"
     cache_latents: bool = True
     clip_skip: int = 1
     concepts_list: List[Dict] = []
     concepts_path: str = ""
     custom_model_name: str = ""
-    noise_scheduler: str = "DDPM"
-    disable_logging: bool = False
     deterministic: bool = False
+    disable_logging: bool = False
     ema_predict: bool = False
     epoch: int = 0
     epoch_pause_frequency: int = 0
@@ -47,7 +42,6 @@ class DreamboothConfig(BaseModel):
     gradient_set_to_none: bool = True
     graph_smoothing: int = 50
     half_model: bool = False
-    train_unfrozen: bool = True
     has_ema: bool = False
     hflip: bool = False
     infer_ema: bool = False
@@ -57,10 +51,10 @@ class DreamboothConfig(BaseModel):
     lifetime_revision: int = 0
     lora_learning_rate: float = 1e-4
     lora_model_name: str = ""
-    lora_unet_rank: int = 4
-    lora_txt_rank: int = 4
     lora_txt_learning_rate: float = 5e-5
+    lora_txt_rank: int = 4
     lora_txt_weight: float = 1.0
+    lora_unet_rank: int = 4
     lora_weight: float = 1.0
     lr_cycles: int = 1
     lr_factor: float = 0.5
@@ -71,8 +65,8 @@ class DreamboothConfig(BaseModel):
     max_token_length: int = 75
     mixed_precision: str = "fp16"
     model_name: str = ""
-    model_dir: str = ""
     model_path: str = ""
+    noise_scheduler: str = "DDPM"
     num_train_epochs: int = 100
     offset_noise: float = 0
     optimizer: str = "8bit AdamW"
@@ -103,17 +97,18 @@ class DreamboothConfig(BaseModel):
     save_state_cancel: bool = False
     save_state_during: bool = False
     scheduler: str = "ddim"
+    shared_diffusers_path: str = ""
     shuffle_tags: bool = True
     snapshot: str = ""
     split_loss: bool = True
     src: str = ""
     stop_text_encoder: float = 1.0
     strict_tokens: bool = False
-    shared_diffusers_path: str = ""
     tf32_enable: bool = False
     train_batch_size: int = 1
     train_imagic: bool = False
     train_unet: bool = True
+    train_unfrozen: bool = True
     use_concepts: bool = False
     use_ema: bool = True
     use_lora: bool = False
