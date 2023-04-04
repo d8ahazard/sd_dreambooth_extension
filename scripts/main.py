@@ -1264,7 +1264,6 @@ def on_ui_tabs():
             db_lr_warmup_steps,
             db_max_token_length,
             db_mixed_precision,
-            db_model_dir,
             db_model_name,
             db_model_path,
             db_noise_scheduler,
