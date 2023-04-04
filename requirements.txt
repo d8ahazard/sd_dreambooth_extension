@@ -6,12 +6,12 @@ discord-webhook~=1.1.0
 fastapi~=0.94.1
 gitpython~=3.1.31
 lion-pytorch~=0.0.7
-Pillow~=9.4.0
+Pillow==9.5.0
 tqdm~=4.64.1
 transformers~=4.26.1  # > 4.26.x causes issues (db extension #1110)
 
 # Tensor
-tensorboard==2.12.0; sys_platform != 'darwin' or platform_machine != 'arm64'
+tensorboard==2.12.1; sys_platform != 'darwin' or platform_machine != 'arm64'
 tensorflow==2.12.0; sys_platform != 'darwin' or platform_machine != 'arm64'
 
 # Tensor MacOS

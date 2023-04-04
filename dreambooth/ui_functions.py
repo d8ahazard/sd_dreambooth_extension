@@ -41,6 +41,7 @@ from dreambooth.utils.model_utils import (
     get_lora_models,
     get_checkpoint_match,
     get_model_snapshots,
+    LORA_SHARED_SRC_CREATE,
 )
 from dreambooth.utils.utils import printm, cleanup
 from helpers.image_builder import ImageBuilder
@@ -624,6 +625,7 @@ def load_model_params(model_name):
     db_v2: If the model requires a v2 config/compilation
     db_has_ema: Was the model extracted with EMA weights
     db_src: The source checkpoint that weights were extracted from or hub URL
+    db_shared_diffusers_path: 
     db_scheduler: Scheduler used for this model
     db_model_snapshots: A gradio dropdown containing the available snapshots for the model
     db_outcome: The result of loading model params
@@ -653,6 +655,7 @@ def load_model_params(model_name):
             "True" if config.v2 else "False",
             "True" if config.has_ema else "False",
             config.src,
+            config.shared_diffusers_path,
             db_model_snapshots,
             db_lora_models,
             msg,
@@ -687,7 +690,7 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
             msg = "Using xformers, please set mixed precision to 'fp16' or 'bf16' to continue."
     if not len(config.concepts()):
         msg = "Please check your dataset directories."
-    if not os.path.exists(config.pretrained_model_name_or_path):
+    if not os.path.exists(config.get_pretrained_model_name_or_path()):
         msg = "Invalid training data directory."
     if config.pretrained_vae_name_or_path:
         if not os.path.exists(config.pretrained_vae_name_or_path):
@@ -929,6 +932,7 @@ def start_crop(
 def create_model(
         new_model_name: str,
         ckpt_path: str,
+        shared_src: str,
         from_hub=False,
         new_model_url="",
         new_model_token="",
@@ -952,24 +956,25 @@ def create_model(
         if sh is not None:
             sh.end(desc=err_msg)
 
-        return "", "", 0, 0, "", "", "", "", res, "", err_msg
+        return "", "", "", 0, 0, "", "", "", "", res, "", err_msg
 
     new_model_name = sanitize_name(new_model_name)
 
-    if not from_hub:
+    if not from_hub and (shared_src == "" or shared_src == LORA_SHARED_SRC_CREATE):
         checkpoint_info = get_checkpoint_match(ckpt_path)
         if checkpoint_info is None or not os.path.exists(checkpoint_info.filename):
             err_msg = "Unable to find checkpoint file!"
             print(err_msg)
             if sh is not None:
                 sh.end(desc=err_msg)
-            return "", "", 0, 0, "", "", "", "", res, "", err_msg
+            return "", "", "", 0, 0, "", "", "", "", res, "", err_msg
         ckpt_path = checkpoint_info.filename
 
     unload_system_models()
     result = extract_checkpoint(
         new_model_name,
         ckpt_path,
+        shared_src,
         from_hub,
         new_model_url,
         new_model_token,

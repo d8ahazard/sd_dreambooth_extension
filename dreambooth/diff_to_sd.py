@@ -400,7 +400,7 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
     checkpoint_ext = ".ckpt" if not config.save_safetensors else ".safetensors"
     checkpoint_path = os.path.join(models_path, f"{save_model_name}_{total_steps}{checkpoint_ext}")
 
-    model_path = config.pretrained_model_name_or_path
+    model_path = config.get_pretrained_model_name_or_path()
 
     new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{snap_rev}")
     if snap_rev and os.path.exists(new_hotness) and os.path.isdir(new_hotness):
@@ -467,11 +467,11 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
         if lora_file_name:
             lora_paths = lora_file_name.split(".")
             lora_txt_file_name = f"{lora_paths[0]}_txt.{lora_paths[1]}"
-            text_encoder_cls = import_model_class_from_model_name_or_path(config.pretrained_model_name_or_path,
+            text_encoder_cls = import_model_class_from_model_name_or_path(config.get_pretrained_model_name_or_path(),
                                                                           config.revision)
 
             text_encoder = text_encoder_cls.from_pretrained(
-                config.pretrained_model_name_or_path,
+                config.get_pretrained_model_name_or_path(),
                 subfolder="text_encoder",
                 revision=config.revision,
                 torch_dtype=torch.float32

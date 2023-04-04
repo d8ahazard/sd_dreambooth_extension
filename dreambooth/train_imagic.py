@@ -164,14 +164,14 @@ def train_imagic(args: DreamboothConfig):
         logging_dir=logging_dir,
     )
 
-    tokenizer = CLIPTokenizer.from_pretrained(args.pretrained_model_name_or_path, subfolder="tokenizer",
+    tokenizer = CLIPTokenizer.from_pretrained(args.get_pretrained_model_name_or_path(), subfolder="tokenizer",
                                               use_auth_token=False)
 
     # Load models and create wrapper for stable diffusion
-    text_encoder = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="text_encoder",
+    text_encoder = CLIPTextModel.from_pretrained(args.get_pretrained_model_name_or_path(), subfolder="text_encoder",
                                                  use_auth_token=False)
-    vae = AutoencoderKL.from_pretrained(args.pretrained_model_name_or_path, subfolder="vae", use_auth_token=True)
-    unet = UNet2DConditionModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="unet",
+    vae = AutoencoderKL.from_pretrained(args.get_pretrained_model_name_or_path(), subfolder="vae", use_auth_token=True)
+    unet = UNet2DConditionModel.from_pretrained(args.get_pretrained_model_name_or_path(), subfolder="unet",
                                                 use_auth_token=False)
 
     if args.gradient_checkpointing:

@@ -74,17 +74,17 @@ class ImageBuilder:
                     print(msg)
             torch_dtype = torch.float16 if shared.device.type == "cuda" else torch.float32
             disable_safe_unpickle()
-            unet_path = os.path.join(config.pretrained_model_name_or_path, "unet")
+            unet_path = os.path.join(config.get_pretrained_model_name_or_path(), "unet")
             if config.infer_ema:
-                ema_path = os.path.join(config.pretrained_model_name_or_path, "ema_unet",
+                ema_path = os.path.join(config.get_pretrained_model_name_or_path(), "ema_unet",
                                         "diffusion_pytorch_model.safetensors")
                 if os.path.isfile(ema_path):
-                    unet_path = os.path.join(config.pretrained_model_name_or_path, "ema_unet")
+                    unet_path = os.path.join(config.get_pretrained_model_name_or_path(), "ema_unet")
 
             self.image_pipe = DiffusionPipeline.from_pretrained(
-                config.pretrained_model_name_or_path,
+                config.get_pretrained_model_name_or_path(),
                 vae=AutoencoderKL.from_pretrained(
-                    config.pretrained_vae_name_or_path or config.pretrained_model_name_or_path,
+                    config.pretrained_vae_name_or_path or config.get_pretrained_model_name_or_path(),
                     subfolder=None if config.pretrained_vae_name_or_path else "vae",
                     revision=config.revision,
                     torch_dtype=torch_dtype
