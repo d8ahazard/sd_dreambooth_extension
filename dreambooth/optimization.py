@@ -562,7 +562,6 @@ def get_optimizer(args, params_to_optimize):
                 params_to_optimize,
                 lr=args.learning_rate,
                 weight_decay=args.adamw_weight_decay,
-                log_every=5,
             )
 
         elif args.optimizer == "AdanIP Dadaptation":
@@ -571,7 +570,6 @@ def get_optimizer(args, params_to_optimize):
                 params_to_optimize,
                 lr=args.learning_rate,
                 weight_decay=args.adamw_weight_decay,
-                log_every=5,
             )
 
 

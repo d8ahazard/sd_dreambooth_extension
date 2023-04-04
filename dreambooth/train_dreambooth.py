@@ -435,7 +435,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 params_to_optimize = itertools.chain(text_encoder.parameters())
         else:
             params_to_optimize = unet.parameters()
-    
+
         optimizer = get_optimizer(args, params_to_optimize)
         noise_scheduler = get_noise_scheduler(args)
 
@@ -957,13 +957,13 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                     )
                                     prompts.append(epd)
                                 pbar.set_description("Generating Samples")
-                                
+
                                 prompt_lengths = len(prompts)
                                 if args.disable_logging:
                                     pbar.reset(prompt_lengths)
                                 else:
                                     pbar.reset(prompt_lengths + 2)
-                                    
+
                                 ci = 0
                                 for c in prompts:
                                     c.out_dir = os.path.join(args.model_dir, "samples")
@@ -1004,7 +1004,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 if save_image:
                     if "generator" in locals():
                         del generator
-                    
+
                     if not args.disable_logging:
                         try:
                             printm("Parse logs.")
@@ -1023,7 +1023,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                             traceback.print_exc()
                             print(f"Exception parsing logz: {l}")
                             pass
-                        
+
                     send_training_update(
                         last_samples,
                         args.model_name,
@@ -1031,7 +1031,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                         global_step,
                         args.revision
                     )
-                    
+
                     status.sample_prompts = last_prompts
                     status.current_image = last_samples
                     pbar.update()

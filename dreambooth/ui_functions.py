@@ -625,7 +625,7 @@ def load_model_params(model_name):
     db_v2: If the model requires a v2 config/compilation
     db_has_ema: Was the model extracted with EMA weights
     db_src: The source checkpoint that weights were extracted from or hub URL
-    db_shared_diffusers_path: 
+    db_shared_diffusers_path:
     db_scheduler: Scheduler used for this model
     db_model_snapshots: A gradio dropdown containing the available snapshots for the model
     db_outcome: The result of loading model params

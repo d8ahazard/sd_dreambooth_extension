@@ -64,6 +64,7 @@ class DreamboothConfig(BaseModel):
     lr_warmup_steps: int = 0
     max_token_length: int = 75
     mixed_precision: str = "fp16"
+    model_dir: str = ""
     model_name: str = ""
     model_path: str = ""
     noise_scheduler: str = "DDPM"
@@ -305,7 +306,7 @@ class DreamboothConfig(BaseModel):
             print(f"Exception loading config: {e}")
             traceback.print_exc()
             return None
-    
+
     def get_pretrained_model_name_or_path(self):
         if self.shared_diffusers_path != "" and not self.use_lora:
             raise Exception(f"shared_diffusers_path is \"{self.shared_diffusers_path}\" but use_lora is false")
@@ -337,7 +338,7 @@ def concepts_from_file(concepts_path: str):
 def save_config(*args):
     params = list(args)
     concept_keys = ["c1_", "c2_", "c3_", "c4_"]
-    model_name = params[0]
+    model_name = params[38]
     if model_name is None or model_name == "":
         print("Invalid model name.")
         return
@@ -379,11 +380,11 @@ def from_file(model_name):
     """
     if isinstance(model_name, list) and len(model_name) > 0:
         model_name = model_name[0]
-        
+
     if model_name == "" or model_name is None:
         return None
 
-    model_name = sanitize_name(model_name)
+    #model_name = sanitize_name(model_name)
     models_path = shared.dreambooth_models_path
     if models_path == "" or models_path is None:
         models_path = os.path.join(shared.models_path, "dreambooth")
