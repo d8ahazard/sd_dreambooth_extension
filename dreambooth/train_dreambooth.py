@@ -108,6 +108,11 @@ try:
 except:
     pass
 
+def dadapt(optimizer):
+    if optimizer == "AdamW Dadaptation" or optimizer == "Adan Dadaptation":
+        return True
+    else:
+        return False
 
 def set_seed(deterministic: bool):
     if deterministic:
@@ -437,10 +442,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             params_to_optimize = unet.parameters()
 
         optimizer = get_optimizer(args, params_to_optimize)
+        optimizer.param_groups[1]["weight_decay"] = args.tenc_weight_decay
+        optimizer.param_groups[1]["grad_clip_norm"] = args.tenc_grad_clip_norm
         noise_scheduler = get_noise_scheduler(args)
-
-        # tenc_weight_decay = optimizer.param_groups[1]["weight_decay"]
-        # tenc_weight_decay = args.adamw_weight_decay + 0.02
 
         def cleanup_memory():
             try:
@@ -569,6 +573,8 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             power=args.lr_power,
             factor=args.lr_factor,
             scale_pos=lr_scale_pos,
+            unet_lr=args.lora_learning_rate,
+            tenc_lr=args.lora_txt_learning_rate,
         )
 
         # create ema, fix OOM
@@ -664,6 +670,15 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 global_epoch = first_epoch
             except Exception as lex:
                 print(f"Exception loading checkpoint: {lex}")
+
+        #if shared.in_progress:
+        #    print("  ***** OOM detected. Resuming from last step *****")
+        #    max_train_steps = max_train_steps - shared.in_progress_step
+        #    max_train_epochs = max_train_epochs - shared.in_progress_epoch
+        #    session_epoch = shared.in_progress_epoch
+        #    text_encoder_epochs = (shared.in_progress_epoch/max_train_epochs)*text_encoder_epochs
+        #else:
+        #    shared.in_progress = True
 
         print("  ***** Running training *****")
         if shared.force_cpu:
@@ -1260,6 +1275,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
                     optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
 
+                    #Track current step and epoch for OOM resume
+                    #shared.in_progress_epoch = global_epoch
+                    #shared.in_progress_steps = global_step
+
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
                 last_lr = lr_scheduler.get_last_lr()[0]
@@ -1276,27 +1295,58 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 del noisy_latents
                 del target
 
+                if dadapt(args.optimizer):
+                    dlr_unet = optimizer.param_groups[0]["d"]*optimizer.param_groups[0]["lr"]
+                    dlr_tenc = optimizer.param_groups[1]["d"]*optimizer.param_groups[1]["lr"]
+
                 loss_step = loss.detach().item()
                 loss_total += loss_step
-                if args.split_loss:
-                    logs = {
-                        "lr": float(last_lr),
-                        "loss": float(loss_step),
-                        "inst_loss": float(instance_loss.detach().item()),
-                        "prior_loss": float(prior_loss.detach().item()),
-                        "vram": float(cached),
-                    }
-                else:
-                    logs = {
-                        "lr": float(last_lr),
-                        "loss": float(loss_step),
-                        "vram": float(cached),
-                    }
 
-                status.textinfo2 = (
-                    f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, "
-                    f"VRAM: {allocated}/{cached} GB"
-                )
+                if args.split_loss:
+                    if dadapt(args.optimizer):
+                        logs = {
+                            "lr": float(dlr_unet),
+                            #"dlr_tenc": float(dlr_tenc),
+                            "loss": float(loss_step),
+                            "inst_loss": float(instance_loss.detach().item()),
+                            "prior_loss": float(prior_loss.detach().item()),
+                            "vram": float(cached),
+                        }
+                    else:
+                        logs = {
+                            "lr": float(last_lr),
+                            "loss": float(loss_step),
+                            "inst_loss": float(instance_loss.detach().item()),
+                            "prior_loss": float(prior_loss.detach().item()),
+                            "vram": float(cached),
+                        }
+
+                else:
+                    if dadapt(args.optimizer):
+                        logs = {
+                            "lr": float(dlr_unet),
+                            #"dlr_tenc": float(dlr_tenc),
+                            "loss": float(loss_step),
+                            "vram": float(cached),
+                        }
+                    else:
+                        logs = {
+                            "lr": float(last_lr),
+                            "loss": float(loss_step),
+                            "vram": float(cached),
+                        }
+
+
+                if dadapt(args.optimizer):
+                    status.textinfo2 = (
+                        f"Loss: {'%.2f' % loss_step}, UNET DLR: {'{:.2E}'.format(Decimal(dlr_unet))}, TENC DLR: {'{:.2E}'.format(Decimal(dlr_tenc))}, "
+                        f"VRAM: {allocated}/{cached} GB"
+                    )
+                else:
+                    status.textinfo2 = (
+                        f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, "
+                        f"VRAM: {allocated}/{cached} GB"
+                    )
                 progress_bar.update(train_batch_size)
                 progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=args.revision)
@@ -1317,6 +1367,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
                 # Log completion message
                 if training_complete or status.interrupted:
+                    shared.in_progress = False
+                    shared.in_progress_step = 0
+                    shared.in_progress_epoch - 0
                     print("  Training complete (step check).")
                     if status.interrupted:
                         state = "cancelled"
@@ -1369,6 +1422,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                         if status.interrupted:
                             training_complete = True
                             print("Training complete, interrupted.")
+                            shared.in_progress = False
+                            shared.in_progress_step = 0
+                            shared.in_progress_epoch = 0
                             break
                         time.sleep(1)
 

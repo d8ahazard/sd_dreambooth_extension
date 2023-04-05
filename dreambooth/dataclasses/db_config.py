@@ -105,6 +105,8 @@ class DreamboothConfig(BaseModel):
     src: str = ""
     stop_text_encoder: float = 1.0
     strict_tokens: bool = False
+    tenc_weight_decay: float = 0.00
+    tenc_grad_clip_norm: float = 0.00
     tf32_enable: bool = False
     train_batch_size: int = 1
     train_imagic: bool = False
@@ -121,6 +123,7 @@ class DreamboothConfig(BaseModel):
     def __init__(
             self,
             model_name: str = "",
+            model_dir: str = "",
             v2: bool = False,
             src: str = "",
             resolution: int = 512,
