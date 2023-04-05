@@ -620,6 +620,7 @@ def load_model_params(model_name):
     """
     @param model_name: The name of the model to load.
     @return:
+    db_model_dir: The model directory
     db_model_path: The full path to the model directory
     db_revision: The current revision of the model
     db_v2: If the model requires a v2 config/compilation
@@ -646,14 +647,13 @@ def load_model_params(model_name):
 
         loras = get_lora_models(config)
         db_lora_models = gr_update(choices=loras)
-
         msg = f"Selected model: '{model_name}'."
         return (
             config.model_dir,
             config.revision,
             config.epoch,
             "True" if config.v2 else "False",
-            "True" if config.has_ema else "False",
+            "True" if config.has_ema and not config.use_lora else "False",
             config.src,
             config.shared_diffusers_path,
             db_model_snapshots,

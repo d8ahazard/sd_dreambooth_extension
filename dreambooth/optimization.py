@@ -47,7 +47,6 @@ class SchedulerType(Enum):
     POLYNOMIAL = "polynomial"
     CONSTANT = "constant"
     CONSTANT_WITH_WARMUP = "constant_with_warmup"
-    DADAPT_WITH_WARMUP = "dadapt_with_warmup"
 
 
 def get_dadapt_with_warmup(optimizer, num_warmup_steps: int=0, unet_lr: int=1.0, tenc_lr: int=1.0):
@@ -582,6 +581,7 @@ def get_optimizer(args, params_to_optimize):
                 params_to_optimize,
                 lr=args.learning_rate,
                 weight_decay=args.adamw_weight_decay,
+                log_every=5,
             )
 
         elif args.optimizer == "Adan Dadaptation":
@@ -590,7 +590,9 @@ def get_optimizer(args, params_to_optimize):
                 params_to_optimize,
                 lr=args.learning_rate,
                 weight_decay=args.adamw_weight_decay,
+                log_every=5,
             )
+
 
     except Exception as e:
         logger.warning(f"Exception importing {args.optimizer}: {e}")

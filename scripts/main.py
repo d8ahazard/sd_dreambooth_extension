@@ -557,7 +557,7 @@ def on_ui_tabs():
                                 label="Step Ratio of Text Encoder Training",
                                 minimum=0,
                                 maximum=1,
-                                step=0.01,
+                                step=0.05,
                                 value=0,
                                 visible=True,
                             )
@@ -584,23 +584,23 @@ def on_ui_tabs():
                                 label="Weight Decay",
                                 minimum=0,
                                 maximum=1,
-                                step=1e-3,
-                                value=1e-2,
+                                step=0.01,
+                                value=0.01,
                                 visible=True,
                             )
                             db_tenc_weight_decay = gr.Slider(
                                 label="TENC Weight Decay",
                                 minimum=0,
                                 maximum=1,
-                                step=1e-2,
-                                value=1e-2,
+                                step=0.01,
+                                value=0.01,
                                 visible=True,
                             )
                             db_tenc_grad_clip_norm = gr.Slider(
                                 label="TENC Gradient Clip Norm",
                                 minimum=0,
-                                maximum=10,
-                                step=1e-1,
+                                maximum=128,
+                                step=0.5,
                                 value=0,
                                 visible=True,
                             )
@@ -1482,7 +1482,6 @@ def on_ui_tabs():
                 "linear",
                 "cosine_annealing",
                 "cosine_annealing_with_restarts",
-                "dadapt_with_warmup"
             ]
             if sched in scale_scheds:
                 show_scale_pos = gr.update(visible=True)

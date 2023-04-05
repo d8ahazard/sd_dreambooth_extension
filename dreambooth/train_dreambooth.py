@@ -77,7 +77,6 @@ dl.set_verbosity_error()
 last_samples = []
 last_prompts = []
 
-
 try:
     diff_version = importlib_metadata.version("diffusers")
     version_string = diff_version.split(".")
@@ -85,7 +84,6 @@ try:
     minor_version = int(version_string[1])
     patch_version = int(version_string[2])
     if minor_version < 14 or (minor_version == 14 and patch_version <= 0):
-
         print(
             "The version of diffusers is less than or equal to 0.14.0. Performing monkey-patch..."
         )
@@ -575,7 +573,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             power=args.lr_power,
             factor=args.lr_factor,
             scale_pos=lr_scale_pos,
-            unet_lr=args.lora_unet_learning_rate,
+            unet_lr=args.lora_learning_rate,
             tenc_lr=args.lora_txt_learning_rate,
         )
 
@@ -1278,8 +1276,8 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
 
                     #Track current step and epoch for OOM resume
-                    shared.in_progress_epoch = global_epoch
-                    shared.in_progress_steps = global_step
+                    #shared.in_progress_epoch = global_epoch
+                    #shared.in_progress_steps = global_step
 
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)

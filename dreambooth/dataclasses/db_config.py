@@ -123,6 +123,7 @@ class DreamboothConfig(BaseModel):
     def __init__(
             self,
             model_name: str = "",
+            model_dir: str = "",
             v2: bool = False,
             src: str = "",
             resolution: int = 512,
