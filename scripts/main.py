@@ -475,8 +475,6 @@ def on_ui_tabs():
                                 value="constant_with_warmup",
                                 choices=list_schedulers(),
                             )
-
-
                             db_learning_rate_min = gr.Number(
                                 label="Min Learning Rate", value=1e-6, visible=False
                             )
