@@ -582,7 +582,7 @@ def on_ui_tabs():
                                 label="Weight Decay",
                                 minimum=0,
                                 maximum=1,
-                                step=0.01,
+                                step=0.001,
                                 value=0.01,
                                 visible=True,
                             )
@@ -590,7 +590,7 @@ def on_ui_tabs():
                                 label="TENC Weight Decay",
                                 minimum=0,
                                 maximum=1,
-                                step=0.01,
+                                step=0.001,
                                 value=0.01,
                                 visible=True,
                             )
@@ -598,7 +598,7 @@ def on_ui_tabs():
                                 label="TENC Gradient Clip Norm",
                                 minimum=0,
                                 maximum=128,
-                                step=0.5,
+                                step=0.25,
                                 value=0,
                                 visible=True,
                             )
