@@ -50,9 +50,22 @@ class SchedulerType(Enum):
 
 
 def get_dadapt_with_warmup(optimizer, num_warmup_steps: int=0, unet_lr: int=1.0, tenc_lr: int=1.0):
-    unet_lr = unet_lr
-    tenc_lr = tenc_lr
+    """
+    Adjust LR from initial rate to the minimum specified LR over the maximum number of steps.
+    See <a href='https://miro.medium.com/max/828/1*Bk4xhtvg_Su42GmiVtvigg.webp'> for an example.
+    Args:
+        optimizer ([`~torch.optim.Optimizer`]):
+            The optimizer for which to schedule the learning rate.
+        num_warmup_steps (`int`, *optional*, defaults to 500):
+            The number of steps for the warmup phase.
+        unet_lr (`float`, *optional*, defaults to 1e-6):
+            The learning rate used to to control d-dadaption for the UNET
+        tenc_lr (`float`, *optional*, defaults to 1e-6):
+            The learning rate used to to control d-dadaption for the TENC
 
+    Return:
+        `torch.optim.lr_scheduler.LambdaLR` with the appropriate schedules for TENC and UNET.
+    """
     def unet_lambda(current_step: int):
         if current_step < num_warmup_steps:
             return (float(current_step) / float(max(unet_lr, num_warmup_steps)))
@@ -418,6 +431,12 @@ def get_scheduler(
         scale_pos (`float`, *optional*, defaults to 0.5):
             If a lr scheduler has an adjustment point, this is the percentage of training steps at which to
             adjust the LR.
+        unet_lr (`float`, *optional*, defaults to 1e-6):
+            The learning rate used to to control d-dadaption for the UNET
+        tenc_lr (`float`, *optional*, defaults to 1e-6):
+            The learning rate used to to control d-dadaption for the TENC
+
+
     """
     name = SchedulerType(name)
     break_steps = int(total_training_steps * scale_pos)
@@ -501,11 +520,11 @@ class UniversalScheduler:
     ):
         self.current_step = 0
         og_schedulers = [
+            "dadapt_with_warmup",
             "constant_with_warmup",
             "linear_with_warmup",
             "cosine",
             "cosine_with_restarts",
-            "dadapt_with_warmup",
             "polynomial",
         ]
 
