@@ -37,6 +37,7 @@ logger = logging.get_logger(__name__)
 
 
 class SchedulerType(Enum):
+    DADAPT_WITH_WARMUP = "dadapt_with_warmup"
     LINEAR = "linear"
     LINEAR_WITH_WARMUP = "linear_with_warmup"
     COSINE = "cosine"
@@ -46,6 +47,27 @@ class SchedulerType(Enum):
     POLYNOMIAL = "polynomial"
     CONSTANT = "constant"
     CONSTANT_WITH_WARMUP = "constant_with_warmup"
+    DADAPT_WITH_WARMUP = "dadapt_with_warmup"
+
+
+def get_dadapt_with_warmup(optimizer, num_warmup_steps: int=0, unet_lr: int=1.0, tenc_lr: int=1.0):
+    unet_lr = unet_lr
+    tenc_lr = tenc_lr
+
+    def unet_lambda(current_step: int):
+        if current_step < num_warmup_steps:
+            return (float(current_step) / float(max(unet_lr, num_warmup_steps)))
+        else:
+            return unet_lr
+
+    def tenc_lambda(current_step: int):
+        if current_step < num_warmup_steps:
+            return (float(current_step) / float(max(tenc_lr, num_warmup_steps)))
+        else:
+            return tenc_lr
+
+    return LambdaLR(optimizer, [unet_lambda, tenc_lambda], last_epoch=-1, verbose=False)
+
 
 
 # region Newer Schedulers
@@ -368,6 +390,8 @@ def get_scheduler(
         power: float = 1.0,
         factor: float = 0.5,
         scale_pos: float = 0.5,
+        unet_lr: float = 1.0,
+        tenc_lr: float = 1.0,
 ):
     """
     Unified API to get any scheduler from its name.
@@ -450,6 +474,14 @@ def get_scheduler(
             num_cycles=num_cycles,
         )
 
+    if name == SchedulerType.DADAPT_WITH_WARMUP:
+        return get_dadapt_with_warmup(
+            optimizer,
+            num_warmup_steps=num_warmup_steps,
+            unet_lr=unet_lr,
+            tenc_lr=tenc_lr,
+        )
+
 
 class UniversalScheduler:
     def __init__(
@@ -465,6 +497,8 @@ class UniversalScheduler:
             lr: float = 1e-6,
             min_lr: float = 1e-6,
             scale_pos: float = 0.5,
+            unet_lr: float = 1.0,
+            tenc_lr: float = 1.0,
     ):
         self.current_step = 0
         og_schedulers = [
@@ -472,6 +506,7 @@ class UniversalScheduler:
             "linear_with_warmup",
             "cosine",
             "cosine_with_restarts",
+            "dadapt_with_warmup",
             "polynomial",
         ]
 
@@ -489,6 +524,8 @@ class UniversalScheduler:
             power=power,
             factor=factor,
             scale_pos=scale_pos,
+            unet_lr=unet_lr,
+            tenc_lr=tenc_lr,
         )
 
     def step(self, steps: int = 1, is_epoch: bool = False):

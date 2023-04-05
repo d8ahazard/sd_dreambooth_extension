@@ -475,6 +475,8 @@ def on_ui_tabs():
                                 value="constant_with_warmup",
                                 choices=list_schedulers(),
                             )
+
+
                             db_learning_rate_min = gr.Number(
                                 label="Min Learning Rate", value=1e-6, visible=False
                             )
@@ -1480,6 +1482,7 @@ def on_ui_tabs():
                 "linear",
                 "cosine_annealing",
                 "cosine_annealing_with_restarts",
+                "dadapt_with_warmup"
             ]
             if sched in scale_scheds:
                 show_scale_pos = gr.update(visible=True)

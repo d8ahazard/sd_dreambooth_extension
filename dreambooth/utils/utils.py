@@ -186,6 +186,7 @@ def list_schedulers():
         "polynomial",
         "constant",
         "constant_with_warmup",
+        "dadapt_with_warmup",
     ]
 
 

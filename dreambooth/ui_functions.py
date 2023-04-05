@@ -1045,6 +1045,9 @@ def debug_buckets(model_name, num_epochs, batch_size):
     optimizer = AdamW(
         placeholder, lr=args.learning_rate, weight_decay=args.adamw_weight_decay
     )
+    if not args.use_lora and args.lr_scheduler == "dadapt_with_warmup":
+        args.lora_learning_rate = args.learning_rate,
+        args.lora_txt_learning_rate = args.learning_rate,
 
     lr_scheduler = UniversalScheduler(
         args.lr_scheduler,
@@ -1057,6 +1060,8 @@ def debug_buckets(model_name, num_epochs, batch_size):
         factor=args.lr_factor,
         scale_pos=args.lr_scale_pos,
         min_lr=args.learning_rate_min,
+        unet_lr=args.lora_learning_rate,
+        tenc_lr=args.lora_txt_learning_rate,
     )
 
     sampler = BucketSampler(dataset, args.train_batch_size, True)

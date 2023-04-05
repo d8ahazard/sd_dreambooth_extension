@@ -575,6 +575,8 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             power=args.lr_power,
             factor=args.lr_factor,
             scale_pos=lr_scale_pos,
+            unet_lr=args.lora_unet_learning_rate,
+            tenc_lr=args.lora_txt_learning_rate,
         )
 
         # create ema, fix OOM
