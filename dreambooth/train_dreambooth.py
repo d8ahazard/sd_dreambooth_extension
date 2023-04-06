@@ -850,11 +850,13 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 s_pipeline = s_pipeline.to(accelerator.device)
 
                 printm("Patching model with tomesd.")
-                tomesd.apply_patch(s_pipeline, ratio=0.4, use_rand=False)
+                if (enable_tomesd):
+                    tomesd.apply_patch(s_pipeline, ratio=0.4, use_rand=False)
 
                 with accelerator.autocast(), torch.inference_mode():
                     if save_model:
-                        tomesd.remove_patch(s_pipeline)
+                        if (enable_tomesd):
+                            tomesd.remove_patch(s_pipeline)
                         # We are saving weights, we need to ensure revision is saved
                         args.save()
                         try:
@@ -895,10 +897,12 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                 pbar.update()
 
                                 printm("Patching model with tomesd.")
-                                tomesd.apply_patch(s_pipeline, ratio=0.4, use_rand=False)
+                                if (enable_tomesd):
+                                    tomesd.apply_patch(s_pipeline, ratio=0.4, use_rand=False)
 
                             elif save_lora:
-                                tomesd.remove_patch(s_pipeline)
+                                if(enable_tomesd):
+                                    tomesd.remove_patch(s_pipeline)
                                 pbar.set_description("Saving Lora Weights...")
                                 # setup directory
                                 loras_dir = os.path.join(args.model_dir, "loras")
@@ -954,13 +958,15 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                 printm("Restored, moved to acc.device.")
 
                                 printm("Patching model with tomesd.")
-                                tomesd.apply_patch(s_pipeline, ratio=0.4, use_rand=False)
+                                if (enable_tomesd):
+                                    tomesd.apply_patch(s_pipeline, ratio=0.4, use_rand=False)
 
                         except Exception as ex:
                             print(f"Exception saving checkpoint/model: {ex}")
                             traceback.print_exc()
                             pass
-                    tomesd.remove_patch(s_pipeline)
+                    if (enable_tomesd):
+                        tomesd.remove_patch(s_pipeline)
                     save_dir = args.model_dir
                     if save_image:
                         samples = []
@@ -1027,13 +1033,15 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                 del samples
                                 del prompts
                                 printm("Patching model with tomesd.")
-                                tomesd.apply_patch(s_pipeline, ratio=0.4, use_rand=False)
+                                if (enable_tomesd):
+                                    tomesd.apply_patch(s_pipeline, ratio=0.4, use_rand=False)
                         except Exception as em:
                             print(f"Exception saving sample: {em}")
                             traceback.print_exc()
                             pass
                 printm("Starting cleanup.")
-                tomesd.remove_patch(s_pipeline)
+                if(enable_tomesd):
+                    tomesd.remove_patch(s_pipeline)
                 del s_pipeline
                 if save_image:
                     if "generator" in locals():
