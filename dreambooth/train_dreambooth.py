@@ -167,7 +167,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
     result.config = args
 
     enable_tomesd = args.enable_tomesd
-    enable_tomesd = True
 
     set_seed(args.deterministic)
 
