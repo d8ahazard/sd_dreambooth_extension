@@ -16,6 +16,7 @@ import torch
 import torch.backends.cuda
 import torch.backends.cudnn
 import torch.utils.checkpoint
+import tomesd
 from accelerate import Accelerator
 from accelerate.utils.random import set_seed as set_seed2
 from diffusers import (
@@ -76,6 +77,8 @@ dl.set_verbosity_error()
 
 last_samples = []
 last_prompts = []
+
+
 
 try:
     diff_version = importlib_metadata.version("diffusers")
@@ -162,6 +165,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
     result = TrainResult
     result.config = args
+
+    enable_tomesd = args.enable_tomesd
+    enable_tomesd = True
 
     set_seed(args.deterministic)
 
@@ -844,8 +850,12 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
                 s_pipeline = s_pipeline.to(accelerator.device)
 
+                printm("Patching model with tomesd.")
+                tomesd.apply_patch(s_pipeline, ratio=0.5)
+
                 with accelerator.autocast(), torch.inference_mode():
                     if save_model:
+                        tomesd.remove_patch(s_pipeline)
                         # We are saving weights, we need to ensure revision is saved
                         args.save()
                         try:
@@ -885,7 +895,11 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                     )
                                 pbar.update()
 
+                                printm("Patching model with tomesd.")
+                                tomesd.apply_patch(s_pipeline, ratio=0.5)
+
                             elif save_lora:
+                                tomesd.remove_patch(s_pipeline)
                                 pbar.set_description("Saving Lora Weights...")
                                 # setup directory
                                 loras_dir = os.path.join(args.model_dir, "loras")
@@ -939,11 +953,15 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                     compile_checkpoint(args.model_name, reload_models=False, lora_file_name=out_file,
                                                        log=False, snap_rev=snap_rev, pbar=pbar)
                                 printm("Restored, moved to acc.device.")
+
+                                printm("Patching model with tomesd.")
+                                tomesd.apply_patch(s_pipeline, ratio=0.5)
+
                         except Exception as ex:
                             print(f"Exception saving checkpoint/model: {ex}")
                             traceback.print_exc()
                             pass
-
+                    tomesd.remove_patch(s_pipeline)
                     save_dir = args.model_dir
                     if save_image:
                         samples = []
@@ -1009,12 +1027,14 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                     last_prompts.append(prompt)
                                 del samples
                                 del prompts
-
+                                printm("Patching model with tomesd.")
+                                tomesd.apply_patch(s_pipeline, ratio=0.5)
                         except Exception as em:
                             print(f"Exception saving sample: {em}")
                             traceback.print_exc()
                             pass
                 printm("Starting cleanup.")
+                tomesd.remove_patch(s_pipeline)
                 del s_pipeline
                 if save_image:
                     if "generator" in locals():

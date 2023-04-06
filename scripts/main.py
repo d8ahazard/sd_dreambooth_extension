@@ -986,6 +986,7 @@ def on_ui_tabs():
                         )
                 with gr.Tab("Testing", elem_id="TabDebug"):
                     gr.HTML(value="Experimental Settings")
+                    db_enable_tomesd = gr.Checkbox(label="Enable ToMeSD")
                     db_disable_logging = gr.Checkbox(label="Disable Logging")
                     db_deterministic = gr.Checkbox(label="Deterministic")
                     db_ema_predict = gr.Checkbox(label="Use EMA for prediction")
@@ -1236,6 +1237,7 @@ def on_ui_tabs():
             db_deterministic,
             db_disable_logging,
             db_ema_predict,
+            db_enable_tomesd,
             db_epoch_pause_frequency,
             db_epoch_pause_time,
             db_epochs,
