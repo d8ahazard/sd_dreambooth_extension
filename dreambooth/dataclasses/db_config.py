@@ -128,14 +128,19 @@ class DreamboothConfig(BaseModel):
     ):
 
         super().__init__(**kwargs)
-        model_name = sanitize_name(model_name)
-        models_path = shared.dreambooth_models_path
-        if models_path == "" or models_path is None:
-            models_path = os.path.join(shared.models_path, "dreambooth")
 
-        # If we're using the new UI, this should be populated, so load models from here.
-        if len(shared.paths):
-            models_path = os.path.join(shared.paths["models"], "dreambooth")
+        model_name = sanitize_name(model_name)
+        if "models_path" in kwargs:
+            models_path = kwargs["models_path"]
+            print(f"Using models path: {models_path}")
+        else:
+            models_path = shared.dreambooth_models_path
+            if models_path == "" or models_path is None:
+                models_path = os.path.join(shared.models_path, "dreambooth")
+
+            # If we're using the new UI, this should be populated, so load models from here.
+            if len(shared.paths):
+                models_path = os.path.join(shared.paths["models"], "dreambooth")
 
         if not self.use_lora:
             self.lora_model_name = ""
