@@ -144,6 +144,12 @@ def list_optimizer():
     except:
         pass
 
+    try:
+        from dreambooth.dadapt_adan_ip import DAdaptAdanIP
+        optimizer_list.append("AdanIP Dadaptation")
+    except:
+        pass
+
     return optimizer_list
 
 
@@ -180,6 +186,7 @@ def list_schedulers():
         "polynomial",
         "constant",
         "constant_with_warmup",
+        "dadapt_with_warmup",
     ]
 
 

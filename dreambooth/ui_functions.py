@@ -620,6 +620,7 @@ def load_model_params(model_name):
     """
     @param model_name: The name of the model to load.
     @return:
+    db_model_dir: The model directory
     db_model_path: The full path to the model directory
     db_revision: The current revision of the model
     db_v2: If the model requires a v2 config/compilation
@@ -646,14 +647,13 @@ def load_model_params(model_name):
 
         loras = get_lora_models(config)
         db_lora_models = gr_update(choices=loras)
-
         msg = f"Selected model: '{model_name}'."
         return (
             config.model_dir,
             config.revision,
             config.epoch,
             "True" if config.v2 else "False",
-            "True" if config.has_ema else "False",
+            "True" if config.has_ema and not config.use_lora else "False",
             config.src,
             config.shared_diffusers_path,
             db_model_snapshots,
@@ -1045,6 +1045,9 @@ def debug_buckets(model_name, num_epochs, batch_size):
     optimizer = AdamW(
         placeholder, lr=args.learning_rate, weight_decay=args.adamw_weight_decay
     )
+    if not args.use_lora and args.lr_scheduler == "dadapt_with_warmup":
+        args.lora_learning_rate = args.learning_rate,
+        args.lora_txt_learning_rate = args.learning_rate,
 
     lr_scheduler = UniversalScheduler(
         args.lr_scheduler,
@@ -1057,6 +1060,8 @@ def debug_buckets(model_name, num_epochs, batch_size):
         factor=args.lr_factor,
         scale_pos=args.lr_scale_pos,
         min_lr=args.learning_rate_min,
+        unet_lr=args.lora_learning_rate,
+        tenc_lr=args.lora_txt_learning_rate,
     )
 
     sampler = BucketSampler(dataset, args.train_batch_size, True)
