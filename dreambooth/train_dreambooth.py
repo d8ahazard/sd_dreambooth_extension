@@ -851,7 +851,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 s_pipeline = s_pipeline.to(accelerator.device)
 
                 printm("Patching model with tomesd.")
-                tomesd.apply_patch(s_pipeline, ratio=0.5)
+                tomesd.apply_patch(s_pipeline, ratio=0.4, use_rand=False)
 
                 with accelerator.autocast(), torch.inference_mode():
                     if save_model:
@@ -896,7 +896,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                 pbar.update()
 
                                 printm("Patching model with tomesd.")
-                                tomesd.apply_patch(s_pipeline, ratio=0.5)
+                                tomesd.apply_patch(s_pipeline, ratio=0.4, use_rand=False)
 
                             elif save_lora:
                                 tomesd.remove_patch(s_pipeline)
@@ -955,7 +955,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                 printm("Restored, moved to acc.device.")
 
                                 printm("Patching model with tomesd.")
-                                tomesd.apply_patch(s_pipeline, ratio=0.5)
+                                tomesd.apply_patch(s_pipeline, ratio=0.4, use_rand=False)
 
                         except Exception as ex:
                             print(f"Exception saving checkpoint/model: {ex}")
@@ -1028,7 +1028,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                 del samples
                                 del prompts
                                 printm("Patching model with tomesd.")
-                                tomesd.apply_patch(s_pipeline, ratio=0.5)
+                                tomesd.apply_patch(s_pipeline, ratio=0.4, use_rand=False)
                         except Exception as em:
                             print(f"Exception saving sample: {em}")
                             traceback.print_exc()
