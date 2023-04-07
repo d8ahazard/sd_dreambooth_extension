@@ -33,7 +33,6 @@ class DreamboothConfig(BaseModel):
     deterministic: bool = False
     disable_logging: bool = False
     ema_predict: bool = False
-    enable_tomesd: bool = False
     epoch: int = 0
     epoch_pause_frequency: int = 0
     epoch_pause_time: int = 0
@@ -108,6 +107,7 @@ class DreamboothConfig(BaseModel):
     strict_tokens: bool = False
     tenc_weight_decay: float = 0.01
     tenc_grad_clip_norm: float = 0.00
+    tomesd: float = 0
     tf32_enable: bool = False
     train_batch_size: int = 1
     train_imagic: bool = False
