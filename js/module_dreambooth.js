@@ -1,10 +1,18 @@
-let dreamModelSelect;
-let newDreamModelSelect;
 let inputBrowser;
+let dreamSelect;
+
 $(".hide").hide();
 document.addEventListener("DOMContentLoaded", function () {
-
-    $(".modelSelect").modelSelect();
+    let selects = $(".modelSelect").modelSelect();
+    console.log("Selects: ", selects);
+    for (let i = 0; i < selects.length; i ++) {
+        let elem = selects[i];
+        console.log("ELEM: ", elem);
+        if (elem.container.id === "dreamModelSelect") {
+            dreamSelect = elem;
+        }
+    }
+    console.log("DS: ", dreamSelect);
     $("#db_create_model").click(function(){
         let data = {};
         $(".newModelParam").each(function(index, elem) {
@@ -26,10 +34,19 @@ document.addEventListener("DOMContentLoaded", function () {
             }
             data[key] = val;
         });
-        sendMessage("create_dreambooth", data, false).then(()=>{
+        sendMessage("create_dreambooth", data, true).then(()=>{
             console.log("New model params: ", data);
+            dreamSelect.refresh();
         });
 
+    });
+
+    $("#db_train").click(function(){
+        let data = getSettings();
+        console.log("Settings: ", data);
+       sendMessage("train_dreambooth", data, false).then((result) => {
+           console.log("Res: ", result);
+       });
     });
 
     $("#db_create_from_hub").change(function(){
@@ -79,6 +96,36 @@ document.addEventListener("DOMContentLoaded", function () {
 
     keyListener.register("ctrl+Enter", "#dreamSettings", startDreambooth);
 });
+
+
+function getSettings() {
+    let concept_path = inputBrowser.currentPath;
+    let dbInputs = $(".db-slider");
+    let settings = {};
+    settings["model"] = dreamSelect.getModel();
+    settings["c1_instance_data_dir"] = concept_path;
+    dbInputs.each(function() {
+        let element = $(this);
+        console.log("ELEM: ", element);
+        let id = element.data("elem_id");
+        let slider = element.data("BootstrapSlider");
+        console.log("Slider: ", slider);
+        if (slider) {
+            settings[id] = parseInt(slider.value);
+        }
+    });
+
+    let otherInputs = $(".dbInput");
+    otherInputs.each(function() {
+       let element = $(this);
+       console.log("OTHER: ", element);
+       let id = element.data("elem_id");
+        settings[id] = element[0].value;
+    });
+
+    console.log("Collected settings: ", settings);
+    return settings;
+}
 
 
 function dreamResponse() {

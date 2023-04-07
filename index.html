@@ -11,12 +11,12 @@
                     </button>
                     <button class="btn btn-top btn-secondary hide" type="button" id="db_train_sample">Generate Samples
                     </button>
-                    <button class="btn btn-top btn-secondary hide" type="button" id="db_cancel">Cancel</button>
+                    <button class="btn btn-top btn-secondary hide cancelButton" type="button" id="db_cancel">Cancel</button>
                 </div>
             </div>
         </div>
         <div class="row">
-            <div class="col-12 col-md-4">
+            <div class="col-12 col-md-6 col-lg-4">
                 <div class="card shadow" id="dreamModel">
                     <div class="card-header">Model</div>
                     <div class="card-body">
@@ -157,7 +157,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-12 col-md-4">
+            <div class="col-12 col-md-6 col-lg-4">
                 <div class="card shadow" id="dreamSettings">
                     <div class="card-header">
                         Input
@@ -171,11 +171,11 @@
                             </div>
                             <div class="form-group">
                                 <label for="db_instance_token">Instance Token</label>
-                                <input type="text" id="db_instance_token" class="form-control">
+                                <input type="text" id="db_instance_token" class="form-control dbInput" data-elem_id="c1_instance_token">
                             </div>
                             <div class="form-group">
                                 <label for="db_class_token">Class Token</label>
-                                <input type="text" id="db_class_token" class="form-control">
+                                <input type="text" id="db_class_token" class="form-control dbInput" data-elem_id="c1_class_token">
                             </div>
                         </div>
                         <div class="borderSection">
@@ -192,7 +192,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-14 col-md-4">
+            <div class="col-14 col-md-6 col-lg-4">
                 <div class="card shadow" id="dreamStatus">
                     <div class="card-header">
                         Output

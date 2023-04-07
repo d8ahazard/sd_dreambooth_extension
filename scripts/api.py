@@ -425,8 +425,7 @@ def dreambooth_api(_, app: FastAPI):
     async def create_db_model(
             new_model_name: str = Query(description="The name of the model to create.", ),
             new_model_src: str = Query(description="The source checkpoint to extract to create this model.", ),
-            new_model_scheduler: str = Query("ddim", description="The scheduler to use. V2+ models ignore this.", ),
-            new_model_shared_src: str = Query(description="The shared diffusers source to use for this differs model.", ),
+            new_model_shared_src: str = Query(None, description="The shared diffusers source to use for this differs model.", ),
             create_from_hub: bool = Query(False, description="Create this model from the hub", ),
             new_model_url: str = Query(None,
                                        description="The hub URL to use for this model. Must contain diffusers model.", ),
@@ -453,14 +452,15 @@ def dreambooth_api(_, app: FastAPI):
             return status
 
         logger.debug("Creating new Checkpoint: " + new_model_name)
-        res = create_model(new_model_name,
-                           new_model_src,
-                           create_from_hub,
-                           new_model_url,
-                           new_model_token,
-                           new_model_extract_ema,
-                           train_unfrozen,
-                           is_512)
+        res = create_model(new_model_name=new_model_name,
+                           ckpt_path=new_model_src,
+                           shared_src=new_model_shared_src,
+                           from_hub=create_from_hub,
+                           new_model_url=new_model_url,
+                           new_model_token=new_model_token,
+                           extract_ema=new_model_extract_ema,
+                           train_unfrozen=train_unfrozen,
+                           is_512=is_512)
 
         return JSONResponse(res[-1])
 
