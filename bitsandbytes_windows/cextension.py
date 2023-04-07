@@ -2,6 +2,7 @@ import ctypes as ct
 from pathlib import Path
 from warnings import warn
 
+from dreambooth import shared
 from .cuda_setup.main import evaluate_cuda_setup
 
 
@@ -42,15 +43,16 @@ class CUDALibrary_Singleton(object):
         return cls._instance
 
 
-lib = CUDALibrary_Singleton.get_instance().lib
-try:
-    lib.cadam32bit_g32
-    lib.get_context.restype = ct.c_void_p
-    lib.get_cusparse.restype = ct.c_void_p
-    COMPILED_WITH_CUDA = True
-except AttributeError:
-    warn(
-        "The installed version of bitsandbytes was compiled without GPU support. "
-        "8-bit optimizers and GPU quantization are unavailable."
-    )
-    COMPILED_WITH_CUDA = False
+if shared.device.type != "mps":
+    lib = CUDALibrary_Singleton.get_instance().lib
+    try:
+        lib.cadam32bit_g32
+        lib.get_context.restype = ct.c_void_p
+        lib.get_cusparse.restype = ct.c_void_p
+        COMPILED_WITH_CUDA = True
+    except AttributeError:
+        warn(
+            "The installed version of bitsandbytes was compiled without GPU support. "
+            "8-bit optimizers and GPU quantization are unavailable."
+        )
+        COMPILED_WITH_CUDA = False

@@ -299,11 +299,11 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
     """
 
     # extract state_dict for UNet
-    unet_state_dict = {}
     ema_state_dict = {}
     keys = list(checkpoint.keys())
     has_ema = False
     unet_key = "model.diffusion_model."
+
     # at least a 100 parameters have to start with `model_ema` in order for the checkpoint to be EMA
     if extract_ema and sum(k.startswith("model_ema") for k in keys) > 100:
         print(f"Checkpoint {path} has both EMA and non-EMA weights.")
@@ -311,15 +311,16 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
         for key in keys:
             if key.startswith("model.diffusion_model"):
                 flat_ema_key = "model_ema." + "".join(key.split(".")[1:])
-                if not hasattr(checkpoint, flat_ema_key):
+                if flat_ema_key not in checkpoint:
                     flat_ema_key = flat_ema_key.replace("diffusion_model", "")
                 ema_state_dict[key.replace(unet_key, "")] = checkpoint.pop(flat_ema_key)
+
     ema_checkpoint = None
+    unet_state_dict = {}
+
     for key in keys:
         if key.startswith(unet_key):
             unet_state_dict[key.replace(unet_key, "")] = checkpoint.pop(key)
-            if has_ema:
-                ema_state_dict[key.replace(unet_key, "")] = unet_state_dict[key.replace(unet_key, "")]
 
     if has_ema:
         ema_checkpoint = unet_dict_to_checkpoint(ema_state_dict, config)
@@ -774,7 +775,7 @@ def replace_symlinks(path, base):
         # Get the target of the symlink
         src = os.readlink(path)
         blob = os.path.basename(src)
-        path_parts = path.split(os.pathsep)
+        path_parts = path.split(os.sep)
         model_name = None
         dir_name = None
         save_next = False
@@ -843,7 +844,7 @@ def download_model(db_config: DreamboothConfig, token, extract_ema: bool = False
             print(f'Found model index: {name}')
             model_index = local_name
             continue
-        if (".ckpt" in name or ".safetensors" in name) and os.pathsep not in name:
+        if (".ckpt" in name or ".safetensors" in name) and os.sep not in name:
             print(f'Found model: {name}')
             model_files.append(local_name)
             continue
@@ -999,7 +1000,10 @@ def load_checkpoint(checkpoint_file: str, map_location: str):
     else:
         disable_safe_unpickle()
         print("Loading ckpt...")
-        checkpoint = torch.load(checkpoint_file, map_location=('cpu' if map_location == 'mps' else map_location))
+        try:
+            checkpoint = torch.load(checkpoint_file, map_location=('cpu' if map_location == 'mps' else map_location))
+        except:
+            checkpoint = torch.load(checkpoint_file, map_location=map_location)
         checkpoint = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
         enable_safe_unpickle()
     return checkpoint

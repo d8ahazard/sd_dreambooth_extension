@@ -142,7 +142,7 @@ class DreamboothConfig(BaseModel):
             self.lora_model_name = ""
 
         model_dir = os.path.join(models_path, model_name)
-        print(f"Model dir set to: {model_dir}")
+        # print(f"Model dir set to: {model_dir}")
         working_dir = os.path.join(model_dir, "working")
 
         if not os.path.exists(working_dir):
@@ -374,6 +374,9 @@ def from_file(model_name):
     Returns: Dict | None
 
     """
+    if isinstance(model_name, list) and len(model_name) > 0:
+        model_name = model_name[0]
+        
     if model_name == "" or model_name is None:
         return None
 
