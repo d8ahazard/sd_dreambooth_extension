@@ -56,15 +56,15 @@ def get_dadapt_with_warmup(optimizer, num_warmup_steps: int=0, unet_lr: int=1.0,
     Args:
         optimizer ([`~torch.optim.Optimizer`]):
             The optimizer for which to schedule the learning rate.
-        num_warmup_steps (`int`, *optional*, defaults to 500):
+        num_warmup_steps (`int`, *optional*, defaults to 0):
             The number of steps for the warmup phase.
-        unet_lr (`float`, *optional*, defaults to 1e-6):
+        unet_lr (`float`, *optional*, defaults to 1.0):
             The learning rate used to to control d-dadaption for the UNET
-        tenc_lr (`float`, *optional*, defaults to 1e-6):
+        tenc_lr (`float`, *optional*, defaults to 1.0):
             The learning rate used to to control d-dadaption for the TENC
 
     Return:
-        `torch.optim.lr_scheduler.LambdaLR` with the appropriate schedules for TENC and UNET.
+        `torch.optim.lr_scheduler.LambdaLR` with the appropriate LR schedules for TENC and UNET.
     """
     def unet_lambda(current_step: int):
         if current_step < num_warmup_steps:
@@ -520,7 +520,6 @@ class UniversalScheduler:
     ):
         self.current_step = 0
         og_schedulers = [
-            "dadapt_with_warmup",
             "constant_with_warmup",
             "linear_with_warmup",
             "cosine",
@@ -567,6 +566,13 @@ class UniversalScheduler:
         return self.scheduler.get_lr()
 
 
+#Temp conditional for dadapt optimizer console logging
+def log_dadapt(disable: bool = True):
+    if disable:
+         return 0
+    else:
+        return 5
+
 def get_optimizer(args, params_to_optimize):
     try:
         if args.optimizer == "8bit AdamW":
@@ -592,6 +598,7 @@ def get_optimizer(args, params_to_optimize):
                 lr=args.learning_rate,
                 weight_decay=args.adamw_weight_decay,
                 decouple=True,
+                log_every=log_dadapt(True)
             )
 
         elif args.optimizer == "AdanIP Dadaptation":
@@ -600,7 +607,7 @@ def get_optimizer(args, params_to_optimize):
                 params_to_optimize,
                 lr=args.learning_rate,
                 weight_decay=args.adamw_weight_decay,
-                log_every=5,
+                log_every=log_dadapt(True)
             )
 
         elif args.optimizer == "Adan Dadaptation":
@@ -609,7 +616,7 @@ def get_optimizer(args, params_to_optimize):
                 params_to_optimize,
                 lr=args.learning_rate,
                 weight_decay=args.adamw_weight_decay,
-                log_every=5,
+                log_every=log_dadapt(True),
             )
 
 

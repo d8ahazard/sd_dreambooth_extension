@@ -120,18 +120,6 @@ def list_optimizer():
     except:
         pass
 
-    # try:
-    #     from dadaptation import DAdaptSGD
-    #     optimizer_list.append("SGD Dadaptation")
-    # except:
-    #     pass
-    #
-    # try:
-    #     from dadaptation import DAdaptAdaGrad
-    #     optimizer_list.append("AdaGrad Dadaptation")
-    # except:
-    #     pass
-    #
     try:
         from dadaptation import DAdaptAdam
         optimizer_list.append("AdamW Dadaptation")
