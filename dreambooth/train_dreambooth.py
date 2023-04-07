@@ -447,8 +447,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             params_to_optimize = unet.parameters()
 
         optimizer = get_optimizer(args, params_to_optimize)
-        optimizer.param_groups[1]["weight_decay"] = args.tenc_weight_decay
-        optimizer.param_groups[1]["grad_clip_norm"] = args.tenc_grad_clip_norm
+        if stop_text_percentage != 0:
+            optimizer.param_groups[1]["weight_decay"] = args.tenc_weight_decay
+            optimizer.param_groups[1]["grad_clip_norm"] = args.tenc_grad_clip_norm
+
         noise_scheduler = get_noise_scheduler(args)
 
         def cleanup_memory():
@@ -504,7 +506,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             del vae
             # Preserve reference to vae for later checks
             vae = None
-        cleanup()
+
         if status.interrupted:
             result.msg = "Training interrupted."
             stop_profiler(profiler)
@@ -1121,6 +1123,8 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         last_tenc = 0 < text_encoder_epochs
         if stop_text_percentage == 0:
             last_tenc = False
+
+        cleanup()
 
         for epoch in range(first_epoch, max_train_epochs):
             if training_complete:
