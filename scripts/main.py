@@ -993,8 +993,6 @@ def on_ui_tabs():
                     db_split_loss = gr.Checkbox(
                         label="Calculate Split Loss", value=True
                     )
-                    db_class_disable_caption_matching = gr.Checkbox(label="Disable Class Caption Matching")
-                    db_class_disable_resolution_matching = gr.Checkbox(label="Disable Class Resolution Matching")
                     db_disable_logging = gr.Checkbox(label="Disable Logging")
                     db_deterministic = gr.Checkbox(label="Deterministic")
                     db_ema_predict = gr.Checkbox(label="Use EMA for prediction")
