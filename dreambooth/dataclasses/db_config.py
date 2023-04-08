@@ -239,9 +239,9 @@ class DreamboothConfig(BaseModel):
 
         if key in replaced_params.keys():
             replacement = replaced_params[key]
-            if hasattr(replacement, "new_key"):
+            if "new_key" in replacement:
                 key = replacement["new_key"]
-            if hasattr(replacement, "values"):
+            if "values" in replacement:
                 for _value in replacement["values"]:
                     if value in _value["old"]:
                         value = _value["new"]
