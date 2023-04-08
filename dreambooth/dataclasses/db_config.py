@@ -23,7 +23,7 @@ def sanitize_name(name):
 
 class DreamboothConfig(BaseModel):
     # These properties MUST be sorted alphabetically
-    adamw_weight_decay: float = 0.01
+    weight_decay: float = 0.01
     attention: str = "xformers"
     cache_latents: bool = True
     clip_skip: int = 1
@@ -108,7 +108,6 @@ class DreamboothConfig(BaseModel):
     tenc_weight_decay: float = 0.01
     tenc_grad_clip_norm: float = 0.00
     tomesd: float = 0
-    tf32_enable: bool = False
     train_batch_size: int = 1
     train_imagic: bool = False
     train_unet: bool = True
@@ -214,6 +213,9 @@ class DreamboothConfig(BaseModel):
             #       "new": "..."
             #   }]
             # }
+            "weight_decay": {
+                "new_key": "weight_decay",
+            },
             "deis_train_scheduler": {
                 "new_key": "noise_scheduler",
                 "values": [{

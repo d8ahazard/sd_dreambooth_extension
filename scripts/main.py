@@ -575,7 +575,7 @@ def on_ui_tabs():
                                 maximum=12,
                                 step=1,
                             )
-                            db_adamw_weight_decay = gr.Slider(
+                            db_weight_decay = gr.Slider(
                                 label="Weight Decay",
                                 minimum=0,
                                 maximum=1,
@@ -990,15 +990,14 @@ def on_ui_tabs():
                         maximum=1,
                         step=0.1,
                     )
-                    db_disable_logging = gr.Checkbox(label="Disable Logging")
-                    db_deterministic = gr.Checkbox(label="Deterministic")
-                    db_ema_predict = gr.Checkbox(label="Use EMA for prediction")
                     db_split_loss = gr.Checkbox(
                         label="Calculate Split Loss", value=True
                     )
-                    db_tf32_enable = gr.Checkbox(
-                        label="Use TensorFloat 32", value=False
-                    )
+                    db_class_disable_caption_matching = gr.Checkbox(label="Disable Class Caption Matching")
+                    db_class_disable_resolution_matching = gr.Checkbox(label="Disable Class Resolution Matching")
+                    db_disable_logging = gr.Checkbox(label="Disable Logging")
+                    db_deterministic = gr.Checkbox(label="Deterministic")
+                    db_ema_predict = gr.Checkbox(label="Use EMA for prediction")
                     db_noise_scheduler = gr.Dropdown(
                         label="Noise scheduler",
                         value="DDPM",
@@ -1231,9 +1230,11 @@ def on_ui_tabs():
         # List of all the things that we need to save
         # db_model_name must be first due to save_config() parsing
         params_to_save = [
-            db_adamw_weight_decay,
+            db_weight_decay,
             db_attention,
             db_cache_latents,
+            db_class_disable_caption_matching,
+            db_class_disable_resolution_matching,
             db_clip_skip,
             db_concepts_path,
             db_custom_model_name,
@@ -1310,7 +1311,6 @@ def on_ui_tabs():
             db_strict_tokens,
             db_tenc_grad_clip_norm,
             db_tenc_weight_decay,
-            db_tf32_enable,
             db_train_batch_size,
             db_train_imagic,
             db_train_unet,

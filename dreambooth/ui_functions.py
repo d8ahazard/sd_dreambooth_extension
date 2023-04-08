@@ -1043,7 +1043,7 @@ def debug_buckets(model_name, num_epochs, batch_size):
     sched_train_steps = args.num_train_epochs * dataset.__len__()
 
     optimizer = AdamW(
-        placeholder, lr=args.learning_rate, weight_decay=args.adamw_weight_decay
+        placeholder, lr=args.learning_rate, weight_decay=args.weight_decay
     )
     if not args.use_lora and args.lr_scheduler == "dadapt_with_warmup":
         args.lora_learning_rate = args.learning_rate,

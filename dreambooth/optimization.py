@@ -580,7 +580,7 @@ def get_optimizer(args, params_to_optimize):
             return AdamW8bit(
                 params_to_optimize,
                 lr=args.learning_rate,
-                weight_decay=args.adamw_weight_decay,
+                weight_decay=args.weight_decay,
             )
 
         elif args.optimizer == "Lion":
@@ -588,7 +588,7 @@ def get_optimizer(args, params_to_optimize):
             return Lion(
                 params_to_optimize,
                 lr=args.learning_rate,
-                weight_decay=args.adamw_weight_decay,
+                weight_decay=args.weight_decay,
             )
 
         elif args.optimizer == "AdamW Dadaptation":
@@ -596,7 +596,7 @@ def get_optimizer(args, params_to_optimize):
             return DAdaptAdam(
                 params_to_optimize,
                 lr=args.learning_rate,
-                weight_decay=args.adamw_weight_decay,
+                weight_decay=args.weight_decay,
                 decouple=True,
                 log_every=log_dadapt(True)
             )
@@ -606,7 +606,7 @@ def get_optimizer(args, params_to_optimize):
             return DAdaptAdanIP(
                 params_to_optimize,
                 lr=args.learning_rate,
-                weight_decay=args.adamw_weight_decay,
+                weight_decay=args.weight_decay,
                 log_every=log_dadapt(True)
             )
 
@@ -615,7 +615,7 @@ def get_optimizer(args, params_to_optimize):
             return DAdaptAdan(
                 params_to_optimize,
                 lr=args.learning_rate,
-                weight_decay=args.adamw_weight_decay,
+                weight_decay=args.weight_decay,
                 log_every=log_dadapt(True),
             )
 
@@ -631,7 +631,7 @@ def get_optimizer(args, params_to_optimize):
     return AdamW(
         params_to_optimize,
         lr=args.learning_rate,
-        weight_decay=args.adamw_weight_decay,
+        weight_decay=args.weight_decay,
     )
 
 
