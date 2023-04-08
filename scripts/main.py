@@ -1231,8 +1231,6 @@ def on_ui_tabs():
             db_weight_decay,
             db_attention,
             db_cache_latents,
-            db_class_disable_caption_matching,
-            db_class_disable_resolution_matching,
             db_clip_skip,
             db_concepts_path,
             db_custom_model_name,
