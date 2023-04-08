@@ -445,7 +445,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             params_to_optimize = unet.parameters()
 
         optimizer = get_optimizer(args, params_to_optimize)
-        if stop_text_percentage != 0:
+        if len(optimizer.param_groups) > 1:
             optimizer.param_groups[1]["weight_decay"] = args.tenc_weight_decay
             optimizer.param_groups[1]["grad_clip_norm"] = args.tenc_grad_clip_norm
 
@@ -1398,10 +1398,10 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 if training_complete or status.interrupted:
                     shared.in_progress = False
                     shared.in_progress_step = 0
-                    shared.in_progress_epoch - 0
+                    shared.in_progress_epoch = 0
                     print("  Training complete (step check).")
                     if status.interrupted:
-                        state = "cancelled"
+                        state = "canceled"
                     else:
                         state = "complete"
 
@@ -1430,7 +1430,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             if training_complete or status.interrupted:
                 print("  Training complete (step check).")
                 if status.interrupted:
-                    state = "cancelled"
+                    state = "canceled"
                 else:
                     state = "complete"
 

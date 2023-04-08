@@ -168,7 +168,7 @@ def dreambooth_api(_, app: FastAPI):
         if shared.status.job_count == 0:
             return JSONResponse(content={"message": "Nothing to cancel."})
         shared.status.interrupted = True
-        return JSONResponse(content={"message": f"Processes cancelled."})
+        return JSONResponse(content={"message": f"Processes canceled."})
 
     @app.get("/dreambooth/checkpoint")
     async def get_checkpoint(
