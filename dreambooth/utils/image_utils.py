@@ -450,6 +450,11 @@ def open_and_trim(image_path: str, reso: Tuple[int, int], return_pil: bool = Fal
 
     # Convert to RGB if necessary
     if image.mode != "RGB":
+        # If given image has Alpha Channel, flatten it instead of removing A channel
+        if image.mode.endswith("A"):
+            bg = Image.new("RGB", image.size, "white")
+            bg.paste(image, mask=image.split()[3])
+            image = bg
         image = image.convert("RGB")
 
     # Upscale image if necessary
