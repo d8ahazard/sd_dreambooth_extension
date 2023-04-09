@@ -985,7 +985,7 @@ def on_ui_tabs():
                     gr.HTML(value="Experimental Settings")
                     db_tomesd = gr.Slider(
                         value=0,
-                        label="ToMeSD",
+                        label="Token Merging (ToMe)",
                         minimum=0,
                         maximum=1,
                         step=0.1,
