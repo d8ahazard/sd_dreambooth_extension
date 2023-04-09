@@ -16,7 +16,7 @@ from helpers.mytqdm import mytqdm
 class ClassDataset(Dataset):
     """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
 
-    def __init__(self, concepts: [Concept], model_dir: str, max_width: int, shuffle: bool):
+    def __init__(self, concepts: [Concept], model_dir: str, max_width: int, shuffle: bool, disable_class_matching: bool):
         # Existing training image data
         self.instance_prompts = []
         # Existing class image data
@@ -71,14 +71,18 @@ class ClassDataset(Dataset):
             if concept.num_class_images_per <= 0 or not class_dir:
                 continue
 
+            if disable_class_matching:
+                class_prompt_buckets = sort_prompts(concept, text_getter, class_dir, class_images[concept_idx], bucket_resos, concept_idx, True, pbar)
+                for class_prompt_datas in class_prompt_buckets.values():
+                    self.class_prompts.extend(class_prompt_datas)
+                continue
+
             required_prompt_buckets = sort_prompts(concept, text_getter, class_dir, instance_images[concept_idx], bucket_resos, concept_idx, True, pbar)
             existing_prompt_buckets = sort_prompts(concept, text_getter, class_dir, class_images[concept_idx], bucket_resos, concept_idx, True, pbar, True)
 
             # Iterate over each resolution of images, per concept
             for res, required_prompt_datas in required_prompt_buckets.items():
                 classes_per_bucket = len(required_prompt_datas) * concept.num_class_images_per
-                if classes_per_bucket == 0:
-                    continue
 
                 new_prompts_datas = []
                 existing_prompt_datas = existing_prompt_buckets[res] if res in existing_prompt_buckets.keys() else []

@@ -31,6 +31,7 @@ class DreamboothConfig(BaseModel):
     concepts_path: str = ""
     custom_model_name: str = ""
     deterministic: bool = False
+    disable_class_matching: bool = False
     disable_logging: bool = False
     ema_predict: bool = False
     epoch: int = 0
@@ -349,10 +350,6 @@ def concepts_from_file(concepts_path: str):
 def save_config(*args):
     params = list(args)
     concept_keys = ["c1_", "c2_", "c3_", "c4_"]
-    model_name = params[38]
-    if model_name is None or model_name == "":
-        print("Invalid model name.")
-        return
     params_dict = dict(zip(save_keys, params))
     concepts_list = []
     # If using a concepts file/string, keep concepts_list empty.
@@ -371,6 +368,11 @@ def save_config(*args):
         existing_concepts = params_dict["concepts_list"] if "concepts_list" in params_dict else []
         if len(concepts_list) and not len(existing_concepts):
             params_dict["concepts_list"] = concepts_list
+
+    model_name = params_dict["db_model_name"]
+    if model_name is None or model_name == "":
+        print("Invalid model name.")
+        return
 
     config = from_file(model_name)
     if config is None:

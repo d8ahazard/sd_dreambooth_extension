@@ -79,7 +79,6 @@ last_samples = []
 last_prompts = []
 
 
-
 try:
     diff_version = importlib_metadata.version("diffusers")
     version_string = diff_version.split(".")

@@ -50,7 +50,8 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
 
     print("Preparing dataset...")
 
-    if args.strict_tokens: print("Building prompts with strict tokens enabled.")
+    if args.strict_tokens:
+        print("Building prompts with strict tokens enabled.")
 
     train_dataset = DbDataset(
         batch_size=batch_size,
@@ -94,7 +95,9 @@ def generate_classifiers(
     class_prompts = []
     try:
         status.textinfo = "Preparing dataset..."
-        prompt_dataset = ClassDataset(args.concepts(), args.model_dir, args.resolution, False)
+        prompt_dataset = ClassDataset(
+            args.concepts(), args.model_dir, args.resolution, False, args.disable_class_matching
+        )
         instance_prompts = prompt_dataset.instance_prompts
         class_prompts = prompt_dataset.class_prompts
     except Exception as p:

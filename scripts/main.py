@@ -993,6 +993,7 @@ def on_ui_tabs():
                     db_split_loss = gr.Checkbox(
                         label="Calculate Split Loss", value=True
                     )
+                    db_disable_class_matching = gr.Checkbox(label="Disable Class Matching")
                     db_disable_logging = gr.Checkbox(label="Disable Logging")
                     db_deterministic = gr.Checkbox(label="Deterministic")
                     db_ema_predict = gr.Checkbox(label="Use EMA for prediction")
@@ -1235,6 +1236,7 @@ def on_ui_tabs():
             db_concepts_path,
             db_custom_model_name,
             db_deterministic,
+            db_disable_class_matching,
             db_disable_logging,
             db_ema_predict,
             db_tomesd,

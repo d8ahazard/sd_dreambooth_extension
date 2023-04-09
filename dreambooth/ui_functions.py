@@ -1025,7 +1025,7 @@ def debug_buckets(model_name, num_epochs, batch_size):
     print("Preparing prompt dataset...")
 
     prompt_dataset = ClassDataset(
-        args.concepts(), args.model_dir, args.resolution, False
+        args.concepts(), args.model_dir, args.resolution, False, args.disable_class_matching
     )
     inst_paths = prompt_dataset.instance_prompts
     class_paths = prompt_dataset.class_prompts
