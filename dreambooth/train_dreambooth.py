@@ -431,8 +431,12 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
         optimizer = get_optimizer(args, params_to_optimize)
         if len(optimizer.param_groups) > 1:
-            optimizer.param_groups[1]["weight_decay"] = args.tenc_weight_decay
-            optimizer.param_groups[1]["grad_clip_norm"] = args.tenc_grad_clip_norm
+            try:
+                optimizer.param_groups[1]["weight_decay"] = args.tenc_weight_decay
+                optimizer.param_groups[1]["grad_clip_norm"] = args.tenc_grad_clip_norm
+            except:
+                print("Exception setting tenc weight decay")
+                traceback.print_exc()
 
         noise_scheduler = get_noise_scheduler(args)
 
