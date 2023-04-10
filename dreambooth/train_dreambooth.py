@@ -1315,6 +1315,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 del noisy_latents
                 del target
 
+                dlr_unet, dlr_tenc = None, None
                 if dadapt(args.optimizer):
                     dlr_unet = optimizer.param_groups[0]["d"] * optimizer.param_groups[0]["lr"]
                     if len(optimizer.param_groups) > 1:
@@ -1361,7 +1362,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                             "vram": float(cached),
                         }
 
-                if dadapt(args.optimizer):
+                if dlr_tenc:
                     status.textinfo2 = (
                         f"Loss: {'%.2f' % loss_step}, UNET DLR: {'{:.2E}'.format(Decimal(dlr_unet))}, TENC DLR: {'{:.2E}'.format(Decimal(dlr_tenc))}, "
                         f"VRAM: {allocated}/{cached} GB"
