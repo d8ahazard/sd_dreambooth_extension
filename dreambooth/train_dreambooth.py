@@ -78,7 +78,6 @@ dl.set_verbosity_error()
 last_samples = []
 last_prompts = []
 
-
 try:
     diff_version = importlib_metadata.version("diffusers")
     version_string = diff_version.split(".")
@@ -103,6 +102,7 @@ diffusers_dir = ""
 try:
     from core.handlers.config import ConfigHandler
     from core.handlers.models import ModelHandler
+
     ch = ConfigHandler()
     mh = ModelHandler()
     export_diffusers = ch.get_item("export_diffusers", "dreambooth", True)
@@ -110,11 +110,13 @@ try:
 except:
     pass
 
+
 def dadapt(optimizer):
     if optimizer == "AdamW Dadaptation" or optimizer == "Adan Dadaptation":
         return True
     else:
         return False
+
 
 def set_seed(deterministic: bool):
     if deterministic:
@@ -665,13 +667,13 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             except Exception as lex:
                 print(f"Exception loading checkpoint: {lex}")
 
-        #if shared.in_progress:
+        # if shared.in_progress:
         #    print("  ***** OOM detected. Resuming from last step *****")
         #    max_train_steps = max_train_steps - shared.in_progress_step
         #    max_train_epochs = max_train_epochs - shared.in_progress_epoch
         #    session_epoch = shared.in_progress_epoch
         #    text_encoder_epochs = (shared.in_progress_epoch/max_train_epochs)*text_encoder_epochs
-        #else:
+        # else:
         #    shared.in_progress = True
 
         print("  ***** Running training *****")
@@ -1293,9 +1295,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
                     optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
 
-                    #Track current step and epoch for OOM resume
-                    #shared.in_progress_epoch = global_epoch
-                    #shared.in_progress_steps = global_step
+                    # Track current step and epoch for OOM resume
+                    # shared.in_progress_epoch = global_epoch
+                    # shared.in_progress_steps = global_step
 
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
@@ -1314,8 +1316,13 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 del target
 
                 if dadapt(args.optimizer):
-                    dlr_unet = optimizer.param_groups[0]["d"]*optimizer.param_groups[0]["lr"]
-                    dlr_tenc = optimizer.param_groups[1]["d"]*optimizer.param_groups[1]["lr"]
+                    dlr_unet = optimizer.param_groups[0]["d"] * optimizer.param_groups[0]["lr"]
+                    if len(optimizer.param_groups) > 1:
+                        try:
+                            dlr_tenc = optimizer.param_groups[1]["d"] * optimizer.param_groups[1]["lr"]
+                        except:
+                            print("Exception setting tenc weight decay")
+                            traceback.print_exc()
 
                 loss_step = loss.detach().item()
                 loss_total += loss_step
@@ -1324,7 +1331,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     if dadapt(args.optimizer):
                         logs = {
                             "lr": float(dlr_unet),
-                            #"dlr_tenc": float(dlr_tenc),
+                            # "dlr_tenc": float(dlr_tenc),
                             "loss": float(loss_step),
                             "inst_loss": float(instance_loss.detach().item()),
                             "prior_loss": float(prior_loss.detach().item()),
@@ -1343,7 +1350,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     if dadapt(args.optimizer):
                         logs = {
                             "lr": float(dlr_unet),
-                            #"dlr_tenc": float(dlr_tenc),
+                            # "dlr_tenc": float(dlr_tenc),
                             "loss": float(loss_step),
                             "vram": float(cached),
                         }
