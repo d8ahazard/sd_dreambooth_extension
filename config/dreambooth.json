@@ -1,3 +1,4 @@
 {
-  "export_diffusers": true
+  "export_diffusers": true,
+  "show_advanced": false
 }

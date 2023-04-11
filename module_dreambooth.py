@@ -12,6 +12,7 @@ from fastapi import FastAPI
 import scripts.api
 from dreambooth.dataclasses.db_config import DreamboothConfig
 from dreambooth.sd_to_diff import extract_checkpoint
+from module_src.gradio_parser import parse_gr_code
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class DreamboothModule(BaseModule):
     def _initialize_websocket(self, handler: SocketHandler):
         handler.register("train_dreambooth", _train_dreambooth)
         handler.register("create_dreambooth", _create_model)
+        handler.register("get_layout", _get_layout)
 
 
 async def _train_dreambooth(data):
@@ -90,3 +92,12 @@ def copy_model(model_name: str, src: str, is_512: bool, mh: ModelHandler):
         cfg.save()
     else:
         logger.debug(f"Destination directory '{dest_dir}' already exists, skipping copy.")
+
+
+async def _get_layout(data):
+    logger.debug(f"Get layout called: {data}")
+    layout_file = os.path.join(os.path.dirname(__file__), "scripts", "main.py")
+    logger.debug(f"Trying to parse: {layout_file}")
+    output = parse_gr_code(layout_file)
+    logger.debug(f"Output: {output}")
+    return {"status": "Layout created.", "layout": output}
