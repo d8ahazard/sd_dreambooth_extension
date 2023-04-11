@@ -997,6 +997,7 @@ def on_ui_tabs():
                     db_disable_logging = gr.Checkbox(label="Disable Logging")
                     db_deterministic = gr.Checkbox(label="Deterministic")
                     db_ema_predict = gr.Checkbox(label="Use EMA for prediction")
+                    db_lora_use_buggy_requires_grad = gr.Checkbox(label="LoRA use buggy requires grad")
                     db_noise_scheduler = gr.Dropdown(
                         label="Noise scheduler",
                         value="DDPM",
@@ -1259,6 +1260,7 @@ def on_ui_tabs():
             db_lora_txt_rank,
             db_lora_txt_weight,
             db_lora_unet_rank,
+            db_lora_use_buggy_requires_grad,
             db_lora_weight,
             db_lr_cycles,
             db_lr_factor,

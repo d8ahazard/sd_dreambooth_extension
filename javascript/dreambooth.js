@@ -376,6 +376,7 @@ let db_titles = {
     "Lora Text Encoder Rank": "The rank for the Lora Text Encoder (Default 4). Higher values = better quality with large file size. Lower values = sacrifice quality with lower file size. Learning rates work differently at different ranks. Saved loras at high precision (fp32) will lead to larger lora files.",
     "Lora Text Learning Rate": "The learning rate at which to train lora text encoder. Regular learning rate is ignored. For optimizers with D-Adaptation recommended LR is 1.0",
     "Lora Text Weight": "What percentage of the lora weights should be applied to the text encoder when creating a checkpoint.",
+    "LoRA use buggy requires grad": "Re-enable the bug that trained the tenc embedding layer for LoRA.",
     "Lora UNET Learning Rate": "The learning rate at which to train lora unet. Regular learning rate is ignored. For optimizers with D-Adaptation recommended learning rate is 1.0",
     "Lora Weight": "What percentage of the lora weights should be applied to the unet when creating a checkpoint.",
     "Max Resolution": "The resolution of input images. When using bucketing, this is the maximum size of image buckets.",
