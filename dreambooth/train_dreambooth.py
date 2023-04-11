@@ -1123,7 +1123,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
             if args.train_unet:
                 unet.train()
-            elif args.use_lora:
+            elif args.use_lora and not args.lora_use_buggy_requires_grad:
                 set_lora_requires_grad(unet, False)
 
             train_tenc = epoch < text_encoder_epochs
@@ -1138,8 +1138,12 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             if not args.use_lora:
                 text_encoder.requires_grad_(train_tenc)
             else:
-                text_encoder.text_model.embeddings.requires_grad_(False)
-                set_lora_requires_grad(text_encoder, train_tenc)
+                if args.lora_use_buggy_requires_grad:
+                    if train_tenc:
+                        text_encoder.text_model.embeddings.requires_grad_(True)
+                else:
+                    text_encoder.text_model.embeddings.requires_grad_(False)
+                    set_lora_requires_grad(text_encoder, train_tenc)
 
             if last_tenc != train_tenc:
                 last_tenc = train_tenc

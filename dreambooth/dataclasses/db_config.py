@@ -57,6 +57,7 @@ class DreamboothConfig(BaseModel):
     lora_txt_weight: float = 1.0
     lora_unet_rank: int = 4
     lora_weight: float = 1.0
+    lora_use_buggy_requires_grad: bool = False
     lr_cycles: int = 1
     lr_factor: float = 0.5
     lr_power: float = 1.0
