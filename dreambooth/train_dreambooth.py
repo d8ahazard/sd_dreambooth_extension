@@ -65,6 +65,7 @@ from lora_diffusion.lora import (
     save_lora_weight,
     TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
     get_target_module,
+    set_lora_requires_grad,
 )
 
 logger = logging.getLogger(__name__)
@@ -1122,6 +1123,8 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
             if args.train_unet:
                 unet.train()
+            elif args.use_lora:
+                set_lora_requires_grad(unet, False)
 
             train_tenc = epoch < text_encoder_epochs
             if stop_text_percentage == 0:
@@ -1134,8 +1137,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
             if not args.use_lora:
                 text_encoder.requires_grad_(train_tenc)
-            elif train_tenc:
-                text_encoder.text_model.embeddings.requires_grad_(True)
+            else:
+                text_encoder.text_model.embeddings.requires_grad_(False)
+                set_lora_requires_grad(text_encoder, train_tenc)
 
             if last_tenc != train_tenc:
                 last_tenc = train_tenc
