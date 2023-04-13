@@ -453,6 +453,7 @@ def dreambooth_api(_, app: FastAPI):
 
         if not os.path.exists(new_model_src):
             new_model_src = os.path.join(shared.models_path, "Stable-Diffusion", new_model_src)
+            logger.debug("Checking for model in Stable-Diffusion: " + new_model_src)
 
         logger.debug("Creating new Checkpoint: " + new_model_name)
         res = create_model(new_model_name=new_model_name,
