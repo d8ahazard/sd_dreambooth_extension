@@ -338,7 +338,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             if stop_text_percentage != 0:
                 text_encoder.gradient_checkpointing_enable()
                 if args.use_lora:
-                    text_encoder.text_model.embeddings.requires_grad_(True)
+                    # We need to ebable gradients on an input for gradient checkpointing to work
+                    # This will not be optimized because it is not a param to optimizer
+                    text_encoder.text_model.embeddings.position_embedding.requires_grad_(True)
             else:
                 text_encoder.to(accelerator.device, dtype=weight_dtype)
 
@@ -1138,12 +1140,12 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             if not args.use_lora:
                 text_encoder.requires_grad_(train_tenc)
             else:
-                if args.lora_use_buggy_requires_grad:
-                    if train_tenc:
-                        text_encoder.text_model.embeddings.requires_grad_(True)
-                else:
-                    text_encoder.text_model.embeddings.requires_grad_(False)
+                if not args.lora_use_buggy_requires_grad:
                     set_lora_requires_grad(text_encoder, train_tenc)
+                    # We need to ebable gradients on an input for gradient checkpointing to work
+                    # This will not be optimized because it is not a param to optimizer
+                    text_encoder.text_model.embeddings.position_embedding.requires_grad_(train_tenc)
+
 
             if last_tenc != train_tenc:
                 last_tenc = train_tenc
