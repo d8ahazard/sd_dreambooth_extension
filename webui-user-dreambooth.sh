@@ -13,6 +13,9 @@
 export COMMANDLINE_ARGS=""
 export XFORMERS_PACKAGE="xformers==0.0.17.dev447"
 
+# For now disable Torch2 Dynamo
+export TORCHDYNAMO_DISABLE=1
+
 # python3 executable
 #python_cmd="python3"
 
