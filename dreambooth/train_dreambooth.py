@@ -15,7 +15,6 @@ import importlib_metadata
 import torch
 import torch.backends.cuda
 import torch.backends.cudnn
-import torch.utils.checkpoint
 import tomesd
 from accelerate import Accelerator
 from accelerate.utils.random import set_seed as set_seed2
@@ -85,7 +84,8 @@ try:
     major_version = int(version_string[0])
     minor_version = int(version_string[1])
     patch_version = int(version_string[2])
-    if minor_version < 14 or (minor_version == 14 and patch_version <= 0):
+    if minor_version < 16:
+        # https://github.com/huggingface/diffusers/pull/2352
         print(
             "The version of diffusers is less than or equal to 0.14.0. Performing monkey-patch..."
         )

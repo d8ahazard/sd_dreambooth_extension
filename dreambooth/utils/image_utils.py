@@ -18,7 +18,6 @@ from typing import List, Tuple, Dict, Union
 
 import numpy as np
 import torch
-import torch.utils.checkpoint
 
 from dreambooth.dataclasses.db_concept import Concept
 from dreambooth.dataclasses.prompt_data import PromptData
