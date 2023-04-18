@@ -11,7 +11,6 @@ import traceback
 from collections import OrderedDict
 
 import torch
-import torch.utils.checkpoint
 import torch.utils.data.dataloader
 from accelerate import find_executable_batch_size
 from diffusers.utils import logging as dl

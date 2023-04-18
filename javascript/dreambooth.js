@@ -336,7 +336,7 @@ let db_titles = {
     "Dataset Directory": "The directory containing training images.",
     "Debug Buckets": "Examine the instance and class images and report any instance images without corresponding class images.",
     "Deterministic": "Seed training RNG. Useful for testing, but may cause minor performance reduction.",
-    "Disable Class Matching": "Ignore matching rules when collecting the class dataset.",
+    "Disable Class Matching": "Ignore matching rules when collecting the class dataset. (# of class images must still be configured on the concepts tab).",
     "Disable Logging": "Disables logging (graphs), may cause minor performance improvements.",
     "Discord Webhook": "Send training samples to a Discord channel after generation.",
     "Existing Prompt Contents": "If using [filewords], this tells the string builder how the existing prompts are formatted.",

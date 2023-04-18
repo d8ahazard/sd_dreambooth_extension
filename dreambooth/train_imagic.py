@@ -3,7 +3,6 @@ import os
 from typing import List
 
 import torch
-import torch.utils.checkpoint
 from PIL import Image
 from accelerate import Accelerator
 from accelerate.logging import get_logger

@@ -15,7 +15,6 @@ import importlib_metadata
 import torch
 import torch.backends.cuda
 import torch.backends.cudnn
-import torch.utils.checkpoint
 import tomesd
 from accelerate import Accelerator
 from accelerate.utils.random import set_seed as set_seed2
@@ -85,7 +84,8 @@ try:
     major_version = int(version_string[0])
     minor_version = int(version_string[1])
     patch_version = int(version_string[2])
-    if minor_version < 14 or (minor_version == 14 and patch_version <= 0):
+    if minor_version < 16:
+        # https://github.com/huggingface/diffusers/pull/2352
         print(
             "The version of diffusers is less than or equal to 0.14.0. Performing monkey-patch..."
         )
@@ -348,7 +348,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             if stop_text_percentage != 0:
                 text_encoder.gradient_checkpointing_enable()
                 if args.use_lora:
-                    text_encoder.text_model.embeddings.requires_grad_(True)
+                    # We need to ebable gradients on an input for gradient checkpointing to work
+                    # This will not be optimized because it is not a param to optimizer
+                    text_encoder.text_model.embeddings.position_embedding.requires_grad_(True)
             else:
                 text_encoder.to(accelerator.device, dtype=weight_dtype)
 
@@ -1150,12 +1152,12 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             if not args.use_lora:
                 text_encoder.requires_grad_(train_tenc)
             else:
-                if args.lora_use_buggy_requires_grad:
-                    if train_tenc:
-                        text_encoder.text_model.embeddings.requires_grad_(True)
-                else:
-                    text_encoder.text_model.embeddings.requires_grad_(False)
+                if not args.lora_use_buggy_requires_grad:
                     set_lora_requires_grad(text_encoder, train_tenc)
+                    # We need to ebable gradients on an input for gradient checkpointing to work
+                    # This will not be optimized because it is not a param to optimizer
+                    text_encoder.text_model.embeddings.position_embedding.requires_grad_(train_tenc)
+
 
             if last_tenc != train_tenc:
                 last_tenc = train_tenc
