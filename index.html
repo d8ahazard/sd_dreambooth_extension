@@ -11,7 +11,8 @@
                     </button>
                     <button class="btn btn-top btn-secondary hide" type="button" id="db_train_sample">Generate Samples
                     </button>
-                    <button class="btn btn-top btn-secondary hide cancelButton" type="button" id="db_cancel">Cancel</button>
+                    <button class="btn btn-top btn-secondary hide cancelButton" type="button" id="db_cancel">Cancel
+                    </button>
                 </div>
             </div>
         </div>
@@ -92,9 +93,10 @@
                                         </div>
                                         <div class="col-6">
                                             <div class="form-check">
-                                                <input type="checkbox" class="form-check-input newModelParam" id="db_use_shared_src" data-key="use_shared_src"
+                                                <input type="checkbox" class="form-check-input newModelParam"
+                                                       id="db_use_shared_src" data-key="use_shared_src"
                                                        checked>
-                                                <label class="form-check-label" for="db_use_shared_src">Experimental Shared Src</label>
+                                                <label class="form-check-label" for="db_use_shared_src">Use Shared Src</label>
                                             </div>
                                         </div>
                                     </div>
@@ -163,30 +165,30 @@
                         Input
                     </div>
                     <div class="card-body">
-                        <div class="borderSection db-basic">
-                            <div class="sectionLabel">Concepts</div>
-                            <div class="form-group">
-                                <label for="dreamInputBrowser">Select Images</label>
-                                <div class="dreamInputBrowser" id="dreamInputBrowser"></div>
+                        <div class="borderSection">
+                            <div class="row justify-content-between">
+                                <div class="col-auto sectionLabel">Concepts</div>
+                                <div class="col-auto db-advanced" id="conceptControls">
+                                    <button type="button" class="btn btn-primary btn-sm" id="db_concept_add">+</button>
+                                    <button type="button" class="btn btn-danger btn-sm hide" id="db_concept_remove">-
+                                    </button>
+                                </div>
                             </div>
-                            <div class="form-group">
-                                <label for="db_instance_token">Instance Token</label>
-                                <input type="text" id="db_instance_token" class="form-control dbInput" data-elem_id="c1_instance_token">
-                            </div>
-                            <div class="form-group">
-                                <label for="db_class_token">Class Token</label>
-                                <input type="text" id="db_class_token" class="form-control dbInput" data-elem_id="c1_class_token">
-                            </div>
+
+                            <div id="advancedConcepts" class="form-control"></div>
                         </div>
                         <div class="borderSection">
                             <div class="sectionLabel">Settings</div>
-                            <div class="db-slider" data-elem_id="num_epochs" data-max="1000" data-min="1"
+                            <div class="db-slider dbInput" data-elem_id="num_train_epochs" data-max="1000" data-min="1"
                                  data-value="150" data-label="Number of Epochs"></div>
-                            <div class="db-slider" data-elem_id="max_res" data-max="1024" data-min="512" data-step="64"
+                            <div class="db-slider dbInput" data-elem_id="resolution" data-max="1024" data-min="512"
+                                 data-step="64"
                                  data-value="768" data-label="Maximum Resolution"></div>
-                            <div class="db-slider" data-elem_id="batch_size" data-max="100" data-min="1" data-step="1"
+                            <div class="db-slider dbInput" data-elem_id="train_batch_size" data-max="100" data-min="1"
+                                 data-step="1"
                                  data-value="5" data-label="Batch Size"></div>
-                            <div class="db-slider" data-elem_id="grad_steps" data-max="100" data-min="1" data-step="1"
+                            <div class="db-slider dbInput" data-elem_id="gradient_accumulation_steps" data-max="100"
+                                 data-min="1" data-step="1"
                                  data-value="1" data-label="Gradient Accumulation Steps"></div>
                         </div>
                     </div>

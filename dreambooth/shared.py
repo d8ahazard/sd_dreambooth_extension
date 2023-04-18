@@ -140,6 +140,7 @@ def format_time(seconds: float):
 
 
 class DreamState:
+    global status_handler
     interrupted = False
     interrupted_after_save = False
     interrupted_after_epoch = False
@@ -162,8 +163,11 @@ class DreamState:
     need_restart = False
     time_left_force_display = False
     active = False
+    new_ui = False
 
     def interrupt(self):
+        if self.status_handler:
+            self.status_handler.end(desc="Interrupted")
         self.interrupted = True
         self.in_progress = False
         
@@ -217,6 +221,8 @@ class DreamState:
         self.time_left_force_display = False
         self.active = True
         torch_gc()
+        if self.status_handler:
+            self.status_handler.start()
 
     def end(self):
         print("Duration: " + format_time(time.time() - self.time_start))
@@ -226,6 +232,8 @@ class DreamState:
         self.active = False
         self.in_progress = False
         torch_gc()
+        if self.status_handler:
+            self.status_handler.end()
 
     def nextjob(self):
         if show_progress_every_n_steps == -1:
@@ -383,7 +391,7 @@ def load_vars(root_path = None):
     if state is None:
         state = status
 
-
+status_handler = None
 script_path = ""
 models_path = ""
 embeddings_dir = ""

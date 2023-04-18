@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import traceback
 from typing import List, Dict
@@ -383,11 +384,12 @@ def save_config(*args):
     config.save()
 
 
-def from_file(model_name):
+def from_file(model_name, model_dir=None):
     """
     Load config data from UI
     Args:
         model_name: The config to load
+        model_dir: If specified, override the default model directory
 
     Returns: Dict | None
 
@@ -399,9 +401,13 @@ def from_file(model_name):
         return None
 
     #model_name = sanitize_name(model_name)
-    models_path = shared.dreambooth_models_path
-    if models_path == "" or models_path is None:
-        models_path = os.path.join(shared.models_path, "dreambooth")
+    if model_dir:
+        models_path = model_dir
+        shared.dreambooth_models_path = models_path
+    else:
+        models_path = shared.dreambooth_models_path
+        if models_path == "" or models_path is None:
+            models_path = os.path.join(shared.models_path, "dreambooth")
     config_file = os.path.join(models_path, model_name, "db_config.json")
     try:
         with open(config_file, 'r') as openfile:

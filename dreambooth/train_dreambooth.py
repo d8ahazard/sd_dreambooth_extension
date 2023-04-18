@@ -103,11 +103,11 @@ diffusers_dir = ""
 try:
     from core.handlers.config import ConfigHandler
     from core.handlers.models import ModelHandler
-
     ch = ConfigHandler()
     mh = ModelHandler()
     export_diffusers = ch.get_item("export_diffusers", "dreambooth", True)
     diffusers_dir = os.path.join(mh.models_path, "diffusers")
+
 except:
     pass
 
@@ -156,13 +156,23 @@ def stop_profiler(profiler):
             pass
 
 
-def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
+def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainResult:
     """
     @param class_gen_method: Image Generation Library.
+    @param user: User to send training updates to (for new UI)
     @return: TrainResult
     """
     args = shared.db_model_config
+
     logging_dir = Path(args.model_dir, "logging")
+    logger = logging.getLogger(__name__)
+    try:
+        from core.handlers.status import StatusHandler
+        sh = StatusHandler(user_name=user)
+        shared.status_handler = sh
+        logger.debug(f"Loaded config: {args.__dict__}")
+    except:
+        pass
     log_parser = LogParser()
 
     result = TrainResult
@@ -791,7 +801,8 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                 range(4),
                 desc="Saving weights",
                 disable=not accelerator.is_local_main_process,
-                position=1
+                position=1,
+                user=user
             )
             pbar.set_postfix(refresh=True)
 
@@ -1095,6 +1106,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             range(global_step, max_train_steps),
             disable=not accelerator.is_local_main_process,
             position=0,
+            user=user
         )
         progress_bar.set_description("Steps")
         progress_bar.set_postfix(refresh=True)

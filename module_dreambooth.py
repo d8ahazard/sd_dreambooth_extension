@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import shutil
@@ -10,8 +11,10 @@ from core.modules.base.module_base import BaseModule
 from fastapi import FastAPI
 
 import scripts.api
-from dreambooth.dataclasses.db_config import DreamboothConfig
+from dreambooth.dataclasses.db_config import DreamboothConfig, from_file
+from dreambooth import shared
 from dreambooth.sd_to_diff import extract_checkpoint
+from dreambooth.train_dreambooth import main
 from module_src.gradio_parser import parse_gr_code
 
 logger = logging.getLogger(__name__)
@@ -35,12 +38,26 @@ class DreamboothModule(BaseModule):
     def _initialize_websocket(self, handler: SocketHandler):
         handler.register("train_dreambooth", _train_dreambooth)
         handler.register("create_dreambooth", _create_model)
+        handler.register("get_db_config", _get_model_config)
+        handler.register("save_db_config", _set_model_config)
         handler.register("get_layout", _get_layout)
 
 
 async def _train_dreambooth(data):
+    model = data["data"]["model"]
+    await _set_model_config(data)
+    data["data"]["model"] = model
     logger.debug(f"Train dreambooth called: {data}")
-    await asyncio.sleep(1)
+    config = await _get_model_config(data, False)
+    training_params = data["data"]
+
+    del training_params["model"]
+
+    config.load_params(training_params)
+
+    logger.debug(f"Updated config: {config}")
+    shared.db_model_config = config
+    asyncio.create_task(main(user=data["user"]))
     return {"status": "Training started."}
 
 
@@ -101,3 +118,32 @@ async def _get_layout(data):
     output = parse_gr_code(layout_file)
     logger.debug(f"Output: {output}")
     return {"status": "Layout created.", "layout": output}
+
+
+async def _get_model_config(data, return_json=True):
+    logger.debug(f"Get model called: {data}")
+    model = data["data"]["model"]
+    config = from_file(model["name"], os.path.dirname(model["path"]))
+    if config.concepts_path and os.path.exists(config.concepts_path):
+        with open(config.concepts_path, "r") as f:
+            config.concepts_list = json.load(f)
+        config.concepts_path = ""
+        config.use_concepts = False
+        config.save()
+    if return_json:
+        return {"config": config.__dict__}
+    return config
+
+
+async def _set_model_config(data):
+    logger.debug(f"Set model called: {data}")
+    model = data["data"]["model"]
+    training_params = data["data"]
+
+    del training_params["model"]
+
+    config = from_file(model["name"], os.path.dirname(model["path"]))
+    config.load_params(training_params)
+    config.save()
+    return {"config": config.__dict__}
+
