@@ -129,7 +129,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     $("#db_concept_add").click(function () {
-        addConcept();
+        addConcept(false);
     });
 
     $("#db_concept_remove").click(function (event) {
@@ -200,7 +200,7 @@ function loadConcepts(concepts) {
             let concept = concepts[0];
             addConcept(concept);
         } else {
-            addConcept();
+            addConcept(false);
         }
     }
 }
