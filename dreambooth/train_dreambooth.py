@@ -78,23 +78,16 @@ dl.set_verbosity_error()
 last_samples = []
 last_prompts = []
 
+
+def check_and_patch_scheduler(scheduler_class):
+    if not hasattr(scheduler_class, 'get_velocity'):
+        logger.debug(f"Adding 'get_velocity' method to {scheduler_class.__name__}...")
+        scheduler_class.get_velocity = get_velocity
+
+
 try:
-    diff_version = importlib_metadata.version("diffusers")
-    version_string = diff_version.split(".")
-    major_version = int(version_string[0])
-    minor_version = int(version_string[1])
-    patch_version = int(version_string[2])
-    if minor_version < 16:
-        # https://github.com/huggingface/diffusers/pull/2352
-        print(
-            "The version of diffusers is less than or equal to 0.14.0. Performing monkey-patch..."
-        )
-        DEISMultistepScheduler.get_velocity = get_velocity
-        UniPCMultistepScheduler.get_velocity = get_velocity
-    else:
-        print(
-            "The version of diffusers is greater than 0.14.0, hopefully they merged the PR by now"
-        )
+    check_and_patch_scheduler(DEISMultistepScheduler)
+    check_and_patch_scheduler(UniPCMultistepScheduler)
 except:
     print("Exception monkey-patching DEIS scheduler.")
 
