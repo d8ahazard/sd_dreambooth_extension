@@ -96,7 +96,7 @@ class mytqdm(tqdm):
             shared.status.textinfo = desc
             if self.status_handler is not None:
                 self.status_handler.update(
-                    items={"status": shared.status.job_no})
+                    items={"status": desc})
         super().set_description(desc, refresh)
 
     def pause_ui(self):

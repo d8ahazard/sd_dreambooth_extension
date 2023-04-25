@@ -1,18 +1,24 @@
 <div class="module" id="moduleDreambooth">
     <div class="container-fluid">
         <div class="row">
-            <div class="card shadow">
-                <div class="card-body text-center justify-between">
-                    <button class="btn btn-top btn-secondary" type="button" id="db_load_params">Load Settings</button>
-                    <button class="btn btn-top btn-secondary" type="button" id="db_save_config">Save Settings</button>
-                    <button class="btn btn-top btn-primary" type="button" id="db_train">Train</button>
-                    <button class="btn btn-top btn-secondary" type="button" id="db_gen_ckpt">Generate Ckpt</button>
-                    <button class="btn btn-top btn-secondary hide" type="button" id="db_gen_ckpt_during">Save Weights
-                    </button>
-                    <button class="btn btn-top btn-secondary hide" type="button" id="db_train_sample">Generate Samples
-                    </button>
-                    <button class="btn btn-top btn-secondary hide cancelButton" type="button" id="db_cancel">Cancel
-                    </button>
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-body text-center justify-between">
+                        <button class="btn btn-top btn-secondary" type="button" id="db_load_params">Load Settings
+                        </button>
+                        <button class="btn btn-top btn-secondary" type="button" id="db_save_config">Save Settings
+                        </button>
+                        <button class="btn btn-top btn-primary" type="button" id="db_train">Train</button>
+                        <button class="btn btn-top btn-secondary" type="button" id="db_gen_ckpt">Generate Ckpt</button>
+                        <button class="btn btn-top btn-secondary hide" type="button" id="db_gen_ckpt_during">Save
+                            Weights
+                        </button>
+                        <button class="btn btn-top btn-secondary hide" type="button" id="db_train_sample">Generate
+                            Samples
+                        </button>
+                        <button class="btn btn-top btn-secondary hide cancelButton" type="button" id="db_cancel">Cancel
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -96,7 +102,8 @@
                                                 <input type="checkbox" class="form-check-input newModelParam"
                                                        id="db_use_shared_src" data-key="use_shared_src"
                                                        checked>
-                                                <label class="form-check-label" for="db_use_shared_src">Use Shared Src</label>
+                                                <label class="form-check-label" for="db_use_shared_src">Use Shared
+                                                    Src</label>
                                             </div>
                                         </div>
                                     </div>
@@ -190,6 +197,14 @@
                             <div class="db-slider dbInput" data-elem_id="gradient_accumulation_steps" data-max="100"
                                  data-min="1" data-step="1"
                                  data-value="1" data-label="Gradient Accumulation Steps"></div>
+                        </div>
+                        <div class="borderSection accordion db-advanced" id="dbAdvancedAccordion">
+                            <div class="accordion-item">
+                                <div id="dbAdvancedLabel" class="sectionLabel accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#dbAdvancedSettings" aria-expanded="false" aria-controls="dbAdvancedSettings">Advanced</div>
+                                <div id="dbAdvancedSettings" class="accordion-collapse collapse show" aria-labelledby="dbAdvancedLabel" data-bs-parent="#dbAdvancedAccordion">
+                                    FOO
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -167,10 +167,13 @@ document.addEventListener("DOMContentLoaded", function () {
     sendMessage("get_config", {"section_key": "dreambooth"}).then((data) => {
         dreamConfig = data;
         console.log("Dream settings: ", dreamConfig);
-        if (dreamConfig["show_advanced"]) {
-            showAdvanced = true;
+        showAdvanced = dreamConfig["show_advanced"];
+        if (showAdvanced) {
             $(".db-advanced").show();
             $(".db-basic").hide();
+        } else {
+            $(".db-advanced").hide();
+            $(".db-basic").show();
         }
     });
 });

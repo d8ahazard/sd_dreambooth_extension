@@ -4,6 +4,9 @@ import logging
 import os
 import shutil
 
+from concurrent.futures import ThreadPoolExecutor
+from typing import Union, Dict
+
 from core.handlers.models import ModelHandler
 from core.handlers.status import StatusHandler
 from core.handlers.websocket import SocketHandler
@@ -36,29 +39,26 @@ class DreamboothModule(BaseModule):
         return scripts.api.dreambooth_api(None, app)
 
     def _initialize_websocket(self, handler: SocketHandler):
-        handler.register("train_dreambooth", _train_dreambooth)
+        handler.register("train_dreambooth", _start_training)
         handler.register("create_dreambooth", _create_model)
         handler.register("get_db_config", _get_model_config)
         handler.register("save_db_config", _set_model_config)
         handler.register("get_layout", _get_layout)
 
 
-async def _train_dreambooth(data):
-    model = data["data"]["model"]
-    await _set_model_config(data)
-    data["data"]["model"] = model
-    logger.debug(f"Train dreambooth called: {data}")
-    config = await _get_model_config(data, False)
-    training_params = data["data"]
-
-    del training_params["model"]
-
-    config.load_params(training_params)
-
-    logger.debug(f"Updated config: {config}")
-    shared.db_model_config = config
-    asyncio.create_task(main(user=data["user"]))
+async def _start_training(request):
+    user = request["user"] if "user" in request else None
+    config = await _set_model_config(request, True)
+    asyncio.create_task(_train_dreambooth(config, user))
     return {"status": "Training started."}
+
+
+async def _train_dreambooth(config: DreamboothConfig, user: str = None):
+    logger.debug(f"Updated config: {config.__dict__}")
+    shared.db_model_config = config
+    loop = asyncio.get_event_loop()
+    with ThreadPoolExecutor() as pool:
+        await loop.run_in_executor(pool, lambda: main(user=user))
 
 
 async def _create_model(data):
@@ -135,15 +135,12 @@ async def _get_model_config(data, return_json=True):
     return config
 
 
-async def _set_model_config(data):
+async def _set_model_config(data: dict, return_config: bool = False) -> Union[Dict, DreamboothConfig]:
     logger.debug(f"Set model called: {data}")
     model = data["data"]["model"]
     training_params = data["data"]
-
     del training_params["model"]
-
     config = from_file(model["name"], os.path.dirname(model["path"]))
     config.load_params(training_params)
     config.save()
-    return {"config": config.__dict__}
-
+    return {"config": config.__dict__} if not return_config else config
