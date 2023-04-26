@@ -3,9 +3,15 @@ let dreamConfig;
 let showAdvanced;
 let lastConcept = -1;
 let conceptsList = [];
+let dbListenersLoaded = false;
 
 $(".hide").hide();
-document.addEventListener("DOMContentLoaded", function () {
+
+// Register the module with the UI. Icon is from boxicons by default.
+const dbModule = new Module("Dreambooth", "moduleDreambooth", "moon", false, 2, initDreambooth);
+
+function initDreambooth() {
+    console.log("Init dreambooth");
     let selects = $(".modelSelect").modelSelect();
     for (let i = 0; i < selects.length; i++) {
         let elem = selects[i];
@@ -13,6 +19,44 @@ document.addEventListener("DOMContentLoaded", function () {
             dreamSelect = elem;
         }
     }
+
+    inferProgress = new ProgressGroup(document.getElementById("dreamProgress"), {
+        "primary_status": "Status 1", // Status 1 text
+        "secondary_status": "Status 2", // Status 2...
+        "bar1_progress": 0, // Progressbar 1 position
+        "bar2_progress": 0 // etc
+    });
+
+    // Gallery creation. Options can also be passed to .update()
+    gallery = new InlineGallery(document.getElementById('dreamGallery'), {
+        "thumbnail": true,
+        "closeable": false,
+        "show_maximize": true,
+        "start_open": true
+    });
+
+    $(".db-slider").BootstrapSlider();
+
+    if (!dbListenersLoaded) {
+        loadDbListeners();
+    }
+
+    registerSocketMethod("train_dreambooth", "train_dreambooth", dreamResponse);
+
+    dreamConfig = dbModule.systemConfig;
+    console.log("Dream settings: ", dreamConfig);
+    showAdvanced = dreamConfig["show_advanced"];
+    if (showAdvanced) {
+        $(".db-advanced").show();
+        $(".db-basic").hide();
+    } else {
+        $(".db-advanced").hide();
+        $(".db-basic").show();
+    }
+}
+
+
+function loadDbListeners() {
     $("#db_create_model").click(function () {
         let data = {};
         $(".newModelParam").each(function (index, elem) {
@@ -34,7 +78,6 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
     });
-
 
     $("#db_load_settings").click(function () {
         let selected = dreamSelect.getModel();
@@ -137,47 +180,8 @@ document.addEventListener("DOMContentLoaded", function () {
         removeConcept();
     });
 
-    inferProgress = new ProgressGroup(document.getElementById("dreamProgress"), {
-        "primary_status": "Status 1", // Status 1 text
-        "secondary_status": "Status 2", // Status 2...
-        "bar1_progress": 0, // Progressbar 1 position
-        "bar2_progress": 0 // etc
-    });
-
-    // Gallery creation. Options can also be passed to .update()
-    gallery = new InlineGallery(document.getElementById('dreamGallery'), {
-        "thumbnail": true,
-        "closeable": false,
-        "show_maximize": true,
-        "start_open": true
-    });
-
-    $(".db-slider").BootstrapSlider();
-
-    // Register the module with the UI. Icon is from boxicons by default.
-    registerModule("Dreambooth", "moduleDreambooth", "cloud", false, 2);
-
-
-    registerSocketMethod("train_dreambooth", "train_dreambooth", dreamResponse);
-
-
     keyListener.register("ctrl+Enter", "#dreamSettings", startDreambooth);
-
-
-    sendMessage("get_config", {"section_key": "dreambooth"}).then((data) => {
-        dreamConfig = data;
-        console.log("Dream settings: ", dreamConfig);
-        showAdvanced = dreamConfig["show_advanced"];
-        if (showAdvanced) {
-            $(".db-advanced").show();
-            $(".db-basic").hide();
-        } else {
-            $(".db-advanced").hide();
-            $(".db-basic").show();
-        }
-    });
-});
-
+}
 
 function loadConcepts(concepts) {
     let conceptsContainer = $("#advancedConcepts");
@@ -208,7 +212,7 @@ function loadConcepts(concepts) {
     }
 }
 
-function addConcept(concept=false) {
+function addConcept(concept = false) {
     let conceptsContainer = $("#advancedConcepts");
     let removeConcept = $("#db_concept_remove");
     let controlGroup = $("#conceptControls");
@@ -289,8 +293,8 @@ function addConcept(concept=false) {
         lastConcept = idx;
     });
 
-    formAccordion.blur(function() {
-      console.log("The element has lost focus.");
+    formAccordion.blur(function () {
+        console.log("The element has lost focus.");
     });
 
     conceptsContainer.append(formAccordion);
@@ -382,7 +386,7 @@ function addConcept(concept=false) {
 }
 
 function removeConcept() {
-if (lastConcept === -1) {
+    if (lastConcept === -1) {
         return;
     }
     let c_idx = lastConcept - 1;
@@ -391,6 +395,7 @@ if (lastConcept === -1) {
     console.log("Removed concept: ", c_idx, conceptsList);
     loadConcepts(conceptsList);
 }
+
 function getSettings() {
     let settings = {};
     settings["model"] = dreamSelect.getModel();
