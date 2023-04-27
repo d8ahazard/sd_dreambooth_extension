@@ -172,6 +172,8 @@ class DreamboothConfig(BaseModel):
         Save the config file
         """
         models_path = self.model_dir
+        logger = logging.getLogger(__name__)
+        logger.debug("Saving to %s", models_path)
         config_file = os.path.join(models_path, "db_config.json")
         if backup:
             backup_dir = os.path.join(models_path, "backups")

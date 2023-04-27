@@ -20,20 +20,26 @@ function initDreambooth() {
         }
     }
 
-    inferProgress = new ProgressGroup(document.getElementById("dreamProgress"), {
+    let prog_opts = {
         "primary_status": "Status 1", // Status 1 text
         "secondary_status": "Status 2", // Status 2...
         "bar1_progress": 0, // Progressbar 1 position
         "bar2_progress": 0 // etc
-    });
+    }
 
-    // Gallery creation. Options can also be passed to .update()
-    gallery = new InlineGallery(document.getElementById('dreamGallery'), {
+    let gallery_opts = {
         "thumbnail": true,
         "closeable": false,
         "show_maximize": true,
         "start_open": true
-    });
+    }
+
+    let dreamProgress = new ProgressGroup(document.getElementById("dreamProgress"), prog_opts);
+    let dreamProgressSm = new ProgressGroup(document.getElementById("dreamProgressSm"), prog_opts);
+
+    // Gallery creation. Options can also be passed to .update()
+    let dreamGallery = new InlineGallery(document.getElementById('dreamGallery'), gallery_opts);
+    let dreamGallery2 = new InlineGallery(document.getElementById('dreamGallery2'), gallery_opts);
 
     $(".db-slider").BootstrapSlider();
 

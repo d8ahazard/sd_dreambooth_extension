@@ -79,10 +79,8 @@ async def _create_model(data):
         return {"status": "Unable to find source model.."}
 
     if src and not from_hub:
-        sh.start(1, "Copying source weights.")
-        copy_model(model_name, src, data["512_model"], mh)
-        sh.step()
-        sh.end("Model created.")
+        copy_model(model_name, src, data["512_model"], mh, sh)
+        sh.end("Model copied.")
     else:
         extract_checkpoint(
             model_name,
@@ -98,7 +96,7 @@ async def _create_model(data):
     return {"status": "Creating model."}
 
 
-def copy_model(model_name: str, src: str, is_512: bool, mh: ModelHandler):
+def copy_model(model_name: str, src: str, is_512: bool, mh: ModelHandler, sh: StatusHandler):
     models_path = mh.models_path
     logger.debug(f"Models paths: {models_path}")
     model_dir = models_path[0]
@@ -108,12 +106,42 @@ def copy_model(model_name: str, src: str, is_512: bool, mh: ModelHandler):
         shutil.rmtree(dest_dir, True)
     if not os.path.exists(dest_dir):
         logger.debug(f"Copying model from {src} to {dest_dir}")
-        shutil.copytree(src, dest_dir)
+        copy_directory(src, dest_dir, sh)
         cfg = DreamboothConfig(model_name=model_name, src=src, resolution=is_512, models_path=dreambooth_models_path)
         cfg.save()
     else:
         logger.debug(f"Destination directory '{dest_dir}' already exists, skipping copy.")
     logger.debug("Model copied.")
+
+
+def copy_directory(src_dir, dest_dir, sh: StatusHandler):
+    total_size = get_directory_size(src_dir)
+    sh.start(100, "Copying source weights.")
+    copied_pct = 0
+    copied_size = 0
+    for root, dirs, files in os.walk(src_dir):
+        for file in files:
+            sh.update(items={"status_2": f"Copying {file}"})
+            src_path = os.path.join(root, file)
+            dest_path = os.path.join(dest_dir, os.path.relpath(src_path, src_dir))
+            dest_dirname = os.path.dirname(dest_path)
+            if not os.path.exists(dest_dirname):
+                os.makedirs(dest_dirname)
+            shutil.copy2(src_path, dest_path)
+            copied_size += os.path.getsize(src_path)
+            current_pct = int(copied_size / total_size * 100)
+            if current_pct > copied_pct:
+                sh.update(items={"progress_1_current": current_pct})
+                copied_pct = current_pct
+    sh.end("Source weights copied.")
+
+
+def get_directory_size(dir_path):
+    total_size = 0
+    for root, dirs, files in os.walk(dir_path):
+        for file in files:
+            total_size += os.path.getsize(os.path.join(root, file))
+    return total_size
 
 
 async def _get_layout(data):
