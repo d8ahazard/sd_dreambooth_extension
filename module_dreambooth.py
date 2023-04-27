@@ -64,23 +64,27 @@ async def _train_dreambooth(config: DreamboothConfig, user: str = None):
 async def _create_model(data):
     mh = ModelHandler(user_name=data["user"] if "user" in data else None)
     sh = StatusHandler(user_name=data["user"] if "user" in data else None)
-    msg_id = data["id"]
     logger.debug(f"Full message: {data}")
     data = data["data"] if "data" in data else None
     logger.debug(f"Create model called: {data}")
     model_name = data["new_model_name"] if "new_model_name" in data else None
-    src = data["new_model_src"]["path"]
-    shared_src = data["new_model_shared_src"]["path"] if "new_model_shared_src" in data else None
+    src_hash = data["new_model_src"]
+    src_model = await mh.find_model("diffusers", src_hash)
+    src = src_model.path if src_model else None
+    shared_src = data["new_model_shared_src"] if "new_model_shared_src" in data else None
     from_hub = data["create_from_hub"] if "create_from_hub" in data else False
     logger.debug(f"SRC - {src} and {from_hub}")
+    if not src:
+        logger.debug("Unable to find source model.")
+        return {"status": "Unable to find source model.."}
+
     if src and not from_hub:
         sh.start(1, "Copying source weights.")
         copy_model(model_name, src, data["512_model"], mh)
         sh.step()
         sh.end("Model created.")
     else:
-        loop = asyncio.get_running_loop()
-        loop.create_task(extract_checkpoint(
+        extract_checkpoint(
             model_name,
             src,
             shared_src,
@@ -90,12 +94,11 @@ async def _create_model(data):
             data["new_model_extract_ema"],
             data["train_unfrozen"],
             data["512_model"]
-        ))
-    return {"name": "create_model", "message": "Creating model.", "id": msg_id}
+        )
+    return {"status": "Creating model."}
 
 
 def copy_model(model_name: str, src: str, is_512: bool, mh: ModelHandler):
-    logger.debug("Copying model!")
     models_path = mh.models_path
     logger.debug(f"Models paths: {models_path}")
     model_dir = models_path[0]
@@ -104,11 +107,13 @@ def copy_model(model_name: str, src: str, is_512: bool, mh: ModelHandler):
     if os.path.exists(dest_dir):
         shutil.rmtree(dest_dir, True)
     if not os.path.exists(dest_dir):
+        logger.debug(f"Copying model from {src} to {dest_dir}")
         shutil.copytree(src, dest_dir)
         cfg = DreamboothConfig(model_name=model_name, src=src, resolution=is_512, models_path=dreambooth_models_path)
         cfg.save()
     else:
         logger.debug(f"Destination directory '{dest_dir}' already exists, skipping copy.")
+    logger.debug("Model copied.")
 
 
 async def _get_layout(data):

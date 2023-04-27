@@ -73,7 +73,7 @@ function loadDbListeners() {
             }
             data[key] = val;
         });
-        sendMessage("create_dreambooth", data, true).then(() => {
+        sendMessage("create_dreambooth", data, false).then(() => {
             dreamSelect.refresh();
         });
 
