@@ -146,7 +146,7 @@ def stop_profiler(profiler):
             pass
 
 
-def main(class_gen_method: str = "Native Diffusers", user: str = None, target: str = None) -> TrainResult:
+def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainResult:
     """
     @param class_gen_method: Image Generation Library.
     @param user: User to send training updates to (for new UI)
@@ -157,7 +157,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None, target: s
     logging_dir = Path(args.model_dir, "logging")
     try:
         from core.handlers.status import StatusHandler
-        status_handler = StatusHandler(user_name=user, target=target)
+        status_handler = StatusHandler(user_name=user, target="dreamProgress")
         status_handler.start(0, "Starting Dreambooth Training...")
         shared.status_handler = status_handler
         logger.debug(f"Loaded config: {args.__dict__}")
@@ -801,7 +801,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None, target: s
                 disable=not accelerator.is_local_main_process,
                 position=1,
                 user=user,
-                target=target
+                target="dreamProgress"
             )
             pbar.set_postfix(refresh=True)
 
@@ -1111,7 +1111,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None, target: s
             range(global_step, max_train_steps),
             disable=not accelerator.is_local_main_process,
             position=0,
-            user=user
+            user=user,
+            target="dreamProgress"
         )
         progress_bar.set_description("Steps")
         progress_bar.set_postfix(refresh=True)
