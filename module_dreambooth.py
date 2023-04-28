@@ -65,9 +65,23 @@ async def _train_dreambooth(config: DreamboothConfig, user: str = None, target: 
         gc.collect()
     except:
         pass
-    loop = asyncio.get_event_loop()
-    with ThreadPoolExecutor() as pool:
-        await loop.run_in_executor(pool, lambda: main(user=user))
+
+    result = {"message": "Training complete."}
+    try:
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor() as pool:
+            await loop.run_in_executor(pool, lambda: main(user=user))
+    except Exception as e:
+        logger.error(f"Error in training: {e}")
+        result = {"message": f"Error in training: {e}"}
+
+    try:
+        torch.cuda.empty_cache()
+        gc.collect()
+    except:
+        pass
+
+    return result
 
 
 async def _create_model(data):
