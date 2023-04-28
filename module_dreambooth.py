@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import json
 import logging
 import os
@@ -6,6 +7,8 @@ import shutil
 
 from concurrent.futures import ThreadPoolExecutor
 from typing import Union, Dict
+
+import torch
 
 from core.handlers.models import ModelHandler
 from core.handlers.status import StatusHandler
@@ -57,6 +60,11 @@ async def _start_training(request):
 async def _train_dreambooth(config: DreamboothConfig, user: str = None, target: str = None):
     logger.debug(f"Updated config: {config.__dict__}")
     shared.db_model_config = config
+    try:
+        torch.cuda.empty_cache()
+        gc.collect()
+    except:
+        pass
     loop = asyncio.get_event_loop()
     with ThreadPoolExecutor() as pool:
         await loop.run_in_executor(pool, lambda: main(user=user))
