@@ -59,7 +59,7 @@ async def _train_dreambooth(config: DreamboothConfig, user: str = None, target: 
     shared.db_model_config = config
     loop = asyncio.get_event_loop()
     with ThreadPoolExecutor() as pool:
-        await loop.run_in_executor(pool, lambda: main(user=user, target=target))
+        await loop.run_in_executor(pool, lambda: main(user=user))
 
 
 async def _create_model(data):
