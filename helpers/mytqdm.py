@@ -10,10 +10,14 @@ class mytqdm(tqdm):
         self.status_handler = None
         try:
             from core.handlers.status import StatusHandler
-            self.status_handler = StatusHandler(user_name=kwargs["user"] if "user" in kwargs else None)
+            user = kwargs["user"] if "user" in kwargs else None
+            target = kwargs["target"] if "target" in kwargs else None
+            self.status_handler = StatusHandler(user_name=user, target=target)
             shared.status_handler = self.status_handler
             if "user" in kwargs:
                 del kwargs["user"]
+            if "target" in kwargs:
+                del kwargs["target"]
         except:
             pass
         self.update_ui = True

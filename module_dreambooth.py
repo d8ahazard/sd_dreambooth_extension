@@ -48,17 +48,18 @@ class DreamboothModule(BaseModule):
 
 async def _start_training(request):
     user = request["user"] if "user" in request else None
+    target = request["target"] if "target" in request else None
     config = await _set_model_config(request, True)
-    asyncio.create_task(_train_dreambooth(config, user))
+    asyncio.create_task(_train_dreambooth(config, user, target))
     return {"status": "Training started."}
 
 
-async def _train_dreambooth(config: DreamboothConfig, user: str = None):
+async def _train_dreambooth(config: DreamboothConfig, user: str = None, target: str = None):
     logger.debug(f"Updated config: {config.__dict__}")
     shared.db_model_config = config
     loop = asyncio.get_event_loop()
     with ThreadPoolExecutor() as pool:
-        await loop.run_in_executor(pool, lambda: main(user=user))
+        await loop.run_in_executor(pool, lambda: main(user=user, target=target))
 
 
 async def _create_model(data):

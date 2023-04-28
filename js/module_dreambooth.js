@@ -24,14 +24,16 @@ function initDreambooth() {
         "primary_status": "Status 1", // Status 1 text
         "secondary_status": "Status 2", // Status 2...
         "bar1_progress": 0, // Progressbar 1 position
-        "bar2_progress": 0 // etc
+        "bar2_progress": 0, // etc
+        "id": "dreamProgress" // ID of the progress group
     }
 
     let gallery_opts = {
         "thumbnail": true,
         "closeable": false,
         "show_maximize": true,
-        "start_open": true
+        "start_open": true,
+        "id": "dreamProgress"
     }
 
     let dreamProgress = new ProgressGroup(document.getElementById("dreamProgress"), prog_opts);
@@ -79,7 +81,7 @@ function loadDbListeners() {
             }
             data[key] = val;
         });
-        sendMessage("create_dreambooth", data, false).then(() => {
+        sendMessage("create_dreambooth", data, false, "dreamProgress").then(() => {
             dreamSelect.refresh();
         });
 
@@ -109,7 +111,7 @@ function loadDbListeners() {
     $("#db_train").click(function () {
         let data = getSettings();
         console.log("Settings: ", data);
-        sendMessage("train_dreambooth", data, true).then((result) => {
+        sendMessage("train_dreambooth", data, true, "dreamProgress").then((result) => {
             console.log("Res: ", result);
         });
     });
@@ -321,6 +323,7 @@ function addConcept(concept = false) {
                     </div>
                 `);
             formElements.append(fileBrowser);
+            console.log("Creating file browser: ", concept, key);
             new FileBrowser(document.getElementById(`${inputId}`), {
                 "dropdown": true,
                 "showInfo": false,
@@ -410,16 +413,24 @@ function getSettings() {
     let concepts_list = [];
 
 
-    let inputElements = document.querySelectorAll('input[id^="concept_"]');
+    let inputElements = $('[id^="concept_"]');
+
     let values = [];
-    inputElements.forEach((element) => {
+    inputElements.each((index, element) => {
+        console.log("Parsing concept input: ", element, element.value);
         let conceptIndex = element.id.split("-")[0].split("_")[1];
         let key = element.id.split("-")[1];
 
-        let value = element.value;
-        if (key.includes("data_dir")) {
-            value = $(element).FileBrowser.val();
+        let value = (element.dataset.hasOwnProperty("value") ? element.dataset.value : element.value);
+        if (value === "undefined") {
+            value = "";
         }
+        if (!isNaN(parseInt(value))) {
+            value = parseInt(value);
+        } else if (!isNaN(parseFloat(value))) {
+            value = parseFloat(value);
+        }
+
         let found = false;
         for (let i = 0; i < values.length; i++) {
             if (values[i]["conceptIndex"] === conceptIndex) {
@@ -431,9 +442,11 @@ function getSettings() {
         if (!found) {
             let newValue = {"conceptIndex": conceptIndex};
             newValue[key] = value;
+            console.log("Creating new value: ", newValue);
             values.push(newValue);
         }
     });
+
 
     let otherInputs = $(".dbInput");
     otherInputs.each(function () {
