@@ -245,15 +245,24 @@ function addConcept(concept = false) {
     }
 
     if (!concept) {
-        concept = [{
-            "class_prompt": "Class prompt",
-            "class_token": "",
-            "instance_prompt": "",
-            "instance_token": "",
+        concept = {
             "class_data_dir": "",
+            "class_guidance_scale": 7.5,
+            "class_infer_steps": 20,
+            "class_negative_prompt": "blurry, deformed, bad",
+            "class_prompt": "[filewords]",
+            "class_token": "",
             "instance_data_dir": "",
-            "n_save_sample": 4,
-        }];
+            "instance_prompt": "[filewords]",
+            "instance_token": "",
+            "n_save_sample": 0,
+            "num_class_images_per": 0,
+            "sample_seed": -1,
+            "save_guidance_scale": 7.5,
+            "save_infer_steps": 20,
+            "save_sample_negative_prompt": "blurry, deformed, bad",
+            "save_sample_prompt": "[filewords]"
+        };
     }
 
     conceptsList.push(concept);
@@ -268,15 +277,14 @@ function addConcept(concept = false) {
         "instance_token",
         "class_token",
         "num_class_images_per",
-        "class_negative_prompt",
-        "class_guidance_scale",
-        "class_infer_steps",
-        "save_sample_negative_prompt",
         "n_save_sample",
-        "sample_seed",
+        "class_negative_prompt",
+        "save_sample_negative_prompt",
+        "class_guidance_scale",
         "save_guidance_scale",
-        "save_infer_steps"
-
+        "class_infer_steps",
+        "save_infer_steps",
+        "sample_seed"
     ];
 
     let i = conceptsContainer.children().length + 1;

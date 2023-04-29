@@ -91,28 +91,21 @@
                                     </div>
                                     <div class="row">
                                         <div class="col-6 db_adv">
-                                            <div class="form-check">
-                                                <input type="checkbox" class="form-check-input newModelParam"
-                                                       id="db_create_from_hub" data-key="create_from_hub">
-                                                <label class="form-check-label" for="db_create_from_hub">Create From
-                                                    Hub</label>
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input newModelParam" type="checkbox" id="create_from_hub"
+                                                           name="create_from_hub" data-key="create_from_hub">
+                                                    <label class="form-check-label" for="create_from_hub">Create From Hub</label>
+                                                </div>
                                             </div>
                                         </div>
-                                        <div class="col-6">
-                                            <div class="form-check">
-                                                <input type="checkbox" class="form-check-input newModelParam"
-                                                       id="db_512_model" data-key="512_model"
-                                                       checked>
-                                                <label class="form-check-label" for="db_512_model">512x Model</label>
-                                            </div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="form-check">
-                                                <input type="checkbox" class="form-check-input newModelParam"
-                                                       id="db_use_shared_src" data-key="use_shared_src"
-                                                       checked>
-                                                <label class="form-check-label" for="db_use_shared_src">Use Shared
-                                                    Src</label>
+                                        <div class="col-12">
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input newModelparam" type="checkbox" id="512_model"
+                                                           name="512_model" data-key="create_from_hub" checked>
+                                                    <label class="form-check-label" for="512_model">512x Model</label>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -197,7 +190,8 @@
                             <div class="sectionLabel">Settings</div>
                             <div class="db-slider dbInput" data-elem_id="num_train_epochs" data-max="1000" data-min="1"
                                  data-value="150" data-label="Number of Epochs"></div>
-                            <div class="db-slider dbInput db-advanced" data-elem_id="save_embedding_every" data-max="100"
+                            <div class="db-slider dbInput db-advanced" data-elem_id="save_embedding_every"
+                                 data-max="100"
                                  data-min="0" data-step="1"
                                  data-value="0" data-label="Save Weight Frequency (epochs)"></div>
                             <div class="db-slider dbInput db-advanced" data-elem_id="save_preview_every" data-max="100"
@@ -215,26 +209,106 @@
                         </div>
                         <div class="borderSection accordion db-advanced" id="dbAdvancedAccordion">
                             <div class="accordion-item">
-                                <div id="dbAdvancedLabel" class="sectionLabel accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#dbAdvancedSettings" aria-expanded="false" aria-controls="dbAdvancedSettings">Advanced</div>
-                                <div id="dbAdvancedSettings" class="accordion-collapse collapse show" aria-labelledby="dbAdvancedLabel" data-bs-parent="#dbAdvancedAccordion">
-                                    FOO
+                                <div id="dbAdvancedLabel" class="sectionLabel accordion-button collapsed" type="button"
+                                     data-bs-toggle="collapse" data-bs-target="#dbAdvancedSettings"
+                                     aria-expanded="false" aria-controls="dbAdvancedSettings">Advanced
+                                </div>
+                                <div id="dbAdvancedSettings" class="accordion-collapse collapse"
+                                     aria-labelledby="dbAdvancedLabel" data-bs-parent="#dbAdvancedAccordion">
+                                    <div class="accordion-body">
+                                        <form>
+                                            <div class="form-group">
+                                                <label class="form-label" for="attention">Attention</label>
+                                                <select class="dbInput form-control" id="attention" name="attention">
+                                                    <option value="default">Default</option>
+                                                    <option value="xformers" selected>Xformers</option>
+                                                </select>
+                                            </div>
+
+                                            <div class="form-group">
+                                                <label for="learning_rate">Learning Rate</label>
+                                                <input class="dbInput form-control" type="number" step="any"
+                                                       id="learning_rate"
+                                                       name="learning_rate" value="0.000002">
+                                            </div>
+
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="0" data-max="10000"
+                                                     data-step="1" data-elem_id="lr_warmup_steps" data-value="500"
+                                                     data-label="LR Warmup Steps"></div>
+                                            </div>
+
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="75" data-max="300"
+                                                     data-step="75" data-elem_id="max_token_length" data-value="75"
+                                                     data-label="Max Token length"></div>
+                                            </div>
+
+                                            <div class="form-group">
+                                                <label class="form-label" for="mixed_precision">Mixed Precision</label>
+                                                <select class="dbInput form-control" id="mixed_precision"
+                                                        name="mixed_precision">
+                                                    <option value="no">Full (FP32)</option>
+                                                    <option value="fp16">FP16</option>
+                                                    <option value="bf16" selected>BF16</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="0" data-max="1.0"
+                                                     data-step="0.01" data-elem_id="stop_text_encoder"
+                                                     data-value="1.0"
+                                                     data-label="Text Encoder Percentage"></div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" id="shuffle_tags"
+                                                           name="shuffle_tags" checked>
+                                                    <label class="form-check-label" for="shuffle_tags">Shuffle
+                                                        Tags:</label>
+
+                                                </div>
+                                            </div>
+
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox"
+                                                           id="gradient_checkpointing"
+                                                           name="gradient_checkpointing">
+                                                    <label class="form-check-label" for="gradient_checkpointing">Gradient
+                                                        Checkpointing</label>
+
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox"
+                                                           id="freeze_clip_normalization"
+                                                           name="gradient_checkpointing">
+                                                    <label class="form-check-label" for="freeze_clip_normalization">Freeze
+                                                        CLIP Normalization</label>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-14 col-md-6 col-lg-4">
-                <div class="card shadow d-md-none d-lg-block" id="dreamStatus">
-                    <div class="card-header">
-                        Output
-                    </div>
-                    <div class="card-body">
-                        <div class="progressGroup" id="dreamProgress"></div>
-                        <div class="image-container inline-gallery-container" id="dreamGallery"></div>
-                    </div>
-                </div>
+        </div>
+    </div>
+    <div class="col-14 col-md-6 col-lg-4">
+        <div class="card shadow d-md-none d-lg-block" id="dreamStatus">
+            <div class="card-header">
+                Output
+            </div>
+            <div class="card-body">
+                <div class="progressGroup" id="dreamProgress"></div>
+                <div class="image-container inline-gallery-container" id="dreamGallery"></div>
             </div>
         </div>
     </div>
+</div>
+</div>
 </div>
