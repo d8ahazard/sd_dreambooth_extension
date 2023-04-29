@@ -1039,7 +1039,7 @@ def is_v2_from_diffuers_unet(unet_dir):
     return v2
 
 
-def extract_checkpoint(new_model_name: str, checkpoint_file: str, shared_src_name: str, from_hub=False, new_model_url="",
+def extract_checkpoint(new_model_name: str, checkpoint_file: str, shared_src_name: str=None, from_hub=False, new_model_url="",
                        new_model_token="", extract_ema=False, train_unfrozen=False, is_512=True):
     """
 

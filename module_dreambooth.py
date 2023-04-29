@@ -59,6 +59,8 @@ async def _start_training(request):
 
 async def _train_dreambooth(config: DreamboothConfig, user: str = None, target: str = None):
     logger.debug(f"Updated config: {config.__dict__}")
+    mh = ModelHandler(user_name=user)
+    mh.to_cpu()
     shared.db_model_config = config
     try:
         torch.cuda.empty_cache()
@@ -76,11 +78,11 @@ async def _train_dreambooth(config: DreamboothConfig, user: str = None, target: 
         result = {"message": f"Error in training: {e}"}
 
     try:
-        torch.cuda.empty_cache()
         gc.collect()
+        torch.cuda.empty_cache()
     except:
         pass
-
+    mh.to_gpu()
     return result
 
 
