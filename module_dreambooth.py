@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import shutil
+import traceback
 
 from concurrent.futures import ThreadPoolExecutor
 from typing import Union, Dict
@@ -75,6 +76,7 @@ async def _train_dreambooth(config: DreamboothConfig, user: str = None, target: 
             await loop.run_in_executor(pool, lambda: main(user=user))
     except Exception as e:
         logger.error(f"Error in training: {e}")
+        traceback.print_exc()
         result = {"message": f"Error in training: {e}"}
 
     try:
