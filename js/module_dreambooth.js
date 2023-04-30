@@ -373,13 +373,15 @@ function addConcept(concept = false) {
                 </div>
               </div>`);
 
-    formAccordion.click(function () {
+    formAccordion.click(function (event) {
+        event.preventDefault();
         let idx = $(this).data("index");
         console.log("Clicked: ", idx);
         lastConcept = idx;
     });
 
-    formAccordion.blur(function () {
+    formAccordion.blur(function (event) {
+        event.preventDefault();
         console.log("The element has lost focus.");
     });
 
@@ -534,10 +536,12 @@ function getSettings() {
         let value;
 
         if (slider) {
-            settings[id] = parseInt(slider.value);
+            console.log("SLIDER", slider);
+            value = slider.value;
         } else if (file) {
+            console.log("Filebrowser", file);
             let browser = element.FileBrowser();
-            settings[id] = browser.value;
+            value = browser.value;
         } else if (element.is(":checkbox")) {
             value = element.is(":checked");
         } else if (element.is(":radio")) {
