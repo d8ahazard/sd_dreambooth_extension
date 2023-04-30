@@ -34,6 +34,7 @@ class DbDataset(torch.utils.data.Dataset):
             hflip: bool,
             shuffle_tags: bool,
             strict_tokens: bool,
+            dynamic_img_norm: bool,
             not_pad_tokens: bool,
             debug_dataset: bool,
             model_dir: str
@@ -80,26 +81,33 @@ class DbDataset(torch.utils.data.Dataset):
         self.shuffle_tags = shuffle_tags
         self.not_pad_tokens = not_pad_tokens
         self.strict_tokens = strict_tokens
+        self.dynamic_img_norm = dynamic_img_norm
         self.tokens = tokens
         self.vae = None
         self.cache_latents = False
         flip_p = 0.5 if hflip else 0.0
-        if hflip:
-            self.image_transforms = transforms.Compose(
-                [
-                    transforms.ToPILImage(),
-                    transforms.RandomHorizontalFlip(flip_p),
-                    transforms.ToTensor(),
-                    transforms.Normalize([0.5], [0.5]),
-                ]
-            )
+        self.image_transforms = self.build_compose(hflip, flip_p)
+
+    def build_compose(self, hflip, flip_p):
+        img_augmentation = [transforms.ToPILImage(), transforms.RandomHorizontalFlip(flip_p)]
+        to_tensor = [transforms.ToTensor()]
+        
+        image_transforms = (
+            to_tensor if not hflip else img_augmentation + to_tensor
+        )
+        return transforms.Compose(image_transforms)
+
+    def get_img_std(self, img):
+        if self.dynamic_img_norm:
+            return img.mean(), img.std()
         else:
-            self.image_transforms = transforms.Compose(
-                [
-                    transforms.ToTensor(),
-                    transforms.Normalize([0.5], [0.5]),
-                ]
-            )
+            return [0.5], [0.5]
+
+    def image_transform(self, img):
+        img = self.image_transforms(img)
+        mean, std = self.get_img_std(img)
+        norm = transforms.Normalize(mean, std)
+        return norm(img) 
 
     def load_image(self, image_path, caption, res):
         if self.debug_dataset:
@@ -110,7 +118,7 @@ class DbDataset(torch.utils.data.Dataset):
                 image = self.latents_cache[image_path]
             else:
                 img = open_and_trim(image_path, res, False)
-                image = self.image_transforms(img)
+                image = self.image_transform(img)
             if self.shuffle_tags:
                 caption, input_ids = self.cache_caption(image_path, caption)
             else:
@@ -120,7 +128,7 @@ class DbDataset(torch.utils.data.Dataset):
     def cache_latent(self, image_path, res):
         if self.vae is not None:
             image = open_and_trim(image_path, res, False)
-            img_tensor = self.image_transforms(image)
+            img_tensor = self.image_transform(image)
             img_tensor = img_tensor.unsqueeze(0).to(device=self.vae.device, dtype=self.vae.dtype)
             latents = self.vae.encode(img_tensor).latent_dist.sample().squeeze(0).to("cpu")
             self.latents_cache[image_path] = latents

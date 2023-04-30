@@ -19,7 +19,10 @@ class mytqdm(tqdm):
             if "target" in kwargs:
                 del kwargs["target"]
         except:
-            pass
+            if "user" in kwargs:
+                del kwargs["user"]
+            if "target" in kwargs:
+                del kwargs["target"]
         self.update_ui = True
         if "total" in kwargs:
             total = kwargs["total"]

@@ -220,6 +220,7 @@ class DreamState:
         self.textinfo2 = None
         self.time_left_force_display = False
         self.active = True
+        self.status_handler = status_handler
         torch_gc()
         if self.status_handler:
             self.status_handler.start()
