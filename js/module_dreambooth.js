@@ -537,7 +537,7 @@ function getSettings() {
 
         if (slider) {
             console.log("SLIDER", slider);
-            value = slider.value;
+            value = parseInt(slider.value);
         } else if (file) {
             console.log("Filebrowser", file);
             let browser = element.FileBrowser();
