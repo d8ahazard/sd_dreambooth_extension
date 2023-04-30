@@ -420,7 +420,6 @@ function getSettings() {
     // Just create one concept if advanced is disabled
     let concepts_list = [];
 
-
     let inputElements = $('[id^="concept_"]');
 
     let values = [];
@@ -469,7 +468,9 @@ function getSettings() {
             settings[id] = browser.value;
         } else {
             if (id === undefined) id = element[0].id;
-            settings[id] = element[0].value;
+            let value = element[0].value;
+            if (id==="learning_rate") value = parseFloat(value);
+            settings[id] = value;
         }
     });
 
