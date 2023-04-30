@@ -1,9 +1,16 @@
 let dreamSelect;
 let dreamConfig;
 let showAdvanced;
+let dreamProgress;
+let dreamGallery;
 let lastConcept = -1;
 let conceptsList = [];
 let dbListenersLoaded = false;
+let dbModelCol;
+let dbStatusCol;
+
+// Define the Bootstrap "md" breakpoint as a constant
+const mdBreakpoint = 990;
 
 $(".hide").hide();
 
@@ -12,6 +19,7 @@ const dbModule = new Module("Dreambooth", "moduleDreambooth", "moon", false, 2, 
 
 function initDreambooth() {
     console.log("Init dreambooth");
+
     let selects = $(".modelSelect").modelSelect();
     for (let i = 0; i < selects.length; i++) {
         let elem = selects[i];
@@ -36,12 +44,27 @@ function initDreambooth() {
         "id": "dreamProgress"
     }
 
-    let dreamProgress = new ProgressGroup(document.getElementById("dreamProgress"), prog_opts);
-    let dreamProgressSm = new ProgressGroup(document.getElementById("dreamProgressSm"), prog_opts);
+    window.addEventListener('resize', handleResize);
+
+    // Call the function once on page load to ensure the correct container is shown
+    handleResize();
+    let pg = document.getElementById("dreamProgress");
+    console.log("Progress: ", pg);
+    dreamProgress = new ProgressGroup(document.getElementById("dreamProgress"), prog_opts);
+    dreamProgress.setOnCancel(function() {
+        $(".dbTrainBtn").addClass("hide");
+        $(".dbSettingBtn").removeClass("hide");
+    });
+
+    dreamProgress.setOnComplete(function() {
+        $(".dbTrainBtn").addClass("hide");
+        $(".dbSettingBtn").removeClass("hide");
+    });
 
     // Gallery creation. Options can also be passed to .update()
-    let dreamGallery = new InlineGallery(document.getElementById('dreamGallery'), gallery_opts);
-    let dreamGallery2 = new InlineGallery(document.getElementById('dreamGallery2'), gallery_opts);
+    dreamGallery = new InlineGallery(document.getElementById('dreamGallery'), gallery_opts);
+
+    console.log("Gallery and progress: ", dreamProgress, dreamGallery);
 
     $(".db-slider").BootstrapSlider();
 
@@ -64,7 +87,46 @@ function initDreambooth() {
 }
 
 
+function handleResize() {
+    // Get the current window width
+    const windowWidth = window.innerWidth;
+    dbModelCol = document.getElementById("dbModelCol");
+    dbStatusCol = document.getElementById("dbStatusCol");
+
+    let statusCard = document.getElementById("dreamStatus");
+    // If the window is less than the "md" breakpoint
+    if (windowWidth <= mdBreakpoint) {
+        // Check if statusCard is not already a child of dbModelCol
+        if (dbModelCol.contains(statusCard) === false) {
+            // Append statusCard to dbModelCol
+            dbModelCol.prepend(statusCard);
+            //dbModelCol.appendChild(statusCard);
+        }
+        // Hide dbStatusCol
+        dbStatusCol.style.display = "none";
+    } else {
+        // Check if statusCard is not already a child of dbStatusCol
+        if (dbStatusCol.contains(statusCard) === false) {
+            // Append statusCard to dbStatusCol
+            dbStatusCol.appendChild(statusCard);
+        }
+        // Show dbStatusCol
+        dbStatusCol.style.display = "block";
+    }
+}
+
 function loadDbListeners() {
+    $("#db_use_shared_src").click(function () {
+        let checked = $(this).is(":checked");
+        if (checked) {
+            console.log("CHECKED");
+            $("#shared_row").show();
+        } else {
+            console.log("NOT CHECKED");
+            $("#shared_row").hide();
+        }
+    });
+
     $("#db_create_model").click(function () {
         let data = {};
         $(".newModelParam").each(function (index, elem) {
@@ -84,7 +146,6 @@ function loadDbListeners() {
         sendMessage("create_dreambooth", data, false, "dreamProgress").then(() => {
             dreamSelect.refresh();
         });
-
     });
 
     $("#db_load_settings").click(function () {
@@ -112,8 +173,15 @@ function loadDbListeners() {
         let data = getSettings();
         console.log("Settings: ", data);
         sendMessage("train_dreambooth", data, true, "dreamProgress").then((result) => {
+            $(".dbSettingBtn").addClass("hide");
+            $(".dbTrainBtn").removeClass("hide").show();
             console.log("Res: ", result);
         });
+    });
+
+    $("#db_cancel").click(function () {
+        $(".dbSettingBtn").removeClass("hide");
+        $(".dbTrainBtn").addClass("hide");
     });
 
     $("#db_load_params").click(function () {
@@ -158,7 +226,7 @@ function loadDbListeners() {
 
     $("#db_save_config").click(function () {
         let selected = dreamSelect.getModel();
-        console.log("Load model settings click: ", selected);
+        console.log("Save model settings click: ", selected);
         if (selected === undefined) {
             alert("Please select a model first!");
         } else {
@@ -189,6 +257,8 @@ function loadDbListeners() {
     });
 
     keyListener.register("ctrl+Enter", "#dreamSettings", startDreambooth);
+
+    dbListenersLoaded = true;
 }
 
 function loadConcepts(concepts) {
@@ -458,21 +528,34 @@ function getSettings() {
     let otherInputs = $(".dbInput");
     otherInputs.each(function () {
         let element = $(this);
-        let id = element.data("elem_id") || element.id;
+        let id = element.data("elem_id") || element.attr("id");
         let slider = element.data("BootstrapSlider");
         let file = element.data("fileBrowser");
+        let value;
+
         if (slider) {
             settings[id] = parseInt(slider.value);
         } else if (file) {
             let browser = element.FileBrowser();
             settings[id] = browser.value;
+        } else if (element.is(":checkbox")) {
+            value = element.is(":checked");
+        } else if (element.is(":radio")) {
+            if (element.is(":checked")) {
+                value = element.val();
+            }
+        } else if (element.is("select")) {
+            value = element.val();
+        } else if (element.is("input[type='number']")) {
+            value = parseFloat(element.val());
         } else {
-            if (id === undefined) id = element[0].id;
-            let value = element[0].value;
-            if (id==="learning_rate") value = parseFloat(value);
-            settings[id] = value;
+            value = element.val();
         }
+
+        console.log("Input", id, value);
+        settings[id] = value;
     });
+
 
     let highestConceptIndex = -1;
     const concepts = {};
