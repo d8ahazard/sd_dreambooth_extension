@@ -860,8 +860,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 if "UniPC" in args.scheduler:
                     s_pipeline.scheduler.config.solver_type = "bh2"
 
-                s_pipeline = s_pipeline.to(accelerator.device)
-
                 printm("Patching model with tomesd.")
                 if args.tomesd:
                     tomesd.apply_patch(s_pipeline, ratio=args.tomesd, use_rand=False)
