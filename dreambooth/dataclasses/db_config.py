@@ -174,12 +174,22 @@ class DreamboothConfig(BaseModel):
         models_path = self.model_dir
         logger = logging.getLogger(__name__)
         logger.debug("Saving to %s", models_path)
+
+        if os.name == 'nt' and '/' in models_path:
+            # replace linux path separators with windows path separators
+            models_path = models_path.replace('/', '\\')
+        elif os.name == 'posix' and '\\' in models_path:
+            # replace windows path separators with linux path separators
+            models_path = models_path.replace('\\', '/')
+        self.model_dir = models_path
         config_file = os.path.join(models_path, "db_config.json")
+
         if backup:
             backup_dir = os.path.join(models_path, "backups")
             if not os.path.exists(backup_dir):
                 os.makedirs(backup_dir)
             config_file = os.path.join(models_path, "backups", f"db_config_{self.revision}.json")
+
         with open(config_file, "w") as outfile:
             json.dump(self.__dict__, outfile, indent=4)
 

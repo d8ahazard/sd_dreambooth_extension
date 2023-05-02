@@ -243,7 +243,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             update_status({"status": msg})
             stop_text_percentage = 0
         count, instance_prompts, class_prompts = generate_classifiers(
-            args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False
+            args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False, pbar=mytqdm(user=user)
         )
         if status.interrupted:
             result.msg = "Training interrupted."
@@ -300,13 +300,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             revision=args.revision,
             torch_dtype=torch.float32,
         )
-        unet = torch2ify(unet)
 
-        # Check that all trainable models are in full precision
-        low_precision_error_string = (
-            "Please make sure to always have all model weights in full float32 precision when starting training - "
-            "even if doing mixed precision training. copy of the weights should still be float32."
-        )
         if args.attention == "xformers" and not shared.force_cpu:
             if is_xformers_available():
                 import xformers
@@ -322,6 +316,15 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 )
             xformerify(unet)
             xformerify(vae)
+
+
+        unet = torch2ify(unet)
+
+        # Check that all trainable models are in full precision
+        low_precision_error_string = (
+            "Please make sure to always have all model weights in full float32 precision when starting training - "
+            "even if doing mixed precision training. copy of the weights should still be float32."
+        )
 
         if accelerator.unwrap_model(unet).dtype != torch.float32:
             logger.warning(

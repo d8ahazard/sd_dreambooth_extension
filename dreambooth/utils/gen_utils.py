@@ -79,7 +79,9 @@ def generate_classifiers(
         args: DreamboothConfig,
         class_gen_method: str = "Native Diffusers",
         accelerator: Accelerator = None,
-        ui=True):
+        ui=True,
+        pbar: mytqdm = None
+):
     """
 
     @param args: A DreamboothConfig
@@ -90,6 +92,7 @@ def generate_classifiers(
     generated: Number of images generated
     images: A list of images or image paths, depending on if returning to the UI or not.
     if ui is False, this will return a second array of paths representing the class paths.
+    pbar: Progress bar to use.
     """
     out_images = []
     instance_prompts = []
@@ -97,7 +100,7 @@ def generate_classifiers(
     try:
         status.textinfo = "Preparing dataset..."
         prompt_dataset = ClassDataset(
-            args.concepts(), args.model_dir, args.resolution, False, args.disable_class_matching
+            args.concepts(), args.model_dir, args.resolution, False, args.disable_class_matching,pbar=pbar
         )
         instance_prompts = prompt_dataset.instance_prompts
         class_prompts = prompt_dataset.class_prompts
@@ -118,7 +121,11 @@ def generate_classifiers(
             return 0, instance_prompts, class_prompts
 
     print(f"Generating {set_len} class images for training...")
-    pbar = mytqdm(total=set_len, desc=f"Generating class images 0/{set_len}:", position=0)
+    if not pbar:
+        pbar = mytqdm(total=set_len, desc=f"Generating class images 0/{set_len}:", position=0)
+    else:
+        pbar.reset(total=set_len)
+        pbar.set_description(f"Generating class images 0/{set_len}:")
     shared.status.job_count = set_len
     shared.status.job_no = 0
     builder = ImageBuilder(
