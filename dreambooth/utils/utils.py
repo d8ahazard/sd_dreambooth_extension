@@ -3,6 +3,7 @@ from __future__ import annotations
 import gc
 import html
 import importlib.util
+import logging
 import os
 import sys
 import traceback
@@ -48,11 +49,19 @@ def sanitize_name(name):
 
 def printm(msg=""):
     from dreambooth import shared
+    use_logger = True
+    try:
+        from core.handlers.config import ConfigHandler
+    except:
+        use_logger = False
 
-    if shared.debug:
+    if shared.debug or use_logger:
         allocated = round(torch.cuda.memory_allocated(0) / 1024**3, 1)
         cached = round(torch.cuda.memory_reserved(0) / 1024**3, 1)
-        print(f"{msg}({allocated}/{cached})")
+        if use_logger:
+            logging.getLogger(__name__).info(f"{msg}({allocated}/{cached})")
+        else:
+            print(f"{msg}({allocated}/{cached})")
 
 
 def cleanup(do_print: bool = False):
