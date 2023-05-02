@@ -485,6 +485,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             return result
 
         printm("Loading dataset...")
+        td_bar = mytqdm(
+            range(4),
             disable=not accelerator.is_local_main_process,
             position=1,
             user=user,
