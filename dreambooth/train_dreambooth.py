@@ -974,13 +974,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     s_pipeline.enable_vae_tiling()
                     s_pipeline.enable_vae_slicing()
                     s_pipeline.enable_xformers_memory_efficient_attention()
-                    # If less than 8GB total VRAM, enable cpu offload
-                    total_vram = torch.cuda.get_device_properties(accelerator.device).total_memory / 1024 ** 3
-                    if total_vram <= 10:
-                        s_pipeline.enable_sequential_cpu_offload()
-                    else:
-                        s_pipeline = s_pipeline.to(accelerator.device)
-
+                    s_pipeline.enable_sequential_cpu_offload()
+                    
                     s_pipeline.scheduler = get_scheduler_class("UniPCMultistep").from_config(s_pipeline.scheduler.config)
                     s_pipeline.scheduler.config.solver_type = "bh2"
                     samples = []
