@@ -4,19 +4,26 @@
             <div class="col-12">
                 <div class="card shadow">
                     <div class="card-body text-center justify-between">
-                        <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_load_params">Load Settings
+                        <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_load_params">Load
+                            Settings
                         </button>
-                        <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_save_config">Save Settings
+                        <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_save_config">Save
+                            Settings
                         </button>
                         <button class="btn btn-top btn-primary dbSettingBtn" type="button" id="db_train">Train</button>
-                        <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_gen_ckpt">Generate Ckpt</button>
-                        <button class="btn btn-top btn-secondary hide dbTrainBtn" type="button" id="db_gen_ckpt_during">Save
+                        <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_gen_ckpt">Generate
+                            Ckpt
+                        </button>
+                        <button class="btn btn-top btn-secondary hide dbTrainBtn" type="button" id="db_gen_ckpt_during">
+                            Save
                             Weights
                         </button>
-                        <button class="btn btn-top btn-secondary hide dbTrainBtn" type="button" id="db_train_sample">Generate
+                        <button class="btn btn-top btn-secondary hide dbTrainBtn" type="button" id="db_train_sample">
+                            Generate
                             Samples
                         </button>
-                        <button class="btn btn-top btn-secondary hide cancelButton dbTrainBtn" type="button" id="db_cancel">Cancel
+                        <button class="btn btn-top btn-secondary hide cancelButton dbTrainBtn" type="button"
+                                id="db_cancel">Cancel
                         </button>
                     </div>
                 </div>
@@ -78,14 +85,17 @@
                                     </div>
                                     <div class="form-group">
                                         <div class="form-check form-switch">
-                                            <input class="newModelParam form-check-input" type="checkbox" id="512_model" name="512_model" data-key="512_model" checked>
+                                            <input class="newModelParam form-check-input" type="checkbox" id="512_model"
+                                                   name="512_model" data-key="512_model" checked>
                                             <label class="form-check-label" for="512_model">512x Base Model</label>
                                         </div>
                                     </div>
                                     <div class="form-group">
                                         <div class="form-check form-switch">
-                                            <input class="newModelParam form-check-input" type="checkbox" id="create_from_hub" name="create_from_hub">
-                                            <label class="form-check-label" for="create_from_hub">Create from Hub</label>
+                                            <input class="newModelParam form-check-input" type="checkbox"
+                                                   id="create_from_hub" name="create_from_hub">
+                                            <label class="form-check-label" for="create_from_hub">Create from
+                                                Hub</label>
                                         </div>
                                     </div>
                                     <div class="form-group db_advanced" style="display: none;" id="hub_row">
@@ -109,8 +119,11 @@
                                     </div>
                                     <div class="form-group db-advanced">
                                         <div class="form-check form-switch">
-                                            <input class="newModelParam form-check-input" type="checkbox" id="db_use_shared_src" name="use_shared_src" data-key="use_shared_src">
-                                            <label class="form-check-label" for="db_use_shared_src">Use Shared Base Model (Lora)</label>
+                                            <input class="newModelParam form-check-input" type="checkbox"
+                                                   id="db_use_shared_src" name="use_shared_src"
+                                                   data-key="use_shared_src">
+                                            <label class="form-check-label" for="db_use_shared_src">Use Shared Base
+                                                Model (Lora)</label>
                                         </div>
                                     </div>
                                     <div class="form-group" id="shared_row" style="display: none">
@@ -123,24 +136,16 @@
                                     </div>
                                     <div class="form-group">
                                         <div class="form-check form-switch">
-                                            <input class="newModelParam form-check-input" type="checkbox" id="db_new_model_extract_ema" name="new_model_extract_ema" data-key="new_model_extract_ema">
-                                            <label class="form-check-label" for="db_new_model_extract_ema">Extract EMA</label>
-                                        </div>                                            
-                                    </div>
-                                    <div class="form-group">
-                                        <div class="form-check form-switch">
-                                            <input class="newModelParam form-check-input" type="checkbox" id="db_train_unfrozen" data-key="train_unfrozen" name="train_unfrozen" checked>
+                                            <input class="newModelParam form-check-input" type="checkbox"
+                                                   id="db_train_unfrozen" data-key="train_unfrozen"
+                                                   name="train_unfrozen" checked>
                                             <label class="form-check-label" for="db_train_unfrozen">Unfreeze</label>
                                         </div>
                                     </div>
-                                    <div class="form-group">
-                                        <div class="form-check form-switch">
-                                            <input class="newModelParam form-check-input" type="checkbox" id="db_use_ema" data-key="use_ema" name="use_ema">
-                                            <label class="form-check-label" for="db_use_ema">Use EMA</label>
-                                        </div>
-                                    </div>
                                     <div class="form-group text-center">
-                                        <button class="btn btn-primary" type="button" id="db_create_model">Create Model</button>
+                                        <button class="btn btn-primary" type="button" id="db_create_model">Create
+                                            Model
+                                        </button>
                                     </div>
                                 </form>
                             </div>
@@ -275,6 +280,16 @@
                                                         CLIP Normalization</label>
                                                 </div>
                                             </div>
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="dbInput form-check-input" type="checkbox"
+                                                           id="db_extract_ema" name="new_model_extract_ema"
+                                                           data-key="new_model_extract_ema">
+                                                    <label class="form-check-label" for="db_extract_ema">Extract
+                                                        EMA</label>
+                                                </div>
+                                            </div>
+
                                         </form>
                                     </div>
                                 </div>
