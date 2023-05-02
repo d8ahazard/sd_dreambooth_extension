@@ -27,7 +27,6 @@ from diffusers import (
 )
 from diffusers.utils import logging as dl, is_xformers_available
 from packaging import version
-from tensorflow.python.framework.random_seed import set_seed as set_seed1
 from torch.cuda.profiler import profile
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
@@ -113,7 +112,6 @@ def set_seed(deterministic: bool):
     if deterministic:
         torch.backends.cudnn.deterministic = True
         seed = 0
-        set_seed1(seed)
         set_seed2(seed)
     else:
         torch.backends.cudnn.deterministic = False

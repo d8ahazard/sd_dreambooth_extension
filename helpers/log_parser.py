@@ -195,30 +195,38 @@ class LogParser:
             prior_loss_events = []
             has_all = False
             try:
-                import tensorflow
+                from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
             except:
-                print("Unable to import tensorflow")
+                print("Unable to import tensorboard")
                 return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events), has_all
 
-            serialized_examples = tensorflow.data.TFRecordDataset(filepath)
+            acc = EventAccumulator(filepath).Reload()
 
-            for serialized_example in serialized_examples:
-                e = event_pb2.Event.FromString(serialized_example.numpy())
-                if len(e.summary.value):
-                    parsed = parse_tfevent(e)
-                    if parsed["Name"] == "lr":
-                        lr_events.append(parsed)
-                    elif parsed["Name"] == "loss":
-                        loss_events.append(parsed)
-                    elif parsed["Name"] == "vram_usage" or parsed["Name"] == "vram":
-                        ram_events.append(parsed)
-                    elif parsed["Name"] == "instance_loss" or parsed["Name"] == "inst_loss":
-                        instance_loss_events.append(parsed)
-                    elif parsed["Name"] == "prior_loss":
-                        prior_loss_events.append(parsed)
-
-            merged_events = []
-
+            def parse_tbevent(tbevent, name):
+                return {
+                    "Wall_time": tbevent.wall_time,
+                    "Name": name,
+                    "Step": tbevent.step,
+                    "Value": float(tbevent.value),
+                }
+            for k, v in acc.Tags().items():
+                if k == "scalars":  # Assume only scalars are logged
+                    for scalar in v:  # e.g. ['lr', 'loss', 'inst_loss', 'prior_loss', 'vram', 'epoch_loss']
+                        for tbevent in acc.Scalars(scalar):  # multiple steps
+                            if scalar == "lr":
+                                lr_events.append(parse_tbevent(tbevent, scalar))
+                            elif scalar == "loss":
+                                loss_events.append(parse_tbevent(tbevent, scalar))
+                            elif scalar == "vram_usage" or scalar == "vram":
+                                ram_events.append(parse_tbevent(tbevent, scalar))
+                            elif scalar == "instance_loss" or scalar == "inst_loss":
+                                instance_loss_events.append(parse_tbevent(tbevent, scalar))
+                            elif scalar == "prior_loss":
+                                prior_loss_events.append(parse_tbevent(tbevent, scalar))
+            
+            # Merge "lr, loss, instance_loss, prior_loss" into the merged_events
+            # if the steps are all the same, make loss_events = merged_events
+            merged_events = []  
             has_all = True
             for le in loss_events:
                 lr = next((item for item in lr_events if item["Step"] == le["Step"]), None)
@@ -236,14 +244,6 @@ class LogParser:
                 loss_events = merged_events
 
             return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events), has_all
-
-        def parse_tfevent(tfevent):
-            return {
-                "Wall_time": tfevent.wall_time,
-                "Name": tfevent.summary.value[0].tag,
-                "Step": tfevent.step,
-                "Value": float(tfevent.summary.value[0].simple_value),
-            }
 
         try:
             from dreambooth.dataclasses.db_config import from_file  # noqa
