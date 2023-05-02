@@ -1104,6 +1104,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 update_status({"images": last_samples})
                 printm("Cleanup.")
 
+                cleanup()
                 optim_to(profiler, optimizer, accelerator.device)
 
                 # Restore all random states to avoid having sampling impact training.
