@@ -485,6 +485,11 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             return result
 
         printm("Loading dataset...")
+            disable=not accelerator.is_local_main_process,
+            position=1,
+            user=user,
+            target="dreamProgress"
+        )
         train_dataset = generate_dataset(
             model_name=args.model_name,
             instance_prompts=instance_prompts,
@@ -494,6 +499,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             vae=vae if args.cache_latents else None,
             debug=False,
             model_dir=args.model_dir,
+            pbar=td_bar
         )
 
         printm("Dataset loaded.")
@@ -842,7 +848,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 scheduler_class = get_scheduler_class(args.scheduler)
                 if args.attention == "xformers" and not shared.force_cpu:
                     xformerify(s_pipeline)
-
+                s_pipeline.enable_sequential_cpu_offload()
                 s_pipeline.scheduler = scheduler_class.from_config(
                     s_pipeline.scheduler.config
                 )

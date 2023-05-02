@@ -36,7 +36,8 @@ class DbDataset(torch.utils.data.Dataset):
             strict_tokens: bool,
             not_pad_tokens: bool,
             debug_dataset: bool,
-            model_dir: str
+            model_dir: str,
+            pbar: mytqdm = None
     ) -> None:
         super().__init__()
         self.batch_indices = []
@@ -82,6 +83,7 @@ class DbDataset(torch.utils.data.Dataset):
         self.strict_tokens = strict_tokens
         self.tokens = tokens
         self.vae = None
+        self.pbar = pbar
         self.cache_latents = False
         flip_p = 0.5 if hflip else 0.0
         if hflip:
@@ -210,7 +212,8 @@ class DbDataset(torch.utils.data.Dataset):
         shared.status.job_no = 0
         total_instances = 0
         total_classes = 0
-        pbar = mytqdm(range(p_len), desc="Caching latents..." if self.cache_latents else "Processing images...", position=0)
+        if self.pbar is None:
+            self.pbar = mytqdm(range(p_len), desc="Caching latents..." if self.cache_latents else "Processing images...", position=0)
         image_cache_file = os.path.join(self.cache_dir, f"image_cache_{self.resolution}.safetensors")
         latents_cache = {}
         if os.path.exists(image_cache_file):
@@ -224,14 +227,14 @@ class DbDataset(torch.utils.data.Dataset):
             # This should really be the index, because we want the bucket sampler to shuffle them all
             self.resolutions.append(dict_idx)
             # Cache with the actual res, because it's used to crop
-            cache_images(train_images, res, pbar)
+            cache_images(train_images, res, self.pbar)
             inst_count = len(train_images)
             class_count = 0
             if dict_idx in self.class_dict:
                 # Use dict index to find class images
                 class_images = self.class_dict[dict_idx]
                 # Use actual res here as well
-                cache_images(class_images, res, pbar)
+                cache_images(class_images, res, self.pbar)
                 class_count = len(class_images)
             total_instances += inst_count
             total_classes += class_count
@@ -244,7 +247,7 @@ class DbDataset(torch.utils.data.Dataset):
             class_str = str(class_count).rjust(len(str(nc)), " ")
             ex_str = str(example_len).rjust(len(str(ti * 2)), " ")
             # Log both here
-            pbar.write(
+            self.pbar.write(
                 f"Bucket {bucket_str} {dict_idx} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {ex_str}")
             bucket_idx += 1
         try:
@@ -260,7 +263,7 @@ class DbDataset(torch.utils.data.Dataset):
         inst_str = str(total_instances).rjust(len(str(ni)), " ")
         class_str = str(total_classes).rjust(len(str(nc)), " ")
         tot_str = str(total_len).rjust(len(str(ti)), " ")
-        pbar.write(
+        self.pbar.write(
             f"Total Buckets {bucket_str} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {tot_str}")
         self._length = total_len
         print(f"\nTotal images / batch: {self._length}, total examples: {total_len}")
