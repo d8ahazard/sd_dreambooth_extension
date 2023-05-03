@@ -421,7 +421,7 @@ try:
 
         return output_images
 except:
-    print("Oops, no txt2img available. Oh well.")
+    pass
 
 
     def process_txt2img(p: StableDiffusionProcessing) -> None:

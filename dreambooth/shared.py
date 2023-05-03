@@ -318,7 +318,6 @@ def load_vars(root_path = None):
     orig_tensor_numpy, extension_path, orig_cumsum, orig_Tensor_cumsum, status, state, in_progress, in_progress_epoch, in_progress_step
 
     script_path = os.sep.join(__file__.split(os.sep)[0:-4]) if root_path is None else root_path
-    logger.debug(f"Script path is {script_path}")
     models_path = os.path.join(script_path, "models")
     embeddings_dir = os.path.join(script_path, "embeddings")
     dreambooth_models_path = os.path.join(models_path, "dreambooth")
