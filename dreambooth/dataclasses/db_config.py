@@ -2,7 +2,7 @@ import json
 import os
 import traceback
 from typing import List, Dict
-
+from pathlib import Path
 from pydantic import BaseModel
 
 from dreambooth import shared  # noqa
