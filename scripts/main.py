@@ -521,6 +521,9 @@ def on_ui_tabs():
                             db_hflip = gr.Checkbox(
                                 label="Apply Horizontal Flip", value=False
                             )
+                            db_dynamic_img_norm = gr.Checkbox(
+                                label="Dynamic Image Normalization", value=False
+                            )
 
                         with gr.Column():
                             gr.HTML(value="Tuning")
@@ -1309,6 +1312,7 @@ def on_ui_tabs():
             db_src,
             db_stop_text_encoder,
             db_strict_tokens,
+            db_dynamic_img_norm,
             db_tenc_grad_clip_norm,
             db_tenc_weight_decay,
             db_train_batch_size,

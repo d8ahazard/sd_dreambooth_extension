@@ -108,6 +108,7 @@ class DreamboothConfig(BaseModel):
     src: str = ""
     stop_text_encoder: float = 1.0
     strict_tokens: bool = False
+    dynamic_img_norm: bool = False
     tenc_weight_decay: float = 0.01
     tenc_grad_clip_norm: float = 0.00
     tomesd: float = 0

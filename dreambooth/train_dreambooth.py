@@ -338,6 +338,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 f"Text encoder loaded as datatype {accelerator.unwrap_model(text_encoder).dtype}."
                 f" {low_precision_error_string}"
             )
+        
+        if args.use_lora:
+            unet.requires_grad_(False)
+            text_encoder.requires_grad_(False)
 
         if args.gradient_checkpointing:
             if args.train_unet:
@@ -377,9 +381,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 ema_model = EMAModel(
                     unet, device=accelerator.device, dtype=weight_dtype
                 )
-
-        if args.use_lora or not args.train_unet:
-            unet.requires_grad_(False)
 
         unet_lora_params = None
         text_encoder_lora_params = None
@@ -1143,11 +1144,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             if training_complete:
                 logger.debug("Training complete, breaking epoch.")
                 break
-
+  
             if args.train_unet:
                 unet.train()
-            elif args.use_lora and not args.lora_use_buggy_requires_grad:
-                set_lora_requires_grad(unet, False)
 
             train_tenc = epoch < text_encoder_epochs
             if stop_text_percentage == 0:
@@ -1302,7 +1301,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                         if len(instance_chunks) and len(prior_chunks):
                             # Add the prior loss to the instance loss.
-                            loss = instance_loss + current_prior_loss_weight * prior_loss
+                            loss = instance_loss + (prior_loss * current_prior_loss_weight)
                         elif len(instance_chunks):
                             loss = instance_loss
                         else:

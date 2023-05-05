@@ -426,6 +426,7 @@ let db_titles = {
     "Shuffle Tags": "When enabled, tags after the first ',' in a prompt will be randomly ordered, which can potentially improve training.",
     "Source Checkpoint": "The source checkpoint to extract for training.",
     "Step Ratio of Text Encoder Training": "The number of steps per image (Epoch) to train the text encoder for. Set 0.5 for 50% of the epochs",
+    "Dynamic Image Normalization": "Normalizes each image separately by mean and standard deviation in your dataset. Useful to preserve likeness to your images.",
     "Strict Tokens": "Parses instance prompts separated by the following characters [,;.!?], and prevents breaking up tokens when using the tokenizer. Useful if you have prompts separated by a lot of tags.",
     "TENC Gradient Clip Norm": "Prevents overfit by clipping gradient norms. Default value is 0.0. Recommended value for Lora is 1.0",
     "TENC Weight Decay": "The weight decay for the Text Encoder. Values closer to 0 closely match your training dataset, and values closer to 1 generalize more and deviate from your training dataset. Default is 1e-2. For Dreambooth, recommended value is same as AdamW Weight Decay. For Lora recommended value is 0.01-0.02 higher than AdamW Weight Decay.",
