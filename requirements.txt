@@ -1,7 +1,7 @@
 accelerate~=0.18.0
 bitsandbytes==0.35.4
-dadaptation~=1.5.0
-diffusers~=0.15.1
+dadaptation==2.0
+diffusers~=0.16.1
 discord-webhook~=1.1.0
 fastapi~=0.94.1
 gitpython~=3.1.31
@@ -9,11 +9,9 @@ lion-pytorch~=0.0.7
 Pillow==9.5.0
 tqdm~=4.64.1
 tomesd~=0.1.2
-transformers~=4.26.1  # > 4.26.x causes issues (db extension #1110)
+transformers~=4.28.1  # > 4.26.x causes issues (db extension #1110)
 
 # Tensor
-tensorboard==2.12.0; sys_platform != 'darwin' or platform_machine != 'arm64'
-
+tensorboard==2.13.0; sys_platform != 'darwin' or platform_machine != 'arm64'
 # Tensor MacOS
-# Note: Major and Minor versions of tensorboard & tensorflow must match
 tensorboard==2.11.2; sys_platform == 'darwin' and platform_machine == 'arm64'
