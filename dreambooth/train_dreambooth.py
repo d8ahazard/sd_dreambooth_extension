@@ -27,6 +27,7 @@ from diffusers import (
 from diffusers.models.attention_processor import AttnProcessor2_0
 from diffusers.utils import logging as dl, is_xformers_available
 from packaging import version
+from tensorflow.python.framework.random_seed import set_seed as set_seed1
 from torch.cuda.profiler import profile
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
@@ -86,7 +87,6 @@ try:
 except:
     logger.warning("Exception while adding 'get_velocity' method to the schedulers.")
 
-
 export_diffusers = False
 diffusers_dir = ""
 try:
@@ -113,6 +113,7 @@ def set_seed(deterministic: bool):
     if deterministic:
         torch.backends.cudnn.deterministic = True
         seed = 0
+        set_seed1(seed)
         set_seed2(seed)
     else:
         torch.backends.cudnn.deterministic = False
@@ -316,7 +317,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             xformerify(unet)
             xformerify(vae)
 
-
         unet = torch2ify(unet)
 
         # Check that all trainable models are in full precision
@@ -338,10 +338,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 f"Text encoder loaded as datatype {accelerator.unwrap_model(text_encoder).dtype}."
                 f" {low_precision_error_string}"
             )
-        
-        if args.use_lora:
-            unet.requires_grad_(False)
-            text_encoder.requires_grad_(False)
 
         if args.gradient_checkpointing:
             if args.train_unet:
@@ -382,6 +378,20 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     unet, device=accelerator.device, dtype=weight_dtype
                 )
 
+        # Create shared unet/tenc learning rate variables
+
+        learning_rate = args.learning_rate
+        txt_learning_rate = args.txt_learning_rate
+        if args.use_lora:
+            learning_rate = args.lora_learning_rate
+            txt_learning_rate = args.lora_txt_learning_rate
+        if args.optimizer.containg("Dadapt"):
+            learning_rate = 1.0
+            txt_learning_rate = 1.0
+
+        if args.use_lora or not args.train_unet:
+            unet.requires_grad_(False)
+
         unet_lora_params = None
         text_encoder_lora_params = None
         lora_path = None
@@ -419,16 +429,15 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             cleanup()
             printm("Cleaned")
 
-            args.learning_rate = args.lora_learning_rate
             if stop_text_percentage != 0:
                 params_to_optimize = [
                     {
                         "params": itertools.chain(*unet_lora_params),
-                        "lr": args.lora_learning_rate,
+                        "lr": learning_rate,
                     },
                     {
                         "params": itertools.chain(*text_encoder_lora_params),
-                        "lr": args.lora_txt_learning_rate,
+                        "lr": txt_learning_rate,
                     },
                 ]
             else:
@@ -589,8 +598,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             power=args.lr_power,
             factor=args.lr_factor,
             scale_pos=lr_scale_pos,
-            unet_lr=args.lora_learning_rate,
-            tenc_lr=args.lora_txt_learning_rate,
+            unet_lr=learning_rate,
+            tenc_lr=txt_learning_rate,
         )
 
         # create ema, fix OOM
@@ -715,11 +724,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         logger.debug(f"  EMA: {args.use_ema}")
         logger.debug(f"  UNET: {args.train_unet}")
         logger.debug(f"  Freeze CLIP Normalization Layers: {args.freeze_clip_normalization}")
-        logger.debug(f"  LR: {args.learning_rate}")
-        if args.use_lora_extended:
-            logger.debug(f"  LoRA Extended: {args.use_lora_extended}")
-        if args.use_lora and stop_text_percentage > 0:
-            logger.debug(f"  LoRA Text Encoder LR: {args.lora_txt_learning_rate}")
+        logger.debug(f"  LR{' (Lora)' if args.use_lora else ''}: {learning_rate}")
+        if stop_text_percentage > 0:
+            logger.debug(f"  Tenc LR{' (Lora)' if args.use_lora else ''}: {txt_learning_rate}")
+        logger.debug(f"  LoRA Extended: {args.use_lora_extended}")
         logger.debug(f"  V2: {args.v2}")
 
         os.environ.__setattr__("CUDA_LAUNCH_BLOCKING", 1)
@@ -972,13 +980,11 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                     s_pipeline.enable_vae_tiling()
                     s_pipeline.enable_vae_slicing()
+                    s_pipeline.enable_xformers_memory_efficient_attention()
                     s_pipeline.enable_sequential_cpu_offload()
-                    try:
-                        s_pipeline.enable_xformers_memory_efficient_attention()
-                    except:
-                        pass
-                    
-                    s_pipeline.scheduler = get_scheduler_class("UniPCMultistep").from_config(s_pipeline.scheduler.config)
+
+                    s_pipeline.scheduler = get_scheduler_class("UniPCMultistep").from_config(
+                        s_pipeline.scheduler.config)
                     s_pipeline.scheduler.config.solver_type = "bh2"
                     samples = []
                     sample_prompts = []
@@ -1147,9 +1153,11 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             if training_complete:
                 logger.debug("Training complete, breaking epoch.")
                 break
-  
+
             if args.train_unet:
                 unet.train()
+            elif args.use_lora and not args.lora_use_buggy_requires_grad:
+                set_lora_requires_grad(unet, False)
 
             train_tenc = epoch < text_encoder_epochs
             if stop_text_percentage == 0:
@@ -1304,7 +1312,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                         if len(instance_chunks) and len(prior_chunks):
                             # Add the prior loss to the instance loss.
-                            loss = instance_loss + (prior_loss * current_prior_loss_weight)
+                            loss = instance_loss + current_prior_loss_weight * prior_loss
                         elif len(instance_chunks):
                             loss = instance_loss
                         else:
@@ -1420,7 +1428,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     f"Steps: {global_step}/{max_train_steps} (Current),"
                     f" {args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
                 )
-                update_status({"progress_1_job_no": status.job_no, "progress_1_job_count": status.job_count, "status": status.textinfo})
+                update_status({"progress_1_job_no": status.job_no, "progress_1_job_count": status.job_count,
+                               "status": status.textinfo})
 
                 if math.isnan(loss_step):
                     logger.warning("Loss is NaN, your model is dead. Cancelling training.")
