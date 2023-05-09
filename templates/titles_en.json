@@ -1,0 +1,201 @@
+{
+  "module": {
+    "label": "Dreambooth",
+    "title": "Fine-Tune Diffusion Models using Dreambooth"
+  },
+  "db_load_params": {
+    "label": "Load Settings",
+    "title": "",
+    "description": ""
+  },
+  "db_save_config": {
+    "label": "Save Settings",
+    "title": "",
+    "description": ""
+  },
+  "db_train": {
+    "label": "Train",
+    "title": "",
+    "description": ""
+  },
+  "db_gen_ckpt": {
+    "label": "Generate Ckpt",
+    "title": "",
+    "description": ""
+  },
+  "db_gen_ckpt_during": {
+    "label": "Save Weights",
+    "title": "",
+    "description": ""
+  },
+  "db_train_sample": {
+    "label": "Generate Samples",
+    "title": "",
+    "description": ""
+  },
+  "db_cancel": {
+    "label": "Cancel",
+    "title": "",
+    "description": ""
+  },
+  "db-model-select-tab": {
+    "label": "Select",
+    "title": "",
+    "description": ""
+  },
+  "db-model-create-tab": {
+    "label": "Create",
+    "title": "",
+    "description": ""
+  },
+  "dreamModelSelect_select": {
+    "label": "Select Model",
+    "title": "Choose an existing model to use for training.",
+    "description": "Select an existing model to train."
+  },
+  "snapshotSelect_select": {
+    "label": "Snapshot to Resume",
+    "title": "Load a pre-trained model checkpoint to resume training.",
+    "description": "Load a saved checkpoint of a pre-trained model to resume training from that point."
+  },
+  "loraModelSelect_select": {
+    "label": "Lora Model",
+    "title": "Load a pre-trained LoRA model to use for training.",
+    "description": "Load a pre-trained LoRA model for training."
+  },
+  "db_new_model_name": {
+    "label": "Name",
+    "title": "Enter a name for the new model to create.",
+    "description": "Enter a name for the new model to be created during the process."
+  },
+  "512_model": {
+    "label": "512x Base Model",
+    "title": "Select this option if the source model is a 512x base.",
+    "description": "Select this option if using a stable-diffusion v1-5x or earlier model, or the v2.1_BASE model."
+  },
+  "create_from_hub": {
+    "label": "Create from Hub",
+    "title": "Select this option to create a model from a pre-trained model in the hub.",
+    "description": "Select this option to create a new model based on a pre-trained model available in the hub."
+  },
+  "db_new_model_url": {
+    "label": "Model Path",
+    "title": "Enter the path to the pre-trained model to use from the hub.",
+    "description": "Enter the path to the pre-trained model to be used for creating a new model."
+  },
+  "db_new_model_token": {
+    "label": "HuggingFace Token",
+    "title": "Enter the HuggingFace API token for authentication.",
+    "description": "Enter the HuggingFace API token for authentication to access the available pre-trained models in the hub."
+  },
+  "db_new_model_select": {
+    "label": "Source Checkpoint",
+    "title": "",
+    "description": ""
+  },
+  "db_use_shared_src": {
+    "label": "Use Shared Base Model (Lora)",
+    "title": "",
+    "description": ""
+  },
+  "new_model_shared_src_select": {
+    "label": "LoRA Shared Diffusers Source",
+    "title": "",
+    "description": ""
+  },
+  "db_train_unfrozen": {
+    "label": "Unfreeze",
+    "title": "",
+    "description": ""
+  },
+  "db_create_model": {
+    "label": "Create Model",
+    "title": "",
+    "description": ""
+  },
+  "db_concept_add": {
+    "label": "+",
+    "title": "",
+    "description": ""
+  },
+  "db_concept_remove": {
+    "label": "-",
+    "title": "",
+    "description": ""
+  },
+  "dbAdvancedLabel": {
+    "label": "Advanced",
+    "title": "",
+    "description": ""
+  },
+  "mixed_precision": {
+    "label": "Mixed Precision",
+    "title": "Select this option to use mixed precision for training.",
+    "description": "Mixed precision training is a technique that uses both single and half precision floating-point data types for faster training. It allows you to perform calculations with lower precision (half-precision or BF16) for certain parts of the model that can tolerate it, while using full-precision (FP32) for the rest. This can speed up training time without sacrificing model accuracy. The available options for mixed precision are No, FP16, and BF16 (for newer GPUs)."
+  },
+  "attention": {
+    "label": "Attention",
+    "title": "Select the attention mechanism to use for training.",
+    "description": "The type of attention mechanism to use for the model."
+  },
+  "optimizer": {
+    "label": "Optimizer",
+    "title": "Select the optimizer to use for training.",
+    "description": "The optimization algorithm to use for updating model parameters."
+  },
+  "lr_scheduler": {
+    "label": "Scheduler",
+    "title": "Select the learning rate scheduler to use for training.",
+    "description": "The method for adjusting the learning rate during training."
+  },
+  "learning_rate": {
+    "label": "Learning Rate",
+    "title": "Set the learning rate for training.",
+    "description": "The rate at which the optimizer adjusts the model weights."
+  },
+  "min_learning_rate": {
+    "label": "Minimum Learning",
+    "title": "",
+    "description": ""
+  },
+  "shuffle_tags": {
+    "label": "Shuffle Tags",
+    "title": "Shuffle the tags before training.",
+    "description": "Whether or not to shuffle the order of the tags before training. Shuffling the tags can help prevent overfitting by making it harder for the model to memorize the order of the tags.."
+  },
+  "strict_tokens": {
+    "label": "Strict Tokens",
+    "title": "Enable strict token checking.",
+    "description": "Whether or not to enable strict token checking. Enabling strict token checking will ensure that only valid tokens are generated by the model, but may also limit the creativity of the generated text.."
+  },
+  "gradient_checkpointing": {
+    "label": "Gradient Checkpointing",
+    "title": "Enable gradient checkpointing.",
+    "description": "Whether or not to enable gradient checkpointing. Gradient checkpointing can help reduce the memory requirements of the model during training, but may also increase the training time.."
+  },
+  "gradient_set_to_none": {
+    "label": "Set Gradients to None",
+    "title": "Set gradients to None when zeroing.",
+    "description": "When zeroing gradients for unused parameters, setting them to None can reduce memory usage during training but may increase training time. Enabling this option is an advanced setting that should only be used if you have a good understanding of the training process and its memory requirements.."
+  },
+  "freeze_clip_normalization": {
+    "label": "Freeze CLIP Normalization",
+    "title": "Freeze normalization parameters of the CLIP model.",
+    "description": "Whether or not to freeze the normalization parameters of the CLIP model. Freezing the normalization parameters can help improve the quality of the generated images, but may also increase the training time.."
+  },
+  "use_ema": {
+    "label": "Use EMA",
+    "title": "Enable exponential moving average (EMA).",
+    "description": "Whether or not to use exponential moving average (EMA) for model weights. Using EMA can help improve the stability and consistency of the generated images.."
+  },
+  "train_unet": {
+    "label": "Train UNET",
+    "title": "Train UNET as an additional module.",
+    "description": "Whether or not to train UNET as an additional module. Training UNET can help improve the quality of the generated images, but may also increase the training time and memory requirements of the model.."
+  },
+  "disable_logging": {
+    "label": "Disable Logging",
+    "title": "Disable logging during training.",
+    "description": "Whether or not to disable logging during training. Disabling logging can help reduce the memory requirements of the model during training, but may also make it harder to track the progress of the training.."
+  }
+}

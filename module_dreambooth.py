@@ -11,6 +11,7 @@ from typing import Union, Dict
 
 import torch
 
+from core.handlers.cache import CacheHandler
 from core.handlers.models import ModelHandler
 from core.handlers.status import StatusHandler
 from core.handlers.websocket import SocketHandler
@@ -48,6 +49,26 @@ class DreamboothModule(BaseModule):
         handler.register("get_db_config", _get_model_config)
         handler.register("save_db_config", _set_model_config)
         handler.register("get_layout", _get_layout)
+        handler.register("get_db_vars", _get_db_vars)
+
+
+async def _get_db_vars(request):
+    from dreambooth.utils.utils import (
+        list_attention,
+        list_precisions,
+        list_optimizer,
+        list_schedulers,
+    )
+    attentions = list_attention()
+    precisions = list_precisions()
+    optimizers = list_optimizer()
+    schedulers = list_schedulers()
+    return {
+        "attentions": attentions,
+        "precisions": precisions,
+        "optimizers": optimizers,
+        "schedulers": schedulers,
+    }
 
 
 async def _start_training(request):
@@ -106,9 +127,14 @@ async def _create_model(data):
         return {"status": "Unable to find source model.."}
 
     if src and not from_hub:
-        copy_model(model_name, src, data["512_model"], mh, sh)
+        sh.update("status", "Copying model.")
+        await sh.send_async()
+        dest = await copy_model(model_name, src, data["512_model"], mh, sh)
+        mh.refresh("dreambooth", dest)
         sh.end("Model copied.")
     else:
+        sh.update("status", "Extracting model.")
+        await sh.send_async()
         extract_checkpoint(
             model_name,
             src,
@@ -120,10 +146,12 @@ async def _create_model(data):
             data["train_unfrozen"],
             data["512_model"]
         )
-    return {"status": "Creating model."}
+    mh.refresh("dreambooth")
+    sh.end("Model created.")
+    return {"status": "Model created."}
 
 
-def copy_model(model_name: str, src: str, is_512: bool, mh: ModelHandler, sh: StatusHandler):
+async def copy_model(model_name: str, src: str, is_512: bool, mh: ModelHandler, sh: StatusHandler):
     models_path = mh.models_path
     logger.debug(f"Models paths: {models_path}")
     model_dir = models_path[0]
@@ -133,15 +161,17 @@ def copy_model(model_name: str, src: str, is_512: bool, mh: ModelHandler, sh: St
         shutil.rmtree(dest_dir, True)
     if not os.path.exists(dest_dir):
         logger.debug(f"Copying model from {src} to {dest_dir}")
-        copy_directory(src, dest_dir, sh)
+        await copy_directory(src, dest_dir, sh)
         cfg = DreamboothConfig(model_name=model_name, src=src, resolution=is_512, models_path=dreambooth_models_path)
         cfg.save()
+
     else:
         logger.debug(f"Destination directory '{dest_dir}' already exists, skipping copy.")
     logger.debug("Model copied.")
+    return dest_dir
 
 
-def copy_directory(src_dir, dest_dir, sh: StatusHandler):
+async def copy_directory(src_dir, dest_dir, sh: StatusHandler):
     total_size = get_directory_size(src_dir)
     sh.start(100, "Copying source weights.")
     copied_pct = 0
@@ -149,6 +179,7 @@ def copy_directory(src_dir, dest_dir, sh: StatusHandler):
     for root, dirs, files in os.walk(src_dir):
         for file in files:
             sh.update(items={"status_2": f"Copying {file}"})
+            await sh.send_async()
             src_path = os.path.join(root, file)
             dest_path = os.path.join(dest_dir, os.path.relpath(src_path, src_dir))
             dest_dirname = os.path.dirname(dest_path)
@@ -159,8 +190,10 @@ def copy_directory(src_dir, dest_dir, sh: StatusHandler):
             current_pct = int(copied_size / total_size * 100)
             if current_pct > copied_pct:
                 sh.update(items={"progress_1_current": current_pct})
+                await sh.send_async()
                 copied_pct = current_pct
     sh.end("Source weights copied.")
+    await sh.send_async()
 
 
 def get_directory_size(dir_path):

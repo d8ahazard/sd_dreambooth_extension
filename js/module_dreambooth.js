@@ -18,6 +18,93 @@ $(".hide").hide();
 const dbModule = new Module("Dreambooth", "moduleDreambooth", "moon", false, 2, initDreambooth);
 
 function initDreambooth() {
+    sendMessage("get_db_vars", {}, true).then(function (response) {
+        console.log("Got DB vars: ", response);
+        let attentionSelect = $("#attention");
+        let precisionSelect = $("#mixed_precision");
+        let schedulerSelect = $("#lr_scheduler");
+        let optimizerSelect = $("#optimizer");
+
+        // iterate over each array in the response and populate the corresponding select object
+        for (let key in response) {
+            let arr = response[key];
+            let select = null;
+            switch (key) {
+                case "attentions":
+                    select = attentionSelect;
+                    break;
+                case "precisions":
+                    select = precisionSelect;
+                    break;
+                case "schedulers":
+                    select = schedulerSelect;
+                    break;
+                case "optimizers":
+                    select = optimizerSelect;
+                    break;
+                default:
+                    break;
+            }
+            if (select) {
+                // populate the select object with options
+                for (let i = 0; i < arr.length; i++) {
+                    let value = arr[i];
+                    let displayValue = value.replace(/_/g, " ").toTitleCase();
+                    let option = $("<option></option>").attr("value", value).text(displayValue);
+                    select.append(option);
+                }
+                // set the default selected option
+                let defaultValue = null;
+                switch (key) {
+                    case "attentions":
+                        if (arr.includes("xformers")) {
+                            defaultValue = "xformers";
+                        } else {
+                            defaultValue = "default";
+                        }
+                        break;
+                    case "precisions":
+                        if (arr.includes("bf16")) {
+                            defaultValue = "bf16";
+                        } else {
+                            defaultValue = "fp16";
+                        }
+                        break;
+                    case "schedulers":
+                        defaultValue = "constant_with_warmup";
+                        break;
+                    case "optimizers":
+                        if (arr.includes("8bit AdamW")) {
+                            defaultValue = "8bit AdamW";
+                        } else if (arr.includes("Torch AdamW")) {
+                            defaultValue = "Torch AdamW";
+                        }
+                        break;
+                    default:
+                        break;
+                }
+                if (defaultValue) {
+                    let defaultOption = select.find(`option[value="${defaultValue}"]`);
+                    if (defaultOption.length > 0) {
+                        defaultOption.attr("selected", true);
+                    } else {
+                        select.find("option:first").attr("selected", true);
+                    }
+                } else {
+                    select.find("option:first").attr("selected", true);
+                }
+            }
+        }
+    });
+
+// utility function to convert a string to Title Case
+    String.prototype.toTitleCase = function () {
+        return this.replace(/\w\S*/g, function (txt) {
+            return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+        });
+    };
+
+
     let selects = $(".modelSelect").modelSelect();
     for (let i = 0; i < selects.length; i++) {
         let elem = selects[i];
@@ -48,12 +135,12 @@ function initDreambooth() {
     handleResize();
     let pg = document.getElementById("dreamProgress");
     dreamProgress = new ProgressGroup(document.getElementById("dreamProgress"), prog_opts);
-    dreamProgress.setOnCancel(function() {
+    dreamProgress.setOnCancel(function () {
         $(".dbTrainBtn").addClass("hide");
         $(".dbSettingBtn").removeClass("hide");
     });
 
-    dreamProgress.setOnComplete(function() {
+    dreamProgress.setOnComplete(function () {
         $(".dbTrainBtn").addClass("hide");
         $(".dbSettingBtn").removeClass("hide");
     });
