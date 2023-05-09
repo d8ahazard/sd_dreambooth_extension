@@ -383,7 +383,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         if args.use_lora:
             learning_rate = args.lora_learning_rate
             txt_learning_rate = args.lora_txt_learning_rate
-        if args.optimizer.contains("Dadapt"):
+        if "Dadapt" in args.optimizer:
             learning_rate = 1.0
             txt_learning_rate = 1.0
 
