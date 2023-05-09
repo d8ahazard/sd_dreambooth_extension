@@ -116,6 +116,7 @@ class DreamboothConfig(BaseModel):
     train_imagic: bool = False
     train_unet: bool = True
     train_unfrozen: bool = True
+    txt_learning_rate: float = 5e-5
     use_concepts: bool = False
     use_ema: bool = True
     use_lora: bool = False

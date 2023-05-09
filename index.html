@@ -4,27 +4,28 @@
             <div class="col-12">
                 <div class="card shadow">
                     <div class="card-body text-center justify-between">
-                        <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_load_params">Load
-                            Settings
-                        </button>
-                        <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_save_config">Save
-                            Settings
-                        </button>
-                        <button class="btn btn-top btn-primary dbSettingBtn" type="button" id="db_train">Train</button>
-                        <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_gen_ckpt">Generate
-                            Ckpt
-                        </button>
-                        <button class="btn btn-top btn-secondary hide dbTrainBtn" type="button" id="db_gen_ckpt_during">
-                            Save
-                            Weights
-                        </button>
-                        <button class="btn btn-top btn-secondary hide dbTrainBtn" type="button" id="db_train_sample">
-                            Generate
-                            Samples
-                        </button>
-                        <button class="btn btn-top btn-secondary hide cancelButton dbTrainBtn" type="button"
-                                id="db_cancel">Cancel
-                        </button>
+                        <div class="btn-group">
+                            <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_load_params">
+                                Load Settings
+                            </button>
+                            <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_save_config">
+                                Save Settings
+                            </button>
+                            <button class="btn btn-top btn-primary dbSettingBtn" type="button" id="db_train">Train
+                            </button>
+                            <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_gen_ckpt">
+                                Generate Ckpt
+                            </button>
+                            <button class="btn btn-top btn-secondary hide dbTrainBtn" type="button"
+                                    id="db_gen_ckpt_during"> Save Weights
+                            </button>
+                            <button class="btn btn-top btn-secondary hide dbTrainBtn" type="button"
+                                    id="db_train_sample">Generate Samples
+                            </button>
+                            <button class="btn btn-top btn-secondary hide cancelButton dbTrainBtn" type="button"
+                                    id="db_cancel">Cancel
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -203,17 +204,38 @@
                                     <div class="accordion-body">
                                         <form>
                                             <div class="form-group">
+                                                <label class="form-label" for="mixed_precision">Mixed Precision</label>
+                                                <select class="dbInput form-control" id="mixed_precision"
+                                                        name="mixed_precision">
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
                                                 <label class="form-label" for="attention">Attention</label>
                                                 <select class="dbInput form-control" id="attention" name="attention">
-                                                    <option value="default">Default</option>
-                                                    <option value="xformers" selected>Xformers</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="form-label" for="optimizer">Optimizer</label>
+                                                <select class="dbInput form-control" id="optimizer" name="optimizer">
                                                 </select>
                                             </div>
 
                                             <div class="form-group">
+                                                <label class="form-label" for="lr_scheduler">Scheduler</label>
+                                                <select class="dbInput form-control" id="lr_scheduler"
+                                                        name="lr_scheduler">
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
                                                 <label class="form-label" for="learning_rate">Learning Rate</label>
                                                 <input class="dbInput form-control" type="number" id="learning_rate"
                                                        name="learning_rate" value="0.000002">
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="form-label" for="min_learning_rate">Minimum Learning
+                                                    Rate</label>
+                                                <input class="dbInput form-control" type="number" id="min_learning_rate"
+                                                       name="min_learning_rate" value="0.000001">
                                             </div>
 
                                             <div class="form-group">
@@ -221,26 +243,41 @@
                                                      data-step="1" data-elem_id="lr_warmup_steps" data-value="500"
                                                      data-label="LR Warmup Steps"></div>
                                             </div>
-
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="0" data-max="1"
+                                                     data-step="0.001" data-elem_id="weight_decay" data-value="0.01"
+                                                     data-label="Weight Decay"></div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="0" data-max="1"
+                                                     data-step="0.001" data-elem_id="tenc_weight_decay"
+                                                     data-value="0.01"
+                                                     data-label="TENC Weight Decay"></div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="-1" data-max="1"
+                                                     data-step="0.01" data-elem_id="offset_noise" data-value="0"
+                                                     data-label="Offset Noise"></div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="1" data-max="12"
+                                                     data-step="1" data-elem_id="clip_skip" data-value="1"
+                                                     data-label="Clip Skip"></div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="0" data-max="128"
+                                                     data-step="0.25" data-elem_id="tenc_grad_clip_norm" data-value="0"
+                                                     data-label="TENC Gradient Clip Norm"></div>
+                                            </div>
                                             <div class="form-group">
                                                 <div class="dbInput db-slider" data-min="75" data-max="300"
                                                      data-step="75" data-elem_id="max_token_length" data-value="75"
                                                      data-label="Max Token length"></div>
                                             </div>
-
-                                            <div class="form-group">
-                                                <label class="form-label" for="mixed_precision">Mixed Precision</label>
-                                                <select class="dbInput form-control" id="mixed_precision"
-                                                        name="mixed_precision">
-                                                    <option value="no">Full (FP32)</option>
-                                                    <option value="fp16">FP16</option>
-                                                    <option value="bf16" selected>BF16</option>
-                                                </select>
-                                            </div>
                                             <div class="form-group">
                                                 <div class="dbInput db-slider" data-min="0" data-max="1.0"
                                                      data-step="0.01" data-elem_id="stop_text_encoder"
-                                                     data-value="1.0"
+                                                     data-value="0.75"
                                                      data-label="Text Encoder Percentage"></div>
                                             </div>
                                             <div class="form-group">
@@ -267,7 +304,15 @@
                                                            name="gradient_checkpointing">
                                                     <label class="form-check-label" for="gradient_checkpointing">Gradient
                                                         Checkpointing</label>
-
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="dbInput form-check-input" type="checkbox"
+                                                           id="gradient_set_to_none"
+                                                           name="gradient_set_to_none" checked>
+                                                    <label class="form-check-label" for="gradient_set_to_none">Set
+                                                        Gradients to None</label>
                                                 </div>
                                             </div>
                                             <div class="form-group">
@@ -290,9 +335,18 @@
                                             <div class="form-group">
                                                 <div class="form-check form-switch">
                                                     <input class="dbInput form-check-input" type="checkbox"
+                                                           id="train_unet" name="train_unet"
+                                                           data-key="train_unet" checked>
+                                                    <label class="form-check-label" for="train_unet">Train UNET</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="dbInput form-check-input" type="checkbox"
                                                            id="disable_logging" name="disable_logging"
                                                            data-key="disable_logging" checked>
-                                                    <label class="form-check-label" for="disable_logging">Disable Logging</label>
+                                                    <label class="form-check-label" for="disable_logging">Disable
+                                                        Logging</label>
                                                 </div>
                                             </div>
                                         </form>
@@ -316,6 +370,4 @@
             </div>
         </div>
     </div>
-</div>
-</div>
 </div>
