@@ -61,7 +61,7 @@
                                                  data-label="Select Model"></div>
                                         </div>
                                         <div class="col-12">
-                                            <div id="snapshotSelect" class="modelSelect db_advanced"
+                                            <div id="snapshotSelect" class="modelSelect db-advanced"
                                                  data-model_type="dreamboothSnapshot"
                                                  data-label="Snapshot to Resume"></div>
                                         </div>
@@ -84,14 +84,14 @@
                                         <input type="text" class="form-control newModelParam"
                                                id="db_new_model_name" data-key="new_model_name">
                                     </div>
-                                    <div class="form-group">
+                                    <div class="form-group db-advanced">
                                         <div class="form-check form-switch">
                                             <input class="newModelParam form-check-input" type="checkbox" id="512_model"
                                                    name="512_model" data-key="512_model" checked>
                                             <label class="form-check-label" for="512_model">512x Base Model</label>
                                         </div>
                                     </div>
-                                    <div class="form-group">
+                                    <div class="form-group db-advanced">
                                         <div class="form-check form-switch">
                                             <input class="newModelParam form-check-input" type="checkbox"
                                                    id="create_from_hub" name="create_from_hub">
@@ -99,7 +99,7 @@
                                                 Hub</label>
                                         </div>
                                     </div>
-                                    <div class="form-group db_advanced" style="display: none;" id="hub_row">
+                                    <div class="form-group db-advanced" style="display: none;" id="hub_row">
                                         <label class="form-label" for="db_new_model_url">Model Path</label>
                                         <input type="text" class="form-control newModelParam"
                                                id="db_new_model_url"
@@ -135,7 +135,7 @@
                                              data-label="LoRA Shared Diffusers Source"
                                              data-key="new_model_shared_src"></div>
                                     </div>
-                                    <div class="form-group">
+                                    <div class="form-group db-advanced">
                                         <div class="form-check form-switch">
                                             <input class="newModelParam form-check-input" type="checkbox"
                                                    id="db_train_unfrozen" data-key="train_unfrozen"
@@ -186,10 +186,10 @@
                             <div class="db-slider dbInput" data-elem_id="resolution" data-max="1024" data-min="512"
                                  data-step="64"
                                  data-value="768" data-label="Maximum Resolution"></div>
-                            <div class="db-slider dbInput" data-elem_id="train_batch_size" data-max="100" data-min="1"
+                            <div class="db-slider dbInput db-advanced" data-elem_id="train_batch_size" data-max="100" data-min="1"
                                  data-step="1"
                                  data-value="5" data-label="Batch Size"></div>
-                            <div class="db-slider dbInput" data-elem_id="gradient_accumulation_steps" data-max="100"
+                            <div class="db-slider dbInput db-advanced" data-elem_id="gradient_accumulation_steps" data-max="100"
                                  data-min="1" data-step="1"
                                  data-value="1" data-label="Gradient Accumulation Steps"></div>
                         </div>
@@ -232,7 +232,6 @@
                                                     <input class="dbInput form-control" type="number" id="learning_rate"
                                                            name="learning_rate" value="0.000002">
                                                 </div>
-                                            </div>
 
 
                                             <span class="input-group-btn linkBtn db-advanced">
@@ -240,8 +239,7 @@
                                                       <i class="bx bx-link"></i>
                                                   </button>
                                             </span>
-                                            <div class="form-group">
-                                                <label class="form-label" for="txt_learning_rate">Learning Rate
+                                                <label class="form-label mt-3 db-advanced" for="txt_learning_rate">Learning Rate
                                                     (Tenc)</label>
                                                 <div class="input-group">
                                                     <input class="dbInput form-control db-advanced" type="number"

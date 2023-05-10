@@ -156,7 +156,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
     try:
         from core.handlers.status import StatusHandler
         status_handler = StatusHandler(user_name=user, target="dreamProgress")
-        status_handler.start(0, "Starting Dreambooth Training...")
         shared.status_handler = status_handler
         logger.debug(f"Loaded config: {args.__dict__}")
     except:

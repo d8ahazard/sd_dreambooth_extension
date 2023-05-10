@@ -8,12 +8,14 @@
 
 .linkBtn {
     position: absolute;
-    right: 30px;
-    top: 46.2%;
+    right: 0;
+    top: 050%;
+    border: 1px solid var(--bs-border-dark);
+    border-radius: 5px;
 }
 
 .linkBtn * {
-    color: var(--primary-color);
+    color: var(--primary-accent-text-color);
 }
 
 .linkBtn:hover * {

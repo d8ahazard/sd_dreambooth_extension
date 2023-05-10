@@ -79,6 +79,7 @@ async def _start_training(request):
 async def _train_dreambooth(config: DreamboothConfig, user: str = None, target: str = None):
     logger.debug(f"Updated config: {config.__dict__}")
     mh = ModelHandler(user_name=user)
+    sh = StatusHandler(user_name=user)
     mh.to_cpu()
     shared.db_model_config = config
     try:
@@ -86,17 +87,20 @@ async def _train_dreambooth(config: DreamboothConfig, user: str = None, target: 
         gc.collect()
     except:
         pass
-
+    sh.start(0, "Starting Dreambooth Training...")
+    await sh.send_async()
     result = {"message": "Training complete."}
     try:
         loop = asyncio.get_event_loop()
         with ThreadPoolExecutor() as pool:
             await loop.run_in_executor(pool, lambda: main(user=user))
+        sh.end("Training complete.")
+
     except Exception as e:
         logger.error(f"Error in training: {e}")
         traceback.print_exc()
         result = {"message": f"Error in training: {e}"}
-
+        sh.end(f"Error in training: {e}")
     try:
         gc.collect()
         torch.cuda.empty_cache()
