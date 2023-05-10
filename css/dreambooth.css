@@ -6,3 +6,23 @@
     display: none;
 }
 
+.linkBtn {
+    position: absolute;
+    right: 30px;
+    top: 46.2%;
+}
+
+.linkBtn * {
+    color: var(--primary-color);
+}
+
+.linkBtn:hover * {
+    color: var(--primary-accent-color);
+    background-color: var(--primary-accent-text-color);
+}
+
+.linkBtn.active * {
+    background-color: var(--primary-color);
+    color: var(--primary-text-color);
+}
+

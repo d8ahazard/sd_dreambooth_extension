@@ -5,22 +5,19 @@ import logging
 import os
 import shutil
 import traceback
-
 from concurrent.futures import ThreadPoolExecutor
 from typing import Union, Dict
 
 import torch
+from fastapi import FastAPI
 
-from core.handlers.cache import CacheHandler
+import scripts.api
 from core.handlers.models import ModelHandler
 from core.handlers.status import StatusHandler
 from core.handlers.websocket import SocketHandler
 from core.modules.base.module_base import BaseModule
-from fastapi import FastAPI
-
-import scripts.api
-from dreambooth.dataclasses.db_config import DreamboothConfig, from_file
 from dreambooth import shared
+from dreambooth.dataclasses.db_config import DreamboothConfig, from_file
 from dreambooth.sd_to_diff import extract_checkpoint
 from dreambooth.train_dreambooth import main
 from module_src.gradio_parser import parse_gr_code
@@ -125,13 +122,14 @@ async def _create_model(data):
     if not src:
         logger.debug("Unable to find source model.")
         return {"status": "Unable to find source model.."}
-
+    sh.start(desc="Creating model: {model_name}")
     if src and not from_hub:
         sh.update("status", "Copying model.")
         await sh.send_async()
         dest = await copy_model(model_name, src, data["512_model"], mh, sh)
         mh.refresh("dreambooth", dest)
-        sh.end("Model copied.")
+        sh.end(f"Created model: {model_name}")
+        await sh.send_async()
     else:
         sh.update("status", "Extracting model.")
         await sh.send_async()
@@ -147,7 +145,8 @@ async def _create_model(data):
             data["512_model"]
         )
     mh.refresh("dreambooth")
-    sh.end("Model created.")
+    sh.end(f"Created model: {model_name}")
+    await sh.send_async()
     return {"status": "Model created."}
 
 
@@ -178,7 +177,7 @@ async def copy_directory(src_dir, dest_dir, sh: StatusHandler):
     copied_size = 0
     for root, dirs, files in os.walk(src_dir):
         for file in files:
-            sh.update(items={"status_2": f"Copying {file}"})
+            sh.update(items={"status": f"Copying {file}"})
             await sh.send_async()
             src_path = os.path.join(root, file)
             dest_path = os.path.join(dest_dir, os.path.relpath(src_path, src_dir))
@@ -192,8 +191,7 @@ async def copy_directory(src_dir, dest_dir, sh: StatusHandler):
                 sh.update(items={"progress_1_current": current_pct})
                 await sh.send_async()
                 copied_pct = current_pct
-    sh.end("Source weights copied.")
-    await sh.send_async()
+
 
 
 def get_directory_size(dir_path):

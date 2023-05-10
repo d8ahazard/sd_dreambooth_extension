@@ -8,6 +8,7 @@ let conceptsList = [];
 let dbListenersLoaded = false;
 let dbModelCol;
 let dbStatusCol;
+let linkLR = false;
 
 // Define the Bootstrap "md" breakpoint as a constant
 const mdBreakpoint = 990;
@@ -207,6 +208,20 @@ function loadDbListeners() {
         }
     });
 
+    $(".linkBtn").click(function () {
+        console.log("Linkyclicky.");
+        $(this).toggleClass("active");
+        linkLR = $(this).hasClass("active");
+        $("#txt_learning_rate").prop("disabled", linkLR);
+    });
+
+    $("#learning_rate").change(function () {
+        if (linkLR) {
+            let val = $(this).val();
+            $("#txt_learning_rate").val(val);
+        }
+    });
+
     $("#db_create_model").click(function () {
         let data = {};
         $(".newModelParam").each(function (index, elem) {
@@ -223,7 +238,7 @@ function loadDbListeners() {
             }
             data[key] = val;
         });
-        sendMessage("create_dreambooth", data, false, "dreamProgress").then(() => {
+        sendMessage("create_dreambooth", data, true, "dreamProgress").then(() => {
             dreamSelect.refresh();
         });
     });
@@ -643,7 +658,9 @@ function getSettings() {
         concepts_list.push(concepts[concept]);
     }
     settings["concepts_list"] = concepts_list;
-
+    if (!showAdvanced) {
+        settings["txt_learning_rate"] = settings["learning_rate"] / 2;
+    }
     return settings;
 }
 

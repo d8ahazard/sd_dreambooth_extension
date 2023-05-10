@@ -226,11 +226,30 @@
                                                         name="lr_scheduler">
                                                 </select>
                                             </div>
-                                            <div class="form-group">
+                                            <div class="form-group" style="position: relative">
                                                 <label class="form-label" for="learning_rate">Learning Rate</label>
-                                                <input class="dbInput form-control" type="number" id="learning_rate"
-                                                       name="learning_rate" value="0.000002">
+                                                <div class="input-group">
+                                                    <input class="dbInput form-control" type="number" id="learning_rate"
+                                                           name="learning_rate" value="0.000002">
+                                                </div>
                                             </div>
+
+
+                                            <span class="input-group-btn linkBtn">
+                                                  <button class="btn btn-link btn-sm" type="button">
+                                                      <i class="bx bx-link"></i>
+                                                  </button>
+                                            </span>
+                                            <div class="form-group">
+                                                <label class="form-label" for="txt_learning_rate">Learning Rate
+                                                    (Tenc)</label>
+                                                <div class="input-group">
+                                                    <input class="dbInput form-control db-advanced" type="number"
+                                                           id="txt_learning_rate" name="txt_learning_rate"
+                                                           value="0.000002">
+                                                </div>
+                                            </div>
+
                                             <div class="form-group">
                                                 <label class="form-label" for="min_learning_rate">Minimum Learning
                                                     Rate</label>
