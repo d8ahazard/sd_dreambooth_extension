@@ -238,7 +238,7 @@ function loadDbListeners() {
             }
             data[key] = val;
         });
-        sendMessage("create_dreambooth", data, true, "dreamProgress").then(() => {
+        sendMessage("create_dreambooth", data, false, "dreamProgress").then(() => {
             dreamSelect.refresh();
         });
     });
@@ -266,7 +266,7 @@ function loadDbListeners() {
     $("#db_train").click(function () {
         let data = getSettings();
         console.log("Settings: ", data);
-        sendMessage("train_dreambooth", data, true, "dreamProgress").then((result) => {
+        sendMessage("train_dreambooth", data, false, "dreamProgress").then((result) => {
             $(".dbSettingBtn").addClass("hide");
             $(".dbTrainBtn").removeClass("hide").show();
         });

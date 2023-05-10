@@ -122,14 +122,12 @@ async def _create_model(data):
     if not src:
         logger.debug("Unable to find source model.")
         return {"status": "Unable to find source model.."}
-    sh.start(desc="Creating model: {model_name}")
+    sh.start(desc=f"Creating model: {model_name}")
     if src and not from_hub:
         sh.update("status", "Copying model.")
         await sh.send_async()
         dest = await copy_model(model_name, src, data["512_model"], mh, sh)
         mh.refresh("dreambooth", dest)
-        sh.end(f"Created model: {model_name}")
-        await sh.send_async()
     else:
         sh.update("status", "Extracting model.")
         await sh.send_async()
@@ -146,7 +144,6 @@ async def _create_model(data):
         )
     mh.refresh("dreambooth")
     sh.end(f"Created model: {model_name}")
-    await sh.send_async()
     return {"status": "Model created."}
 
 
@@ -177,9 +174,12 @@ async def copy_directory(src_dir, dest_dir, sh: StatusHandler):
     copied_size = 0
     for root, dirs, files in os.walk(src_dir):
         for file in files:
-            sh.update(items={"status": f"Copying {file}"})
-            await sh.send_async()
             src_path = os.path.join(root, file)
+            # Get the name of the parent of the file
+            parent = os.path.basename(os.path.dirname(src_path))
+            sh.update(items={"status_2": f"Copying {parent}{os.sep}{file}"})
+            await sh.send_async()
+
             dest_path = os.path.join(dest_dir, os.path.relpath(src_path, src_dir))
             dest_dirname = os.path.dirname(dest_path)
             if not os.path.exists(dest_dirname):
@@ -191,7 +191,6 @@ async def copy_directory(src_dir, dest_dir, sh: StatusHandler):
                 sh.update(items={"progress_1_current": current_pct})
                 await sh.send_async()
                 copied_pct = current_pct
-
 
 
 def get_directory_size(dir_path):
