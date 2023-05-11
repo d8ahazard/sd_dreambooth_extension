@@ -275,7 +275,7 @@ function loadDbListeners() {
     });
 
     $("#db_load_params").click(function () {
-        let selected = dreamSelect.getModel();
+        let selected = $("#dreamModelSelect").modelSelect().getModel();
         if (selected === undefined) {
             alert("Please select a model first!");
         } else {
