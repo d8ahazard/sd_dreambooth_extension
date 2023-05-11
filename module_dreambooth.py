@@ -119,6 +119,7 @@ async def _create_model(data):
     model_name = data["new_model_name"] if "new_model_name" in data else None
     src_hash = data["new_model_src"]
     src_model = await mh.find_model("diffusers", src_hash)
+    logger.debug(f"SRC Model result: {src_model}")
     src = src_model.path if src_model else None
     shared_src = data["new_model_shared_src"] if "new_model_shared_src" in data else None
     from_hub = data["create_from_hub"] if "create_from_hub" in data else False

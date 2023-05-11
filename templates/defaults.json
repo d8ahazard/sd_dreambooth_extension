@@ -1,4 +1,7 @@
 {
+  "dbModelTabs": {
+    "value": "db-model-select-tab"
+  },
   "dreamModelSelect_select": {
     "value": "",
     "options": {}
