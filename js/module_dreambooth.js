@@ -282,6 +282,7 @@ function loadDbListeners() {
             alert("Please select a model first!");
         } else {
             sendMessage("get_db_config", {model: selected}, true).then((result) => {
+                console.log("Loading settings: ", result);
                 for (let key in result["config"]) {
                     let value = result["config"][key];
                     if (value === null || value === undefined) continue;
@@ -484,7 +485,7 @@ function addConcept(concept = false) {
                     </div>
                 `);
             formElements.append(fileBrowser);
-            new FileBrowser(document.getElementById(`${inputId}`), {
+            $("#" + inputId).fileBrowser({
                 "dropdown": true,
                 "showInfo": false,
                 "showTitle": false,
@@ -577,9 +578,16 @@ function getSettings() {
     conceptElements.each((index, element) => {
         let conceptIndex = element.id.split("-")[0].split("_")[1];
         let key = element.id.split("-")[1];
-
         let value = (element.dataset.hasOwnProperty("value") ? element.dataset.value : element.value);
+
+        if (element.classList.contains("db-file-browser")) {
+            let browser = $("#" + element.id).fileBrowser();
+            value = browser.getValue();
+            value = element.dataset.value;
+            console.log("Got file browser?????", value);
+        }
         if (value === "undefined") {
+            console.log("Clearing value.")
             value = "";
         }
         if (!isNaN(parseInt(value))) {
@@ -601,8 +609,14 @@ function getSettings() {
             newValue[key] = value;
             values.push(newValue);
         }
+        console.log("Values: ", values);
     });
-
+    for (let i = 0; i < values.length; i++) {
+        let value = values[i];
+        // Remove the conceptIndex value from the value
+        delete value.conceptIndex;
+        concepts_list.push(value);
+    }
 
     let otherInputs = $(".dbInput");
     otherInputs.each(function () {
@@ -630,30 +644,12 @@ function getSettings() {
         } else {
             value = element.val();
         }
-        settings[id] = value;
+        if (id.indexOf("concept_") === -1) {
+            settings[id] = value;
+        }
+
     });
 
-
-    let highestConceptIndex = -1;
-    const concepts = {};
-
-    for (let key in settings) {
-        if (key.includes("concept_")) {
-            const conceptIndex = parseInt(key.split("-")[0].split("_")[1]);
-            const conceptKey = key.split("-")[1];
-            if (!concepts[conceptIndex]) {
-                concepts[conceptIndex] = {};
-            }
-            concepts[conceptIndex][conceptKey] = settings[key];
-            delete settings[key];
-            if (conceptIndex > highestConceptIndex) {
-                highestConceptIndex = conceptIndex;
-            }
-        }
-    }
-    for (let concept in concepts) {
-        concepts_list.push(concepts[concept]);
-    }
     settings["concepts_list"] = concepts_list;
     if (!showAdvanced) {
         settings["txt_learning_rate"] = settings["learning_rate"] / 2;
