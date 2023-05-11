@@ -133,7 +133,7 @@ async def _create_model(data):
         sh.update("status", "Copying model.")
         await sh.send_async()
         dest = await copy_model(model_name, src, data["512_model"], mh, sh)
-        mh.refresh("dreambooth", dest)
+        mh.refresh("dreambooth", dest, model_name)
     else:
         sh.update("status", "Extracting model.")
         await sh.send_async()
@@ -148,7 +148,7 @@ async def _create_model(data):
             data["train_unfrozen"],
             data["512_model"]
         )
-    mh.refresh("dreambooth")
+        mh.refresh("dreambooth")
     sh.end(f"Created model: {model_name}")
     return {"status": "Model created."}
 
