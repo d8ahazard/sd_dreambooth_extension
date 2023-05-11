@@ -79,7 +79,7 @@ async def _start_training(request):
 async def _train_dreambooth(config: DreamboothConfig, user: str = None, target: str = None):
     logger.debug(f"Updated config: {config.__dict__}")
     mh = ModelHandler(user_name=user)
-    sh = StatusHandler(user_name=user)
+    sh = StatusHandler(user_name=user, target=target)
     mh.to_cpu()
     shared.db_model_config = config
     try:
@@ -111,8 +111,9 @@ async def _train_dreambooth(config: DreamboothConfig, user: str = None, target: 
 
 
 async def _create_model(data):
+    target = data["target"] if "target" in data else None
     mh = ModelHandler(user_name=data["user"] if "user" in data else None)
-    sh = StatusHandler(user_name=data["user"] if "user" in data else None)
+    sh = StatusHandler(user_name=data["user"] if "user" in data else None, target=target)
     logger.debug(f"Full message: {data}")
     data = data["data"] if "data" in data else None
     logger.debug(f"Create model called: {data}")

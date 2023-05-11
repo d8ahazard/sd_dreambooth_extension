@@ -237,9 +237,7 @@ function loadDbListeners() {
             }
             data[key] = val;
         });
-        sendMessage("create_dreambooth", data, true, "dreamProgress").then(() => {
-            dreamSelect.refresh();
-        });
+        sendMessage("create_dreambooth", data, false, "dreamProgress").then(() => {});
     });
 
     $("#db_load_settings").click(function () {
