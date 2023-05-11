@@ -233,6 +233,7 @@ function loadDbListeners() {
             if ($(elem).is(".modelSelect")) {
                 let ms = $(elem).modelSelect();
                 val = ms.getModel();
+                console.log("Got ms: ", key, val);
             }
             data[key] = val;
         });
