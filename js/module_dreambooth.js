@@ -230,15 +230,13 @@ function loadDbListeners() {
             if ($(elem).is(":checkbox")) {
                 val = $(elem).is(":checked");
             }
-            if ($(elem).is(".model-select")) {
-                let parent = $(elem).parent().parent();
-                let ms = $(parent).modelSelect();
-                let realElement = ms[0];
-                val = realElement.currentModel;
+            if ($(elem).is(".modelSelect")) {
+                let ms = $(elem).modelSelect();
+                val = ms.getModel();
             }
             data[key] = val;
         });
-        sendMessage("create_dreambooth", data, false, "dreamProgress").then(() => {
+        sendMessage("create_dreambooth", data, true, "dreamProgress").then(() => {
             dreamSelect.refresh();
         });
     });
@@ -574,10 +572,10 @@ function getSettings() {
     // Just create one concept if advanced is disabled
     let concepts_list = [];
 
-    let inputElements = $('[id^="concept_"]');
+    let conceptElements = $('[id^="concept_"]');
 
     let values = [];
-    inputElements.each((index, element) => {
+    conceptElements.each((index, element) => {
         let conceptIndex = element.id.split("-")[0].split("_")[1];
         let key = element.id.split("-")[1];
 
