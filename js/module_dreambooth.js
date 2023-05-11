@@ -310,7 +310,7 @@ function loadDbListeners() {
     });
 
     $("#db_save_config").click(function () {
-        let selected = dreamSelect.getModel();
+        let selected = $("#dreamModelSelect").modelSelect().getModel();
         if (selected === undefined) {
             alert("Please select a model first!");
         } else {
@@ -566,7 +566,7 @@ function removeConcept() {
 
 function getSettings() {
     let settings = {};
-    settings["model"] = dreamSelect.getModel();
+    settings["model"] = $("#dreamModelSelect").modelSelect().getModel();
 
     // Just create one concept if advanced is disabled
     let concepts_list = [];
