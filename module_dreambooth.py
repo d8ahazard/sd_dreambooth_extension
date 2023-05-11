@@ -159,7 +159,7 @@ async def copy_model(model_name: str, src: str, is_512: bool, mh: ModelHandler, 
     if not os.path.exists(dest_dir):
         logger.debug(f"Copying model from {src} to {dest_dir}")
         await copy_directory(src, dest_dir, sh)
-        cfg = DreamboothConfig(model_name=model_name, src=src, resolution=is_512, models_path=dreambooth_models_path)
+        cfg = DreamboothConfig(model_name=model_name, src=src, resolution=512 if is_512 else 768, models_path=dreambooth_models_path)
         cfg.save()
 
     else:

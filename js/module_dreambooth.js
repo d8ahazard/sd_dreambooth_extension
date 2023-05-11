@@ -163,6 +163,8 @@ function initDreambooth() {
     if (showAdvanced) {
         $(".db-advanced").show();
         $(".db-basic").hide();
+        $("#hub_row").hide();
+        $("#local_row").show();
     } else {
         $(".db-advanced").hide();
         $(".db-basic").show();
@@ -281,6 +283,8 @@ function loadDbListeners() {
         } else {
             sendMessage("get_db_config", {model: selected}, true).then((result) => {
                 for (let key in result["config"]) {
+                    let value = result["config"][key];
+                    if (value === null || value === undefined) continue;
                     if (key === "concepts_list") {
                         let concepts = result["config"][key];
                         loadConcepts(concepts);
@@ -290,7 +294,6 @@ function loadDbListeners() {
                     if (!elem.length) {
                         elem = $(`#${key}`);
                     }
-                    let value = result["config"][key];
                     if (elem.length) {
                         if (elem[0].classList.contains("db-slider")) {
                             let slider = $(elem[0]).data("BootstrapSlider");
@@ -366,8 +369,10 @@ function loadConcepts(concepts) {
     } else {
         if (concepts.length > 0) {
             let concept = concepts[0];
+            console.log("Creating existing concept: ", concept);
             addConcept(concept);
         } else {
+            console.log("Creating new concept");
             addConcept(false);
         }
     }
@@ -391,11 +396,6 @@ function addConcept(concept = false) {
     let textFieldKeys = ["class_negative_prompt", "save_sample_negative_prompt", "save_sample_prompt", "save_sample_template"];
     let textKeys = ["class_prompt", "class_token", "instance_prompt", "instance_token"];
     let numberKeys = ["sample_seed"];
-
-    if (!showAdvanced) {
-        bootstrapSliderKeys = [];
-        textFieldKeys = [];
-    }
 
     if (!concept) {
         concept = {
@@ -504,7 +504,7 @@ function addConcept(concept = false) {
             let sliderMax = key.indexOf("scale") !== -1 ? 20 : 100;
             let sliderMin = (key.indexOf("sample") !== -1 || key.indexOf("images") !== -1) ? 0 : 1;
             let sliderDiv = $(`
-                    <div class="form-group">
+                    <div class="form-group db-advanced">
                         <label>${bootstrapSliderLabel}</label>
                         <div class="db-slider dbInput" data-elem_id="${inputId}" data-max="${sliderMax}" data-min="${sliderMin}" data-step="${sliderStep}" data-value="${concept[key]}" data-label="${bootstrapSliderLabel}"></div>
                     </div>
@@ -520,7 +520,7 @@ function addConcept(concept = false) {
                     key === "save_sample_prompt" ? "Sample Prompt" :
                         "Sample Template";
             let textField = $(`
-                        <div class="form-group">
+                        <div class="form-group db-advanced">
                             <label for="${inputId}">${textFieldLabel}</label>
                             <input type="text" class="form-control dbInput" id="${inputId}" value="${concept[key]}">
                         </div>
