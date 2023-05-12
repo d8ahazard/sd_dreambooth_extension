@@ -240,7 +240,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             update_status({"status": msg})
             stop_text_percentage = 0
         count, instance_prompts, class_prompts = generate_classifiers(
-            args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False, pbar=mytqdm(user=user)
+            args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False, pbar=mytqdm(user=user, target="dreamProgress")
         )
         if status.interrupted:
             result.msg = "Training interrupted."

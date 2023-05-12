@@ -239,7 +239,8 @@ function loadDbListeners() {
             }
             data[key] = val;
         });
-        sendMessage("create_dreambooth", data, false, "dreamProgress").then(() => {});
+        sendMessage("create_dreambooth", data, false, "dreamProgress").then(() => {
+        });
     });
 
     $("#db_load_settings").click(function () {
@@ -291,22 +292,21 @@ function loadDbListeners() {
                         loadConcepts(concepts);
                         continue;
                     }
-                    let elem = $(`.db-slider[data-elem_id="${key}"]`);
-                    if (!elem.length) {
-                        elem = $(`#${key}`);
-                    }
-                    if (elem.length) {
-                        if (elem[0].classList.contains("db-slider")) {
-                            let slider = $(elem[0]).data("BootstrapSlider");
+                    let elem_selector = "#" + key;
+                    let element = $(elem_selector);
+                    if (element.length !== 0) {
+                        if (element.hasClass("db-slider")) {
+                            let slider = element.data("BootstrapSlider");
                             if (slider) {
-                                slider.updateValue(value);
+                                slider.setValue(value);
                             }
-                        } else if (elem.is(":checkbox")) {
-                            elem.prop("checked", value);
+                        } else if (element.is(":checkbox")) {
+                            element.prop("checked", value);
                         } else {
-                            elem.val(value);
+                            element.val(value);
                         }
                     }
+
                 }
 
             });
@@ -590,19 +590,15 @@ function getSettings() {
         }
         let conceptIndex = element.id.split("-")[0].split("_")[1];
         let key = element.id.split("-")[1];
-        console.log("Grabbing value for " + key + " in concept " + conceptIndex);
         let value = (element.dataset.hasOwnProperty("value") ? element.dataset.value : element.value);
 
         if (element.classList.contains("db-file-browser")) {
             let browser = $("#" + element.id).fileBrowser();
-            value = browser.getValue();
             value = element.dataset.value;
-            console.log("Got file browser?????", value);
         } else if (element.classList.contains("db-slider")) {
             value = $("#" + element.id).BootstrapSlider().getValue();
         }
         if (value === "undefined") {
-            console.log("Clearing value.")
             value = "";
         }
         if (!isNaN(parseFloat(value))) {
@@ -625,6 +621,7 @@ function getSettings() {
         }
         console.log("Values: ", values);
     });
+
     for (let i = 0; i < values.length; i++) {
         let value = values[i];
         // Remove the conceptIndex value from the value
@@ -633,36 +630,52 @@ function getSettings() {
     }
 
     let otherInputs = $(".dbInput");
-    otherInputs.each(function () {
-        let element = $(this);
-        let id = element.data("elem_id") || element.attr("id");
-        let slider = element.data("BootstrapSlider");
-        let file = element.data("fileBrowser");
+    otherInputs.each((index, element) => {
+        let id = element.id;
+        // Skip concepts
+        if (id.indexOf("concept_") !== -1) {
+            return;
+        }
+
+        if (id === null || id === "" || id === "undefined") {
+            console.log("invalid element: ", element);
+            return;
+        }
+
+
         let value;
-
-        if (slider) {
-            value = parseInt(slider.value);
-        } else if (file) {
-            console.log("Filebrowser", file);
-            value = file.value;
-        } else if (element.is(":checkbox")) {
-            value = element.is(":checked");
-        } else if (element.is(":radio")) {
-            if (element.is(":checked")) {
-                value = element.val();
+        let elem_selector = "#" + id;
+        if ($(element).hasClass("db-file-browser")) {
+            let browser = $(elem_selector).fileBrowser();
+            value = element.dataset.value;
+        } else if ($(element).hasClass("db-slider")) {
+            value = $(elem_selector).BootstrapSlider().getValue();
+        } else if ($(element).is(":checkbox")) {
+            value = $(element).is(":checked");
+        } else if ($(element).is(":radio")) {
+            if ($(element).is(":checked")) {
+                value = $(element).val();
             }
-        } else if (element.is("select")) {
-            value = element.val();
-        } else if (element.is("input[type='number']")) {
-            value = parseFloat(element.val());
+        } else if ($(element).is("select")) {
+            value = $(element).val();
+        } else if ($(element).is("input[type='number']")) {
+            value = parseFloat($(element).val());
         } else {
-            value = element.val();
-        }
-        if (id.indexOf("concept_") === -1) {
-            settings[id] = value;
+            value = $(element).val();
         }
 
+        if (typeof value === "undefined") {
+            value = "";
+        }
+        if (!isNaN(parseFloat(value))) {
+            value = parseFloat(value);
+        } else if (!isNaN(parseInt(value))) {
+            value = parseInt(value);
+        }
+
+        settings[id] = value;
     });
+
 
     settings["concepts_list"] = concepts_list;
     if (!showAdvanced) {

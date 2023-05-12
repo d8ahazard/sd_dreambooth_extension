@@ -172,22 +172,22 @@
                         </div>
                         <div class="borderSection">
                             <div class="sectionLabel">Settings</div>
-                            <div class="db-slider dbInput" data-elem_id="num_train_epochs" data-max="1000" data-min="1"
+                            <div class="db-slider dbInput" id="num_train_epochs" data-max="1000" data-min="1"
                                  data-value="150" data-label="Number of Epochs"></div>
-                            <div class="db-slider dbInput db-advanced" data-elem_id="save_embedding_every"
+                            <div class="db-slider dbInput db-advanced" id="save_embedding_every"
                                  data-max="100"
                                  data-min="0" data-step="1"
                                  data-value="0" data-label="Save Weight Frequency"></div>
-                            <div class="db-slider dbInput db-advanced" data-elem_id="save_preview_every" data-max="100"
+                            <div class="db-slider dbInput db-advanced" id="save_preview_every" data-max="100"
                                  data-min="0" data-step="1"
                                  data-value="0" data-label="Save Preview Frequency"></div>
-                            <div class="db-slider dbInput" data-elem_id="resolution" data-max="1024" data-min="512"
+                            <div class="db-slider dbInput" id="resolution" data-max="1024" data-min="512"
                                  data-step="64"
                                  data-value="768" data-label="Maximum Resolution"></div>
-                            <div class="db-slider dbInput db-advanced" data-elem_id="train_batch_size" data-max="100" data-min="1"
+                            <div class="db-slider dbInput db-advanced" id="train_batch_size" data-max="100" data-min="1"
                                  data-step="1"
                                  data-value="5" data-label="Batch Size"></div>
-                            <div class="db-slider dbInput db-advanced" data-elem_id="gradient_accumulation_steps" data-max="100"
+                            <div class="db-slider dbInput db-advanced" id="gradient_accumulation_steps" data-max="100"
                                  data-min="1" data-step="1"
                                  data-value="1" data-label="Gradient Accumulation Steps"></div>
                         </div>
@@ -255,43 +255,43 @@
 
                                             <div class="form-group">
                                                 <div class="dbInput db-slider" data-min="0" data-max="10000"
-                                                     data-step="1" data-elem_id="lr_warmup_steps" data-value="500"
+                                                     data-step="1" id="lr_warmup_steps" data-value="500"
                                                      data-label="LR Warmup Steps"></div>
                                             </div>
                                             <div class="form-group">
                                                 <div class="dbInput db-slider" data-min="0" data-max="1"
-                                                     data-step="0.001" data-elem_id="weight_decay" data-value="0.01"
+                                                     data-step="0.001" id="weight_decay" data-value="0.01"
                                                      data-label="Weight Decay"></div>
                                             </div>
                                             <div class="form-group">
                                                 <div class="dbInput db-slider" data-min="0" data-max="1"
-                                                     data-step="0.001" data-elem_id="tenc_weight_decay"
+                                                     data-step="0.001" id="tenc_weight_decay"
                                                      data-value="0.01"
                                                      data-label="TENC Weight Decay"></div>
                                             </div>
                                             <div class="form-group">
                                                 <div class="dbInput db-slider" data-min="-1" data-max="1"
-                                                     data-step="0.01" data-elem_id="offset_noise" data-value="0"
+                                                     data-step="0.01" id="offset_noise" data-value="0"
                                                      data-label="Offset Noise"></div>
                                             </div>
                                             <div class="form-group">
                                                 <div class="dbInput db-slider" data-min="1" data-max="12"
-                                                     data-step="1" data-elem_id="clip_skip" data-value="1"
+                                                     data-step="1" id="clip_skip" data-value="1"
                                                      data-label="Clip Skip"></div>
                                             </div>
                                             <div class="form-group">
                                                 <div class="dbInput db-slider" data-min="0" data-max="128"
-                                                     data-step="0.25" data-elem_id="tenc_grad_clip_norm" data-value="0"
+                                                     data-step="0.25" id="tenc_grad_clip_norm" data-value="0"
                                                      data-label="TENC Gradient Clip Norm"></div>
                                             </div>
                                             <div class="form-group">
                                                 <div class="dbInput db-slider" data-min="75" data-max="300"
-                                                     data-step="75" data-elem_id="max_token_length" data-value="75"
+                                                     data-step="75" id="max_token_length" data-value="75"
                                                      data-label="Max Token length"></div>
                                             </div>
                                             <div class="form-group">
                                                 <div class="dbInput db-slider" data-min="0" data-max="1.0"
-                                                     data-step="0.01" data-elem_id="stop_text_encoder"
+                                                     data-step="0.01" id="stop_text_encoder"
                                                      data-value="0.75"
                                                      data-label="Text Encoder Percentage"></div>
                                             </div>
