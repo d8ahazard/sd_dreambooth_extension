@@ -25,6 +25,7 @@ function initDreambooth() {
         let precisionSelect = $("#mixed_precision");
         let schedulerSelect = $("#lr_scheduler");
         let optimizerSelect = $("#optimizer");
+        let imgSchedulerSelect = $("#scheduler");
 
         // iterate over each array in the response and populate the corresponding select object
         for (let key in response) {
@@ -43,6 +44,8 @@ function initDreambooth() {
                 case "optimizers":
                     select = optimizerSelect;
                     break;
+                case "infer_schedulers":
+                    select = imgSchedulerSelect;
                 default:
                     break;
             }
@@ -51,6 +54,7 @@ function initDreambooth() {
                 for (let i = 0; i < arr.length; i++) {
                     let value = arr[i];
                     let displayValue = value.replace(/_/g, " ").toTitleCase();
+                    if (key === "infer_schedulers") displayValue = value;
                     let option = $("<option></option>").attr("value", value).text(displayValue);
                     select.append(option);
                 }
@@ -81,6 +85,8 @@ function initDreambooth() {
                             defaultValue = "Torch AdamW";
                         }
                         break;
+                    case "infer_schedulers":
+                        defaultValue = "UniPCMultistep";
                     default:
                         break;
                 }
@@ -582,102 +588,26 @@ function getSettings() {
 
     let conceptElements = $('[id^="concept_"]');
 
-    let values = [];
     let to_skip = ["_container", "_range", "_number"];
-    conceptElements.each((index, element) => {
-        if (to_skip.some((skip) => element.id.includes(skip))) {
-            return;
-        }
-        let conceptIndex = element.id.split("-")[0].split("_")[1];
-        let key = element.id.split("-")[1];
-        let value = (element.dataset.hasOwnProperty("value") ? element.dataset.value : element.value);
+    let allSettings = dbModule.getSettings(".dbInput", to_skip);
+    console.log("All settings: ", allSettings);
+    // Enumerate through allSettings, removing any element with "concept_" in the key and putting it in a new dict.
+    let concepts = {};
 
-        if (element.classList.contains("db-file-browser")) {
-            let browser = $("#" + element.id).fileBrowser();
-            value = element.dataset.value;
-        } else if (element.classList.contains("db-slider")) {
-            value = $("#" + element.id).BootstrapSlider().getValue();
-        }
-        if (value === "undefined") {
-            value = "";
-        }
-        if (!isNaN(parseFloat(value))) {
-            value = parseFloat(value);
-        } else if (!isNaN(parseInt(value))) {
-            value = parseInt(value);
-        }
-        let found = false;
-        for (let i = 0; i < values.length; i++) {
-            if (values[i]["conceptIndex"] === conceptIndex) {
-                values[i][key] = value;
-                found = true;
-                break;
+    for (let key in allSettings) {
+        if (key.indexOf("concept_") !== -1) {
+            let conceptIdx = key.split("-")[0].split("_")[1];
+            let conceptKey = key.split("-")[1];
+            if (!(conceptIdx in concepts)) {
+                concepts[conceptIdx] = {};
             }
-        }
-        if (!found) {
-            let newValue = {"conceptIndex": conceptIndex};
-            newValue[key] = value;
-            values.push(newValue);
-        }
-        console.log("Values: ", values);
-    });
-
-    for (let i = 0; i < values.length; i++) {
-        let value = values[i];
-        // Remove the conceptIndex value from the value
-        delete value.conceptIndex;
-        concepts_list.push(value);
-    }
-
-    let otherInputs = $(".dbInput");
-    otherInputs.each((index, element) => {
-        let id = element.id;
-        // Skip concepts
-        if (id.indexOf("concept_") !== -1) {
-            return;
-        }
-
-        if (id === null || id === "" || id === "undefined") {
-            console.log("invalid element: ", element);
-            return;
-        }
-
-
-        let value;
-        let elem_selector = "#" + id;
-        if ($(element).hasClass("db-file-browser")) {
-            let browser = $(elem_selector).fileBrowser();
-            value = element.dataset.value;
-        } else if ($(element).hasClass("db-slider")) {
-            value = $(elem_selector).BootstrapSlider().getValue();
-        } else if ($(element).is(":checkbox")) {
-            value = $(element).is(":checked");
-        } else if ($(element).is(":radio")) {
-            if ($(element).is(":checked")) {
-                value = $(element).val();
-            }
-        } else if ($(element).is("select")) {
-            value = $(element).val();
-        } else if ($(element).is("input[type='number']")) {
-            value = parseFloat($(element).val());
+            concepts[conceptIdx][conceptKey] = allSettings[key];
         } else {
-            value = $(element).val();
+            settings[key] = allSettings[key];
         }
-
-        if (typeof value === "undefined") {
-            value = "";
-        }
-        if (!isNaN(parseFloat(value))) {
-            value = parseFloat(value);
-        } else if (!isNaN(parseInt(value))) {
-            value = parseInt(value);
-        }
-
-        settings[id] = value;
-    });
-
-
-    settings["concepts_list"] = concepts_list;
+    }
+    settings["concepts_list"] = concepts;
+    console.log("Cleaned settings: ", settings);
     if (!showAdvanced) {
         settings["txt_learning_rate"] = settings["learning_rate"] / 2;
     }

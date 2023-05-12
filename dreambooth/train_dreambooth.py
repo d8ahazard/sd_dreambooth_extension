@@ -221,6 +221,13 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             result.config = args
             stop_profiler(profiler)
             return result
+
+        pbar = mytqdm(
+            disable=not accelerator.is_local_main_process,
+            position=1,
+            user=user,
+            target="dreamProgress"
+        )
         # Currently, it's not possible to do gradient accumulation when training two models with
         # accelerate.accumulate This will be enabled soon in accelerate. For now, we don't allow gradient
         # accumulation when training two models.
@@ -240,7 +247,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             update_status({"status": msg})
             stop_text_percentage = 0
         count, instance_prompts, class_prompts = generate_classifiers(
-            args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False, pbar=mytqdm(user=user, target="dreamProgress")
+            args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False, pbar=pbar
         )
         if status.interrupted:
             result.msg = "Training interrupted."
@@ -382,9 +389,12 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         if args.use_lora:
             learning_rate = args.lora_learning_rate
             txt_learning_rate = args.lora_txt_learning_rate
-        if "Dadapt" in args.optimizer:
-            learning_rate = 1.0
-            txt_learning_rate = 1.0
+        try:
+            if "Dadapt" in args.optimizer:
+                learning_rate = 1.0
+                txt_learning_rate = 1.0
+        except:
+            pass
 
         if args.use_lora or not args.train_unet:
             unet.requires_grad_(False)
@@ -494,13 +504,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             return result
 
         printm("Loading dataset...")
-        td_bar = mytqdm(
-            range(4),
-            disable=not accelerator.is_local_main_process,
-            position=1,
-            user=user,
-            target="dreamProgress"
-        )
+        pbar.reset()
+
         train_dataset = generate_dataset(
             model_name=args.model_name,
             instance_prompts=instance_prompts,
@@ -510,7 +515,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             vae=vae if args.cache_latents else None,
             debug=False,
             model_dir=args.model_dir,
-            pbar=td_bar
+            pbar=pbar
         )
 
         printm("Dataset loaded.")
@@ -809,16 +814,11 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             global last_samples
             global last_prompts
             nonlocal vae
+            nonlocal pbar
 
             printm(" Saving weights.")
-            pbar = mytqdm(
-                range(4),
-                desc="Saving weights",
-                disable=not accelerator.is_local_main_process,
-                position=1,
-                user=user,
-                target="dreamProgress"
-            )
+            pbar.reset()
+            pbar.set_description("Saving weights")
             pbar.set_postfix(refresh=True)
 
             # Create the pipeline using the trained modules and save it.

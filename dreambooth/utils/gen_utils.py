@@ -1,3 +1,4 @@
+import logging
 import os
 import traceback
 from typing import List
@@ -5,6 +6,7 @@ from typing import List
 from accelerate import Accelerator
 from transformers import AutoTokenizer
 
+from core.handlers.status import StatusHandler
 from dreambooth import shared
 from dreambooth.dataclasses.db_config import DreamboothConfig, from_file
 from dreambooth.dataclasses.prompt_data import PromptData
@@ -89,11 +91,12 @@ def generate_classifiers(
     @param class_gen_method
     @param accelerator: An optional existing accelerator to use.
     @param ui: Whether this was called by th UI, or is being run during training.
+    @param pbar: Progress bar to use.
     @return:
     generated: Number of images generated
     images: A list of images or image paths, depending on if returning to the UI or not.
     if ui is False, this will return a second array of paths representing the class paths.
-    pbar: Progress bar to use.
+
     """
     out_images = []
     instance_prompts = []
@@ -122,13 +125,28 @@ def generate_classifiers(
             return 0, instance_prompts, class_prompts
 
     print(f"Generating {set_len} class images for training...")
-    if not pbar:
-        pbar = mytqdm(total=set_len, desc=f"Generating class images 0/{set_len}:", position=0)
+    status_handler = None
+    if pbar is None:
+        logging.getLogger(__name__).info("Creating new progress bar")
+        pbar = mytqdm(total=set_len, desc=f"Generating class images 0/{set_len}:", position=0, target="dreamProgress")
     else:
+        logging.getLogger(__name__).info("Using existing progress bar")
         pbar.reset(total=set_len)
+        if getattr(pbar, "name", None):
+            try:
+                status_handler = StatusHandler(user_name=pbar.name, target="dreamProgress")
+            except:
+                pass
+
         pbar.set_description(f"Generating class images 0/{set_len}:")
     shared.status.job_count = set_len
     shared.status.job_no = 0
+    if status_handler:
+        status_handler.update(items={
+            "status": f"Generating class images 0/{set_len}",
+            "progress_1_total": set_len,
+            "progress_1_current": 0
+        })
     builder = ImageBuilder(
         args,
         class_gen_method=class_gen_method,
@@ -137,7 +155,8 @@ def generate_classifiers(
         accelerator=accelerator,
         lora_unet_rank=args.lora_unet_rank,
         lora_txt_rank=args.lora_txt_rank,
-        source_checkpoint=args.src
+        source_checkpoint=args.src,
+        pbar=pbar
     )
 
     generated = 0
@@ -170,34 +189,59 @@ def generate_classifiers(
         i_idx = 0
         preview_images = []
         preview_prompts = []
+        image_handler = None
+        try:
+            from core.handlers.images import ImageHandler
+            from core.dataclasses.infer_data import InferSettings
+            image_handler = ImageHandler(user_name=None)
+        except:
+            pass
         for image in new_images:
             if generated >= set_len:
                 break
             try:
                 # Retrieve prompt data object
                 pd = prompts[i_idx]
-                # Save image and get new filename
-                image_filename = db_save_image(image, pd)
-                # Set filename here for later retrieval
-                pd.src_image = image_filename
-                # NOW STORE IT
+                if image_handler is not None:
+                    infer_settings = InferSettings(pd.__dict__)
+                    infer_settings.from_prompt_data(pd.__dict__)
+                    image_filename = image_handler.save_image(image, pd.out_dir, infer_settings, False)
+                    out_images.append(image_filename)
+                else:
+                    # Save image and get new filename
+                    image_filename = db_save_image(image, pd)
+                    # Set filename here for later retrieval
+                    pd.src_image = image_filename
+                    if ui:
+                        out_images.append(image)
+
                 class_prompts.append(pd)
-                if ui:
-                    out_images.append(image)
                 i_idx += 1
                 generated += 1
                 pbar.reset(set_len)
                 pbar.update(generated)
                 pbar.set_description(f"Generating class images {generated}/{set_len}:", True)
                 shared.status.job_count = set_len
-                preview_images.append(image_filename)
-                preview_prompts.append(pd.prompt)
+                if status_handler:
+                    status_handler.update(items={
+                        "status": f"Generating class images {generated}/{set_len}",
+                        "progress_1_total": set_len,
+                        "progress_1_current": generated
+                    })
+                if image_filename is not None:
+                    preview_images.append(image_filename)
+                    preview_prompts.append(pd.prompt)
             except Exception as e:
                 print(f"Exception generating images: {e}")
                 traceback.print_exc()
 
         status.current_image = preview_images
         status.sample_prompts = preview_prompts
+        if status_handler:
+            status_handler.update(items={
+                "images": preview_images,
+                "prompts": preview_prompts
+            })
     builder.unload(ui)
     del prompt_dataset
     cleanup()

@@ -12,6 +12,8 @@ class mytqdm(tqdm):
             from core.handlers.status import StatusHandler
             user = kwargs["user"] if "user" in kwargs else None
             target = kwargs["target"] if "target" in kwargs else None
+            self.user = user
+            self.target = target
             self.status_handler = StatusHandler(user_name=user, target=target)
             shared.status_handler = self.status_handler
             if "user" in kwargs:

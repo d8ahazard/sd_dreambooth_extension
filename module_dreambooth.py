@@ -56,15 +56,19 @@ async def _get_db_vars(request):
         list_optimizer,
         list_schedulers,
     )
+    from dreambooth.utils.image_utils import get_scheduler_names
+
     attentions = list_attention()
     precisions = list_precisions()
     optimizers = list_optimizer()
     schedulers = list_schedulers()
+    infer_schedulers = get_scheduler_names()
     return {
         "attentions": attentions,
         "precisions": precisions,
         "optimizers": optimizers,
         "schedulers": schedulers,
+        "infer_schedulers": infer_schedulers
     }
 
 
