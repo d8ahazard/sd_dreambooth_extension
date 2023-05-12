@@ -606,7 +606,12 @@ function getSettings() {
             settings[key] = allSettings[key];
         }
     }
-    settings["concepts_list"] = concepts;
+    // Convert concepts to a list
+    concepts_list = [];
+    for (let key in concepts) {
+        concepts_list.push(concepts[key]);
+    }
+    settings["concepts_list"] = concepts_list;
     console.log("Cleaned settings: ", settings);
     if (!showAdvanced) {
         settings["txt_learning_rate"] = settings["learning_rate"] / 2;
