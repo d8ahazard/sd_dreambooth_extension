@@ -506,13 +506,12 @@ function addConcept(concept = false) {
             let sliderMin = (key.indexOf("sample") !== -1 || key.indexOf("images") !== -1) ? 0 : 1;
             let sliderDiv = $(`
                     <div class="form-group db-advanced">
-                        <label>${bootstrapSliderLabel}</label>
-                        <div class="db-slider dbInput" data-elem_id="${inputId}" data-max="${sliderMax}" data-min="${sliderMin}" data-step="${sliderStep}" data-value="${concept[key]}" data-label="${bootstrapSliderLabel}"></div>
+                        <div id="${inputId}" class="db-slider dbInput" data-elem_id="${inputId}" data-max="${sliderMax}" data-min="${sliderMin}" data-step="${sliderStep}" data-value="${concept[key]}" data-label="${bootstrapSliderLabel}"></div>
                     </div>
                 `);
+
             formElements.append(sliderDiv);
-            sliderDiv.find(".db-slider")
-                .BootstrapSlider();
+            $("#" + inputId).BootstrapSlider({});
         }
         // check if the key is in the textFieldKeys array
         else if (textFieldKeys.includes(key)) {
@@ -553,6 +552,15 @@ function addConcept(concept = false) {
     }
     // create bootstrap slider elements
     formElements.find(".db-slider").BootstrapSlider();
+    if (showAdvanced) {
+        $(".db-advanced").show();
+        $(".db-basic").hide();
+        $("#hub_row").hide();
+        $("#local_row").show();
+    } else {
+        $(".db-advanced").hide();
+        $(".db-basic").show();
+    }
 }
 
 function removeConcept() {
@@ -575,9 +583,14 @@ function getSettings() {
     let conceptElements = $('[id^="concept_"]');
 
     let values = [];
+    let to_skip = ["_container", "_range", "_number"];
     conceptElements.each((index, element) => {
+        if (to_skip.some((skip) => element.id.includes(skip))) {
+            return;
+        }
         let conceptIndex = element.id.split("-")[0].split("_")[1];
         let key = element.id.split("-")[1];
+        console.log("Grabbing value for " + key + " in concept " + conceptIndex);
         let value = (element.dataset.hasOwnProperty("value") ? element.dataset.value : element.value);
 
         if (element.classList.contains("db-file-browser")) {
@@ -585,17 +598,18 @@ function getSettings() {
             value = browser.getValue();
             value = element.dataset.value;
             console.log("Got file browser?????", value);
+        } else if (element.classList.contains("db-slider")) {
+            value = $("#" + element.id).BootstrapSlider().getValue();
         }
         if (value === "undefined") {
             console.log("Clearing value.")
             value = "";
         }
-        if (!isNaN(parseInt(value))) {
-            value = parseInt(value);
-        } else if (!isNaN(parseFloat(value))) {
+        if (!isNaN(parseFloat(value))) {
             value = parseFloat(value);
+        } else if (!isNaN(parseInt(value))) {
+            value = parseInt(value);
         }
-
         let found = false;
         for (let i = 0; i < values.length; i++) {
             if (values[i]["conceptIndex"] === conceptIndex) {
