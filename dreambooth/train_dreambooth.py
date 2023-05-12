@@ -977,7 +977,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                     s_pipeline.enable_vae_tiling()
                     s_pipeline.enable_vae_slicing()
-                    s_pipeline.enable_xformers_memory_efficient_attention()
+                    try:
+                        s_pipeline.enable_xformers_memory_efficient_attention()
+                    except:
+                        pass
                     s_pipeline.enable_sequential_cpu_offload()
 
                     s_pipeline.scheduler = get_scheduler_class("UniPCMultistep").from_config(

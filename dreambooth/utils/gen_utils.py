@@ -6,7 +6,10 @@ from typing import List
 from accelerate import Accelerator
 from transformers import AutoTokenizer
 
-from core.handlers.status import StatusHandler
+try:
+    from core.handlers.status import StatusHandler
+except:
+    pass
 from dreambooth import shared
 from dreambooth.dataclasses.db_config import DreamboothConfig, from_file
 from dreambooth.dataclasses.prompt_data import PromptData
