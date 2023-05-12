@@ -3,7 +3,7 @@ import logging
 import os
 import traceback
 from typing import List, Dict
-
+from pathlib import Path
 from pydantic import BaseModel
 
 from dreambooth import shared  # noqa
@@ -355,6 +355,12 @@ def concepts_from_file(concepts_path: str):
     try:
         concepts_data = json.loads(concepts_str)
         for concept_data in concepts_data:
+            concepts_path_dir = Path(concepts_path).parent # Get which folder is JSON file reside
+            instance_data_dir = concept_data.get("instance_data_dir")
+            if not os.path.isabs(instance_data_dir):
+                print(f"Rebuilding portable concepts path: {concepts_path_dir} + {instance_data_dir}")
+                concept_data["instance_data_dir"] = os.path.join(concepts_path_dir, instance_data_dir)
+
             concept = Concept(input_dict=concept_data)
             if concept.is_valid:
                 concepts.append(concept.__dict__)
