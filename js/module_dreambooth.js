@@ -398,6 +398,7 @@ function loadDbListeners() {
                 val = ms.getModel();
                 console.log("Got ms: ", key, val);
             }
+            if (key === "is_512") key = "512_model";
             data[key] = val;
         });
         sendMessage("create_dreambooth", data, false, "dreamProgress").then(() => {
