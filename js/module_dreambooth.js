@@ -9,11 +9,10 @@ let dbListenersLoaded = false;
 let dbModelCol;
 let dbStatusCol;
 let linkLR = false;
+let modelLoaded = false;
 
 // Define the Bootstrap "md" breakpoint as a constant
 const mdBreakpoint = 990;
-
-$(".hide").hide();
 
 // Register the module with the UI. Icon is from boxicons by default.
 const dbModule = new Module("Dreambooth", "moduleDreambooth", "moon", false, 2, initDreambooth);
@@ -112,13 +111,17 @@ function initDreambooth() {
     };
 
 
-    let selects = $(".modelSelect").modelSelect();
-    for (let i = 0; i < selects.length; i++) {
-        let elem = selects[i];
-        if (elem.container.id === "dreamModelSelect") {
-            dreamSelect = elem;
+    dreamSelect = $("#dreamModelSelect").modelSelect();
+    dreamSelect.setOnChangeHandler(function (value) {
+        let md = dreamSelect.getModel();
+        console.log("DS change: ", md, value);
+        if (md && md.hasOwnProperty("data")) {
+            let data = md.data;
+            if (data.hasOwnProperty("db_config")) {
+                setModelInfo(data.db_config);
+            }
         }
-    }
+    });
 
     let prog_opts = {
         "primary_status": "Status 1", // Status 1 text
@@ -142,15 +145,11 @@ function initDreambooth() {
     handleResize();
     let pg = document.getElementById("dreamProgress");
     dreamProgress = new ProgressGroup(document.getElementById("dreamProgress"), prog_opts);
-    dreamProgress.setOnCancel(function () {
-        $(".dbTrainBtn").addClass("hide");
-        $(".dbSettingBtn").removeClass("hide");
-    });
 
-    dreamProgress.setOnComplete(function () {
-        $(".dbTrainBtn").addClass("hide");
-        $(".dbSettingBtn").removeClass("hide");
-    });
+    dreamProgress.setOnCancel(onDbEnd);
+    dreamProgress.setOnComplete(onDbEnd);
+    dreamProgress.setOnStart(onDbStart);
+    dreamProgress.setOnUpdate(onDbUpdate)
 
     // Gallery creation. Options can also be passed to .update()
     dreamGallery = new InlineGallery(document.getElementById('dreamGallery'), gallery_opts);
@@ -177,6 +176,162 @@ function initDreambooth() {
     }
 }
 
+function onDbEnd() {
+    $(".dbTrainBtn").addClass("hide");
+    $(".dbSettingBtn").removeClass("hide");
+}
+
+function onDbStart() {
+    $(".dbTrainBtn").removeClass("hide");
+    $(".dbSettingBtn").addClass("hide");
+}
+
+function onDbUpdate(data) {
+    console.log("onDbUpdate", data);
+    // If the data is a JSON string, parse it
+    let status = data["status"];
+    if (status.hasOwnProperty("status")) {
+        status = status["status"];
+    }
+    console.log("OG status: ", status);
+
+    if (typeof status === "string" && status.startsWith("{")) {
+        let stats = JSON.parse(status);
+        console.log("Stats:", stats);
+        const progress_1_total = stats.total_session_step;
+        const progress_1_current = stats.session_step;
+        const progress_2_total = stats.steps_per_epoch;
+        const progress_2_current = stats.session_step - (stats.steps_per_epoch * stats.session_epoch);
+        // Truncate loss to 2 decimal places
+        let progressContainer = $("#dreamProgress").find(".progressContainer");
+        // If there is no .plotter class in the progressContainer, add one
+        // Check if the plotter element already exists
+        if (progressContainer.find(".plotter").length === 0) {
+            // Create the plotter element if it doesn't exist
+            progressContainer.append(`<div class="plotter" id="dbChart"></div>`);
+            let plotter = document.getElementById("dbChart");
+
+            // Initialize the plot with the initial data for loss, VRAM usage, and learning rate
+            let data = [
+                {
+                    y: [stats.loss],
+                    x: [stats.session_step],
+                    mode: 'lines',
+                    name: 'Loss',
+                    yaxis: 'y'
+                },
+                {
+                    y: [stats.unet_lr],
+                    x: [stats.session_step],
+                    mode: 'lines',
+                    name: 'LR',
+                    yaxis: 'y'
+                }
+            ];
+
+            // Specify the layout options for the plot
+            let lr = parseFloat(stats.unet_lr);
+            console.log("LR: ", lr);
+            let layout = {
+                autosize: true,
+                height: 300,
+                paper_bgcolor: '#7f7f7f',
+                plot_bgcolor: '#c7c7c7',
+                yaxis: {
+                    title: 'Loss',
+                    side: 'left',
+                    range: [0, 1]
+                },
+                yaxis2: {
+                    title: 'LR',
+                    side: 'right',
+                    overlaying: 'y',
+                    range: [0, lr * 1.2]
+                },
+                xaxis: {
+                    title: 'Steps'
+                }
+
+            };
+
+            // Create the plot using Plotly.newPlot
+            Plotly.newPlot(plotter, data, layout);
+        } else {
+            let plotter = document.getElementById("dbChart");
+
+            // Retrieve the existing data from the plot
+            let existingData = plotter.data;
+
+            // Extend the existing traces by adding new points for loss, VRAM usage, and learning rate
+            let lr = parseFloat(stats.unet_lr);
+            console.log("LR: ", lr);
+            Plotly.extendTraces(plotter, {
+                y: [[stats.loss], [lr]],
+                x: [[stats.session_step], [stats.session_step]]
+            }, existingData.map((_, i) => i)); // Update all the existing traces
+        }
+
+
+        data = {
+            "status": `Steps: ${progress_1_current}/${progress_1_total} (${stats.iterations_per_second})`,
+            "status_2": `Epoch: ${stats.session_epoch}/${stats.total_session_epoch} VRAM: ${stats.vram}`,
+            "progress_1_total": progress_1_total,
+            "progress_1_current": progress_1_current,
+            "progress_2_total": progress_2_total,
+            "progress_2_current": progress_2_current,
+            "target": "dreamProgress"
+        };
+
+    }
+    console.log("Returning: ", data);
+    return data;
+}
+
+
+function setModelInfo(data) {
+    const keysToSelect = ["epoch", "v2", "src", "has_ema"];
+    const keyTitles = {
+        "epoch": "Model Epoch",
+        "v2": "V2 Model",
+        "src": "Source Model",
+        "has_ema": "Has EMA"
+    }
+    const dbModelInfoElement = document.querySelector(".dbModelInfo");
+    dbModelInfoElement.innerHTML = "";
+
+    keysToSelect.forEach((key) => {
+        let value = data[key];
+        if (value === "false" || value === false) value = "False";
+        // Create a div element for the key and value
+        const divElement = document.createElement("div");
+        divElement.classList.add("m-2", "d-inline-block", "col-12");
+
+        // Create a span element for the title
+        const titleSpan = document.createElement("span");
+        titleSpan.textContent = keyTitles[key] + ": ";
+
+        // Create a span element for the value
+        const valueSpan = document.createElement("span");
+        valueSpan.textContent = value;
+        valueSpan.classList.add("fit");
+
+        // Append the title and value spans to the div element
+        divElement.appendChild(titleSpan);
+        divElement.appendChild(valueSpan);
+
+        // Append the div element to the dbModelInfoElement
+        dbModelInfoElement.appendChild(divElement);
+    });
+
+
+    fitty(".fit",
+        {
+            minSize: 10,
+            maxSize: 16,
+            multiLine: false,
+        });
+    if (!modelLoaded) $("#db_load_params").click();
+}
 
 function handleResize() {
     // Get the current window width
@@ -272,9 +427,11 @@ function loadDbListeners() {
     $("#db_train").click(function () {
         let data = getSettings();
         console.log("Settings: ", data);
+        $(".dbSettingBtn").addClass("hide");
+        $(".dbTrainBtn").removeClass("hide");
         sendMessage("train_dreambooth", data, false, "dreamProgress").then((result) => {
             $(".dbSettingBtn").addClass("hide");
-            $(".dbTrainBtn").removeClass("hide").show();
+            $(".dbTrainBtn").removeClass("hide");
         });
     });
 
@@ -284,10 +441,12 @@ function loadDbListeners() {
     });
 
     $("#db_load_params").click(function () {
+        modelLoaded = true;
         let selected = $("#dreamModelSelect").modelSelect().getModel();
         if (selected === undefined) {
             alert("Please select a model first!");
         } else {
+            console.log("Fetching model data for: ", selected);
             sendMessage("get_db_config", {model: selected}, true).then((result) => {
                 console.log("Loading settings: ", result);
                 for (let key in result["config"]) {
@@ -603,6 +762,7 @@ function getSettings() {
             }
             concepts[conceptIdx][conceptKey] = allSettings[key];
         } else {
+            if (key === "is_512") key = "512_model";
             settings[key] = allSettings[key];
         }
     }

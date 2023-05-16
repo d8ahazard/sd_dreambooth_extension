@@ -17,7 +17,7 @@
   "db_new_model_name": {
     "value": ""
   },
-  "512_model": {
+  "is_512": {
     "value": true
   },
   "create_from_hub": {

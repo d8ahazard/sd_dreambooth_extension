@@ -188,6 +188,7 @@ async def copy_directory(src_dir, dest_dir, sh: StatusHandler):
             dest_path = os.path.join(dest_dir, os.path.relpath(src_path, src_dir))
             dest_dirname = os.path.dirname(dest_path)
             if not os.path.exists(dest_dirname):
+                logger.debug("Making directory(md): " + dest_dirname)
                 os.makedirs(dest_dirname)
             shutil.copy2(src_path, dest_path)
             copied_size += os.path.getsize(src_path)

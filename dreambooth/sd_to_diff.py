@@ -15,6 +15,7 @@
 """ Conversion script for the LDM checkpoints. """
 import glob
 import json
+import logging
 import os
 import re
 import shutil
@@ -1383,6 +1384,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, shared_src_nam
         if os.path.exists(rem_dir):
             shutil.rmtree(rem_dir, True)
             if not os.path.exists(rem_dir):
+                logging.getLogger(__name__).info(f"Making rd {rem_dir}")
                 os.makedirs(rem_dir)
 
     enable_safe_unpickle()

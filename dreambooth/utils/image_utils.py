@@ -123,10 +123,11 @@ def sort_prompts(
         if h > max_dim:
             max_dim = h
     _, dirr = os.path.split(img_dir)
-    for img in images:
-        # Get prompt
-        pbar.set_description(f"Pre-processing images: {dirr}")
+    # Get prompt
+    pbar.set_description(f"Pre-processing images: {dirr}")
 
+    for img in images:
+        pbar.update(1)
         file_text = text_getter.read_text(img)
         if verbatim:
             prompt = file_text
@@ -151,7 +152,6 @@ def sort_prompts(
             concept_index=concept_index
         )
         prompt_list.append(pd)
-        pbar.update()
         prompts[reso] = prompt_list
     return dict(sorted(prompts.items()))
 

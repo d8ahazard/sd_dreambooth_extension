@@ -107,7 +107,7 @@ def generate_classifiers(
     try:
         status.textinfo = "Preparing dataset..."
         prompt_dataset = ClassDataset(
-            args.concepts(), args.model_dir, args.resolution, False, args.disable_class_matching,pbar=pbar
+            args.concepts(), args.model_dir, args.resolution, False, args.disable_class_matching, pbar=pbar
         )
         instance_prompts = prompt_dataset.instance_prompts
         class_prompts = prompt_dataset.class_prompts
@@ -135,16 +135,16 @@ def generate_classifiers(
     else:
         logging.getLogger(__name__).info("Using existing progress bar")
         pbar.reset(total=set_len)
-        if getattr(pbar, "name", None):
+        if getattr(pbar, "user", None):
             try:
-                status_handler = StatusHandler(user_name=pbar.name, target="dreamProgress")
+                status_handler = StatusHandler(user_name=pbar.user, target="dreamProgress")
             except:
                 pass
 
         pbar.set_description(f"Generating class images 0/{set_len}:")
     shared.status.job_count = set_len
     shared.status.job_no = 0
-    if status_handler:
+    if status_handler is not None:
         status_handler.update(items={
             "status": f"Generating class images 0/{set_len}",
             "progress_1_total": set_len,
@@ -164,9 +164,12 @@ def generate_classifiers(
 
     generated = 0
     actual_idx = 0
+    canceled = False
+    if status_handler is not None:
+        canceled = status_handler.status.canceled
     for i in range(set_len):
         first_res = None
-        if status.interrupted or generated >= set_len:
+        if status.interrupted or generated >= set_len or canceled:
             break
         prompts = []
         # Decrease batch size
@@ -208,7 +211,7 @@ def generate_classifiers(
                 if image_handler is not None:
                     infer_settings = InferSettings(pd.__dict__)
                     infer_settings.from_prompt_data(pd.__dict__)
-                    image_filename = image_handler.save_image(image, pd.out_dir, infer_settings, False)
+                    image_filename = image_handler.save_image(image, pd.out_dir, infer_settings)
                     out_images.append(image_filename)
                 else:
                     # Save image and get new filename
@@ -225,7 +228,7 @@ def generate_classifiers(
                 pbar.update(generated)
                 pbar.set_description(f"Generating class images {generated}/{set_len}:", True)
                 shared.status.job_count = set_len
-                if status_handler:
+                if status_handler is not None:
                     status_handler.update(items={
                         "status": f"Generating class images {generated}/{set_len}",
                         "progress_1_total": set_len,
@@ -240,11 +243,12 @@ def generate_classifiers(
 
         status.current_image = preview_images
         status.sample_prompts = preview_prompts
-        if status_handler:
+        if status_handler is not None:
             status_handler.update(items={
                 "images": preview_images,
                 "prompts": preview_prompts
             })
+            status_handler.send()
     builder.unload(ui)
     del prompt_dataset
     cleanup()

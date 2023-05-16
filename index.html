@@ -4,7 +4,7 @@
             <div class="col-12">
                 <div class="card shadow">
                     <div class="card-body text-center justify-between">
-                        <div class="btn-group">
+                        <div class="btn-group dbButtons">
                             <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_load_params">
                                 Load Settings
                             </button>
@@ -72,7 +72,8 @@
                                                  data-label="Lora Model"></div>
                                         </div>
                                     </div>
-                                    <div class="row" id="modelDetails">
+                                    <div class="dbModelInfo">
+
                                     </div>
                                 </div>
                             </div>
@@ -86,9 +87,9 @@
                                     </div>
                                     <div class="form-group db-advanced">
                                         <div class="form-check form-switch">
-                                            <input class="newModelParam form-check-input" type="checkbox" id="512_model"
-                                                   name="512_model" data-key="512_model" checked>
-                                            <label class="form-check-label" for="512_model">512x Base Model</label>
+                                            <input class="newModelParam form-check-input" type="checkbox" id="is_512"
+                                                   name="is_512" data-key="is_512" checked>
+                                            <label class="form-check-label" for="is_512">512x Base Model</label>
                                         </div>
                                     </div>
                                     <div class="form-group db-advanced">
@@ -237,12 +238,13 @@
                                                 </div>
 
 
-                                            <span class="input-group-btn linkBtn db-advanced">
+                                                <span class="input-group-btn linkBtn db-advanced">
                                                   <button class="btn btn-link btn-sm" type="button">
                                                       <i class="bx bx-link"></i>
                                                   </button>
                                             </span>
-                                                <label class="form-label mt-3 db-advanced" for="txt_learning_rate">Learning Rate
+                                                <label class="form-label mt-3 db-advanced" for="txt_learning_rate">Learning
+                                                    Rate
                                                     (Tenc)</label>
                                                 <div class="input-group">
                                                     <input class="dbInput form-control db-advanced" type="number"

@@ -52,11 +52,21 @@ class ClassDataset(Dataset):
         if pbar is None:
             pbar = mytqdm(desc="Pre-processing images.", position=0)
             pbar.reset(total_images)
+            pbar2 = mytqdm()
         else:
+            pbar2 = mytqdm(
+                position=1,
+                user=pbar.user,
+                target="dreamProgress",
+                index=1
+            )
+            pbar2 = pbar2
             pbar.set_description("Pre-processing images.")
             pbar.reset(total_images)
-
+        pbar.reset(total_images)
         for concept_idx, concept in enumerate(concepts):
+            pbar.set_description(f"Processing concept {concept_idx + 1}/{len(concepts)}")
+
             if not concept.is_valid:
                 continue
 
@@ -66,7 +76,7 @@ class ClassDataset(Dataset):
                 class_dir = os.path.join(model_dir, f"classifiers_{concept_idx}")
 
             # ===== Instance =====
-            instance_prompt_buckets = sort_prompts(concept, text_getter, instance_dir, instance_images[concept_idx], bucket_resos, concept_idx, False, pbar)
+            instance_prompt_buckets = sort_prompts(concept, text_getter, instance_dir, instance_images[concept_idx], bucket_resos, concept_idx, False, pbar2)
             for _, instance_prompt_datas in instance_prompt_buckets.items():
                 # Extend instance prompts by the instance data
                 self.instance_prompts.extend(instance_prompt_datas)
@@ -76,13 +86,13 @@ class ClassDataset(Dataset):
                 continue
 
             if disable_class_matching:
-                class_prompt_buckets = sort_prompts(concept, text_getter, class_dir, class_images[concept_idx], bucket_resos, concept_idx, True, pbar)
+                class_prompt_buckets = sort_prompts(concept, text_getter, class_dir, class_images[concept_idx], bucket_resos, concept_idx, True, pbar2)
                 for class_prompt_datas in class_prompt_buckets.values():
                     self.class_prompts.extend(class_prompt_datas)
                 continue
 
-            required_prompt_buckets = sort_prompts(concept, text_getter, class_dir, instance_images[concept_idx], bucket_resos, concept_idx, True, pbar)
-            existing_prompt_buckets = sort_prompts(concept, text_getter, class_dir, class_images[concept_idx], bucket_resos, concept_idx, True, pbar, True)
+            required_prompt_buckets = sort_prompts(concept, text_getter, class_dir, instance_images[concept_idx], bucket_resos, concept_idx, True, pbar2)
+            existing_prompt_buckets = sort_prompts(concept, text_getter, class_dir, class_images[concept_idx], bucket_resos, concept_idx, True, pbar2, True)
 
             # Iterate over each resolution of images, per concept
             for res, required_prompt_datas in required_prompt_buckets.items():
@@ -125,8 +135,8 @@ class ClassDataset(Dataset):
                         self.new_prompts[res].extend(new_prompts_datas)
                     else:
                         self.new_prompts[res] = new_prompts_datas
-
-        pbar.reset(0)
+            pbar.update()
+        pbar2.close()
         if self.required_prompts > 0:
             print(f"We need a total of {self.required_prompts} class images.")
 

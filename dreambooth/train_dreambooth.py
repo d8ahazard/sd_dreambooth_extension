@@ -3,6 +3,7 @@
 # With some custom bits sprinkled in and some stuff from OG diffusers as well.
 
 import itertools
+import json
 import logging
 import math
 import os
@@ -24,7 +25,6 @@ from diffusers import (
     DEISMultistepScheduler,
     UniPCMultistepScheduler
 )
-from diffusers.models.attention_processor import AttnProcessor2_0
 from diffusers.utils import logging as dl, is_xformers_available
 from packaging import version
 from torch.cuda.profiler import profile
@@ -87,7 +87,7 @@ except:
     logger.warning("Exception while adding 'get_velocity' method to the schedulers.")
 
 export_diffusers = False
-diffusers_dir = ""
+user_model_dir = ""
 try:
     from core.handlers.config import ConfigHandler
     from core.handlers.models import ModelHandler
@@ -95,7 +95,8 @@ try:
     ch = ConfigHandler()
     mh = ModelHandler()
     export_diffusers = ch.get_item("export_diffusers", "dreambooth", True)
-    diffusers_dir = os.path.join(mh.models_path, "diffusers")
+    user_model_dir = os.path.join(mh.models_path[0], "diffusers")
+    logger.debug(f"Export diffusers: {export_diffusers}, diffusers dir: {user_model_dir}")
 
 except:
     pass
@@ -164,6 +165,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
     def update_status(data: dict):
         if status_handler is not None:
+            if "iterations_per_second" in data:
+                data = {"status": json.dumps(data)}
             status_handler.update(items=data)
 
     result = TrainResult
@@ -222,11 +225,21 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             stop_profiler(profiler)
             return result
 
+        # This is the primary status bar
         pbar = mytqdm(
             disable=not accelerator.is_local_main_process,
             position=1,
             user=user,
             target="dreamProgress"
+        )
+
+        # This is the secondary status bar
+        pbar2 = mytqdm(
+            disable=not accelerator.is_local_main_process,
+            position=1,
+            user=user,
+            target="dreamProgress",
+            index=1
         )
         # Currently, it's not possible to do gradient accumulation when training two models with
         # accelerate.accumulate This will be enabled soon in accelerate. For now, we don't allow gradient
@@ -318,8 +331,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 raise ValueError(
                     "xformers is not available. Make sure it is installed correctly"
                 )
-            xformerify(unet)
-            xformerify(vae)
+            xformerify(unet, False)
+            xformerify(vae, False)
 
         unet = torch2ify(unet)
 
@@ -505,6 +518,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
         printm("Loading dataset...")
         pbar.reset()
+        pbar.set_description("Loading dataset")
 
         train_dataset = generate_dataset(
             model_name=args.model_name,
@@ -814,12 +828,12 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             global last_samples
             global last_prompts
             nonlocal vae
-            nonlocal pbar
+            nonlocal pbar2
 
             printm(" Saving weights.")
-            pbar.reset()
-            pbar.set_description("Saving weights")
-            pbar.set_postfix(refresh=True)
+            pbar2.reset()
+            pbar2.set_description("Saving weights")
+            pbar2.set_postfix(refresh=True)
 
             # Create the pipeline using the trained modules and save it.
             if accelerator.is_main_process:
@@ -871,7 +885,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             # Loras resume from pt
                             if not args.use_lora:
                                 if save_snapshot:
-                                    pbar.set_description("Saving Snapshot")
+                                    pbar2.set_description("Saving Snapshot")
                                     status.textinfo = (
                                         f"Saving snapshot at step {args.revision}..."
                                     )
@@ -883,14 +897,14 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                             f"checkpoint-{args.revision}",
                                         )
                                     )
-                                    pbar.update()
+                                    pbar2.update()
 
                                 # We should save this regardless, because it's our fallback if no snapshot exists.
                                 status.textinfo = (
                                     f"Saving diffusion model at step {args.revision}..."
                                 )
                                 update_status({"status": status.textinfo})
-                                pbar.set_description("Saving diffusion model")
+                                pbar2.set_description("Saving diffusion model")
                                 s_pipeline.save_pretrained(
                                     os.path.join(args.model_dir, "working"),
                                     safe_serialization=True,
@@ -903,12 +917,15 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                         ),
                                         safe_serialization=True,
                                     )
-                                pbar.update()
+                                pbar2.update()
 
                             elif save_lora:
-                                pbar.set_description("Saving Lora Weights...")
+                                pbar2.set_description("Saving Lora Weights...")
                                 # setup directory
-                                loras_dir = os.path.join(args.model_dir, "loras")
+                                if user_model_dir != "":
+                                    loras_dir = os.path.join(user_model_dir, "loras")
+                                else:
+                                    loras_dir = os.path.join(args.model_dir, "loras")
                                 os.makedirs(loras_dir, exist_ok=True)
                                 # setup pt path
                                 if args.custom_model_name == "":
@@ -938,7 +955,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                         out_txt,
                                         target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
                                     )
-                                    pbar.update()
+                                    pbar2.update()
                                 # save extra_net
                                 if args.save_lora_for_extra_net:
                                     os.makedirs(
@@ -951,10 +968,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                     save_extra_networks(modelmap, out_safe)
                             # package pt into checkpoint
                             if save_checkpoint:
-                                pbar.set_description("Compiling Checkpoint")
+                                pbar2.set_description("Compiling Checkpoint")
                                 snap_rev = str(args.revision) if save_snapshot else ""
                                 if export_diffusers:
-                                    copy_diffusion_model(args.model_name, diffusers_dir)
+                                    copy_diffusion_model(args.model_name, user_model_dir)
                                 else:
                                     compile_checkpoint(args.model_name, reload_models=False, lora_file_name=out_file,
                                                        log=False, snap_rev=snap_rev, pbar=pbar)
@@ -1012,13 +1029,13 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 resolution=(args.resolution, args.resolution),
                             )
                             prompts.append(epd)
-                        pbar.set_description("Generating Samples")
+                        pbar2.set_description("Generating Samples")
 
                         prompt_lengths = len(prompts)
                         if args.disable_logging:
-                            pbar.reset(prompt_lengths)
+                            pbar2.reset(prompt_lengths)
                         else:
-                            pbar.reset(prompt_lengths + 2)
+                            pbar2.reset(prompt_lengths + 2)
 
                         ci = 0
                         for c in prompts:
@@ -1043,7 +1060,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             shared.status.sample_prompts = [c.prompt]
                             update_status({"images": [image_name], "prompts": [c.prompt]})
                             samples.append(image_name)
-                            pbar.update()
+                            pbar2.update()
                             ci += 1
                         for sample in samples:
                             last_samples.append(sample)
@@ -1071,7 +1088,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             log_images, log_names = log_parser.parse_logs(
                                 model_name=args.model_name
                             )
-                            pbar.update()
+                            pbar2.update()
                             for log_image in log_images:
                                 last_samples.append(log_image)
                             for log_name in log_names:
@@ -1095,7 +1112,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     status.sample_prompts = last_prompts
                     status.current_image = last_samples
                     update_status({"images": last_samples, "prompts": last_prompts})
-                    pbar.update()
+                    pbar2.update()
 
                 if args.cache_latents:
                     printm("Unloading vae.")
@@ -1120,13 +1137,11 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 cleanup()
                 printm("Completed saving weights.")
 
-        # Only show the progress bar once on each machine.
+        # Only show the progress bar once on each machine, and do not send statuses to the new UI.
         progress_bar = mytqdm(
             range(global_step, max_train_steps),
             disable=not accelerator.is_local_main_process,
-            position=0,
-            user=user,
-            target="dreamProgress"
+            position=0
         )
         progress_bar.set_description("Steps")
         progress_bar.set_postfix(refresh=True)
@@ -1148,7 +1163,24 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             last_tenc = False
 
         cleanup()
-
+        stats = {
+            "loss": 0.0,
+            "prior_loss": 0.0,
+            "instance_loss": 0.0,
+            "unet_lr": learning_rate,
+            "tenc_lr": txt_learning_rate,
+            "session_epoch": 0,
+            "lifetime_epoch": args.epoch,
+            "total_session_epoch": args.num_train_epochs,
+            "total_lifetime_epoch": args.epoch + args.num_train_epochs,
+            "lifetime_step": args.revision,
+            "session_step": 0,
+            "total_session_step": max_train_steps,
+            "total_lifetime_step": args.revision + max_train_steps,
+            "steps_per_epoch": len(train_dataset),
+            "iterations_per_second": 0.0,
+            "vram": round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
+        }
         for epoch in range(first_epoch, max_train_epochs):
             if training_complete:
                 logger.debug("Training complete, breaking epoch.")
@@ -1197,7 +1229,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     progress_bar.reset()
                     status.job_count = max_train_steps
                     status.job_no += train_batch_size
-                    update_status({"progress_1_job_current": status.job_no, "progress_1_total": max_train_steps})
+                    stats["session_step"] += train_batch_size
+                    stats["lifetime_step"] += train_batch_size
+                    update_status(stats)
                     continue
                 with accelerator.accumulate(unet), accelerator.accumulate(text_encoder):
                     # Convert images to latent space
@@ -1343,11 +1377,24 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
                 last_lr = lr_scheduler.get_last_lr()[0]
+                last_tenc_lr = 0
+                try:
+                    last_tenc_lr = lr_scheduler.get_last_lr()[1] if train_tenc else 0
+                    logger.debug("Tenc LR is %f", last_tenc_lr)
+                except:
+                    logger.debug("Exception getting tenc lr")
+                    pass
 
-                global_step += train_batch_size
-                args.revision += train_batch_size
-                status.job_no += train_batch_size
-                update_status({"progress_1_job_no": status.job_no})
+                if dadapt(args.optimizer):
+                    last_lr = optimizer.param_groups[0]["d"] * optimizer.param_groups[0]["lr"]
+                    if len(optimizer.param_groups) > 1:
+                        try:
+                            last_tenc_lr = optimizer.param_groups[1]["d"] * optimizer.param_groups[1]["lr"]
+                        except:
+                            logger.warning("Exception setting tenc weight decay")
+                            traceback.print_exc()
+
+                update_status(stats)
                 del noise_pred
                 del latents
                 del encoder_hidden_states
@@ -1356,56 +1403,35 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 del noisy_latents
                 del target
 
-                dlr_unet, dlr_tenc = None, None
-                if dadapt(args.optimizer):
-                    dlr_unet = optimizer.param_groups[0]["d"] * optimizer.param_groups[0]["lr"]
-                    if len(optimizer.param_groups) > 1:
-                        try:
-                            dlr_tenc = optimizer.param_groups[1]["d"] * optimizer.param_groups[1]["lr"]
-                        except:
-                            logger.warning("Exception setting tenc weight decay")
-                            traceback.print_exc()
-
+                global_step += train_batch_size
+                args.revision += train_batch_size
+                status.job_no += train_batch_size
                 loss_step = loss.detach().item()
                 loss_total += loss_step
 
+                stats["session_step"] += train_batch_size
+                stats["lifetime_step"] += train_batch_size
+                stats["loss"] = loss_step
+
+                logs = {
+                    "lr": float(last_lr),
+                    "loss": float(loss_step),
+                    "vram": float(cached),
+                }
+
+                stats["vram"] = logs["vram"]
+                stats["unet_lr"] = '{:.2E}'.format(Decimal(last_lr))
+                stats["tenc_lr"] = '{:.2E}'.format(Decimal(last_tenc_lr))
+
                 if args.split_loss:
-                    if dadapt(args.optimizer):
-                        logs = {
-                            "lr": float(dlr_unet),
-                            # "dlr_tenc": float(dlr_tenc),
-                            "loss": float(loss_step),
-                            "inst_loss": float(instance_loss.detach().item()),
-                            "prior_loss": float(prior_loss.detach().item()),
-                            "vram": float(cached),
-                        }
-                    else:
-                        logs = {
-                            "lr": float(last_lr),
-                            "loss": float(loss_step),
-                            "inst_loss": float(instance_loss.detach().item()),
-                            "prior_loss": float(prior_loss.detach().item()),
-                            "vram": float(cached),
-                        }
+                    logs["inst_loss"] = float(instance_loss.detach().item())
+                    logs["prior_loss"] = float(prior_loss.detach().item())
+                    stats["instance_loss"] = logs["inst_loss"]
+                    stats["prior_loss"] = logs["prior_loss"]
 
-                else:
-                    if dadapt(args.optimizer):
-                        logs = {
-                            "lr": float(dlr_unet),
-                            # "dlr_tenc": float(dlr_tenc),
-                            "loss": float(loss_step),
-                            "vram": float(cached),
-                        }
-                    else:
-                        logs = {
-                            "lr": float(last_lr),
-                            "loss": float(loss_step),
-                            "vram": float(cached),
-                        }
-
-                if dlr_tenc:
+                if dadapt(args.optimizer):
                     status.textinfo2 = (
-                        f"Loss: {'%.2f' % loss_step}, UNET DLR: {'{:.2E}'.format(Decimal(dlr_unet))}, TENC DLR: {'{:.2E}'.format(Decimal(dlr_tenc))}, "
+                        f"Loss: {'%.2f' % loss_step}, UNET DLR: {'{:.2E}'.format(Decimal(last_lr))}, TENC DLR: {'{:.2E}'.format(Decimal(last_tenc_lr))}, "
                         f"VRAM: {allocated}/{cached} GB"
                     )
                 else:
@@ -1413,23 +1439,35 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, "
                         f"VRAM: {allocated}/{cached} GB"
                     )
-                update_status({"status2": status.textinfo2})
-                progress_bar.update(train_batch_size)
-                progress_bar.set_postfix(**logs)
+
+                pbar.update(train_batch_size)
+                rate = pbar.format_dict["rate"] if "rate" in pbar.format_dict else None
+                if rate is None:
+                    rate_string = ""
+                else:
+                    if rate > 1:
+                        rate_string = f"{rate:.2f} it/s"
+                    else:
+                        rate_string = f"{1 / rate:.2f} s/it" if rate != 0 else "N/A"
+                stats["iterations_per_second"] = rate_string
+                pbar.set_postfix(**logs)
                 accelerator.log(logs, step=args.revision)
 
                 logs = {"epoch_loss": loss_total / len(train_dataloader)}
                 accelerator.log(logs, step=global_step)
+                stats["epoch_loss"] = '%.2f' % (loss_total / len(train_dataloader))
 
                 status.job_count = max_train_steps
                 status.job_no = global_step
-
+                stats["lifetime_step"] = args.revision
+                stats["session_step"] = global_step
+                status0 = f"Steps: {global_step}/{max_train_steps} (Current), {rate_string}"
+                status1 = f"{args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
                 status.textinfo = (
-                    f"Steps: {global_step}/{max_train_steps} (Current),"
+                    f"Steps: {global_step}/{max_train_steps} (Current), {rate_string}"
                     f" {args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
                 )
-                update_status({"progress_1_job_no": status.job_no, "progress_1_job_count": status.job_count,
-                               "status": status.textinfo})
+                update_status(stats)
 
                 if math.isnan(loss_step):
                     logger.warning("Loss is NaN, your model is dead. Cancelling training.")
@@ -1462,10 +1500,12 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             global_epoch += 1
             lifetime_epoch += 1
             session_epoch += 1
+            stats["session_epoch"] += 1
+            stats["lifetime_epoch"] += 1
             lr_scheduler.step(is_epoch=True)
             status.job_count = max_train_steps
             status.job_no = global_step
-            update_status({"progress_1_job_no": status.job_no, "progress_1_job_count": status.job_count})
+            update_status(stats)
             check_save(True)
 
             if args.num_train_epochs > 1:

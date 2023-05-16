@@ -339,7 +339,8 @@ def copy_diffusion_model(model_name: str, dst_dir: str):
     model = from_file(model_name)
     if model is not None:
         src_dir = model.pretrained_model_name_or_path
-        logger.debug(f"Exporting: {src_dir}")
+        dst_dir = os.path.join(dst_dir, f"{model_name} ({model.revision})")
+        logger.debug(f"Exporting: {src_dir} to {dst_dir}")
         if not os.path.exists(dst_dir):
             os.makedirs(dst_dir)
         src_yaml = os.path.basename(os.path.join(src_dir, "..", f"{model_name}.yaml"))

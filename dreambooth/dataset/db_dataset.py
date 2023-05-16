@@ -160,6 +160,8 @@ class DbDataset(torch.utils.data.Dataset):
         self.cache_latents = vae is not None
         state = f"Preparing Dataset ({'With Caching' if self.cache_latents else 'Without Caching'})"
         print(state)
+        if self.pbar is not None:
+            self.pbar.set_description(state)
         status.textinfo = state
 
         # Create a list of resolutions
@@ -222,6 +224,9 @@ class DbDataset(torch.utils.data.Dataset):
         total_classes = 0
         if self.pbar is None:
             self.pbar = mytqdm(range(p_len), desc="Caching latents..." if self.cache_latents else "Processing images...", position=0)
+        else:
+            self.pbar.reset(total=p_len)
+            self.pbar.set_description("Caching latents..." if self.cache_latents else "Processing images...")
         image_cache_file = os.path.join(self.cache_dir, f"image_cache_{self.resolution}.safetensors")
         latents_cache = {}
         if os.path.exists(image_cache_file):
