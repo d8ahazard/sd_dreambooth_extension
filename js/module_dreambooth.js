@@ -110,7 +110,7 @@ function initDreambooth() {
         });
     };
 
-
+    $("#db_new_model").modelSelect();
     dreamSelect = $("#dreamModelSelect").modelSelect();
     dreamSelect.setOnChangeHandler(function (value) {
         let md = dreamSelect.getModel();
