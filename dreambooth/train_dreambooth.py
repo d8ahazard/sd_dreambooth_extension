@@ -981,14 +981,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             traceback.print_exc()
                             pass
                     save_dir = args.model_dir
-                del s_pipeline
                 cleanup()
                 if save_image:
-                    s_pipeline = DiffusionPipeline.from_pretrained(
-                        args.get_pretrained_model_name_or_path(),
-                        vae=vae,
-                        torch_dtype=weight_dtype
-                    )
                     if args.tomesd:
                         tomesd.apply_patch(s_pipeline, ratio=args.tomesd, use_rand=False)
 
