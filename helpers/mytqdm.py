@@ -16,7 +16,8 @@ class mytqdm(tqdm):
             self.status_index = kwargs["index"] if "index" in kwargs else 0
             self.user = user
             self.target = target
-            self.status_handler = StatusHandler(user_name=user, target=target)
+            if user and target:
+                self.status_handler = StatusHandler(user_name=user, target=target)
             if "user" in kwargs:
                 del kwargs["user"]
             if "target" in kwargs:
@@ -98,6 +99,7 @@ class mytqdm(tqdm):
         super().update(n)
 
     def reset(self, total=None):
+        self.set_description(None)
         if total is not None and self.update_ui:
             shared.status.job_no = 0
             shared.status.job_count = total
@@ -109,7 +111,7 @@ class mytqdm(tqdm):
     def set_description(self, desc=None, refresh=True):
         if self.update_ui:
             shared.status.textinfo = desc
-            if self.status_handler is not None:
+            if self.status_handler is not None and desc is not None:
                 status_title = "status" if self.status_index == 0 else "status_2"
                 self.status_handler.update(
                     items={status_title: desc})

@@ -182,7 +182,7 @@ class DbDataset(torch.utils.data.Dataset):
         sort_images(self.train_img_data, bucket_resos, self.train_dict, False)
         sort_images(self.class_img_data, bucket_resos, self.class_dict, True)
 
-        def cache_images(images, reso, p_bar):
+        def cache_images(images, reso, p_bar: mytqdm):
             for img_path, cap, is_prior in images:
                 try:
                     # If the image is not in the "precache",cache it
@@ -227,6 +227,7 @@ class DbDataset(torch.utils.data.Dataset):
         else:
             self.pbar.reset(total=p_len)
             self.pbar.set_description("Caching latents..." if self.cache_latents else "Processing images...")
+        self.pbar.status_index = 1
         image_cache_file = os.path.join(self.cache_dir, f"image_cache_{self.resolution}.safetensors")
         latents_cache = {}
         if os.path.exists(image_cache_file):
@@ -280,6 +281,7 @@ class DbDataset(torch.utils.data.Dataset):
             f"Total Buckets {bucket_str} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {tot_str}")
         self._length = total_len
         print(f"\nTotal images / batch: {self._length}, total examples: {total_len}")
+        self.pbar.reset(0)
 
     def shuffle_buckets(self):
         sample_dict = {}

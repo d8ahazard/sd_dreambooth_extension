@@ -106,6 +106,7 @@ async def _train_dreambooth(request):
     except:
         pass
     mh.to_gpu()
+    sh.end(result["message"])
     return result
 
 

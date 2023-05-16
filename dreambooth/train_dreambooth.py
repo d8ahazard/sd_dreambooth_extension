@@ -225,13 +225,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             stop_profiler(profiler)
             return result
 
-        # This is the primary status bar
-        pbar = mytqdm(
-            disable=not accelerator.is_local_main_process,
-            position=1,
-            user=user,
-            target="dreamProgress"
-        )
 
         # This is the secondary status bar
         pbar2 = mytqdm(
@@ -260,8 +253,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             update_status({"status": msg})
             stop_text_percentage = 0
         count, instance_prompts, class_prompts = generate_classifiers(
-            args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False, pbar=pbar
+            args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False, pbar=pbar2
         )
+        pbar2.reset()
         if status.interrupted:
             result.msg = "Training interrupted."
             stop_profiler(profiler)
@@ -517,8 +511,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             return result
 
         printm("Loading dataset...")
-        pbar.reset()
-        pbar.set_description("Loading dataset")
+        pbar2.reset()
+        pbar2.set_description("Loading dataset")
 
         train_dataset = generate_dataset(
             model_name=args.model_name,
@@ -529,9 +523,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             vae=vae if args.cache_latents else None,
             debug=False,
             model_dir=args.model_dir,
-            pbar=pbar
+            pbar=pbar2
         )
-
+        pbar2.reset()
         printm("Dataset loaded.")
 
         if args.cache_latents:
@@ -832,7 +826,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
             printm(" Saving weights.")
             pbar2.reset()
-            pbar2.set_description("Saving weights")
+            pbar2.set_description("Saving weights/samples...")
             pbar2.set_postfix(refresh=True)
 
             # Create the pipeline using the trained modules and save it.
@@ -869,13 +863,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     requires_safety_checker=None,
                 )
 
-                scheduler_class = get_scheduler_class(args.scheduler)
-                s_pipeline.scheduler = scheduler_class.from_config(
-                    s_pipeline.scheduler.config
-                )
-                if "UniPC" in args.scheduler:
-                    s_pipeline.scheduler.config.solver_type = "bh2"
-
                 with accelerator.autocast(), torch.inference_mode():
                     if save_model:
                         # We are saving weights, we need to ensure revision is saved
@@ -885,6 +872,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             # Loras resume from pt
                             if not args.use_lora:
                                 if save_snapshot:
+                                    pbar2.reset(1)
                                     pbar2.set_description("Saving Snapshot")
                                     status.textinfo = (
                                         f"Saving snapshot at step {args.revision}..."
@@ -904,6 +892,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                     f"Saving diffusion model at step {args.revision}..."
                                 )
                                 update_status({"status": status.textinfo})
+                                pbar2.reset(1)
                                 pbar2.set_description("Saving diffusion model")
                                 s_pipeline.save_pretrained(
                                     os.path.join(args.model_dir, "working"),
@@ -920,6 +909,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 pbar2.update()
 
                             elif save_lora:
+                                pbar2.reset(1)
                                 pbar2.set_description("Saving Lora Weights...")
                                 # setup directory
                                 if user_model_dir != "":
@@ -958,6 +948,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                     pbar2.update()
                                 # save extra_net
                                 if args.save_lora_for_extra_net:
+                                    pbar2.reset(1)
+                                    pbar2.set_description("Saving Extra Networks")
                                     os.makedirs(
                                         shared.ui_lora_models_path, exist_ok=True
                                     )
@@ -966,23 +958,41 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                         f"{lora_file_prefix}.safetensors",
                                     )
                                     save_extra_networks(modelmap, out_safe)
+                                    pbar2.update(0)
                             # package pt into checkpoint
                             if save_checkpoint:
+                                pbar2.reset(1)
                                 pbar2.set_description("Compiling Checkpoint")
                                 snap_rev = str(args.revision) if save_snapshot else ""
                                 if export_diffusers:
                                     copy_diffusion_model(args.model_name, user_model_dir)
                                 else:
                                     compile_checkpoint(args.model_name, reload_models=False, lora_file_name=out_file,
-                                                       log=False, snap_rev=snap_rev, pbar=pbar)
+                                                       log=False, snap_rev=snap_rev, pbar=pbar2)
                                 printm("Restored, moved to acc.device.")
+                                pbar2.update()
                         except Exception as ex:
                             logger.warning(f"Exception saving checkpoint/model: {ex}")
                             traceback.print_exc()
                             pass
                     save_dir = args.model_dir
-                cleanup()
+                    del s_pipeline
+                    cleanup()
                 if save_image:
+                    s_pipeline = DiffusionPipeline.from_pretrained(
+                        args.get_pretrained_model_name_or_path(),
+                        unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=False),
+                        text_encoder=accelerator.unwrap_model(
+                            text_encoder, keep_fp32_wrapper=False
+                        ),
+                        vae=vae,
+                        torch_dtype=torch.float16,
+                        revision=args.revision,
+                        safety_checker=None,
+                        requires_safety_checker=None,
+                    )
+                    s_pipeline = s_pipeline.to(accelerator.device)
+
                     if args.tomesd:
                         tomesd.apply_patch(s_pipeline, ratio=args.tomesd, use_rand=False)
 
@@ -1023,39 +1033,40 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 resolution=(args.resolution, args.resolution),
                             )
                             prompts.append(epd)
-                        pbar2.set_description("Generating Samples")
 
                         prompt_lengths = len(prompts)
                         if args.disable_logging:
                             pbar2.reset(prompt_lengths)
                         else:
                             pbar2.reset(prompt_lengths + 2)
+                        pbar2.set_description("Generating Samples")
 
                         ci = 0
-                        for c in prompts:
-                            c.out_dir = os.path.join(args.model_dir, "samples")
-                            generator = torch.manual_seed(int(c.seed))
-                            s_image = s_pipeline(
-                                c.prompt,
-                                num_inference_steps=c.steps,
-                                guidance_scale=c.scale,
-                                negative_prompt=c.negative_prompt,
-                                height=c.resolution[1],
-                                width=c.resolution[0],
-                                generator=generator,
-                            ).images[0]
-                            sample_prompts.append(c.prompt)
-                            image_name = db_save_image(
-                                s_image,
-                                c,
-                                custom_name=f"sample_{args.revision}-{ci}",
-                            )
-                            shared.status.current_image = image_name
-                            shared.status.sample_prompts = [c.prompt]
-                            update_status({"images": [image_name], "prompts": [c.prompt]})
-                            samples.append(image_name)
-                            pbar2.update()
-                            ci += 1
+                        with accelerator.autocast():
+                            for c in prompts:
+                                c.out_dir = os.path.join(args.model_dir, "samples")
+                                generator = torch.manual_seed(int(c.seed))
+                                s_image = s_pipeline(
+                                    c.prompt,
+                                    num_inference_steps=c.steps,
+                                    guidance_scale=c.scale,
+                                    negative_prompt=c.negative_prompt,
+                                    height=c.resolution[1],
+                                    width=c.resolution[0],
+                                    generator=generator,
+                                ).images[0]
+                                sample_prompts.append(c.prompt)
+                                image_name = db_save_image(
+                                    s_image,
+                                    c,
+                                    custom_name=f"sample_{args.revision}-{ci}",
+                                )
+                                shared.status.current_image = image_name
+                                shared.status.sample_prompts = [c.prompt]
+                                update_status({"images": [image_name], "prompts": [c.prompt]})
+                                samples.append(image_name)
+                                pbar2.update()
+                                ci += 1
                         for sample in samples:
                             last_samples.append(sample)
                         for prompt in sample_prompts:
@@ -1130,6 +1141,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                 cleanup()
                 printm("Completed saving weights.")
+                pbar2.reset()
 
         # Only show the progress bar once on each machine, and do not send statuses to the new UI.
         progress_bar = mytqdm(
@@ -1370,11 +1382,13 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
-                last_lr = lr_scheduler.get_last_lr()[0]
+                lr_data = lr_scheduler.get_last_lr()
+                last_lr = lr_data[0]
                 last_tenc_lr = 0
+                stats["lr_data"] = lr_data
                 try:
-                    last_tenc_lr = lr_scheduler.get_last_lr()[1] if train_tenc else 0
-                    logger.debug("Tenc LR is %f", last_tenc_lr)
+                    if len(optimizer.param_groups) > 1:
+                        last_tenc_lr = optimizer.param_groups[1]["lr"] if train_tenc else 0
                 except:
                     logger.debug("Exception getting tenc lr")
                     pass
@@ -1434,8 +1448,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         f"VRAM: {allocated}/{cached} GB"
                     )
 
-                pbar.update(train_batch_size)
-                rate = pbar.format_dict["rate"] if "rate" in pbar.format_dict else None
+                progress_bar.update(train_batch_size)
+                rate = progress_bar.format_dict["rate"] if "rate" in progress_bar.format_dict else None
                 if rate is None:
                     rate_string = ""
                 else:
@@ -1444,7 +1458,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     else:
                         rate_string = f"{1 / rate:.2f} s/it" if rate != 0 else "N/A"
                 stats["iterations_per_second"] = rate_string
-                pbar.set_postfix(**logs)
+                progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=args.revision)
 
                 logs = {"epoch_loss": loss_total / len(train_dataloader)}
