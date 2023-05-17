@@ -7,6 +7,8 @@ import json
 import logging
 import math
 import os
+import shutil
+import tempfile
 import time
 import traceback
 from decimal import Decimal
@@ -224,7 +226,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             result.config = args
             stop_profiler(profiler)
             return result
-
 
         # This is the secondary status bar
         pbar2 = mytqdm(
@@ -863,7 +864,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     requires_safety_checker=None,
                 )
 
-                with accelerator.autocast(), torch.inference_mode():
+                with accelerator.autocast():
                     if save_model:
                         # We are saving weights, we need to ensure revision is saved
                         args.save()
@@ -976,22 +977,18 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             traceback.print_exc()
                             pass
                     save_dir = args.model_dir
+
+                if save_image:
+                    # Get the path to a temporary directory
+                    tmp_dir = tempfile.mkdtemp()
+                    s_pipeline.save_pretrained(tmp_dir, safe_serialization=True)
                     del s_pipeline
                     cleanup()
-                if save_image:
                     s_pipeline = DiffusionPipeline.from_pretrained(
-                        args.get_pretrained_model_name_or_path(),
-                        unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=False),
-                        text_encoder=accelerator.unwrap_model(
-                            text_encoder, keep_fp32_wrapper=False
-                        ),
+                        tmp_dir,
                         vae=vae,
-                        torch_dtype=torch.float16,
-                        revision=args.revision,
-                        safety_checker=None,
-                        requires_safety_checker=None,
+                        torch_dtype=weight_dtype
                     )
-                    s_pipeline = s_pipeline.to(accelerator.device)
 
                     if args.tomesd:
                         tomesd.apply_patch(s_pipeline, ratio=args.tomesd, use_rand=False)
@@ -1040,33 +1037,31 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         else:
                             pbar2.reset(prompt_lengths + 2)
                         pbar2.set_description("Generating Samples")
-
                         ci = 0
-                        with accelerator.autocast():
-                            for c in prompts:
-                                c.out_dir = os.path.join(args.model_dir, "samples")
-                                generator = torch.manual_seed(int(c.seed))
-                                s_image = s_pipeline(
-                                    c.prompt,
-                                    num_inference_steps=c.steps,
-                                    guidance_scale=c.scale,
-                                    negative_prompt=c.negative_prompt,
-                                    height=c.resolution[1],
-                                    width=c.resolution[0],
-                                    generator=generator,
-                                ).images[0]
-                                sample_prompts.append(c.prompt)
-                                image_name = db_save_image(
-                                    s_image,
-                                    c,
-                                    custom_name=f"sample_{args.revision}-{ci}",
-                                )
-                                shared.status.current_image = image_name
-                                shared.status.sample_prompts = [c.prompt]
-                                update_status({"images": [image_name], "prompts": [c.prompt]})
-                                samples.append(image_name)
-                                pbar2.update()
-                                ci += 1
+                        for c in prompts:
+                            c.out_dir = os.path.join(args.model_dir, "samples")
+                            generator = torch.manual_seed(int(c.seed))
+                            s_image = s_pipeline(
+                                c.prompt,
+                                num_inference_steps=c.steps,
+                                guidance_scale=c.scale,
+                                negative_prompt=c.negative_prompt,
+                                height=c.resolution[1],
+                                width=c.resolution[0],
+                                generator=generator,
+                            ).images[0]
+                            sample_prompts.append(c.prompt)
+                            image_name = db_save_image(
+                                s_image,
+                                c,
+                                custom_name=f"sample_{args.revision}-{ci}",
+                            )
+                            shared.status.current_image = image_name
+                            shared.status.sample_prompts = [c.prompt]
+                            update_status({"images": [image_name], "prompts": [c.prompt]})
+                            samples.append(image_name)
+                            pbar2.update()
+                            ci += 1
                         for sample in samples:
                             last_samples.append(sample)
                         for prompt in sample_prompts:
@@ -1079,10 +1074,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         pass
                     if args.tomesd:
                         tomesd.remove_patch(s_pipeline)
-                    del s_pipeline
-
+                    if os.path.isdir(tmp_dir):
+                        shutil.rmtree(tmp_dir)
+                del s_pipeline
                 printm("Starting cleanup.")
-                cleanup()
                 if save_image:
                     if "generator" in locals():
                         del generator
