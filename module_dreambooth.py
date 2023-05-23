@@ -12,7 +12,8 @@ import torch
 from fastapi import FastAPI
 
 import scripts.api
-from core.handlers.models import ModelHandler
+from core.handlers.config import ConfigHandler
+from core.handlers.models import ModelHandler, ModelManager
 from core.handlers.status import StatusHandler
 from core.handlers.websocket import SocketHandler
 from core.modules.base.module_base import BaseModule
@@ -36,6 +37,10 @@ class DreamboothModule(BaseModule):
     def initialize(self, app: FastAPI, handler: SocketHandler):
         self._initialize_api(app)
         self._initialize_websocket(handler)
+        defaults_base_file = os.path.join(os.path.dirname(__file__), "templates", "db_config.json")
+        if os.path.exists(defaults_base_file):
+            ch = ConfigHandler()
+            ch.set_config_protected(json.load(open(defaults_base_file, "r")), "dreambooth_model_defaults")
 
     def _initialize_api(self, app: FastAPI):
         return scripts.api.dreambooth_api(None, app)
@@ -76,8 +81,9 @@ async def _train_dreambooth(request):
     user = request["user"] if "user" in request else None
     config = await _set_model_config(request, True)
     mh = ModelHandler(user_name=user)
+    mm = ModelManager()
     sh = StatusHandler(user_name=user, target="dreamProgress")
-    mh.to_cpu()
+    mm.to_cpu()
     shared.db_model_config = config
     try:
         torch.cuda.empty_cache()
@@ -92,20 +98,17 @@ async def _train_dreambooth(request):
         with ThreadPoolExecutor() as pool:
             await loop.run_in_executor(pool, lambda: (
                 sh.start(0, "Starting Dreambooth Training..."),
-                main(user=user),
-                sh.end("Training complete.")
+                main(user=user)
             ))
     except Exception as e:
         logger.error(f"Error in training: {e}")
         traceback.print_exc()
         result = {"message": f"Error in training: {e}"}
-        sh.end(f"Error in training: {e}")
     try:
         gc.collect()
         torch.cuda.empty_cache()
     except:
         pass
-    mh.to_gpu()
     sh.end(result["message"])
     return result
 
@@ -161,10 +164,20 @@ async def copy_model(model_name: str, src: str, is_512: bool, mh: ModelHandler, 
     dest_dir = os.path.join(model_dir, "dreambooth", model_name, "working")
     if os.path.exists(dest_dir):
         shutil.rmtree(dest_dir, True)
+    ch = ConfigHandler(user_name=mh.user_name)
+    base = ch.get_config_protected("dreambooth_model_defaults")
+    user_base = ch.get_config_user("dreambooth_model_defaults")
+    logger.debug(f"User base: {user_base}")
+    if user_base is not None:
+        base = {**base, **user_base}
+    else:
+        logger.debug("Setting user config")
+        ch.set_config_user(base, "dreambooth_model_defaults")
     if not os.path.exists(dest_dir):
         logger.debug(f"Copying model from {src} to {dest_dir}")
         await copy_directory(src, dest_dir, sh)
         cfg = DreamboothConfig(model_name=model_name, src=src, resolution=512 if is_512 else 768, models_path=dreambooth_models_path)
+        cfg.load_params(base)
         cfg.save()
 
     else:

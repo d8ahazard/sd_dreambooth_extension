@@ -15,7 +15,7 @@ let modelLoaded = false;
 const mdBreakpoint = 990;
 
 // Register the module with the UI. Icon is from boxicons by default.
-const dbModule = new Module("Dreambooth", "moduleDreambooth", "moon", false, 2, initDreambooth);
+const dbModule = new Module("Dreambooth", "moduleDreambooth", "moon", false, 2, initDreambooth, refreshDreambooth);
 
 function initDreambooth() {
     sendMessage("get_db_vars", {}, true).then(function (response) {
@@ -103,7 +103,7 @@ function initDreambooth() {
         }
     });
 
-// utility function to convert a string to Title Case
+    // utility function to convert a string to Title Case
     String.prototype.toTitleCase = function () {
         return this.replace(/\w\S*/g, function (txt) {
             return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
@@ -176,6 +176,19 @@ function initDreambooth() {
     }
 }
 
+function refreshDreambooth() {
+    dreamConfig = dbModule.systemConfig;
+    showAdvanced = dreamConfig["show_advanced"];
+    if (showAdvanced) {
+        $(".db-advanced").show();
+        $(".db-basic").hide();
+        $("#hub_row").hide();
+        $("#local_row").show();
+    } else {
+        $(".db-advanced").hide();
+        $(".db-basic").show();
+    }
+}
 function onDbEnd() {
     $(".dbTrainBtn").addClass("hide");
     $(".dbSettingBtn").removeClass("hide");

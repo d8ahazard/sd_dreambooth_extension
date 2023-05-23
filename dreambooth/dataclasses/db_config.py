@@ -291,30 +291,6 @@ class DreamboothConfig(BaseModel):
             concepts.extend([Concept(None)] * missing)
         return concepts
 
-    # Set default values
-    def check_defaults(self):
-        if self.model_name:
-            if self.revision == "" or self.revision is None:
-                self.revision = 0
-            if self.epoch == "" or self.epoch is None:
-                self.epoch = 0
-            self.model_name = "".join(x for x in self.model_name if (x.isalnum() or x in "._- "))
-            models_path = shared.dreambooth_models_path
-            try:
-                from core.handlers.models import ModelHandler
-                mh = ModelHandler()
-                models_path = mh.models_path
-            except:
-                pass
-            if models_path == "" or models_path is None:
-                models_path = os.path.join(shared.models_path, "dreambooth")
-            model_dir = os.path.join(models_path, self.model_name)
-            working_dir = os.path.join(model_dir, "working")
-            if not os.path.exists(working_dir):
-                os.makedirs(working_dir)
-            self.model_dir = model_dir
-            self.pretrained_model_name_or_path = working_dir
-
     def refresh(self):
         """
         Reload self from file

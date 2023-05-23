@@ -19,7 +19,14 @@ db_path = os.path.join(shared.models_path, "dreambooth")
 url_file = os.path.join(db_path, "webhook.txt")
 hook_url = None
 
-if not os.path.exists(db_path):
+new_ui = False
+try:
+    from core.dataclasses import status_data
+    new_ui = True
+except:
+    pass
+
+if not os.path.exists(db_path) and not new_ui:
     os.makedirs(db_path)
 
 

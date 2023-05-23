@@ -5,7 +5,14 @@ from dreambooth import shared
 
 db_path = os.path.join(shared.models_path, "dreambooth")
 secret_file = os.path.join(db_path, "secret.txt")
-
+try:
+    from core.handlers.config import DirectoryHandler
+    dh = DirectoryHandler()
+    protected_path = dh.protected_path
+    db_path = os.path.join(protected_path, "dreambooth")
+    secret_file = os.path.join(db_path, "secret.txt")
+except:
+    pass
 if not os.path.exists(db_path):
     os.makedirs(db_path)
 

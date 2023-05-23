@@ -90,18 +90,6 @@ except:
 
 export_diffusers = False
 user_model_dir = ""
-try:
-    from core.handlers.config import ConfigHandler
-    from core.handlers.models import ModelHandler
-
-    ch = ConfigHandler()
-    mh = ModelHandler()
-    export_diffusers = ch.get_item("export_diffusers", "dreambooth", True)
-    user_model_dir = os.path.join(mh.models_path[0], "diffusers")
-    logger.debug(f"Export diffusers: {export_diffusers}, diffusers dir: {user_model_dir}")
-
-except:
-    pass
 
 
 def dadapt(optimizer):
@@ -156,9 +144,17 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
     args = shared.db_model_config
     status_handler = None
     logging_dir = Path(args.model_dir, "logging")
+    global export_diffusers, user_model_dir
     try:
         from core.handlers.status import StatusHandler
+        from core.handlers.config import ConfigHandler
+        from core.handlers.models import ModelHandler
+
+        mh = ModelHandler(user_name=user)
         status_handler = StatusHandler(user_name=user, target="dreamProgress")
+        export_diffusers = True
+        user_model_dir = mh.user_path
+        logger.debug(f"Export diffusers: {export_diffusers}, diffusers dir: {user_model_dir}")
         shared.status_handler = status_handler
         logger.debug(f"Loaded config: {args.__dict__}")
     except:
@@ -687,7 +683,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             args.model_dir, "checkpoints", f"checkpoint-{args.snapshot}"
         )
         if os.path.exists(new_hotness):
-            accelerator.logger.debug(f"Resuming from checkpoint {new_hotness}")
+            logger.debug(f"Resuming from checkpoint {new_hotness}")
 
             try:
                 import modules.shared
@@ -864,7 +860,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     requires_safety_checker=None,
                 )
 
-                with accelerator.autocast():
+                # Is inference_mode() needed here to prevent issues when saving?
+                with accelerator.autocast(), torch.inference_mode():
                     if save_model:
                         # We are saving weights, we need to ensure revision is saved
                         args.save()
