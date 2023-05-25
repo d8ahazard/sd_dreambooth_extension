@@ -238,12 +238,12 @@ function onDbUpdate(data) {
                     x: [stats.session_step],
                     mode: 'lines',
                     name: 'LR',
-                    yaxis: 'y'
+                    yaxis: 'y2'
                 }
             ];
 
             // Specify the layout options for the plot
-            let lr = parseFloat(stats.unet_lr);
+            let lr = parseFloat(stats.lr_data[0]);
             console.log("LR: ", lr);
             let layout = {
                 autosize: true,
@@ -276,7 +276,7 @@ function onDbUpdate(data) {
             let existingData = plotter.data;
 
             // Extend the existing traces by adding new points for loss, VRAM usage, and learning rate
-            let lr = parseFloat(stats.unet_lr);
+            let lr = parseFloat(stats.lr_data[0]);
             console.log("LR: ", lr);
             Plotly.extendTraces(plotter, {
                 y: [[stats.loss], [lr]],

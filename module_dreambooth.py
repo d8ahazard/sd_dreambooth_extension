@@ -29,10 +29,11 @@ logger = logging.getLogger(__name__)
 class DreamboothModule(BaseModule):
 
     def __init__(self):
+        self.id = "dreambooth"
         self.name: str = "Dreambooth"
         self.path = os.path.abspath(os.path.dirname(__file__))
         self.model_handler = ModelHandler()
-        super().__init__(self.name, self.path)
+        super().__init__(self.id, self.name, self.path)
 
     def initialize(self, app: FastAPI, handler: SocketHandler):
         self._initialize_api(app)
