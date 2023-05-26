@@ -166,14 +166,16 @@ async def copy_model(model_name: str, src: str, is_512: bool, mh: ModelHandler, 
     if os.path.exists(dest_dir):
         shutil.rmtree(dest_dir, True)
     ch = ConfigHandler(user_name=mh.user_name)
-    base = ch.get_config_protected("dreambooth_model_defaults")
+    base = ch.get_module_defaults("dreambooth_model_defaults")
     user_base = ch.get_config_user("dreambooth_model_defaults")
     logger.debug(f"User base: {user_base}")
-    if user_base is not None:
-        base = {**base, **user_base}
+    if base is not None:
+        if user_base is not None:
+            base = {**base, **user_base}
+        else:
+            ch.set_config_user(base, "dreambooth_model_defaults")
     else:
-        logger.debug("Setting user config")
-        ch.set_config_user(base, "dreambooth_model_defaults")
+        logger.debug("Unable to find base model config: dreambooth_model_defaults")
     if not os.path.exists(dest_dir):
         logger.debug(f"Copying model from {src} to {dest_dir}")
         await copy_directory(src, dest_dir, sh)

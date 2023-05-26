@@ -963,7 +963,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 pbar2.set_description("Compiling Checkpoint")
                                 snap_rev = str(args.revision) if save_snapshot else ""
                                 if export_diffusers:
-                                    copy_diffusion_model(args.model_name, user_model_dir)
+                                    copy_diffusion_model(args.model_name, os.path.join(user_model_dir, "diffusers"))
                                 else:
                                     compile_checkpoint(args.model_name, reload_models=False, lora_file_name=out_file,
                                                        log=False, snap_rev=snap_rev, pbar=pbar2)
@@ -976,6 +976,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     save_dir = args.model_dir
 
                 if save_image:
+                    logger.debug("Saving images...")
                     # Get the path to a temporary directory
                     tmp_dir = tempfile.mkdtemp()
                     s_pipeline.save_pretrained(tmp_dir, safe_serialization=True)
@@ -1016,6 +1017,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                         sd = SampleDataset(args)
                         prompts = sd.prompts
+                        logger.debug(f"Generating {len(prompts)} samples...")
+
                         concepts = args.concepts()
                         if args.sanity_prompt:
                             epd = PromptData(
