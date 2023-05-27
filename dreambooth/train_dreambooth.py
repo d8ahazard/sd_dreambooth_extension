@@ -178,10 +178,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         stop_text_percentage = args.stop_text_encoder
         if not args.train_unet:
             stop_text_percentage = 1
-        # if stop_text_percentage == 0 and args.use_lora and "adapt" in args.optimizer:
-        #     stop_text_percentage = 0.001
-        #     # Adapt doesn't work with stop_text_percentage = 0.
-        #     # this is a hacky fix that should be replaced with a proper fix
+
         n_workers = 0
         args.max_token_length = int(args.max_token_length)
         if not args.pad_tokens and args.max_token_length > 75:
