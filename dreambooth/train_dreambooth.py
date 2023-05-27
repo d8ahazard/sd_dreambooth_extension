@@ -92,13 +92,6 @@ export_diffusers = False
 user_model_dir = ""
 
 
-def dadapt(optimizer):
-    if optimizer == "AdamW Dadaptation" or optimizer == "Adan Dadaptation":
-        return True
-    else:
-        return False
-
-
 def set_seed(deterministic: bool):
     if deterministic:
         torch.backends.cudnn.deterministic = True
@@ -185,6 +178,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         stop_text_percentage = args.stop_text_encoder
         if not args.train_unet:
             stop_text_percentage = 1
+        # if stop_text_percentage == 0 and args.use_lora and "adapt" in args.optimizer:
+        #     stop_text_percentage = 0.001
+        #     # Adapt doesn't work with stop_text_percentage = 0.
+        #     # this is a hacky fix that should be replaced with a proper fix
         n_workers = 0
         args.max_token_length = int(args.max_token_length)
         if not args.pad_tokens and args.max_token_length > 75:
@@ -353,7 +350,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             if stop_text_percentage != 0:
                 text_encoder.gradient_checkpointing_enable()
                 if args.use_lora:
-                    # We need to ebable gradients on an input for gradient checkpointing to work
+                    # We need to enable gradients on an input for gradient checkpointing to work
                     # This will not be optimized because it is not a param to optimizer
                     text_encoder.text_model.embeddings.position_embedding.requires_grad_(True)
             else:
@@ -393,12 +390,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         if args.use_lora:
             learning_rate = args.lora_learning_rate
             txt_learning_rate = args.lora_txt_learning_rate
-        try:
-            if "Dadapt" in args.optimizer:
-                learning_rate = 1.0
-                txt_learning_rate = 1.0
-        except:
-            pass
 
         if args.use_lora or not args.train_unet:
             unet.requires_grad_(False)
@@ -462,7 +453,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         else:
             params_to_optimize = unet.parameters()
 
-        optimizer = get_optimizer(args, params_to_optimize)
+        optimizer = get_optimizer(args.optimizer, learning_rate, args.weight_decay, params_to_optimize)
         if len(optimizer.param_groups) > 1:
             try:
                 optimizer.param_groups[1]["weight_decay"] = args.tenc_weight_decay
@@ -1201,14 +1192,14 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             else:
                 text_encoder.train(train_tenc)
 
-            if not args.use_lora:
-                text_encoder.requires_grad_(train_tenc)
-            else:
+            if args.use_lora:
                 if not args.lora_use_buggy_requires_grad:
                     set_lora_requires_grad(text_encoder, train_tenc)
                     # We need to ebable gradients on an input for gradient checkpointing to work
                     # This will not be optimized because it is not a param to optimizer
                     text_encoder.text_model.embeddings.position_embedding.requires_grad_(train_tenc)
+            else:
+                text_encoder.requires_grad_(train_tenc)
 
             if last_tenc != train_tenc:
                 last_tenc = train_tenc
@@ -1388,7 +1379,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     logger.debug("Exception getting tenc lr")
                     pass
 
-                if dadapt(args.optimizer):
+                if 'adapt' in args.optimizer:
                     last_lr = optimizer.param_groups[0]["d"] * optimizer.param_groups[0]["lr"]
                     if len(optimizer.param_groups) > 1:
                         try:
@@ -1432,7 +1423,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     stats["instance_loss"] = logs["inst_loss"]
                     stats["prior_loss"] = logs["prior_loss"]
 
-                if dadapt(args.optimizer):
+                if 'adapt' in args.optimizer:
                     status.textinfo2 = (
                         f"Loss: {'%.2f' % loss_step}, UNET DLR: {'{:.2E}'.format(Decimal(last_lr))}, TENC DLR: {'{:.2E}'.format(Decimal(last_tenc_lr))}, "
                         f"VRAM: {allocated}/{cached} GB"
