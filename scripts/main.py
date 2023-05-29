@@ -1512,7 +1512,7 @@ def on_ui_tabs():
             )
 
         def optimizer_changed(opti):
-            show_adapt = opti in ["AdamW Dadaptation", "Adan Dadaptation", "AdanIP Dadaptation"]
+            show_adapt = "adapt" in opti
             adaptation_lr = gr.update(visible=show_adapt)
             return adaptation_lr
 

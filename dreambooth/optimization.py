@@ -512,7 +512,6 @@ class UniversalScheduler:
             num_cycles: int = 1,
             power: float = 1.0,
             factor: float = 0.5,
-            lr: float = 1e-6,
             min_lr: float = 1e-6,
             scale_pos: float = 0.5,
             unet_lr: float = 1.0,
@@ -573,65 +572,65 @@ def log_dadapt(disable: bool = True):
     else:
         return 5
 
-def get_optimizer(args, params_to_optimize):
+
+def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, params_to_optimize):
     try:
-        if args.optimizer == "8bit AdamW":
+        if optimizer == "8bit AdamW":
             from bitsandbytes.optim import AdamW8bit
             return AdamW8bit(
                 params_to_optimize,
-                lr=args.learning_rate,
-                weight_decay=args.weight_decay,
+                lr=learning_rate,
+                weight_decay=weight_decay,
             )
 
-        elif args.optimizer == "Lion":
+        elif optimizer == "Lion":
             from lion_pytorch import Lion
             return Lion(
                 params_to_optimize,
-                lr=args.learning_rate,
-                weight_decay=args.weight_decay,
+                lr=learning_rate,
+                weight_decay=weight_decay,
             )
 
-        elif args.optimizer == "AdamW Dadaptation":
+        elif optimizer == "AdamW Dadaptation":
             from dadaptation import DAdaptAdam
             return DAdaptAdam(
                 params_to_optimize,
-                lr=args.learning_rate,
-                weight_decay=args.weight_decay,
+                lr=learning_rate,
+                weight_decay=weight_decay,
                 decouple=True,
                 log_every=log_dadapt(True)
             )
 
-        elif args.optimizer == "AdanIP Dadaptation":
+        elif optimizer == "AdanIP Dadaptation":
             from dreambooth.dadapt_adan_ip import DAdaptAdanIP
             return DAdaptAdanIP(
                 params_to_optimize,
-                lr=args.learning_rate,
-                weight_decay=args.weight_decay,
+                lr=learning_rate,
+                weight_decay=weight_decay,
                 log_every=log_dadapt(True)
             )
 
-        elif args.optimizer == "Adan Dadaptation":
+        elif optimizer == "Adan Dadaptation":
             from dreambooth.dadapt_adan import DAdaptAdan
             return DAdaptAdan(
                 params_to_optimize,
-                lr=args.learning_rate,
-                weight_decay=args.weight_decay,
+                lr=learning_rate,
+                weight_decay=weight_decay,
                 log_every=log_dadapt(True),
             )
 
-
     except Exception as e:
-        logger.warning(f"Exception importing {args.optimizer}: {e}")
+        logger.warning(f"Exception importing {optimizer}: {e}")
         traceback.print_exc()
         print(str(e))
         print("WARNING: Using default optimizer (AdamW from Torch)")
+        optimizer = "Torch AdamW"
 
-    args.optimizer = "Torch AdamW"
     from torch.optim import AdamW
     return AdamW(
         params_to_optimize,
-        lr=args.learning_rate,
-        weight_decay=args.weight_decay,
+        lr=learning_rate,
+        weight_decay=weight_decay,
     )
 
 
