@@ -124,26 +124,20 @@ def list_optimizer():
         pass
 
     try:
-        from lion_pytorch import Lion
-        optimizer_list.append("Lion")
-    except:
-        pass
-
-    try:
         from dadaptation import DAdaptAdam
         optimizer_list.append("AdamW Dadaptation")
     except:
         pass
 
     try:
-        from dreambooth.dadapt_adan import DAdaptAdan
+        from dadaptation import DAdaptAdan
         optimizer_list.append("Adan Dadaptation")
     except:
         pass
 
     try:
-        from dreambooth.dadapt_adan_ip import DAdaptAdanIP
-        optimizer_list.append("AdanIP Dadaptation")
+        from dadaptation import DAdaptSGD
+        optimizer_list.append("SGD Dadaptation")
     except:
         pass
 

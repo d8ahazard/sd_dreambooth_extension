@@ -49,7 +49,7 @@ class SchedulerType(Enum):
     CONSTANT_WITH_WARMUP = "constant_with_warmup"
 
 
-def get_dadapt_with_warmup(optimizer, num_warmup_steps: int=0, unet_lr: int=1.0, tenc_lr: int=1.0):
+def get_dadapt_with_warmup(optimizer, num_warmup_steps: int = 0, unet_lr: float = 1.0, tenc_lr: float = 1.0):
     """
     Adjust LR from initial rate to the minimum specified LR over the maximum number of steps.
     See <a href='https://miro.medium.com/max/828/1*Bk4xhtvg_Su42GmiVtvigg.webp'> for an example.
@@ -59,16 +59,16 @@ def get_dadapt_with_warmup(optimizer, num_warmup_steps: int=0, unet_lr: int=1.0,
         num_warmup_steps (`int`, *optional*, defaults to 0):
             The number of steps for the warmup phase.
         unet_lr (`float`, *optional*, defaults to 1.0):
-            The learning rate used to to control d-dadaption for the UNET
+            The learning rate used to control d-dadaption for the UNET
         tenc_lr (`float`, *optional*, defaults to 1.0):
-            The learning rate used to to control d-dadaption for the TENC
+            The learning rate used to control d-dadaption for the TENC
 
     Return:
         `torch.optim.lr_scheduler.LambdaLR` with the appropriate LR schedules for TENC and UNET.
     """
     def unet_lambda(current_step: int):
         if current_step < num_warmup_steps:
-            return (float(current_step) / float(max(unet_lr, num_warmup_steps)))
+            return float(current_step) / float(max(unet_lr, num_warmup_steps))
         else:
             return unet_lr
 
@@ -432,9 +432,9 @@ def get_scheduler(
             If a lr scheduler has an adjustment point, this is the percentage of training steps at which to
             adjust the LR.
         unet_lr (`float`, *optional*, defaults to 1e-6):
-            The learning rate used to to control d-dadaption for the UNET
+            The learning rate used to control d-dadaption for the UNET
         tenc_lr (`float`, *optional*, defaults to 1e-6):
-            The learning rate used to to control d-dadaption for the TENC
+            The learning rate used to control d-dadaption for the TENC
 
 
     """
@@ -565,10 +565,10 @@ class UniversalScheduler:
         return self.scheduler.get_lr()
 
 
-#Temp conditional for dadapt optimizer console logging
+# Temp conditional for dadapt optimizer console logging
 def log_dadapt(disable: bool = True):
     if disable:
-         return 0
+        return 0
     else:
         return 5
 
@@ -578,14 +578,6 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
         if optimizer == "8bit AdamW":
             from bitsandbytes.optim import AdamW8bit
             return AdamW8bit(
-                params_to_optimize,
-                lr=learning_rate,
-                weight_decay=weight_decay,
-            )
-
-        elif optimizer == "Lion":
-            from lion_pytorch import Lion
-            return Lion(
                 params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
@@ -601,18 +593,18 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 log_every=log_dadapt(True)
             )
 
-        elif optimizer == "AdanIP Dadaptation":
-            from dreambooth.dadapt_adan_ip import DAdaptAdanIP
-            return DAdaptAdanIP(
+        elif optimizer == "Adan Dadaptation":
+            from dadaptation import DAdaptAdan
+            return DAdaptAdan(
                 params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
-                log_every=log_dadapt(True)
+                log_every=log_dadapt(True),
             )
 
-        elif optimizer == "Adan Dadaptation":
-            from dreambooth.dadapt_adan import DAdaptAdan
-            return DAdaptAdan(
+        elif optimizer == "SGD Dadaptation":
+            from dadaptation import DAdaptSGD
+            return DAdaptSGD(
                 params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,

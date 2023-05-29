@@ -2,8 +2,9 @@ import json
 import logging
 import os
 import traceback
-from typing import List, Dict
 from pathlib import Path
+from typing import List, Dict
+
 from pydantic import BaseModel
 
 from dreambooth import shared  # noqa

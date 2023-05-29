@@ -9,14 +9,14 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Union, Dict
 
 import torch
-from fastapi import FastAPI
-
-import scripts.api
 from core.handlers.config import ConfigHandler
 from core.handlers.models import ModelHandler, ModelManager
 from core.handlers.status import StatusHandler
 from core.handlers.websocket import SocketHandler
 from core.modules.base.module_base import BaseModule
+from fastapi import FastAPI
+
+import scripts.api
 from dreambooth import shared
 from dreambooth.dataclasses.db_config import DreamboothConfig, from_file
 from dreambooth.sd_to_diff import extract_checkpoint
