@@ -1,8 +1,6 @@
 import logging
 import os.path
 import re
-from collections import defaultdict
-
 
 logger = logging.getLogger(__name__)
 

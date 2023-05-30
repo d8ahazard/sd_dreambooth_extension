@@ -136,14 +136,20 @@ def list_optimizer():
         pass
 
     try:
-        from dreambooth.dadapt_adan import DAdaptAdan
+        from dadaptation import DAdaptLion
+        optimizer_list.append("Lion Dadaptation")
+    except:
+        pass
+
+    try:
+        from dadaptation import DAdaptAdan
         optimizer_list.append("Adan Dadaptation")
     except:
         pass
 
     try:
-        from dreambooth.dadapt_adan_ip import DAdaptAdanIP
-        optimizer_list.append("AdanIP Dadaptation")
+        from dadaptation import DAdaptSGD
+        optimizer_list.append("SGD Dadaptation")
     except:
         pass
 

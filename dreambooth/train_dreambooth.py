@@ -1452,8 +1452,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 status.job_no = global_step
                 stats["lifetime_step"] = args.revision
                 stats["session_step"] = global_step
-                status0 = f"Steps: {global_step}/{max_train_steps} (Current), {rate_string}"
-                status1 = f"{args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
+                # status0 = f"Steps: {global_step}/{max_train_steps} (Current), {rate_string}"
+                # status1 = f"{args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
                 status.textinfo = (
                     f"Steps: {global_step}/{max_train_steps} (Current), {rate_string}"
                     f" {args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
