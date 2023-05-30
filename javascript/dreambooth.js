@@ -391,7 +391,7 @@ let db_titles = {
     "Number of Hard Resets": "Number of hard resets of the lr in cosine_with_restarts scheduler.",
     "Number of Samples to Generate": "How many samples to generate per subject.",
     "Offset Noise": "Allows the model to learn brightness and contrast with greater detail during training. Value controls the strength of the effect, 0 disables it.",
-    "Optimizer": "Optimizer algorithm.\nRecommended settings (LR = Learning Rate, WD = Weight Decay):\nTorch / 8Bit AdamW - LR: 2e-6, WD: 0.01\nAdamW Adapt - LR: 0.05, WD: 0\nSGD Adapt - LR: 1, WD: 0\nAdan Adapt - LR: 0.2, WD: 0.01",
+    "Optimizer": "Optimizer algorithm.\nRecommended settings (LR = Learning Rate, WD = Weight Decay):\nTorch / 8Bit AdamW - LR: 2e-6, WD: 0.01\nLion - LR: 5e-7, WD: 0.02\nAdamW Adapt - LR: 0.05, WD: 0\nLion Adapt - LR: ??, WD:0\nSGD Adapt - LR: 1, WD: 0\nAdan Adapt - LR: 0.2, WD: 0.01",
     "Pad Tokens": "Pad the input images token length to this amount. You probably want to do this.",
     "Pause After N Epochs": "Number of epochs after which training will be paused for the specified time. Useful if you want to give your GPU a rest.",
     "Performance Wizard (WIP)": "Attempt to automatically set training parameters based on total VRAM. Still under development.",

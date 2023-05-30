@@ -583,6 +583,14 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 weight_decay=weight_decay,
             )
 
+        elif optimizer == "Lion":
+            from lion_pytorch import Lion
+            return Lion(
+                params_to_optimize,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+            )
+
         elif optimizer == "AdamW Dadaptation":
             from dadaptation import DAdaptAdam
             return DAdaptAdam(
@@ -590,6 +598,16 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 lr=learning_rate,
                 weight_decay=weight_decay,
                 decouple=True,
+                use_bias_correction=True,
+                log_every=log_dadapt(True)
+            )
+
+        elif optimizer == "Lion Dadaptation":
+            from dadaptation import DAdaptLion
+            return DAdaptLion(
+                params_to_optimize,
+                lr=learning_rate,
+                weight_decay=weight_decay,
                 log_every=log_dadapt(True)
             )
 

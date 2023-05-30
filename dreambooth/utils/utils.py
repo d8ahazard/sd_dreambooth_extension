@@ -124,8 +124,20 @@ def list_optimizer():
         pass
 
     try:
+        from lion_pytorch import Lion
+        optimizer_list.append("Lion")
+    except:
+        pass
+
+    try:
         from dadaptation import DAdaptAdam
         optimizer_list.append("AdamW Dadaptation")
+    except:
+        pass
+
+    try:
+        from dadaptation import DAdaptLion
+        optimizer_list.append("Lion Dadaptation")
     except:
         pass
 
