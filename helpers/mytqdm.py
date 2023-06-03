@@ -8,6 +8,7 @@ from dreambooth import shared
 class mytqdm(tqdm):
     def __init__(self, iterable: Iterable = None, **kwargs):
         self.user = None
+        self.target = None
         self.status_handler = None
         self.status_index = 0
         try:

@@ -1,65 +1,66 @@
----
+name: Bug Report
+description: Create a report
+title: "[Bug]: "
+labels: ["bug-report"]
 
-name: Bug report
-about: Please Answer the Following Questions
-title: ''
-labels: 'new'
-assignees: ''
-
----
-## ⚠️If you do not follow the template, your issue may be closed without a response ⚠️
-Kindly read and fill this form in its entirety.
-
-### 0. Initial troubleshooting
-Please check each of these before opening an issue. If you've checked them, **delete this section of your bug report**. Have you:
-- Updated the Stable-Diffusion-WebUI to the latest version?
-- Updated Dreambooth to the latest revision?
-- Completely restarted the stable-diffusion-webUI, not just reloaded the UI?
-- Read the [Readme](https://github.com/d8ahazard/sd_dreambooth_extension#readme)?
-
-### 1. Please find the following lines in the console and paste them below.
-
-```
-#######################################################################################################
-Initializing Dreambooth
-If submitting an issue on github, please provide the below text for debugging purposes:
-
-Python revision: 3.10.6 (tags/v3.10.6:9c7b4bd, Aug  1 2022, 21:53:49) [MSC v.1932 64 bit (AMD64)]
-Dreambooth revision: bd3fecc3d27d777a4e8f3206a0b16e852877dbad
-SD-WebUI revision: 
-
-[+] torch version 2.0.0+cu118 installed.
-[+] torchvision version 0.15.1+cu118 installed.
-[+] xformers version 0.0.17+b6be33a.d20230315 installed.
-[+] accelerate version 0.17.1 installed.
-[+] bitsandbytes version 0.35.4 installed.
-[+] diffusers version 0.14.0 installed.
-[+] transformers version 4.27.1 installed.
-
-#######################################################################################################
-```
-
-
-### 2. Describe the bug
-
-(A clear and concise description of what the bug is)
-
-**Screenshots/Config**
-If the issue is specific to an error while training, please provide a screenshot of training parameters or the
-db_config.json file from /models/dreambooth/MODELNAME/db_config.json
-
-### 3. Provide logs
-
-If a crash has occurred, please provide the *entire* stack trace from the log, including the last few log messages *before* the crash occurred.
-
-```st
-PASTE YOUR STACKTRACE HERE
-```
-
-### 4. Environment
-
-What OS?
-
-If Windows - WSL or native?
-
-What GPU are you using?
+body:
+- type: checkboxes
+  attributes:
+  label: Is there an existing issue for this?
+  description: Please search to see if an issue already exists for the bug you encountered, and that it hasn't been fixed in a recent build/commit.
+  options:
+  - label: I have searched the existing issues and checked the recent builds/commits of both this extension and the webui
+  required: true
+- type: markdown
+  attributes:
+  value: |
+  *Please fill this form with as much information as possible, don't forget to fill "What OS..." and "What browsers" and *provide screenshots if possible**
+- type: textarea
+  id: what-did
+  attributes:
+  label: What happened?
+  description: Tell us what happened in a very clear and simple way
+  validations:
+  required: true
+- type: textarea
+  id: steps
+  attributes:
+  label: Steps to reproduce the problem
+  description: Please provide us with precise step by step information on how to reproduce the bug
+  value: |
+  1. Go to ....
+  2. Press ....
+  3. ...
+  validations:
+  required: true
+- type: textarea
+  id: commits
+  attributes:
+  label: Commit and libraries
+  description: Please find the following lines in the console and paste them below. Starting at `Initializing Dreambooth` and ending several lines below at `[+] bitsandbytes version 0.35.4 installed.`.
+  value: |
+  webui:
+  controlnet:
+  validations:
+  required: true
+- type: textarea
+  id: cmdargs
+  attributes:
+  label: Command Line Arguments
+  description: Are you using any launching parameters/command line arguments (modified webui-user .bat/.sh) ? If yes, please write them below. Write "No" otherwise.
+  render: Shell
+  validations:
+  required: true
+- type: textarea
+  id: logs
+  attributes:
+  label: Console logs
+  description: Please provide full cmd/terminal logs from the moment you started UI to the end of it, after your bug happened. If it's very long, provide a link to pastebin or similar service.
+  render: Shell
+  validations:
+  required: true
+- type: textarea
+  id: misc
+  attributes:
+  label: Additional information
+  description: Please provide us with any relevant additional info or context.
