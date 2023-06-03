@@ -28,25 +28,25 @@ body:
       label: Steps to reproduce the problem
       description: Please provide us with precise step by step information on how to reproduce the bug
       value: |
-        1. Go to ....
-        2. Press ....
-        3. ...
+         1. Go to ....
+         2. Press ....
+         3. ...
     validations:
       required: true
   - type: textarea
     id: commits
     attributes:
       label: Commit and libraries
-      description: Please find the following lines in the console and paste them below. Starting at `Initializing Dreambooth` and ending several lines below at `[+] bitsandbytes version 0.35.4 installed.`.
-    value:
+      description: Please find the following lines in the console and paste them below.
+      value: Starting at `Initializing Dreambooth` and ending several lines below at `[+] bitsandbytes version 0.35.4 installed.`.
     validations:
       required: true
   - type: textarea
     id: cmdargs
     attributes:
-    label: Command Line Arguments
-    description: Are you using any launching parameters/command line arguments (modified webui-user .bat/.sh) ? If yes, please write them below. Write "No" otherwise.
-    render: Shell
+      label: Command Line Arguments
+      description: Are you using any launching parameters/command line arguments (modified webui-user .bat/.sh) ? If yes, please write them below. Write "No" otherwise.
+      render: Shell
     validations:
       required: true
   - type: textarea
