@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 from typing import Union, Optional
 
 import torch
@@ -64,6 +65,10 @@ def get_scheduler(
 
 
 def optim_to(profiler, optim: torch.optim.Optimizer, device="cpu"):
+    if profiler is None:
+        torch.cuda.empty_cache()
+        gc.collect()
+
     def inplace_move(obj: torch.Tensor, target):
         if hasattr(obj, 'data'):
             obj.data = obj.data.to(target)
@@ -79,3 +84,4 @@ def optim_to(profiler, optim: torch.optim.Optimizer, device="cpu"):
                 inplace_move(value, device)
     if profiler is None:
         torch.cuda.empty_cache()
+        gc.collect()

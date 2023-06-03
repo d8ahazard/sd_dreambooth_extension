@@ -37,6 +37,7 @@ logger = logging.get_logger(__name__)
 
 
 class SchedulerType(Enum):
+    DADAPT_WITH_WARMUP = "dadapt_with_warmup"
     LINEAR = "linear"
     LINEAR_WITH_WARMUP = "linear_with_warmup"
     COSINE = "cosine"
@@ -46,6 +47,39 @@ class SchedulerType(Enum):
     POLYNOMIAL = "polynomial"
     CONSTANT = "constant"
     CONSTANT_WITH_WARMUP = "constant_with_warmup"
+
+
+def get_dadapt_with_warmup(optimizer, num_warmup_steps: int = 0, unet_lr: float = 1.0, tenc_lr: float = 1.0):
+    """
+    Adjust LR from initial rate to the minimum specified LR over the maximum number of steps.
+    See <a href='https://miro.medium.com/max/828/1*Bk4xhtvg_Su42GmiVtvigg.webp'> for an example.
+    Args:
+        optimizer ([`~torch.optim.Optimizer`]):
+            The optimizer for which to schedule the learning rate.
+        num_warmup_steps (`int`, *optional*, defaults to 0):
+            The number of steps for the warmup phase.
+        unet_lr (`float`, *optional*, defaults to 1.0):
+            The learning rate used to control d-dadaption for the UNET
+        tenc_lr (`float`, *optional*, defaults to 1.0):
+            The learning rate used to control d-dadaption for the TENC
+
+    Return:
+        `torch.optim.lr_scheduler.LambdaLR` with the appropriate LR schedules for TENC and UNET.
+    """
+    def unet_lambda(current_step: int):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(unet_lr, num_warmup_steps))
+        else:
+            return unet_lr
+
+    def tenc_lambda(current_step: int):
+        if current_step < num_warmup_steps:
+            return (float(current_step) / float(max(tenc_lr, num_warmup_steps)))
+        else:
+            return tenc_lr
+
+    return LambdaLR(optimizer, [unet_lambda, tenc_lambda], last_epoch=-1, verbose=False)
+
 
 
 # region Newer Schedulers
@@ -368,6 +402,8 @@ def get_scheduler(
         power: float = 1.0,
         factor: float = 0.5,
         scale_pos: float = 0.5,
+        unet_lr: float = 1.0,
+        tenc_lr: float = 1.0,
 ):
     """
     Unified API to get any scheduler from its name.
@@ -395,6 +431,12 @@ def get_scheduler(
         scale_pos (`float`, *optional*, defaults to 0.5):
             If a lr scheduler has an adjustment point, this is the percentage of training steps at which to
             adjust the LR.
+        unet_lr (`float`, *optional*, defaults to 1e-6):
+            The learning rate used to control d-dadaption for the UNET
+        tenc_lr (`float`, *optional*, defaults to 1e-6):
+            The learning rate used to control d-dadaption for the TENC
+
+
     """
     name = SchedulerType(name)
     break_steps = int(total_training_steps * scale_pos)
@@ -450,6 +492,14 @@ def get_scheduler(
             num_cycles=num_cycles,
         )
 
+    if name == SchedulerType.DADAPT_WITH_WARMUP:
+        return get_dadapt_with_warmup(
+            optimizer,
+            num_warmup_steps=num_warmup_steps,
+            unet_lr=unet_lr,
+            tenc_lr=tenc_lr,
+        )
+
 
 class UniversalScheduler:
     def __init__(
@@ -462,9 +512,10 @@ class UniversalScheduler:
             num_cycles: int = 1,
             power: float = 1.0,
             factor: float = 0.5,
-            lr: float = 1e-6,
             min_lr: float = 1e-6,
             scale_pos: float = 0.5,
+            unet_lr: float = 1.0,
+            tenc_lr: float = 1.0,
     ):
         self.current_step = 0
         og_schedulers = [
@@ -489,6 +540,8 @@ class UniversalScheduler:
             power=power,
             factor=factor,
             scale_pos=scale_pos,
+            unet_lr=unet_lr,
+            tenc_lr=tenc_lr,
         )
 
     def step(self, steps: int = 1, is_epoch: bool = False):
@@ -512,69 +565,82 @@ class UniversalScheduler:
         return self.scheduler.get_lr()
 
 
-def get_optimizer(args, params_to_optimize):
+# Temp conditional for dadapt optimizer console logging
+def log_dadapt(disable: bool = True):
+    if disable:
+        return 0
+    else:
+        return 5
+
+
+def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, params_to_optimize):
     try:
-        if args.optimizer == "8bit AdamW":
+        if optimizer == "8bit AdamW":
             from bitsandbytes.optim import AdamW8bit
             return AdamW8bit(
                 params_to_optimize,
-                lr=args.learning_rate,
-                weight_decay=args.adamw_weight_decay,
+                lr=learning_rate,
+                weight_decay=weight_decay,
             )
 
-        elif args.optimizer == "Lion":
+        elif optimizer == "Lion":
             from lion_pytorch import Lion
             return Lion(
                 params_to_optimize,
-                lr=args.learning_rate,
-                weight_decay=args.adamw_weight_decay,
+                lr=learning_rate,
+                weight_decay=weight_decay,
             )
 
-        elif args.optimizer == "SGD Dadaptation":
-            from dadaptation import DAdaptSGD
-            return DAdaptSGD(
-                params_to_optimize,
-                lr=args.learning_rate,
-                weight_decay=args.adamw_weight_decay,
-            )
-
-        elif args.optimizer == "AdamW Dadaptation":
+        elif optimizer == "AdamW Dadaptation":
             from dadaptation import DAdaptAdam
             return DAdaptAdam(
                 params_to_optimize,
-                lr=args.learning_rate,
-                weight_decay=args.adamw_weight_decay,
+                lr=learning_rate,
+                weight_decay=weight_decay,
                 decouple=True,
+                use_bias_correction=True,
+                log_every=log_dadapt(True)
             )
 
-        elif args.optimizer == "Adagrad Dadaptation":
-            from dadaptation import DAdaptAdaGrad
-            return DAdaptAdaGrad(
+        elif optimizer == "Lion Dadaptation":
+            from dadaptation import DAdaptLion
+            return DAdaptLion(
                 params_to_optimize,
-                lr=args.learning_rate,
-                weight_decay=args.adamw_weight_decay,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                log_every=log_dadapt(True)
             )
 
-        elif args.optimizer == "Adan Dadaptation":
-            from dreambooth.dadapt_adan import DAdaptAdan
+        elif optimizer == "Adan Dadaptation":
+            from dadaptation import DAdaptAdan
             return DAdaptAdan(
                 params_to_optimize,
-                lr=args.learning_rate,
-                weight_decay=args.adamw_weight_decay,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                log_every=log_dadapt(True),
+            )
+
+        elif optimizer == "SGD Dadaptation":
+            from dadaptation import DAdaptSGD
+            return DAdaptSGD(
+                params_to_optimize,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                log_every=log_dadapt(True),
             )
 
     except Exception as e:
-        logger.warning(f"Exception importing {args.optimizer}: {e}")
+        logger.warning(f"Exception importing {optimizer}: {e}")
         traceback.print_exc()
         print(str(e))
         print("WARNING: Using default optimizer (AdamW from Torch)")
+        optimizer = "Torch AdamW"
 
-    args.optimizer = "Torch AdamW"
     from torch.optim import AdamW
     return AdamW(
         params_to_optimize,
-        lr=args.learning_rate,
-        weight_decay=args.adamw_weight_decay,
+        lr=learning_rate,
+        weight_decay=weight_decay,
     )
 
 
@@ -589,5 +655,5 @@ def get_noise_scheduler(args):
         scheduler_class = DDPMScheduler
 
     return scheduler_class.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="scheduler"
+        args.get_pretrained_model_name_or_path(), subfolder="scheduler"
     )

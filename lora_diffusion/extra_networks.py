@@ -123,9 +123,6 @@ def save_extra_networks(modelmap={}, outpath="./lora.safetensors"):
                 rank = getattr(_down, "out_channels")
             weights[f"{prefix}_{_key}.lora_up.weight"] = _up.weight
             weights[f"{prefix}_{_key}.lora_down.weight"] = _down.weight
-            metadata[f"{name}:{i}:up"] = f"{prefix}_{_key}.lora_up.weight"
-            metadata[f"{name}:{i}:down"] = f"{prefix}_{_key}.lora_down.weight"
-            metadata[f"{name}:{i}:rank"] = str(rank)
         if rank:
             metadata[f"{prefix}_rank"] = f"{rank}"
 

@@ -1,0 +1,179 @@
+{
+  "dbModelTabs": {
+    "value": "db-model-select-tab"
+  },
+  "dreamModelSelect_select": {
+    "value": "",
+    "options": {}
+  },
+  "snapshotSelect_select": {
+    "value": "",
+    "options": {}
+  },
+  "loraModelSelect_select": {
+    "value": "",
+    "options": {}
+  },
+  "db_new_model_name": {
+    "value": ""
+  },
+  "is_512": {
+    "value": true
+  },
+  "create_from_hub": {
+    "value": false
+  },
+  "db_new_model_url": {
+    "value": ""
+  },
+  "db_new_model_token": {
+    "value": ""
+  },
+  "db_new_model_select": {
+    "value": "",
+    "options": {}
+  },
+  "db_use_shared_src": {
+    "value": false
+  },
+  "new_model_shared_src_select": {
+    "value": "",
+    "options": {}
+  },
+  "db_train_unfrozen": {
+    "value": true
+  },
+  "num_train_epochs": {
+    "value": 150,
+    "min": 1,
+    "max": 1000,
+    "step": 1
+  },
+  "save_embedding_every": {
+    "value": 0,
+    "min": 0,
+    "max": 100,
+    "step": 1
+  },
+  "save_preview_every": {
+    "value": 0,
+    "min": 0,
+    "max": 100,
+    "step": 1
+  },
+  "resolution": {
+    "value": 768,
+    "min": 512,
+    "max": 1024,
+    "step": 64
+  },
+  "train_batch_size": {
+    "value": 5,
+    "min": 1,
+    "max": 100,
+    "step": 1
+  },
+  "gradient_accumulation_steps": {
+    "value": 1,
+    "min": 1,
+    "max": 100,
+    "step": 1
+  },
+  "mixed_precision": {
+    "value": "",
+    "options": {}
+  },
+  "attention": {
+    "value": "",
+    "options": {}
+  },
+  "optimizer": {
+    "value": "",
+    "options": {}
+  },
+  "lr_scheduler": {
+    "value": "",
+    "options": {}
+  },
+  "learning_rate": {
+    "value": 0.000002
+  },
+  "txt_learning_rate": {
+    "value": 0.000002
+  },
+  "min_learning_rate": {
+    "value": 0.000001
+  },
+  "lr_warmup_steps": {
+    "value": 500,
+    "min": 0,
+    "max": 10000,
+    "step": 1
+  },
+  "weight_decay": {
+    "value": 0.01,
+    "min": 0,
+    "max": 1,
+    "step": 0.001
+  },
+  "tenc_weight_decay": {
+    "value": 0.01,
+    "min": 0,
+    "max": 1,
+    "step": 0.001
+  },
+  "offset_noise": {
+    "value": 0,
+    "min": -1,
+    "max": 1,
+    "step": 0.01
+  },
+  "clip_skip": {
+    "value": 1,
+    "min": 1,
+    "max": 12,
+    "step": 1
+  },
+  "tenc_grad_clip_norm": {
+    "value": 0,
+    "min": 0,
+    "max": 128,
+    "step": 0.25
+  },
+  "max_token_length": {
+    "value": 75,
+    "min": 75,
+    "max": 300,
+    "step": 75
+  },
+  "stop_text_encoder": {
+    "value": 0.75,
+    "min": 0,
+    "max": 1,
+    "step": 0.01
+  },
+  "shuffle_tags": {
+    "value": true
+  },
+  "strict_tokens": {
+    "value": true
+  },
+  "gradient_checkpointing": {
+    "value": false
+  },
+  "gradient_set_to_none": {
+    "value": true
+  },
+  "freeze_clip_normalization": {
+    "value": false
+  },
+  "use_ema": {
+    "value": false
+  },
+  "train_unet": {
+    "value": true
+  },
+  "disable_logging": {
+    "value": true
+  }
+}

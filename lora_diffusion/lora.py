@@ -1164,3 +1164,9 @@ def get_target_module(target_type: str = "injection", use_extended: bool = False
         return UNET_DEFAULT_TARGET_REPLACE if not use_extended else UNET_EXTENDED_TARGET_REPLACE
     if target_type == "patch":
         return monkeypatch_or_replace_lora_extended if use_extended else monkeypatch_or_replace_lora
+
+def set_lora_requires_grad(model, requires_grad):
+    for name, param in model.named_parameters():
+        if "lora" in name:
+            if param.requires_grad != requires_grad:
+                param.requires_grad = requires_grad

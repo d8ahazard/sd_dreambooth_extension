@@ -2,7 +2,6 @@ import re
 from typing import List
 
 import torch
-import torch.utils.checkpoint
 from transformers import CLIPTextModel
 
 

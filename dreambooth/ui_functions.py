@@ -11,7 +11,6 @@ import traceback
 from collections import OrderedDict
 
 import torch
-import torch.utils.checkpoint
 import torch.utils.data.dataloader
 from accelerate import find_executable_batch_size
 from diffusers.utils import logging as dl
@@ -41,6 +40,7 @@ from dreambooth.utils.model_utils import (
     get_lora_models,
     get_checkpoint_match,
     get_model_snapshots,
+    LORA_SHARED_SRC_CREATE,
 )
 from dreambooth.utils.utils import printm, cleanup
 from helpers.image_builder import ImageBuilder
@@ -619,11 +619,13 @@ def load_model_params(model_name):
     """
     @param model_name: The name of the model to load.
     @return:
+    db_model_dir: The model directory
     db_model_path: The full path to the model directory
     db_revision: The current revision of the model
     db_v2: If the model requires a v2 config/compilation
     db_has_ema: Was the model extracted with EMA weights
     db_src: The source checkpoint that weights were extracted from or hub URL
+    db_shared_diffusers_path:
     db_scheduler: Scheduler used for this model
     db_model_snapshots: A gradio dropdown containing the available snapshots for the model
     db_outcome: The result of loading model params
@@ -644,15 +646,15 @@ def load_model_params(model_name):
 
         loras = get_lora_models(config)
         db_lora_models = gr_update(choices=loras)
-
         msg = f"Selected model: '{model_name}'."
         return (
             config.model_dir,
             config.revision,
             config.epoch,
             "True" if config.v2 else "False",
-            "True" if config.has_ema else "False",
+            "True" if config.has_ema and not config.use_lora else "False",
             config.src,
+            config.shared_diffusers_path,
             db_model_snapshots,
             db_lora_models,
             msg,
@@ -687,7 +689,7 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
             msg = "Using xformers, please set mixed precision to 'fp16' or 'bf16' to continue."
     if not len(config.concepts()):
         msg = "Please check your dataset directories."
-    if not os.path.exists(config.pretrained_model_name_or_path):
+    if not os.path.exists(config.get_pretrained_model_name_or_path()):
         msg = "Invalid training data directory."
     if config.pretrained_vae_name_or_path:
         if not os.path.exists(config.pretrained_vae_name_or_path):
@@ -929,6 +931,7 @@ def start_crop(
 def create_model(
         new_model_name: str,
         ckpt_path: str,
+        shared_src: str,
         from_hub=False,
         new_model_url="",
         new_model_token="",
@@ -952,24 +955,25 @@ def create_model(
         if sh is not None:
             sh.end(desc=err_msg)
 
-        return "", "", 0, 0, "", "", "", "", res, "", err_msg
+        return "", "", "", 0, 0, "", "", "", "", res, "", err_msg
 
     new_model_name = sanitize_name(new_model_name)
 
-    if not from_hub:
+    if not from_hub and (shared_src == "" or shared_src == LORA_SHARED_SRC_CREATE):
         checkpoint_info = get_checkpoint_match(ckpt_path)
         if checkpoint_info is None or not os.path.exists(checkpoint_info.filename):
             err_msg = "Unable to find checkpoint file!"
             print(err_msg)
             if sh is not None:
                 sh.end(desc=err_msg)
-            return "", "", 0, 0, "", "", "", "", res, "", err_msg
+            return "", "", "", 0, 0, "", "", "", "", res, "", err_msg
         ckpt_path = checkpoint_info.filename
 
     unload_system_models()
     result = extract_checkpoint(
         new_model_name,
         ckpt_path,
+        shared_src,
         from_hub,
         new_model_url,
         new_model_token,
@@ -1020,7 +1024,7 @@ def debug_buckets(model_name, num_epochs, batch_size):
     print("Preparing prompt dataset...")
 
     prompt_dataset = ClassDataset(
-        args.concepts(), args.model_dir, args.resolution, False
+        args.concepts(), args.model_dir, args.resolution, False, args.disable_class_matching
     )
     inst_paths = prompt_dataset.instance_prompts
     class_paths = prompt_dataset.class_prompts
@@ -1038,8 +1042,11 @@ def debug_buckets(model_name, num_epochs, batch_size):
     sched_train_steps = args.num_train_epochs * dataset.__len__()
 
     optimizer = AdamW(
-        placeholder, lr=args.learning_rate, weight_decay=args.adamw_weight_decay
+        placeholder, lr=args.learning_rate, weight_decay=args.weight_decay
     )
+    if not args.use_lora and args.lr_scheduler == "dadapt_with_warmup":
+        args.lora_learning_rate = args.learning_rate,
+        args.lora_txt_learning_rate = args.learning_rate,
 
     lr_scheduler = UniversalScheduler(
         args.lr_scheduler,
@@ -1052,6 +1059,8 @@ def debug_buckets(model_name, num_epochs, batch_size):
         factor=args.lr_factor,
         scale_pos=args.lr_scale_pos,
         min_lr=args.learning_rate_min,
+        unet_lr=args.lora_learning_rate,
+        tenc_lr=args.lora_txt_learning_rate,
     )
 
     sampler = BucketSampler(dataset, args.train_batch_size, True)

@@ -1,22 +1,41 @@
 <div class="module" id="moduleDreambooth">
     <div class="container-fluid">
         <div class="row">
-            <div class="text-center justify-between">
-                <button class="btn btn-top btn-secondary" type="button" id="db_load_params">Load Settings</button>
-                <button class="btn btn-top btn-secondary" type="button" id="db_save_config">Save Settings</button>
-                <button class="btn btn-top btn-primary" type="button" id="db_train">Train</button>
-                <button class="btn btn-top btn-secondary" type="button" id="db_gen_ckpt">Generate Ckpt</button>
-                <button class="btn btn-top btn-secondary hide" type="button" id="db_gen_ckpt_during">Save Weights</button>
-                <button class="btn btn-top btn-secondary hide" type="button" id="db_train_sample">Generate Samples</button>
-                <button class="btn btn-top btn-secondary hide" type="button" id="db_cancel">Cancel</button>
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-body text-center justify-between">
+                        <div class="btn-group dbButtons">
+                            <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_load_params">
+                                Load Settings
+                            </button>
+                            <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_save_config">
+                                Save Settings
+                            </button>
+                            <button class="btn btn-top btn-primary dbSettingBtn" type="button" id="db_train">Train
+                            </button>
+                            <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_gen_ckpt">
+                                Generate Ckpt
+                            </button>
+                            <button class="btn btn-top btn-secondary hide dbTrainBtn" type="button"
+                                    id="db_gen_ckpt_during"> Save Weights
+                            </button>
+                            <button class="btn btn-top btn-secondary hide dbTrainBtn" type="button"
+                                    id="db_train_sample">Generate Samples
+                            </button>
+                            <button class="btn btn-top btn-secondary hide cancelButton dbTrainBtn" type="button"
+                                    id="db_cancel">Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="row">
-            <div class="col-12 col-md-4">
+            <div class="col-12 col-md-6 col-lg-4" id="dbModelCol">
                 <div class="card shadow" id="dreamModel">
                     <div class="card-header">Model</div>
                     <div class="card-body">
-                        <ul class="nav nav-tabs" id="myTab" role="tablist">
+                        <ul class="nav nav-tabs" id="dbModelTabs" role="tablist">
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link active" id="db-model-select-tab" data-bs-toggle="tab"
                                         data-bs-target="#db-model-select" type="button" role="tab"
@@ -31,118 +50,341 @@
                                 </button>
                             </li>
                         </ul>
-                        <div class="tab-content" id="myTabContent">
+                        <div class="borderSection" id="myTabContent">
                             <div class="tab-pane fade show active" id="db-model-select" role="tabpanel"
                                  aria-labelledby="db-model-select">
 
                                 <div class="container">
                                     <div class="row">
                                         <div class="col-12">
-                                            <div id="dreamModelSelect" class="modelSelect" data-model_type="dreambooth" data-label="Model"></div>
+                                            <div id="dreamModelSelect" class="modelSelect" data-model_type="dreambooth"
+                                                 data-label="Select Model"></div>
                                         </div>
                                         <div class="col-12">
-                                            <div id="snapshotSelect" class="modelSelect" data-model_type="dreamboothSnapshot" data-label="Snapshot to Resume"></div>
+                                            <div id="snapshotSelect" class="modelSelect db-advanced"
+                                                 data-model_type="dreamboothSnapshot"
+                                                 data-label="Snapshot to Resume"></div>
                                         </div>
                                     </div>
                                     <div class="row" style="display: none;" id="loraSelect">
                                         <div class="col-12">
-                                            <div id="loraModelSelect" class="modelSelect" data-model_type="lora" data-label="Lora Model"></div>
+                                            <div id="loraModelSelect" class="modelSelect" data-model_type="lora"
+                                                 data-label="Lora Model"></div>
                                         </div>
                                     </div>
-                                    <div class="row" id="modelDetails">
+                                    <div class="dbModelInfo">
+
                                     </div>
                                 </div>
                             </div>
                             <div class="tab-pane fade" id="db-model-create" role="tabpanel"
                                  aria-labelledby="db-model-create">
-                                <div class="container">
-                                    <div class="row">
-                                        <div class="col-12">
-                                            <div class="form-group">
-                                                <label for="db_new_model_name">Name</label>
-                                                <input type="text" class="form-control newModelParam" id="db_new_model_name" data-key="new_model_name">
-                                            </div>
+                                <form>
+                                    <div class="form-group">
+                                        <label class="form-label" for="db_new_model_name">Name</label>
+                                        <input type="text" class="form-control newModelParam"
+                                               id="db_new_model_name" data-key="new_model_name">
+                                    </div>
+                                    <div class="form-group db-advanced">
+                                        <div class="form-check form-switch">
+                                            <input class="newModelParam form-check-input" type="checkbox" id="is_512"
+                                                   name="is_512" data-key="is_512" checked>
+                                            <label class="form-check-label" for="is_512">512x Base Model</label>
                                         </div>
                                     </div>
-                                    <div class="row">
-                                        <div class="col-6">
-                                            <div class="form-check">
-                                                <input type="checkbox" class="form-check-input newModelParam" id="db_create_from_hub" data-key="create_from_hub">
-                                                <label class="form-check-label" for="db_create_from_hub">Create From
-                                                    Hub</label>
-                                            </div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="form-check">
-                                                <input type="checkbox" class="form-check-input newModelParam" id="db_512_model" data-key="512_model"
-                                                       checked>
-                                                <label class="form-check-label" for="db_512_model">512x Model</label>
-                                            </div>
+                                    <div class="form-group db-advanced">
+                                        <div class="form-check form-switch">
+                                            <input class="newModelParam form-check-input" type="checkbox"
+                                                   id="create_from_hub" name="create_from_hub">
+                                            <label class="form-check-label" for="create_from_hub">Create from
+                                                Hub</label>
                                         </div>
                                     </div>
-                                    <div class="row">
-                                        <div class="col-12">
-                                            <div class="form-group" style="display: none;" id="hub_row">
-                                                <label for="db_new_model_url">Model Path</label>
-                                                <input type="text" class="form-control newModelParam" id="db_new_model_url"
-                                                       placeholder="runwayml/stable-diffusion-v1-5" data-key="new_model_url">
-                                                <label for="db_new_model_token">HuggingFace Token</label>
-                                                <input type="text" class="form-control newModelParam" id="db_new_model_token" data-key="new_model_token"
-                                                       value="">
-                                            </div>
-                                            <div class="form-group" id="local_row">
-                                                <div class="modelSelect"
-                                                     id="db_new_model"
-                                                     data-add_class="newModelParam"
-                                                     data-model_type="diffusers"
-                                                     data-label="Source Checkpoint"
-                                                     data-key="new_model_src"></div>
-                                            </div>
+                                    <div class="form-group db-advanced" style="display: none;" id="hub_row">
+                                        <label class="form-label" for="db_new_model_url">Model Path</label>
+                                        <input type="text" class="form-control newModelParam"
+                                               id="db_new_model_url"
+                                               placeholder="runwayml/stable-diffusion-v1-5"
+                                               data-key="new_model_url">
+                                        <label class="form-label" for="db_new_model_token">HuggingFace Token</label>
+                                        <input type="text" class="form-control newModelParam"
+                                               id="db_new_model_token" data-key="new_model_token"
+                                               value="">
+                                    </div>
+                                    <div class="form-group" id="local_row">
+                                        <div class="modelSelect newModelParam" id="db_new_model"
+                                             data-model_type="diffusers"
+                                             data-label="Source Checkpoint"
+                                             data-key="new_model_src"></div>
+                                    </div>
+                                    <div class="form-group db-advanced">
+                                        <div class="form-check form-switch">
+                                            <input class="newModelParam form-check-input" type="checkbox"
+                                                   id="db_use_shared_src" name="use_shared_src"
+                                                   data-key="use_shared_src">
+                                            <label class="form-check-label" for="db_use_shared_src">Use Shared Base
+                                                Model (Lora)</label>
                                         </div>
                                     </div>
-                                    <div class="row">
-                                        <div class="col-12">
-                                            <div class="form-check">
-                                                <input type="checkbox" class="form-check-input newModelParam"
-                                                       id="db_new_model_extract_ema" data-key="new_model_extract_ema">
-                                                <label class="form-check-label" for="db_new_model_extract_ema">Extract
-                                                    EMA Weights</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input type="checkbox" class="form-check-input newModelParam" id="db_train_unfrozen" data-key="train_unfrozen">
-                                                <label class="form-check-label" for="db_train_unfrozen">Unfreeze
-                                                    Model</label>
-                                            </div>
-                                        </div>
-                                        <div class="col-12 text-center">
-                                            <button class="btn btn-primary" type="button" id="db_create_model">Create
-                                                Model
-                                            </button>
+                                    <div class="form-group" id="shared_row" style="display: none">
+                                        <div class="sharedModelSelect modelSelect"
+                                             id="new_model_shared_src"
+                                             data-add_class="newModelParam"
+                                             data-model_type="diffusers"
+                                             data-label="LoRA Shared Diffusers Source"
+                                             data-key="new_model_shared_src"></div>
+                                    </div>
+                                    <div class="form-group db-advanced">
+                                        <div class="form-check form-switch">
+                                            <input class="newModelParam form-check-input" type="checkbox"
+                                                   id="db_train_unfrozen" data-key="train_unfrozen"
+                                                   name="train_unfrozen" checked>
+                                            <label class="form-check-label" for="db_train_unfrozen">Unfreeze</label>
                                         </div>
                                     </div>
+                                    <div class="form-group text-center">
+                                        <button class="btn btn-primary" type="button" id="db_create_model">Create
+                                            Model
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="card shadow" id="dreamSettings">
+                    <div class="card-header">
+                        Input
+                    </div>
+                    <div class="card-body">
+                        <div class="borderSection">
+                            <div class="row justify-content-between">
+                                <div class="col-auto sectionLabel">Concepts</div>
+                                <div class="col-auto db-advanced" id="conceptControls">
+                                    <button type="button" class="btn btn-primary btn-sm" id="db_concept_add">+</button>
+                                    <button type="button" class="btn btn-danger btn-sm hide" id="db_concept_remove">-
+                                    </button>
+                                </div>
+                            </div>
 
+                            <div id="advancedConcepts" class="form-control"></div>
+                        </div>
+                        <div class="borderSection">
+                            <div class="sectionLabel">Settings</div>
+                            <div class="db-slider dbInput" id="num_train_epochs" data-max="1000" data-min="1"
+                                 data-value="150" data-label="Number of Epochs"></div>
+                            <div class="db-slider dbInput db-advanced" id="save_embedding_every"
+                                 data-max="100"
+                                 data-min="0" data-step="1"
+                                 data-value="0" data-label="Save Weight Frequency"></div>
+                            <div class="db-slider dbInput db-advanced" id="save_preview_every" data-max="100"
+                                 data-min="0" data-step="1"
+                                 data-value="0" data-label="Save Preview Frequency"></div>
+                            <div class="db-slider dbInput" id="resolution" data-max="1024" data-min="512"
+                                 data-step="64"
+                                 data-value="768" data-label="Maximum Resolution"></div>
+                            <div class="db-slider dbInput db-advanced" id="train_batch_size" data-max="100" data-min="1"
+                                 data-step="1"
+                                 data-value="5" data-label="Batch Size"></div>
+                            <div class="db-slider dbInput db-advanced" id="gradient_accumulation_steps" data-max="100"
+                                 data-min="1" data-step="1"
+                                 data-value="1" data-label="Gradient Accumulation Steps"></div>
+                        </div>
+                        <div class="borderSection accordion db-advanced" id="dbAdvancedAccordion">
+                            <div class="accordion-item">
+                                <div id="dbAdvancedLabel" class="sectionLabel accordion-button collapsed" type="button"
+                                     data-bs-toggle="collapse" data-bs-target="#dbAdvancedSettings"
+                                     aria-expanded="false" aria-controls="dbAdvancedSettings">Advanced
+                                </div>
+                                <div id="dbAdvancedSettings" class="accordion-collapse collapse"
+                                     aria-labelledby="dbAdvancedLabel" data-bs-parent="#dbAdvancedAccordion">
+                                    <div class="accordion-body">
+                                        <form>
+                                            <div class="form-group">
+                                                <label class="form-label" for="scheduler">Image Scheduler</label>
+                                                <select class="dbInput form-control" id="scheduler" name="scheduler">
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="form-label" for="mixed_precision">Mixed Precision</label>
+                                                <select class="dbInput form-control" id="mixed_precision"
+                                                        name="mixed_precision">
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="form-label" for="attention">Attention</label>
+                                                <select class="dbInput form-control" id="attention" name="attention">
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="form-label" for="optimizer">Optimizer</label>
+                                                <select class="dbInput form-control" id="optimizer" name="optimizer">
+                                                </select>
+                                            </div>
+
+                                            <div class="form-group">
+                                                <label class="form-label" for="lr_scheduler">Scheduler</label>
+                                                <select class="dbInput form-control" id="lr_scheduler"
+                                                        name="lr_scheduler">
+                                                </select>
+                                            </div>
+                                            <div class="form-group" style="position: relative">
+                                                <label class="form-label" for="learning_rate">Learning Rate</label>
+                                                <div class="input-group">
+                                                    <input class="dbInput form-control" type="number" id="learning_rate"
+                                                           name="learning_rate" value="0.000002">
+                                                </div>
+
+
+                                                <span class="input-group-btn linkBtn db-advanced">
+                                                  <button class="btn btn-link btn-sm" type="button">
+                                                      <i class="bx bx-link"></i>
+                                                  </button>
+                                            </span>
+                                                <label class="form-label mt-3 db-advanced" for="txt_learning_rate">Learning
+                                                    Rate
+                                                    (Tenc)</label>
+                                                <div class="input-group">
+                                                    <input class="dbInput form-control db-advanced" type="number"
+                                                           id="txt_learning_rate" name="txt_learning_rate"
+                                                           value="0.000002">
+                                                </div>
+                                            </div>
+
+                                            <div class="form-group">
+                                                <label class="form-label" for="min_learning_rate">Minimum Learning
+                                                    Rate</label>
+                                                <input class="dbInput form-control" type="number" id="min_learning_rate"
+                                                       name="min_learning_rate" value="0.000001">
+                                            </div>
+
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="0" data-max="10000"
+                                                     data-step="1" id="lr_warmup_steps" data-value="500"
+                                                     data-label="LR Warmup Steps"></div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="0" data-max="1"
+                                                     data-step="0.001" id="weight_decay" data-value="0.01"
+                                                     data-label="Weight Decay"></div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="0" data-max="1"
+                                                     data-step="0.001" id="tenc_weight_decay"
+                                                     data-value="0.01"
+                                                     data-label="TENC Weight Decay"></div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="-1" data-max="1"
+                                                     data-step="0.01" id="offset_noise" data-value="0"
+                                                     data-label="Offset Noise"></div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="1" data-max="12"
+                                                     data-step="1" id="clip_skip" data-value="1"
+                                                     data-label="Clip Skip"></div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="0" data-max="128"
+                                                     data-step="0.25" id="tenc_grad_clip_norm" data-value="0"
+                                                     data-label="TENC Gradient Clip Norm"></div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="75" data-max="300"
+                                                     data-step="75" id="max_token_length" data-value="75"
+                                                     data-label="Max Token length"></div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="dbInput db-slider" data-min="0" data-max="1.0"
+                                                     data-step="0.01" id="stop_text_encoder"
+                                                     data-value="0.75"
+                                                     data-label="Text Encoder Percentage"></div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="dbInput form-check-input" type="checkbox"
+                                                           id="shuffle_tags" name="shuffle_tags" checked>
+                                                    <label class="form-check-label" for="shuffle_tags">Shuffle
+                                                        Tags</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="dbInput form-check-input" type="checkbox"
+                                                           id="strict_tokens"
+                                                           name="strict_tokens" checked>
+                                                    <label class="form-check-label" for="strict_tokens">Strict
+                                                        Tokens</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="dbInput form-check-input" type="checkbox"
+                                                           id="gradient_checkpointing"
+                                                           name="gradient_checkpointing">
+                                                    <label class="form-check-label" for="gradient_checkpointing">Gradient
+                                                        Checkpointing</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="dbInput form-check-input" type="checkbox"
+                                                           id="gradient_set_to_none"
+                                                           name="gradient_set_to_none" checked>
+                                                    <label class="form-check-label" for="gradient_set_to_none">Set
+                                                        Gradients to None</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="dbInput form-check-input" type="checkbox"
+                                                           id="freeze_clip_normalization"
+                                                           name="gradient_checkpointing">
+                                                    <label class="form-check-label" for="freeze_clip_normalization">Freeze
+                                                        CLIP Normalization</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="dbInput form-check-input" type="checkbox"
+                                                           id="use_ema" name="use_ema"
+                                                           data-key="use_ema">
+                                                    <label class="form-check-label" for="use_ema">Use EMA</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="dbInput form-check-input" type="checkbox"
+                                                           id="train_unet" name="train_unet"
+                                                           data-key="train_unet" checked>
+                                                    <label class="form-check-label" for="train_unet">Train UNET</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <div class="form-check form-switch">
+                                                    <input class="dbInput form-check-input" type="checkbox"
+                                                           id="disable_logging" name="disable_logging"
+                                                           data-key="disable_logging" checked>
+                                                    <label class="form-check-label" for="disable_logging">Disable
+                                                        Logging</label>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-12 col-md-4">
-                <div class="card shadow" id="dreamSettings">
-                    <div class="card-header">
-                        Input
-                    </div>
-                    <div class="card-body">
-
-                    </div>
-                </div>
-            </div>
-            <div class="col-14 col-md-4">
+            <div class="col-12 col-md-6 col-lg-4" id="dbStatusCol">
                 <div class="card shadow" id="dreamStatus">
                     <div class="card-header">
                         Output
                     </div>
-                    <div class="card-body">
+                    <div class="card-body" id="dreamStatusContainer">
                         <div class="progressGroup" id="dreamProgress"></div>
                         <div class="image-container inline-gallery-container" id="dreamGallery"></div>
                     </div>

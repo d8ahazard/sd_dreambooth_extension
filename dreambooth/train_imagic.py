@@ -3,7 +3,6 @@ import os
 from typing import List
 
 import torch
-import torch.utils.checkpoint
 from PIL import Image
 from accelerate import Accelerator
 from accelerate.logging import get_logger
@@ -110,10 +109,7 @@ def parse_args():
     parser.add_argument(
         "--use_8bit_adam", action="store_true", help="Whether or not to use 8-bit Adam from bitsandbytes."
     )
-    parser.add_argument("--adam_beta1", type=float, default=0.9, help="The beta1 parameter for the Adam optimizer.")
-    parser.add_argument("--adam_beta2", type=float, default=0.999, help="The beta2 parameter for the Adam optimizer.")
-    parser.add_argument("--adam_weight_decay", type=float, default=1e-2, help="Weight decay to use.")
-    parser.add_argument("--adam_epsilon", type=float, default=1e-08, help="Epsilon value for the Adam optimizer")
+    parser.add_argument("--weight_decay", type=float, default=1e-2, help="Weight decay to use.")
     parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
     parser.add_argument("--hub_token", type=str, default=None, help="The token to use to push to the Model Hub.")
     parser.add_argument(
@@ -164,14 +160,14 @@ def train_imagic(args: DreamboothConfig):
         logging_dir=logging_dir,
     )
 
-    tokenizer = CLIPTokenizer.from_pretrained(args.pretrained_model_name_or_path, subfolder="tokenizer",
+    tokenizer = CLIPTokenizer.from_pretrained(args.get_pretrained_model_name_or_path(), subfolder="tokenizer",
                                               use_auth_token=False)
 
     # Load models and create wrapper for stable diffusion
-    text_encoder = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="text_encoder",
+    text_encoder = CLIPTextModel.from_pretrained(args.get_pretrained_model_name_or_path(), subfolder="text_encoder",
                                                  use_auth_token=False)
-    vae = AutoencoderKL.from_pretrained(args.pretrained_model_name_or_path, subfolder="vae", use_auth_token=True)
-    unet = UNet2DConditionModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="unet",
+    vae = AutoencoderKL.from_pretrained(args.get_pretrained_model_name_or_path(), subfolder="vae", use_auth_token=True)
+    unet = UNet2DConditionModel.from_pretrained(args.get_pretrained_model_name_or_path(), subfolder="unet",
                                                 use_auth_token=False)
 
     if args.gradient_checkpointing:

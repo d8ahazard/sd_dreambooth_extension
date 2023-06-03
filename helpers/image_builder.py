@@ -1,12 +1,15 @@
+import logging
 import os
 import random
 import traceback
 from typing import List, Union
 
+import tomesd
 import torch
 from PIL import Image
 from accelerate import Accelerator
 from diffusers import DiffusionPipeline, AutoencoderKL, UNet2DConditionModel
+from diffusers.models.attention_processor import AttnProcessor2_0
 
 from dreambooth import shared
 from dreambooth.dataclasses.db_config import DreamboothConfig
@@ -16,7 +19,7 @@ from dreambooth.utils import image_utils
 from dreambooth.utils.image_utils import process_txt2img, get_scheduler_class
 from dreambooth.utils.model_utils import get_checkpoint_match, \
     reload_system_models, \
-    enable_safe_unpickle, disable_safe_unpickle, unload_system_models, xformerify
+    enable_safe_unpickle, disable_safe_unpickle, unload_system_models
 from helpers.mytqdm import mytqdm
 from lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, \
     get_target_module
@@ -32,8 +35,15 @@ class ImageBuilder:
             source_checkpoint: str = None,
             lora_unet_rank: int = 4,
             lora_txt_rank: int = 4,
-            scheduler: Union[str, None] = None
+            scheduler: Union[str, None] = None,
+            pbar: mytqdm = None
+            
     ):
+        self.user = None
+        self.target = None
+        if pbar:
+            self.user = pbar.user
+            self.target = pbar.target
         self.image_pipe = None
         self.txt_pipe = None
         self.resolution = config.resolution
@@ -74,31 +84,33 @@ class ImageBuilder:
                     print(msg)
             torch_dtype = torch.float16 if shared.device.type == "cuda" else torch.float32
             disable_safe_unpickle()
-            unet_path = os.path.join(config.pretrained_model_name_or_path, "unet")
-            if config.infer_ema:
-                ema_path = os.path.join(config.pretrained_model_name_or_path, "ema_unet",
-                                        "diffusion_pytorch_model.safetensors")
-                if os.path.isfile(ema_path):
-                    unet_path = os.path.join(config.pretrained_model_name_or_path, "ema_unet")
 
-            self.image_pipe = DiffusionPipeline.from_pretrained(
-                config.pretrained_model_name_or_path,
-                vae=AutoencoderKL.from_pretrained(
-                    config.pretrained_vae_name_or_path or config.pretrained_model_name_or_path,
+            self.image_pipe = DiffusionPipeline.from_pretrained(config.get_pretrained_model_name_or_path(), torch_dtype=torch.float16)
+
+            if config.pretrained_vae_name_or_path:
+                logging.getLogger(__name__).info("Using pretrained VAE.")
+                self.image_pipe.vae = AutoencoderKL.from_pretrained(
+                    config.pretrained_vae_name_or_path or config.get_pretrained_model_name_or_path(),
                     subfolder=None if config.pretrained_vae_name_or_path else "vae",
                     revision=config.revision,
                     torch_dtype=torch_dtype
-                ),
-                unet=UNet2DConditionModel.from_pretrained(unet_path, torch_dtype=torch_dtype),
-                torch_dtype=torch_dtype,
-                requires_safety_checker=False,
-                safety_checker=None,
-                revision=config.revision
-            )
-            self.image_pipe.enable_attention_slicing()
+                )
 
-            xformerify(self.image_pipe)
+            if config.infer_ema:
+                logging.getLogger(__name__).info("Using EMA model for inference.")
+                ema_path = os.path.join(config.get_pretrained_model_name_or_path(), "ema_unet",
+                                        "diffusion_pytorch_model.safetensors")
+                if os.path.isfile(ema_path):
+                    self.image_pipe.unet = UNet2DConditionModel.from_pretrained(ema_path, torch_dtype=torch.float16),
 
+            self.image_pipe.enable_model_cpu_offload()
+            self.image_pipe.unet.set_attn_processor(AttnProcessor2_0())
+            if os.name != "nt":
+                self.image_pipe.unet = torch.compile(self.image_pipe.unet)
+            self.image_pipe.enable_xformers_memory_efficient_attention()
+            self.image_pipe.vae.enable_slicing()
+            tomesd.apply_patch(self.image_pipe, ratio=0.5)
+            self.image_pipe.scheduler.config["solver_type"] = "bh2"
             self.image_pipe.progress_bar = self.progress_bar
 
             if scheduler is None:
@@ -161,9 +173,9 @@ class ImageBuilder:
             )
 
         if iterable is not None:
-            return mytqdm(iterable, **self._progress_bar_config, position=0)
+            return mytqdm(iterable, **self._progress_bar_config, position=0, user=self.user, target=self.target)
         elif total is not None:
-            return mytqdm(total=total, **self._progress_bar_config, position=0)
+            return mytqdm(total=total, **self._progress_bar_config, position=0, user=self.user, target=self.target)
         else:
             raise ValueError("Either `total` or `iterable` has to be defined.")
 

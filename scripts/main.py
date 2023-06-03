@@ -4,10 +4,7 @@ from typing import List
 
 import gradio as gr
 
-from dreambooth.dataclasses.db_config import (
-    save_config,
-    from_file,
-)
+from dreambooth.dataclasses.db_config import from_file, save_config
 from dreambooth.diff_to_sd import compile_checkpoint
 from dreambooth.secret import (
     get_secret,
@@ -39,6 +36,7 @@ from dreambooth.utils.model_utils import (
     get_db_models,
     get_sorted_lora_models,
     get_model_snapshots,
+    get_shared_models,
 )
 from dreambooth.utils.utils import (
     list_attention,
@@ -310,6 +308,9 @@ def on_ui_tabs():
                         with gr.Row():
                             gr.HTML(value="Source Checkpoint:")
                             db_src = gr.HTML()
+                        with gr.Row():
+                            gr.HTML(value="Experimental Shared Source:")
+                            db_shared_diffusers_path = gr.HTML()
                     with gr.Tab("Create"):
                         with gr.Column():
                             db_create_model = gr.Button(
@@ -321,6 +322,9 @@ def on_ui_tabs():
                                 label="Create From Hub", value=False
                             )
                             db_512_model = gr.Checkbox(label="512x Model", value=True)
+                            db_use_shared_src = gr.Checkbox(
+                                label="Experimental Shared Src", value=False
+                            )
                         with gr.Column(visible=False) as hub_row:
                             db_new_model_url = gr.Textbox(
                                 label="Model Path",
@@ -340,6 +344,19 @@ def on_ui_tabs():
                                     get_sd_models,
                                     lambda: {"choices": sorted(get_sd_models())},
                                     "refresh_sd_models",
+                                )
+                        with gr.Column(visible=False) as shared_row:
+                            with gr.Row():
+                                db_new_model_shared_src = gr.Dropdown(
+                                    label="EXPERIMENTAL: LoRA Shared Diffusers Source",
+                                    choices=sorted(get_shared_models()),
+                                    value=""
+                                )
+                                create_refresh_button(
+                                    db_new_model_shared_src,
+                                    get_shared_models,
+                                    lambda: {"choices": sorted(get_shared_models())},
+                                    "refresh_shared_models",
                                 )
                         db_new_model_extract_ema = gr.Checkbox(
                             label="Extract EMA Weights", value=False
@@ -367,7 +384,7 @@ def on_ui_tabs():
                                 value=False,
                                 visible=False,
                             )
-                            db_train_imagic_only = gr.Checkbox(label="Train Imagic Only", value=False)
+                            db_train_imagic = gr.Checkbox(label="Train Imagic Only", value=False)
                             db_train_inpainting = gr.Checkbox(
                                 label="Train Inpainting Model",
                                 value=False,
@@ -449,6 +466,9 @@ def on_ui_tabs():
                                 db_learning_rate = gr.Number(
                                     label="Learning Rate", value=2e-6
                                 )
+                                db_txt_learning_rate = gr.Number(
+                                    label="Text Encoder Learning Rate", value=2e-6
+                                )
 
                             db_lr_scheduler = gr.Dropdown(
                                 label="Learning Rate Scheduler",
@@ -488,7 +508,7 @@ def on_ui_tabs():
                                 label="Learning Rate Warmup Steps",
                                 value=0,
                                 step=5,
-                                maximum=10000,
+                                maximum=1000,
                             )
 
                         with gr.Column():
@@ -503,6 +523,9 @@ def on_ui_tabs():
                             )
                             db_hflip = gr.Checkbox(
                                 label="Apply Horizontal Flip", value=False
+                            )
+                            db_dynamic_img_norm = gr.Checkbox(
+                                label="Dynamic Image Normalization", value=False
                             )
 
                         with gr.Column():
@@ -535,7 +558,7 @@ def on_ui_tabs():
                                 label="Step Ratio of Text Encoder Training",
                                 minimum=0,
                                 maximum=1,
-                                step=0.01,
+                                step=0.05,
                                 value=0,
                                 visible=True,
                             )
@@ -558,12 +581,28 @@ def on_ui_tabs():
                                 maximum=12,
                                 step=1,
                             )
-                            db_adamw_weight_decay = gr.Slider(
+                            db_weight_decay = gr.Slider(
                                 label="Weight Decay",
                                 minimum=0,
                                 maximum=1,
-                                step=1e-7,
-                                value=1e-2,
+                                step=0.001,
+                                value=0.01,
+                                visible=True,
+                            )
+                            db_tenc_weight_decay = gr.Slider(
+                                label="TENC Weight Decay",
+                                minimum=0,
+                                maximum=1,
+                                step=0.001,
+                                value=0.01,
+                                visible=True,
+                            )
+                            db_tenc_grad_clip_norm = gr.Slider(
+                                label="TENC Gradient Clip Norm",
+                                minimum=0,
+                                maximum=128,
+                                step=0.25,
+                                value=0,
                                 visible=True,
                             )
                             db_pad_tokens = gr.Checkbox(
@@ -950,14 +989,21 @@ def on_ui_tabs():
                         )
                 with gr.Tab("Testing", elem_id="TabDebug"):
                     gr.HTML(value="Experimental Settings")
-                    db_deterministic = gr.Checkbox(label="Deterministic")
-                    db_ema_predict = gr.Checkbox(label="Use EMA for prediction")
+                    db_tomesd = gr.Slider(
+                        value=0,
+                        label="Token Merging (ToMe)",
+                        minimum=0,
+                        maximum=1,
+                        step=0.1,
+                    )
                     db_split_loss = gr.Checkbox(
                         label="Calculate Split Loss", value=True
                     )
-                    db_tf32_enable = gr.Checkbox(
-                        label="Use TensorFloat 32", value=False
-                    )
+                    db_disable_class_matching = gr.Checkbox(label="Disable Class Matching")
+                    db_disable_logging = gr.Checkbox(label="Disable Logging")
+                    db_deterministic = gr.Checkbox(label="Deterministic")
+                    db_ema_predict = gr.Checkbox(label="Use EMA for prediction")
+                    db_lora_use_buggy_requires_grad = gr.Checkbox(label="LoRA use buggy requires grad")
                     db_noise_scheduler = gr.Dropdown(
                         label="Noise scheduler",
                         value="DDPM",
@@ -1190,18 +1236,20 @@ def on_ui_tabs():
         # List of all the things that we need to save
         # db_model_name must be first due to save_config() parsing
         params_to_save = [
-            db_model_name,
+            db_weight_decay,
             db_attention,
             db_cache_latents,
             db_clip_skip,
             db_concepts_path,
             db_custom_model_name,
-            db_noise_scheduler,
             db_deterministic,
+            db_disable_class_matching,
+            db_disable_logging,
             db_ema_predict,
-            db_epochs,
+            db_tomesd,
             db_epoch_pause_frequency,
             db_epoch_pause_time,
+            db_epochs,
             db_freeze_clip_normalization,
             db_gradient_accumulation_steps,
             db_gradient_checkpointing,
@@ -1214,10 +1262,11 @@ def on_ui_tabs():
             db_learning_rate_min,
             db_lora_learning_rate,
             db_lora_model_name,
-            db_lora_unet_rank,
-            db_lora_txt_rank,
             db_lora_txt_learning_rate,
+            db_lora_txt_rank,
             db_lora_txt_weight,
+            db_lora_unet_rank,
+            db_lora_use_buggy_requires_grad,
             db_lora_weight,
             db_lr_cycles,
             db_lr_factor,
@@ -1227,8 +1276,9 @@ def on_ui_tabs():
             db_lr_warmup_steps,
             db_max_token_length,
             db_mixed_precision,
-            db_adamw_weight_decay,
+            db_model_name,
             db_model_path,
+            db_noise_scheduler,
             db_num_train_epochs,
             db_offset_noise,
             db_optimizer,
@@ -1246,8 +1296,8 @@ def on_ui_tabs():
             db_save_ckpt_after,
             db_save_ckpt_cancel,
             db_save_ckpt_during,
-            db_save_embedding_every,
             db_save_ema,
+            db_save_embedding_every,
             db_save_lora_after,
             db_save_lora_cancel,
             db_save_lora_during,
@@ -1258,22 +1308,28 @@ def on_ui_tabs():
             db_save_state_cancel,
             db_save_state_during,
             db_scheduler,
-            db_split_loss,
-            db_strict_tokens,
+            db_shared_diffusers_path,
             db_shuffle_tags,
             db_snapshot,
+            db_split_loss,
             db_src,
-            db_tf32_enable,
-            db_train_batch_size,
-            db_train_imagic_only,
-            db_train_unet,
             db_stop_text_encoder,
-            db_use_concepts,
+            db_strict_tokens,
+            db_dynamic_img_norm,
+            db_tenc_grad_clip_norm,
+            db_tenc_weight_decay,
+            db_train_batch_size,
+            db_train_imagic,
+            db_train_unet,
             db_train_unfrozen,
+            db_txt_learning_rate,
+            db_use_concepts,
             db_use_ema,
             db_use_lora,
             db_use_lora_extended,
+            db_use_shared_src,
             db_use_subdir,
+
             c1_class_data_dir,
             c1_class_guidance_scale,
             c1_class_infer_steps,
@@ -1350,6 +1406,7 @@ def on_ui_tabs():
             db_model_path,
             db_revision,
             db_src,
+            db_shared_diffusers_path,
         ]
 
         # Populate by the below method and handed out to other elements
@@ -1391,6 +1448,15 @@ def on_ui_tabs():
             fn=toggle_new_rows,
             inputs=[db_create_from_hub],
             outputs=[hub_row, local_row],
+        )
+
+        def toggle_shared_row(shared_row):
+            return gr.update(visible=shared_row),  gr.update(value="")
+
+        db_use_shared_src.change(
+            fn=toggle_shared_row,
+            inputs=[db_use_shared_src],
+            outputs=[shared_row, db_new_model_shared_src],
         )
 
         db_prior_loss_scale.change(
@@ -1446,7 +1512,7 @@ def on_ui_tabs():
             )
 
         def optimizer_changed(opti):
-            show_adapt = opti in ["SGD Dadaptation", "AdaGrad Dadaptation", "AdamW Dadaptation", "Adan Dadaptation"]
+            show_adapt = "adapt" in opti
             adaptation_lr = gr.update(visible=show_adapt)
             return adaptation_lr
 
@@ -1498,6 +1564,7 @@ def on_ui_tabs():
                 db_v2,
                 db_has_ema,
                 db_src,
+                db_shared_diffusers_path,
                 db_snapshot,
                 db_lora_model_name,
                 db_status,
@@ -1623,6 +1690,7 @@ def on_ui_tabs():
             inputs=[
                 db_new_model_name,
                 db_new_model_src,
+                db_new_model_shared_src,
                 db_create_from_hub,
                 db_new_model_url,
                 db_new_model_token,
@@ -1636,6 +1704,7 @@ def on_ui_tabs():
                 db_revision,
                 db_epochs,
                 db_src,
+                db_shared_diffusers_path,
                 db_has_ema,
                 db_v2,
                 db_resolution,

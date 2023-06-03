@@ -34,9 +34,11 @@ class DbDataset(torch.utils.data.Dataset):
             hflip: bool,
             shuffle_tags: bool,
             strict_tokens: bool,
+            dynamic_img_norm: bool,
             not_pad_tokens: bool,
             debug_dataset: bool,
-            model_dir: str
+            model_dir: str,
+            pbar: mytqdm = None
     ) -> None:
         super().__init__()
         self.batch_indices = []
@@ -80,26 +82,34 @@ class DbDataset(torch.utils.data.Dataset):
         self.shuffle_tags = shuffle_tags
         self.not_pad_tokens = not_pad_tokens
         self.strict_tokens = strict_tokens
+        self.dynamic_img_norm = dynamic_img_norm
         self.tokens = tokens
         self.vae = None
+        self.pbar = pbar
         self.cache_latents = False
         flip_p = 0.5 if hflip else 0.0
-        if hflip:
-            self.image_transforms = transforms.Compose(
-                [
-                    transforms.ToPILImage(),
-                    transforms.RandomHorizontalFlip(flip_p),
-                    transforms.ToTensor(),
-                    transforms.Normalize([0.5], [0.5]),
-                ]
-            )
+        self.image_transforms = self.build_compose(hflip, flip_p)
+
+    def build_compose(self, hflip, flip_p):
+        img_augmentation = [transforms.ToPILImage(), transforms.RandomHorizontalFlip(flip_p)]
+        to_tensor = [transforms.ToTensor()]
+        
+        image_transforms = (
+            to_tensor if not hflip else img_augmentation + to_tensor
+        )
+        return transforms.Compose(image_transforms)
+
+    def get_img_std(self, img):
+        if self.dynamic_img_norm:
+            return img.mean(), img.std()
         else:
-            self.image_transforms = transforms.Compose(
-                [
-                    transforms.ToTensor(),
-                    transforms.Normalize([0.5], [0.5]),
-                ]
-            )
+            return [0.5], [0.5]
+
+    def image_transform(self, img):
+        img = self.image_transforms(img)
+        mean, std = self.get_img_std(img)
+        norm = transforms.Normalize(mean, std)
+        return norm(img) 
 
     def load_image(self, image_path, caption, res):
         if self.debug_dataset:
@@ -110,7 +120,7 @@ class DbDataset(torch.utils.data.Dataset):
                 image = self.latents_cache[image_path]
             else:
                 img = open_and_trim(image_path, res, False)
-                image = self.image_transforms(img)
+                image = self.image_transform(img)
             if self.shuffle_tags:
                 caption, input_ids = self.cache_caption(image_path, caption)
             else:
@@ -120,7 +130,7 @@ class DbDataset(torch.utils.data.Dataset):
     def cache_latent(self, image_path, res):
         if self.vae is not None:
             image = open_and_trim(image_path, res, False)
-            img_tensor = self.image_transforms(image)
+            img_tensor = self.image_transform(image)
             img_tensor = img_tensor.unsqueeze(0).to(device=self.vae.device, dtype=self.vae.dtype)
             latents = self.vae.encode(img_tensor).latent_dist.sample().squeeze(0).to("cpu")
             self.latents_cache[image_path] = latents
@@ -150,6 +160,8 @@ class DbDataset(torch.utils.data.Dataset):
         self.cache_latents = vae is not None
         state = f"Preparing Dataset ({'With Caching' if self.cache_latents else 'Without Caching'})"
         print(state)
+        if self.pbar is not None:
+            self.pbar.set_description(state)
         status.textinfo = state
 
         # Create a list of resolutions
@@ -170,7 +182,7 @@ class DbDataset(torch.utils.data.Dataset):
         sort_images(self.train_img_data, bucket_resos, self.train_dict, False)
         sort_images(self.class_img_data, bucket_resos, self.class_dict, True)
 
-        def cache_images(images, reso, p_bar):
+        def cache_images(images, reso, p_bar: mytqdm):
             for img_path, cap, is_prior in images:
                 try:
                     # If the image is not in the "precache",cache it
@@ -210,7 +222,12 @@ class DbDataset(torch.utils.data.Dataset):
         shared.status.job_no = 0
         total_instances = 0
         total_classes = 0
-        pbar = mytqdm(range(p_len), desc="Caching latents..." if self.cache_latents else "Processing images...", position=0)
+        if self.pbar is None:
+            self.pbar = mytqdm(range(p_len), desc="Caching latents..." if self.cache_latents else "Processing images...", position=0)
+        else:
+            self.pbar.reset(total=p_len)
+            self.pbar.set_description("Caching latents..." if self.cache_latents else "Processing images...")
+        self.pbar.status_index = 1
         image_cache_file = os.path.join(self.cache_dir, f"image_cache_{self.resolution}.safetensors")
         latents_cache = {}
         if os.path.exists(image_cache_file):
@@ -224,14 +241,14 @@ class DbDataset(torch.utils.data.Dataset):
             # This should really be the index, because we want the bucket sampler to shuffle them all
             self.resolutions.append(dict_idx)
             # Cache with the actual res, because it's used to crop
-            cache_images(train_images, res, pbar)
+            cache_images(train_images, res, self.pbar)
             inst_count = len(train_images)
             class_count = 0
             if dict_idx in self.class_dict:
                 # Use dict index to find class images
                 class_images = self.class_dict[dict_idx]
                 # Use actual res here as well
-                cache_images(class_images, res, pbar)
+                cache_images(class_images, res, self.pbar)
                 class_count = len(class_images)
             total_instances += inst_count
             total_classes += class_count
@@ -244,7 +261,7 @@ class DbDataset(torch.utils.data.Dataset):
             class_str = str(class_count).rjust(len(str(nc)), " ")
             ex_str = str(example_len).rjust(len(str(ti * 2)), " ")
             # Log both here
-            pbar.write(
+            self.pbar.write(
                 f"Bucket {bucket_str} {dict_idx} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {ex_str}")
             bucket_idx += 1
         try:
@@ -260,10 +277,11 @@ class DbDataset(torch.utils.data.Dataset):
         inst_str = str(total_instances).rjust(len(str(ni)), " ")
         class_str = str(total_classes).rjust(len(str(nc)), " ")
         tot_str = str(total_len).rjust(len(str(ti)), " ")
-        pbar.write(
+        self.pbar.write(
             f"Total Buckets {bucket_str} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {tot_str}")
         self._length = total_len
         print(f"\nTotal images / batch: {self._length}, total examples: {total_len}")
+        self.pbar.reset(0)
 
     def shuffle_buckets(self):
         sample_dict = {}

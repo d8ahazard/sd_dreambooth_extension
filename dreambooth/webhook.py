@@ -19,7 +19,14 @@ db_path = os.path.join(shared.models_path, "dreambooth")
 url_file = os.path.join(db_path, "webhook.txt")
 hook_url = None
 
-if not os.path.exists(db_path):
+new_ui = False
+try:
+    from core.dataclasses import status_data
+    new_ui = True
+except:
+    pass
+
+if not os.path.exists(db_path) and not new_ui:
     os.makedirs(db_path)
 
 
@@ -64,7 +71,7 @@ def send_training_update(
 
     # Accept a list, make a grid
     if isinstance(imgs, List):
-        out_imgs = [Image.open(img) for img in imgs]
+        out_imgs = [Image.open(img) if isinstance(img, str) else img for img in imgs]
 
         image = image_grid(out_imgs)
 
@@ -73,7 +80,7 @@ def send_training_update(
 
         del out_imgs
     else:
-        image = Image.open(imgs)
+        image = Image.open(imgs) if isinstance(imgs, str) else imgs
 
     if isinstance(prompt, List):
         _prompts = prompt

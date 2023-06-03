@@ -168,7 +168,7 @@ def dreambooth_api(_, app: FastAPI):
         if shared.status.job_count == 0:
             return JSONResponse(content={"message": "Nothing to cancel."})
         shared.status.interrupted = True
-        return JSONResponse(content={"message": f"Processes cancelled."})
+        return JSONResponse(content={"message": f"Processes canceled."})
 
     @app.get("/dreambooth/checkpoint")
     async def get_checkpoint(
@@ -425,7 +425,7 @@ def dreambooth_api(_, app: FastAPI):
     async def create_db_model(
             new_model_name: str = Query(description="The name of the model to create.", ),
             new_model_src: str = Query(description="The source checkpoint to extract to create this model.", ),
-            new_model_scheduler: str = Query("ddim", description="The scheduler to use. V2+ models ignore this.", ),
+            new_model_shared_src: str = Query(None, description="The shared diffusers source to use for this differs model.", ),
             create_from_hub: bool = Query(False, description="Create this model from the hub", ),
             new_model_url: str = Query(None,
                                        description="The hub URL to use for this model. Must contain diffusers model.", ),
@@ -435,7 +435,7 @@ def dreambooth_api(_, app: FastAPI):
                                          description="Un-freeze the model.", ),
             new_model_token: str = Query(None, description="Your huggingface hub token.", ),
             new_model_extract_ema: bool = Query(False, description="Whether to extract EMA weights if present.", ),
-            api_key: str = Query("", description="If an API key is set, this must be present.", ),
+            api_key: str = Query("", description="If an API key is set, this must be present.", ),  
     ):
         """
         Create a new Dreambooth model.
@@ -451,15 +451,21 @@ def dreambooth_api(_, app: FastAPI):
         if status:
             return status
 
+        if not os.path.exists(new_model_src):
+            mp = shared.ckpt_dir
+            new_model_src = os.path.join(mp, new_model_src)
+            logger.debug("Checking for model in Stable-Diffusion: " + new_model_src)
+
         logger.debug("Creating new Checkpoint: " + new_model_name)
-        res = create_model(new_model_name,
-                           new_model_src,
-                           create_from_hub,
-                           new_model_url,
-                           new_model_token,
-                           new_model_extract_ema,
-                           train_unfrozen,
-                           is_512)
+        res = create_model(new_model_name=new_model_name,
+                           ckpt_path=new_model_src,
+                           shared_src=new_model_shared_src,
+                           from_hub=create_from_hub,
+                           new_model_url=new_model_url,
+                           new_model_token=new_model_token,
+                           extract_ema=new_model_extract_ema,
+                           train_unfrozen=train_unfrozen,
+                           is_512=is_512)
 
         return JSONResponse(res[-1])
 

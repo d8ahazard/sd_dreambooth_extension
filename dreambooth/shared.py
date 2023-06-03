@@ -44,6 +44,9 @@ def load_auto_settings():
         config = ws.cmd_opts.config
         device = ws.device
         sd_model = ws.sd_model
+        in_progress = False
+        in_progress_epoch = 0
+        in_progress_step = 0
 
         def set_model(new_model):
             global sd_model
@@ -137,6 +140,7 @@ def format_time(seconds: float):
 
 
 class DreamState:
+    global status_handler
     interrupted = False
     interrupted_after_save = False
     interrupted_after_epoch = False
@@ -159,15 +163,21 @@ class DreamState:
     need_restart = False
     time_left_force_display = False
     active = False
+    new_ui = False
 
     def interrupt(self):
+        if self.status_handler:
+            self.status_handler.end(desc="Interrupted")
         self.interrupted = True
-
+        self.in_progress = False
+        
     def interrupt_after_save(self):
         self.interrupted_after_save = True
+        self.in_progress = False
 
     def interrupt_after_epoch(self):
         self.interrupted_after_epoch = True
+        self.in_progress = False
 
     def save_samples(self):
         self.do_save_samples = True
@@ -187,7 +197,10 @@ class DreamState:
             "sampling_steps": self.sampling_steps,
             "last_status": self.textinfo,
             "sample_prompts": self.sample_prompts,
-            "active": self.active
+            "active": self.active,
+            "in_progress": self.in_progress,
+            "in_progress_epoch": self.in_progress_epoch,
+            "in_progress_step": self.in_progress_step,
         }
 
         return obj
@@ -207,7 +220,10 @@ class DreamState:
         self.textinfo2 = None
         self.time_left_force_display = False
         self.active = True
+        self.status_handler = status_handler
         torch_gc()
+        if self.status_handler:
+            self.status_handler.start()
 
     def end(self):
         print("Duration: " + format_time(time.time() - self.time_start))
@@ -215,7 +231,10 @@ class DreamState:
         self.job_count = 0
         self.job_no = 0
         self.active = False
+        self.in_progress = False
         torch_gc()
+        if self.status_handler:
+            self.status_handler.end()
 
     def nextjob(self):
         if show_progress_every_n_steps == -1:
@@ -297,10 +316,9 @@ def load_vars(root_path = None):
     data_path, show_progress_every_n_steps, parallel_processing_allowed, dataset_filename_word_regex, dataset_filename_join_string, \
     device_id, state, disable_safe_unpickle, ckptfix, medvram, lowvram, debug, profile_db, sub_quad_q_chunk_size, sub_quad_kv_chunk_size, \
     sub_quad_chunk_threshold, CLIP_stop_at_last_layers, sd_model, config, force_cpu, paths, is_auto, device, orig_tensor_to, orig_layer_norm, \
-    orig_tensor_numpy, extension_path, orig_cumsum, orig_Tensor_cumsum, status, state
+    orig_tensor_numpy, extension_path, orig_cumsum, orig_Tensor_cumsum, status, state, in_progress, in_progress_epoch, in_progress_step
 
     script_path = os.sep.join(__file__.split(os.sep)[0:-4]) if root_path is None else root_path
-    logger.debug(f"Script path is {script_path}")
     models_path = os.path.join(script_path, "models")
     embeddings_dir = os.path.join(script_path, "embeddings")
     dreambooth_models_path = os.path.join(models_path, "dreambooth")
@@ -319,6 +337,9 @@ def load_vars(root_path = None):
     medvram = False
     lowvram = False
     debug = False
+    in_progress = False
+    in_progress_epoch = 0
+    in_progress_step = 0
     profile_db = False
     sub_quad_q_chunk_size = 1024
     sub_quad_kv_chunk_size = None
@@ -370,7 +391,7 @@ def load_vars(root_path = None):
     if state is None:
         state = status
 
-
+status_handler = None
 script_path = ""
 models_path = ""
 embeddings_dir = ""
@@ -390,6 +411,9 @@ ckptfix = False
 medvram = False
 lowvram = False
 debug = False
+in_progress = False
+in_progress_epoch = 0
+in_progress_step = 0
 profile_db = False
 sub_quad_q_chunk_size = 1024
 sub_quad_kv_chunk_size = None
@@ -407,5 +431,6 @@ extension_path = ""
 status = None
 orig_cumsum = torch.cumsum
 orig_Tensor_cumsum = torch.Tensor.cumsum
+is_auto = load_auto_settings()
 
 load_vars()

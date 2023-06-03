@@ -1,8 +1,12 @@
 import argparse
+import os
 
 
 def preload(parser: argparse.ArgumentParser):
     # from postinstall import actual_install
+    if os.name == "posix":
+        # For now disable Torch2 Dynamo
+        os.environ["TORCHDYNAMO_DISABLE"] = "1"
 
     parser.add_argument("--dreambooth-models-path", type=str, help="Path to directory to store Dreambooth model file("
                                                                    "s).", default=None)
