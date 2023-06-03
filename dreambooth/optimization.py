@@ -66,6 +66,7 @@ def get_dadapt_with_warmup(optimizer, num_warmup_steps: int = 0, unet_lr: float 
     Return:
         `torch.optim.lr_scheduler.LambdaLR` with the appropriate LR schedules for TENC and UNET.
     """
+
     def unet_lambda(current_step: int):
         if current_step < num_warmup_steps:
             return float(current_step) / float(max(unet_lr, num_warmup_steps))
@@ -79,7 +80,6 @@ def get_dadapt_with_warmup(optimizer, num_warmup_steps: int = 0, unet_lr: float 
             return tenc_lr
 
     return LambdaLR(optimizer, [unet_lambda, tenc_lambda], last_epoch=-1, verbose=False)
-
 
 
 # region Newer Schedulers

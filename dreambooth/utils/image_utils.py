@@ -262,20 +262,29 @@ def get_scheduler_class(scheduler_name):
     return scheduler_class
 
 
-def make_bucket_resolutions(max_resolution, divisible=8) -> List[Tuple[int, int]]:
+def make_bucket_resolutions(max_resolution: int, divisible: int = 8) -> List[Tuple[int, int]]:
     aspect_ratios = [(16, 9), (5, 4), (4, 3), (3, 2), (2, 1), (1, 1)]
     resos = set()
 
-    for ar in aspect_ratios:
-        w = int(max_resolution * math.sqrt(ar[0] / ar[1]) // divisible) * divisible
-        h = int(max_resolution * math.sqrt(ar[1] / ar[0]) // divisible) * divisible
+    for ratio in aspect_ratios:
+        width, height = ratio
+        max_width = max_height = max_resolution
 
-        resos.add((w, h))
-        resos.add((h, w))
+        # Adjust width or height according to aspect ratio
+        if width > height:
+            max_height = max_resolution * height / width
+        else:
+            max_width = max_resolution * width / height
 
-    resos = list(resos)
-    resos.sort()
-    return resos
+        # Make sure they are divisible by the given value
+        max_width = int(max_width // divisible * divisible)
+        max_height = int(max_height // divisible * divisible)
+
+        # Add to the set of resolutions
+        resos.add((max_width, max_height))
+        resos.add((max_height, max_width))
+
+    return sorted(list(resos), key=lambda x: x[0] * x[1], reverse=True)
 
 
 def closest_resolution(img_w, img_h, resos) -> Tuple[int, int]:

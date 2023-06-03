@@ -34,6 +34,7 @@ from torch.utils.data import Dataset
 from transformers import AutoTokenizer
 
 from dreambooth import shared
+from dreambooth.dataclasses.db_config import DreamboothConfig
 from dreambooth.dataclasses.prompt_data import PromptData
 from dreambooth.dataclasses.train_result import TrainResult
 from dreambooth.dataset.bucket_sampler import BucketSampler
@@ -128,13 +129,15 @@ def stop_profiler(profiler):
             pass
 
 
-def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainResult:
+def main(args: DreamboothConfig, class_gen_method: str = "Native Diffusers", user: str = None) -> TrainResult:
     """
+    @param args: DreamboothConfig - I don't know why we removed this, but please leave it.
     @param class_gen_method: Image Generation Library.
     @param user: User to send training updates to (for new UI)
     @return: TrainResult
     """
-    args = shared.db_model_config
+    # We're not doing this, it makes it rely on Auto1111
+    #args = shared.db_model_config
     status_handler = None
     logging_dir = Path(args.model_dir, "logging")
     global export_diffusers, user_model_dir
@@ -179,7 +182,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         if not args.train_unet:
             stop_text_percentage = 1
 
-        n_workers = 0
         args.max_token_length = int(args.max_token_length)
         if not args.pad_tokens and args.max_token_length > 75:
             logger.warning("Cannot raise token length limit above 75 when pad_tokens=False")
@@ -392,22 +394,22 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             unet.requires_grad_(False)
 
         unet_lora_params = None
-        text_encoder_lora_params = None
-        lora_path = None
-        lora_txt = None
 
-        if args.use_lora:
-            if args.lora_model_name:
-                lora_path = os.path.join(args.model_dir, "loras", args.lora_model_name)
-                lora_txt = lora_path.replace(".pt", "_txt.pt")
+        # Determine whether to use lora and set paths
+        use_lora = args.use_lora and args.lora_model_name
+        lora_path = os.path.join(args.model_dir, "loras", args.lora_model_name) if use_lora else None
+        lora_txt = lora_path.replace(".pt", "_txt.pt") if use_lora else None
 
-                if not os.path.exists(lora_path) or not os.path.isfile(lora_path):
-                    lora_path = None
-                    lora_txt = None
+        # Handle invalid paths
+        if use_lora and (not os.path.exists(lora_path) or not os.path.isfile(lora_path)):
+            lora_path, lora_txt = None, None
+            use_lora = False
 
+        # Define unet parameters
+        unet_lora_params = None
+        if use_lora:
             injectable_lora = get_target_module("injection", args.use_lora_extended)
             target_module = get_target_module("module", args.use_lora_extended)
-
             unet_lora_params, _ = injectable_lora(
                 unet,
                 r=args.lora_unet_rank,
@@ -415,40 +417,35 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 target_replace_module=target_module,
             )
 
-            if stop_text_percentage != 0:
-                text_encoder.requires_grad_(False)
-                inject_trainable_txt_lora = get_target_module("injection", False)
-                text_encoder_lora_params, _ = inject_trainable_txt_lora(
-                    text_encoder,
-                    target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
-                    r=args.lora_txt_rank,
-                    loras=lora_txt,
-                )
-            printm("Lora loaded")
-            cleanup()
-            printm("Cleaned")
+        # Define text encoder parameters
+        text_encoder_lora_params = None
+        if use_lora and stop_text_percentage != 0:
+            text_encoder.requires_grad_(False)
+            inject_trainable_txt_lora = get_target_module("injection", False)
+            text_encoder_lora_params, _ = inject_trainable_txt_lora(
+                text_encoder,
+                target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
+                r=args.lora_txt_rank,
+                loras=lora_txt,
+            )
 
-            if stop_text_percentage != 0:
-                params_to_optimize = [
-                    {
-                        "params": itertools.chain(*unet_lora_params),
-                        "lr": learning_rate,
-                    },
-                    {
-                        "params": itertools.chain(*text_encoder_lora_params),
-                        "lr": txt_learning_rate,
-                    },
-                ]
-            else:
-                params_to_optimize = itertools.chain(*unet_lora_params)
-
+        # Combine parameters to optimize
+        if use_lora:
+            params_to_optimize = itertools.chain(*unet_lora_params) if stop_text_percentage == 0 else [
+                {"params": itertools.chain(*unet_lora_params), "lr": learning_rate},
+                {"params": itertools.chain(*text_encoder_lora_params), "lr": txt_learning_rate},
+            ]
         elif stop_text_percentage != 0:
-            if args.train_unet:
-                params_to_optimize = itertools.chain(unet.parameters(), text_encoder.parameters())
-            else:
-                params_to_optimize = itertools.chain(text_encoder.parameters())
+            params_to_optimize = [
+                {"params": itertools.chain(unet.parameters()), "lr": learning_rate},
+                {"params": itertools.chain(text_encoder.parameters()), "lr": txt_learning_rate},
+            ] if args.train_unet else [
+                {"params": itertools.chain(text_encoder.parameters()), "lr": txt_learning_rate},
+            ]
         else:
-            params_to_optimize = unet.parameters()
+            params_to_optimize = [
+                {"params": itertools.chain(unet.parameters()), "lr": learning_rate},
+            ]
 
         optimizer = get_optimizer(args.optimizer, learning_rate, args.weight_decay, params_to_optimize)
         if len(optimizer.param_groups) > 1:
@@ -498,9 +495,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         printm("Loading dataset...")
         pbar2.reset()
         pbar2.set_description("Loading dataset")
-
+        logger.debug(f"Dataset dir is {args.model_dir}")
         train_dataset = generate_dataset(
-            model_name=args.model_name,
             instance_prompts=instance_prompts,
             class_prompts=class_prompts,
             batch_size=train_batch_size,
@@ -511,7 +507,14 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             pbar=pbar2
         )
         pbar2.reset()
-        printm("Dataset loaded.")
+        if train_dataset:
+            printm("Dataset loaded.")
+        else:
+            logger.warning("Dataset not loaded.")
+            result.msg = "Dataset not loaded."
+            stop_profiler(profiler)
+            cleanup_memory()
+            return result
 
         if args.cache_latents:
             printm("Unloading vae.")
@@ -569,7 +572,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             batch_size=1,
             batch_sampler=sampler,
             collate_fn=collate_fn,
-            num_workers=n_workers,
+            num_workers=0,
         )
 
         max_train_steps = args.num_train_epochs * len(train_dataset)

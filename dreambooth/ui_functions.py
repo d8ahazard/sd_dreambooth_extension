@@ -18,7 +18,7 @@ from torch.optim import AdamW
 
 from dreambooth import shared
 from dreambooth.dataclasses import db_config
-from dreambooth.dataclasses.db_config import from_file, sanitize_name
+from dreambooth.dataclasses.db_config import from_file, sanitize_name, DreamboothConfig
 from dreambooth.dataclasses.prompt_data import PromptData
 from dreambooth.dataset.bucket_sampler import BucketSampler
 from dreambooth.dataset.class_dataset import ClassDataset
@@ -678,7 +678,7 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
         msg = "Create or select a model first."
         lora_model_name = gr_update(visible=True)
         return lora_model_name, 0, 0, [], msg
-    config = from_file(model_dir)
+    config = DreamboothConfig().load_from_file(model_dir)
     # Clear pretrained VAE Name if applicable
     if config.pretrained_vae_name_or_path == "":
         config.pretrained_vae_name_or_path = None
@@ -726,7 +726,7 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
                 from dreambooth.train_dreambooth import main  # noqa
             except:
                 from dreambooth.train_dreambooth import main  # noqa
-            result = main(class_gen_method=class_gen_method)
+            result = main(config, class_gen_method=class_gen_method)
 
         config = result.config
         images = result.samples

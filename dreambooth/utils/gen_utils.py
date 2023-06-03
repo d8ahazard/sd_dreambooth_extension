@@ -22,24 +22,20 @@ from helpers.image_builder import ImageBuilder
 from helpers.mytqdm import mytqdm
 
 
-def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None, class_prompts: List[PromptData] = None,
+def generate_dataset(instance_prompts: List[PromptData] = None, class_prompts: List[PromptData] = None,
                      batch_size=None, tokenizer=None, vae=None, debug=True, model_dir="", pbar = None):
     if debug:
         print("Generating dataset.")
     from dreambooth.ui_functions import gr_update
 
-    db_gallery = gr_update(value=None)
-    db_prompt_list = gr_update(value=None)
-    db_status = gr_update(value=None)
-
-    args = from_file(model_name)
+    args = DreamboothConfig().load_from_file(model_dir)
 
     if batch_size is None:
         batch_size = args.train_batch_size
 
     if args is None:
         print("No CONFIG!")
-        return db_gallery, db_prompt_list, db_status
+        return None
 
     if debug and tokenizer is None:
         print("Definitely made a tokenizer.")

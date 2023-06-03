@@ -5,9 +5,10 @@ import traceback
 from pathlib import Path
 from typing import List, Dict
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from dreambooth import shared  # noqa
+from dreambooth.dataclasses.base_config import BaseConfig
 from dreambooth.dataclasses.db_concept import Concept  # noqa
 from dreambooth.utils.image_utils import get_scheduler_names  # noqa
 from dreambooth.utils.utils import list_attention
@@ -23,151 +24,151 @@ def sanitize_name(name):
     return "".join(x for x in name if (x.isalnum() or x in "._- "))
 
 
-class DreamboothConfig(BaseModel):
-    # These properties MUST be sorted alphabetically
-    weight_decay: float = 0.01
-    attention: str = "xformers"
-    cache_latents: bool = True
-    clip_skip: int = 1
-    concepts_list: List[Dict] = []
-    concepts_path: str = ""
-    custom_model_name: str = ""
-    deterministic: bool = False
-    disable_class_matching: bool = False
-    disable_logging: bool = False
-    ema_predict: bool = False
-    epoch: int = 0
-    epoch_pause_frequency: int = 0
-    epoch_pause_time: int = 0
-    freeze_clip_normalization: bool = False
-    gradient_accumulation_steps: int = 1
-    gradient_checkpointing: bool = True
-    gradient_set_to_none: bool = True
-    graph_smoothing: int = 50
-    half_model: bool = False
-    has_ema: bool = False
-    hflip: bool = False
-    infer_ema: bool = False
-    initial_revision: int = 0
-    learning_rate: float = 5e-6
-    learning_rate_min: float = 1e-6
-    lifetime_revision: int = 0
-    lora_learning_rate: float = 1e-4
-    lora_model_name: str = ""
-    lora_txt_learning_rate: float = 5e-5
-    lora_txt_rank: int = 4
-    lora_txt_weight: float = 1.0
-    lora_unet_rank: int = 4
-    lora_weight: float = 1.0
-    lora_use_buggy_requires_grad: bool = False
-    lr_cycles: int = 1
-    lr_factor: float = 0.5
-    lr_power: float = 1.0
-    lr_scale_pos: float = 0.5
-    lr_scheduler: str = "constant_with_warmup"
-    lr_warmup_steps: int = 0
-    max_token_length: int = 75
-    mixed_precision: str = "fp16"
-    model_dir: str = ""
-    model_name: str = ""
-    model_path: str = ""
-    noise_scheduler: str = "DDPM"
-    num_train_epochs: int = 100
-    offset_noise: float = 0
-    optimizer: str = "8bit AdamW"
-    pad_tokens: bool = True
-    pretrained_model_name_or_path: str = ""
-    pretrained_vae_name_or_path: str = ""
-    prior_loss_scale: bool = False
-    prior_loss_target: int = 100
-    prior_loss_weight: float = 0.75
-    prior_loss_weight_min: float = 0.1
-    resolution: int = 512
-    revision: int = 0
-    sample_batch_size: int = 1
-    sanity_prompt: str = ""
-    sanity_seed: int = 420420
-    save_ckpt_after: bool = True
-    save_ckpt_cancel: bool = False
-    save_ckpt_during: bool = True
-    save_ema: bool = True
-    save_embedding_every: int = 25
-    save_lora_after: bool = True
-    save_lora_cancel: bool = False
-    save_lora_during: bool = True
-    save_lora_for_extra_net: bool = True
-    save_preview_every: int = 5
-    save_safetensors: bool = True
-    save_state_after: bool = False
-    save_state_cancel: bool = False
-    save_state_during: bool = False
-    scheduler: str = "ddim"
-    shared_diffusers_path: str = ""
-    shuffle_tags: bool = True
-    snapshot: str = ""
-    split_loss: bool = True
-    src: str = ""
-    stop_text_encoder: float = 1.0
-    strict_tokens: bool = False
-    dynamic_img_norm: bool = False
-    tenc_weight_decay: float = 0.01
-    tenc_grad_clip_norm: float = 0.00
-    tomesd: float = 0
-    train_batch_size: int = 1
-    train_imagic: bool = False
-    train_unet: bool = True
-    train_unfrozen: bool = True
-    txt_learning_rate: float = 5e-6
-    use_concepts: bool = False
-    use_ema: bool = True
-    use_lora: bool = False
-    use_lora_extended: bool = False
-    use_shared_src: bool = False,
-    use_subdir: bool = False
-    v2: bool = False
+class DreamboothConfig(BaseConfig):
+    config_prefix: str = Field("db", description="Prefix for the config file.")
+    attention: str = Field("xformers", description="Attention model.")
+    cache_latents: bool = Field(True, description="Cache latents.")
+    clip_skip: int = Field(1, description="Clip skip.")
+    concepts_list: List[Dict] = Field([], description="Concepts list.")
+    concepts_path: str = Field("", description="Path to the concepts.")
+    custom_model_name: str = Field("", description="Custom model name.")
+    deterministic: bool = Field(False, description="Deterministic mode.")
+    disable_class_matching: bool = Field(False, description="Disable class matching.")
+    disable_logging: bool = Field(False, description="Disable logging.")
+    ema_predict: bool = Field(False, description="EMA predict.")
+    epoch: int = Field(0, description="Current epoch.")
+    epoch_pause_frequency: int = Field(0, description="Epoch pause frequency.")
+    epoch_pause_time: int = Field(0, description="Epoch pause time.")
+    freeze_clip_normalization: bool = Field(False, description="Freeze clip normalization.")
+    gradient_accumulation_steps: int = Field(1, description="Gradient accumulation steps.")
+    gradient_checkpointing: bool = Field(True, description="Gradient checkpointing.")
+    gradient_set_to_none: bool = Field(True, description="Gradient set to none.")
+    graph_smoothing: int = Field(50, description="Graph smoothing.")
+    half_model: bool = Field(False, description="Half model.")
+    has_ema: bool = Field(False, description="Has EMA.")
+    hflip: bool = Field(False, description="Horizontal flip.")
+    infer_ema: bool = Field(False, description="Infer EMA.")
+    initial_revision: int = Field(0, description="Initial revision.")
+    learning_rate: float = Field(5e-6, description="Learning rate.")
+    learning_rate_min: float = Field(1e-6, description="Minimum learning rate.")
+    lifetime_revision: int = Field(0, description="Lifetime revision.")
+    lora_learning_rate: float = Field(1e-4, description="LoRA learning rate.")
+    lora_model_name: str = Field("", description="LoRA model name.")
+    lora_txt_learning_rate: float = Field(5e-5, description="LoRA text learning rate.")
+    lora_txt_rank: int = Field(4, description="LoRA text rank.")
+    lora_txt_weight: float = Field(1.0, description="LoRA text weight.")
+    lora_unet_rank: int = Field(4, description="LoRA UNet rank.")
+    lora_weight: float = Field(1.0, description="LoRA weight.")
+    lora_use_buggy_requires_grad: bool = Field(False, description="LoRA use buggy requires grad.")
+    lr_cycles: int = Field(1, description="Learning rate cycles.")
+    lr_factor: float = Field(0.5, description="Learning rate factor.")
+    lr_power: float = Field(1.0, description="Learning rate power.")
+    lr_scale_pos: float = Field(0.5, description="Learning rate scale position.")
+    lr_scheduler: str = Field("constant_with_warmup", description="Learning rate scheduler.")
+    lr_warmup_steps: int = Field(0, description="Learning rate warmup steps.")
+    max_token_length: int = Field(75, description="Max token length.")
+    mixed_precision: str = Field("fp16", description="Mixed precision mode.")
+    model_dir: str = Field("", description="Model directory.")
+    model_name: str = Field("", description="Model name.")
+    model_path: str = Field("", description="Model path.")
+    noise_scheduler: str = Field("DDPM", description="Noise scheduler.")
+    num_train_epochs: int = Field(100, description="Number of training epochs.")
+    offset_noise: float = Field(0, description="Offset noise.")
+    optimizer: str = Field("8bit AdamW", description="Optimizer.")
+    pad_tokens: bool = Field(True, description="Pad tokens.")
+    pretrained_model_name_or_path: str = Field("", description="Pretrained model name or path.")
+    pretrained_vae_name_or_path: str = Field("", description="Pretrained VAE model name or path.")
+    prior_loss_scale: bool = Field(False, description="Prior loss scale.")
+    prior_loss_target: int = Field(100, description="Prior loss target.")
+    prior_loss_weight: float = Field(0.75, description="Prior loss weight.")
+    prior_loss_weight_min: float = Field(0.1, description="Minimum prior loss weight.")
+    resolution: int = Field(512, description="Resolution.")
+    revision: int = Field(0, description="Revision.")
+    sample_batch_size: int = Field(1, description="Sample batch size.")
+    sanity_prompt: str = Field("", description="Sanity prompt.")
+    sanity_seed: int = Field(420420, description="Sanity seed.")
+    save_ckpt_after: bool = Field(True, description="Save checkpoint after.")
+    save_ckpt_cancel: bool = Field(False, description="Cancel saving of checkpoint.")
+    save_ckpt_during: bool = Field(True, description="Save checkpoint during.")
+    save_ema: bool = Field(True, description="Save EMA.")
+    save_embedding_every: int = Field(25, description="How often to save weights.")
+    save_lora_after: bool = Field(True, description="Save LoRA after.")
+    save_lora_cancel: bool = Field(False, description="Cancel saving of LoRA.")
+    save_lora_during: bool = Field(True, description="Save LoRA during.")
+    save_lora_for_extra_net: bool = Field(True, description="Save LoRA for extra net.")
+    save_preview_every: int = Field(5, description="Save preview every.")
+    save_safetensors: bool = Field(True, description="Save safetensors.")
+    save_state_after: bool = Field(False, description="Save state after.")
+    save_state_cancel: bool = Field(False, description="Cancel saving of state.")
+    save_state_during: bool = Field(False, description="Save state during.")
+    scheduler: str = Field("ddim", description="Scheduler.")
+    shared_diffusers_path: str = Field("", description="Shared diffusers path.")
+    shuffle_tags: bool = Field(True, description="Shuffle tags.")
+    snapshot: str = Field("", description="Snapshot.")
+    split_loss: bool = Field(True, description="Split loss.")
+    src: str = Field("", description="The source checkpoint.")
+    stop_text_encoder: float = Field(1.0, description="Stop text encoder.")
+    strict_tokens: bool = Field(False, description="Strict tokens.")
+    dynamic_img_norm: bool = Field(False, description="Dynamic image normalization.")
+    tenc_weight_decay: float = Field(0.01, description="Text encoder weight decay.")
+    tenc_grad_clip_norm: float = Field(0.00, description="Text encoder gradient clipping norm.")
+    tomesd: float = Field(0, description="TomesD.")
+    train_batch_size: int = Field(1, description="Training batch size.")
+    train_imagic: bool = Field(False, description="Train iMagic.")
+    train_unet: bool = Field(True, description="Train UNet.")
+    train_unfrozen: bool = Field(True, description="Train unfrozen.")
+    txt_learning_rate: float = Field(5e-6, description="Text learning rate.")
+    use_concepts: bool = Field(False, description="Use concepts.")
+    use_ema: bool = Field(True, description="Use EMA.")
+    use_lora: bool = Field(False, description="Use LoRA.")
+    use_lora_extended: bool = Field(False, description="Use LoRA extended.")
+    use_shared_src: bool = Field(False, description="Use shared source.")
+    use_subdir: bool = Field(False, description="Use subdirectory.")
+    v2: bool = Field(False, description="If this is a V2 Model or not.")
+    weight_decay: float = Field(0.01, description="Weight decay.")
 
     def __init__(
             self,
-            model_name: str = "",
-            model_dir: str = "",
-            v2: bool = False,
-            src: str = "",
-            resolution: int = 512,
             **kwargs
     ):
 
         super().__init__(**kwargs)
+        if "model_name" in kwargs:
+            model_name = kwargs["model_name"]
+            model_name = sanitize_name(model_name)
+            if "models_path" in kwargs:
+                models_path = kwargs["models_path"]
+                print(f"Using models path: {models_path}")
+            else:
+                models_path = shared.dreambooth_models_path
+                if models_path == "" or models_path is None:
+                    models_path = os.path.join(shared.models_path, "dreambooth")
 
-        model_name = sanitize_name(model_name)
-        if "models_path" in kwargs:
-            models_path = kwargs["models_path"]
-            print(f"Using models path: {models_path}")
-        else:
-            models_path = shared.dreambooth_models_path
-            if models_path == "" or models_path is None:
-                models_path = os.path.join(shared.models_path, "dreambooth")
+                # If we're using the new UI, this should be populated, so load models from here.
+                if len(shared.paths):
+                    models_path = os.path.join(shared.paths["models"], "dreambooth")
 
-            # If we're using the new UI, this should be populated, so load models from here.
-            if len(shared.paths):
-                models_path = os.path.join(shared.paths["models"], "dreambooth")
+            if not self.use_lora:
+                self.lora_model_name = ""
 
-        if not self.use_lora:
-            self.lora_model_name = ""
+            model_dir = os.path.join(models_path, model_name)
+            # print(f"Model dir set to: {model_dir}")
+            working_dir = os.path.join(model_dir, "working")
 
-        model_dir = os.path.join(models_path, model_name)
-        # print(f"Model dir set to: {model_dir}")
-        working_dir = os.path.join(model_dir, "working")
+            if not os.path.exists(working_dir):
+                os.makedirs(working_dir)
 
-        if not os.path.exists(working_dir):
-            os.makedirs(working_dir)
-
-        self.model_name = model_name
-        self.model_dir = model_dir
-        self.pretrained_model_name_or_path = working_dir
-        self.resolution = resolution
-        self.src = src
-        self.scheduler = "ddim"
-        self.v2 = v2
+            self.model_name = model_name
+            self.model_dir = model_dir
+            self.pretrained_model_name_or_path = working_dir
+        if "resolution" in kwargs:
+            self.resolution = kwargs["resolution"]
+        if "v2" in kwargs:
+            self.v2 = kwargs["v2"]
+        if "src" in kwargs:
+            self.src = kwargs["src"]
+        if "scheduler" in kwargs:
+            self.scheduler = kwargs["scheduler"]
 
     # Actually save as a file
     def save(self, backup=False):
@@ -316,6 +317,27 @@ class DreamboothConfig(BaseModel):
         if self.shared_diffusers_path != "" and not self.use_lora:
             raise Exception(f"shared_diffusers_path is \"{self.shared_diffusers_path}\" but use_lora is false")
         return self.shared_diffusers_path if self.shared_diffusers_path != "" else self.pretrained_model_name_or_path
+
+    def load_from_file(self, model_dir=None):
+        """
+        Load config data from UI
+        Args:
+            model_dir: If specified, override the default model directory
+
+        Returns: DreamboothConfig | None
+
+        """
+        config_file = os.path.join(model_dir, "db_config.json")
+        try:
+            with open(config_file, 'r') as openfile:
+                config_dict = json.load(openfile)
+            super().load_from_file(model_dir)
+            self.load_params(config_dict)
+            return self
+        except Exception as e:
+            print(f"Exception loading config: {e}")
+            traceback.print_exc()
+            return None
 
 
 def concepts_from_file(concepts_path: str):

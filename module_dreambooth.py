@@ -19,8 +19,11 @@ from fastapi import FastAPI
 import scripts.api
 from dreambooth import shared
 from dreambooth.dataclasses.db_config import DreamboothConfig, from_file
+from dreambooth.dataclasses.db_config_2 import DreamboothConfig2
+from dreambooth.dataclasses.finetune_config import FinetuneConfig
 from dreambooth.sd_to_diff import extract_checkpoint
 from dreambooth.train_dreambooth import main
+from dreambooth.train_text_to_image import main as ft_main
 from module_src.gradio_parser import parse_gr_code
 
 logger = logging.getLogger(__name__)
@@ -80,6 +83,8 @@ async def _get_db_vars(request):
 
 async def _train_dreambooth(request):
     user = request["user"] if "user" in request else None
+    data = request["data"]
+    fine_tune = data["fine_tune"] if "fine_tune" in data else False
     config = await _set_model_config(request, True)
     mh = ModelHandler(user_name=user)
     mm = ModelManager()
@@ -97,13 +102,20 @@ async def _train_dreambooth(request):
     try:
         loop = asyncio.get_event_loop()
         with ThreadPoolExecutor() as pool:
-            await loop.run_in_executor(pool, lambda: (
-                sh.start(0, "Starting Dreambooth Training..."),
-                main(user=user)
-            ))
+            if fine_tune:
+                await loop.run_in_executor(pool, lambda: (
+                    sh.start(0, "Starting Dreambooth Training..."),
+                    ft_main(user=user, args=config)
+                ))
+            else:
+                await loop.run_in_executor(pool, lambda: (
+                    sh.start(0, "Starting Dreambooth Training..."),
+                    main(args=config, user=user)
+                ))
     except Exception as e:
         logger.error(f"Error in training: {e}")
         traceback.print_exc()
+        sh.end(f"Error in training: {e}")
         result = {"message": f"Error in training: {e}"}
     try:
         gc.collect()
@@ -161,27 +173,30 @@ async def copy_model(model_name: str, src: str, is_512: bool, mh: ModelHandler, 
     models_path = mh.models_path
     logger.debug(f"Models paths: {models_path}")
     model_dir = models_path[0]
-    dreambooth_models_path = os.path.join(model_dir, "dreambooth")
+    mp = os.path.join(model_dir, "dreambooth")
     dest_dir = os.path.join(model_dir, "dreambooth", model_name, "working")
     if os.path.exists(dest_dir):
         shutil.rmtree(dest_dir, True)
     ch = ConfigHandler(user_name=mh.user_name)
     base = ch.get_module_defaults("dreambooth_model_defaults")
-    user_base = ch.get_config_user("dreambooth_model_defaults")
-    logger.debug(f"User base: {user_base}")
-    if base is not None:
-        if user_base is not None:
-            base = {**base, **user_base}
-        else:
-            ch.set_config_user(base, "dreambooth_model_defaults")
-    else:
-        logger.debug("Unable to find base model config: dreambooth_model_defaults")
+    base2 = ch.get_module_defaults("dreambooth2_model_defaults")
+    ft_base = ch.get_module_defaults("ft_model_defaults")
+
     if not os.path.exists(dest_dir):
         logger.debug(f"Copying model from {src} to {dest_dir}")
         await copy_directory(src, dest_dir, sh)
-        cfg = DreamboothConfig(model_name=model_name, src=src, resolution=512 if is_512 else 768, models_path=dreambooth_models_path)
-        cfg.load_params(base)
-        cfg.save()
+        cfg = DreamboothConfig(model_name=model_name, src=src, resolution=512 if is_512 else 768, models_path=mp)
+        cfg_2 = DreamboothConfig2(model_name=model_name, src=src, resolution=512 if is_512 else 768, models_path=mp)
+        cfg_3 = FinetuneConfig(model_name=model_name, src=src, resolution=512 if is_512 else 768, models_path=mp)
+        if base is not None:
+            cfg.load_params(base)
+            cfg.save()
+        if base2 is not None:
+            cfg_2.load_params(base2)
+            cfg_2.save()
+        if ft_base is not None:
+            cfg_3.load_params(ft_base)
+            cfg_3.save()
 
     else:
         logger.debug(f"Destination directory '{dest_dir}' already exists, skipping copy.")
@@ -236,19 +251,37 @@ async def _get_layout(data):
 async def _get_model_config(data, return_json=True):
     logger.debug(f"Get model called: {data}")
     model = data["data"]["model"]
-    config = from_file(model["name"], os.path.dirname(model["path"]))
-    if config.concepts_path and os.path.exists(config.concepts_path):
-        with open(config.concepts_path, "r") as f:
-            config.concepts_list = json.load(f)
-        config.concepts_path = ""
-        config.use_concepts = False
-        config.save()
+    model_dir = model["path"]
+    db_config = DreamboothConfig().load_from_file(model_dir)
+    ft_config = FinetuneConfig().load_from_file(model_dir)
+    if db_config.concepts_path and os.path.exists(db_config.concepts_path):
+        with open(db_config.concepts_path, "r") as f:
+            db_config.concepts_list = json.load(f)
+        db_config.concepts_path = ""
+        db_config.use_concepts = False
+        db_config.save()
     if return_json:
-        return {"config": config.__dict__}
-    return config
+        return {"db_config": db_config.__dict__, "ft_config": ft_config.__dict__}
+    return db_config, ft_config
 
 
-async def _set_model_config(data: dict, return_config: bool = False) -> Union[Dict, DreamboothConfig]:
+async def _set_model_config(data: dict, return_config: bool = False) -> Union[Dict, DreamboothConfig, FinetuneConfig]:
+    logger.debug(f"Set model called: {data}")
+    model = data["data"]["model"]
+    training_params = data["data"]
+    fine_tune = training_params["fine_tune"] if "fine_tune" in training_params else False
+    del training_params["model"]
+    if fine_tune:
+        config = FinetuneConfig().load_from_file(model["path"])
+    else:
+        config = DreamboothConfig().load_from_file(model["path"])
+    config.load_params(training_params)
+    config.pretrained_model_name_or_path = os.path.join(model["path"], "working")
+    config.save()
+    return {"config": config.__dict__} if not return_config else config
+
+
+async def set_ft_model_config(data: dict, return_config: bool = False) -> Union[Dict, FinetuneConfig]:
     logger.debug(f"Set model called: {data}")
     model = data["data"]["model"]
     training_params = data["data"]

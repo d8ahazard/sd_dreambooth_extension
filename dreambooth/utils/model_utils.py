@@ -245,7 +245,7 @@ def enable_safe_unpickle():
         pass
 
 
-def xformerify(obj, try_sdp=True):
+def xformerify(obj, try_sdp=False):
     if try_sdp:
         try:
             from diffusers.models.attention_processor import AttnProcessor2_0

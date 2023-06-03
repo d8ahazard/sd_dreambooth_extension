@@ -159,7 +159,7 @@
                         Input
                     </div>
                     <div class="card-body">
-                        <div class="borderSection">
+                        <div class="borderSection dbOnly">
                             <div class="row justify-content-between">
                                 <div class="col-auto sectionLabel">Concepts</div>
                                 <div class="col-auto db-advanced" id="conceptControls">
@@ -171,15 +171,26 @@
 
                             <div id="advancedConcepts" class="form-control"></div>
                         </div>
+                        <div class="borderSection ftOnly">
+                            <div class="col-auto sectionLabel">Dataset Directory</div>
+                            <div id="train_data_dir"></div>
+                        </div>
                         <div class="borderSection">
                             <div class="sectionLabel">Settings</div>
+                            <div class="form-group hide">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="train_ft" name="train_ft"
+                                           data-key="train_ft">
+                                    <label class="form-check-label" for="train_ft">Fine-Tune</label>
+                                </div>
+                            </div>
                             <div class="db-slider dbInput" id="num_train_epochs" data-max="1000" data-min="1"
                                  data-value="150" data-label="Number of Epochs"></div>
                             <div class="db-slider dbInput db-advanced" id="save_embedding_every"
                                  data-max="100"
                                  data-min="0" data-step="1"
                                  data-value="0" data-label="Save Weight Frequency"></div>
-                            <div class="db-slider dbInput db-advanced" id="save_preview_every" data-max="100"
+                            <div class="db-slider dbInput db-advanced dbOnly" id="save_preview_every" data-max="100"
                                  data-min="0" data-step="1"
                                  data-value="0" data-label="Save Preview Frequency"></div>
                             <div class="db-slider dbInput" id="resolution" data-max="1024" data-min="512"
@@ -202,7 +213,7 @@
                                      aria-labelledby="dbAdvancedLabel" data-bs-parent="#dbAdvancedAccordion">
                                     <div class="accordion-body">
                                         <form>
-                                            <div class="form-group">
+                                            <div class="form-group dbOnly">
                                                 <label class="form-label" for="scheduler">Image Scheduler</label>
                                                 <select class="dbInput form-control" id="scheduler" name="scheduler">
                                                 </select>
@@ -238,24 +249,22 @@
                                                 </div>
 
 
-                                                <span class="input-group-btn linkBtn db-advanced">
+                                                <span class="input-group-btn linkBtn db-advanced dbOnly">
                                                   <button class="btn btn-link btn-sm" type="button">
                                                       <i class="bx bx-link"></i>
                                                   </button>
                                             </span>
-                                                <label class="form-label mt-3 db-advanced" for="txt_learning_rate">Learning
-                                                    Rate
-                                                    (Tenc)</label>
-                                                <div class="input-group">
+                                                <label class="form-label mt-3 db-advanced dbOnly"
+                                                       for="txt_learning_rate">Learning Rate (Tenc)</label>
+                                                <div class="input-group dbOnly">
                                                     <input class="dbInput form-control db-advanced" type="number"
                                                            id="txt_learning_rate" name="txt_learning_rate"
                                                            value="0.000002">
                                                 </div>
                                             </div>
 
-                                            <div class="form-group">
-                                                <label class="form-label" for="min_learning_rate">Minimum Learning
-                                                    Rate</label>
+                                            <div class="form-group dbOnly">
+                                                <label class="form-label" for="min_learning_rate">Minimum Learning Rate</label>
                                                 <input class="dbInput form-control" type="number" id="min_learning_rate"
                                                        name="min_learning_rate" value="0.000001">
                                             </div>
@@ -281,28 +290,38 @@
                                                      data-step="0.01" id="offset_noise" data-value="0"
                                                      data-label="Offset Noise"></div>
                                             </div>
-                                            <div class="form-group">
+                                            <div class="form-group dbOnly">
                                                 <div class="dbInput db-slider" data-min="1" data-max="12"
                                                      data-step="1" id="clip_skip" data-value="1"
                                                      data-label="Clip Skip"></div>
                                             </div>
-                                            <div class="form-group">
+                                            <div class="form-group dbOnly">
                                                 <div class="dbInput db-slider" data-min="0" data-max="128"
                                                      data-step="0.25" id="tenc_grad_clip_norm" data-value="0"
                                                      data-label="TENC Gradient Clip Norm"></div>
                                             </div>
-                                            <div class="form-group">
+                                            <div class="form-group dbOnly">
                                                 <div class="dbInput db-slider" data-min="75" data-max="300"
                                                      data-step="75" id="max_token_length" data-value="75"
                                                      data-label="Max Token length"></div>
                                             </div>
-                                            <div class="form-group">
+                                            <div class="form-group dbOnly">
                                                 <div class="dbInput db-slider" data-min="0" data-max="1.0"
                                                      data-step="0.01" id="stop_text_encoder"
                                                      data-value="0.75"
                                                      data-label="Text Encoder Percentage"></div>
                                             </div>
-                                            <div class="form-group">
+                                            <div class="form-group ftOnly">
+                                                <div class="dbInput db-slider" data-min="0" data-max="1"
+                                                     data-step="0.1" id="input_pertubation" data-value="0.1"
+                                                     data-label="Input Pertubation"></div>
+                                            </div>
+                                            <div class="form-group ftOnly">
+                                                <div class="dbInput db-slider" data-min="0" data-max="10"
+                                                     data-step="1" id="snr_gamma" data-value="5"
+                                                     data-label="SNR Gamma"></div>
+                                            </div>
+                                            <div class="form-group dbOnly">
                                                 <div class="form-check form-switch">
                                                     <input class="dbInput form-check-input" type="checkbox"
                                                            id="shuffle_tags" name="shuffle_tags" checked>
@@ -310,7 +329,7 @@
                                                         Tags</label>
                                                 </div>
                                             </div>
-                                            <div class="form-group">
+                                            <div class="form-group dbOnly">
                                                 <div class="form-check form-switch">
                                                     <input class="dbInput form-check-input" type="checkbox"
                                                            id="strict_tokens"
@@ -328,7 +347,7 @@
                                                         Checkpointing</label>
                                                 </div>
                                             </div>
-                                            <div class="form-group">
+                                            <div class="form-group dbOnly">
                                                 <div class="form-check form-switch">
                                                     <input class="dbInput form-check-input" type="checkbox"
                                                            id="gradient_set_to_none"
@@ -337,7 +356,7 @@
                                                         Gradients to None</label>
                                                 </div>
                                             </div>
-                                            <div class="form-group">
+                                            <div class="form-group dbOnly">
                                                 <div class="form-check form-switch">
                                                     <input class="dbInput form-check-input" type="checkbox"
                                                            id="freeze_clip_normalization"
@@ -354,7 +373,7 @@
                                                     <label class="form-check-label" for="use_ema">Use EMA</label>
                                                 </div>
                                             </div>
-                                            <div class="form-group">
+                                            <div class="form-group dbOnly">
                                                 <div class="form-check form-switch">
                                                     <input class="dbInput form-check-input" type="checkbox"
                                                            id="train_unet" name="train_unet"
@@ -362,13 +381,29 @@
                                                     <label class="form-check-label" for="train_unet">Train UNET</label>
                                                 </div>
                                             </div>
-                                            <div class="form-group">
+                                            <div class="form-group dbOnly">
                                                 <div class="form-check form-switch">
                                                     <input class="dbInput form-check-input" type="checkbox"
                                                            id="disable_logging" name="disable_logging"
                                                            data-key="disable_logging" checked>
                                                     <label class="form-check-label" for="disable_logging">Disable
                                                         Logging</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group ftOnly">
+                                                <div class="form-check form-switch">
+                                                    <input class="dbInput form-check-input" type="checkbox"
+                                                           id="allow_tf32" name="allow_tf32"
+                                                           data-key="allow_tf32" checked>
+                                                    <label class="form-check-label" for="allow_tf32">Allow TF32</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group ftOnly">
+                                                <div class="form-check form-switch">
+                                                    <input class="dbInput form-check-input" type="checkbox"
+                                                           id="use_dir_tags" name="use_dir_tags"
+                                                           data-key="use_dir_tags" checked>
+                                                    <label class="form-check-label" for="use_dir_tags">Use Directory Names for Tags</label>
                                                 </div>
                                             </div>
                                         </form>
