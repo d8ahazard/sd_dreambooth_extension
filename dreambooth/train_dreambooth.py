@@ -1060,13 +1060,16 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         logger.warning(f"Exception saving sample.")
                         traceback.print_exc()
                         pass
+                    printm("Starting cleanup.")
                     if args.tomesd:
                         tomesd.remove_patch(s_pipeline)
+
+                    del s_pipeline
+                    cleanup()
+
                     if os.path.isdir(tmp_dir):
                         shutil.rmtree(tmp_dir)
-                del s_pipeline
-                printm("Starting cleanup.")
-                if save_image:
+                
                     if "generator" in locals():
                         del generator
 
