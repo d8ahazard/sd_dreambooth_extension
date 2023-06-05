@@ -4,6 +4,7 @@ import random
 import traceback
 from typing import List, Union
 
+import tomesd
 import torch
 from PIL import Image
 from accelerate import Accelerator
