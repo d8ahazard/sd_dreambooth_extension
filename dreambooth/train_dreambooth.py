@@ -976,7 +976,9 @@ def main(args: DreamboothConfig, class_gen_method: str = "Native Diffusers", use
                     s_pipeline = DiffusionPipeline.from_pretrained(
                         tmp_dir,
                         vae=vae,
-                        torch_dtype=weight_dtype
+                        torch_dtype=weight_dtype,
+                        low_cpu_mem_usage=False,
+                        device_map=None
                     )
 
                     if args.tomesd:
@@ -990,8 +992,7 @@ def main(args: DreamboothConfig, class_gen_method: str = "Native Diffusers", use
                         pass
                     s_pipeline.enable_sequential_cpu_offload()
 
-                    s_pipeline.scheduler = get_scheduler_class("UniPCMultistep").from_config(
-                        s_pipeline.scheduler.config)
+                    s_pipeline.scheduler = get_scheduler_class("UniPCMultistep").from_config(s_pipeline.scheduler.config)
                     s_pipeline.scheduler.config.solver_type = "bh2"
                     samples = []
                     sample_prompts = []
@@ -1063,12 +1064,13 @@ def main(args: DreamboothConfig, class_gen_method: str = "Native Diffusers", use
                         logger.warning(f"Exception saving sample.")
                         traceback.print_exc()
                         pass
-                    if args.tomesd:
-                        tomesd.remove_patch(s_pipeline)
+
+                    del s_pipeline
+                    printm("Starting cleanup.")
+
                     if os.path.isdir(tmp_dir):
                         shutil.rmtree(tmp_dir)
-                del s_pipeline
-                printm("Starting cleanup.")
+
                 if save_image:
                     if "generator" in locals():
                         del generator
@@ -1195,7 +1197,7 @@ def main(args: DreamboothConfig, class_gen_method: str = "Native Diffusers", use
             if args.use_lora:
                 if not args.lora_use_buggy_requires_grad:
                     set_lora_requires_grad(text_encoder, train_tenc)
-                    # We need to ebable gradients on an input for gradient checkpointing to work
+                    # We need to enable gradients on an input for gradient checkpointing to work
                     # This will not be optimized because it is not a param to optimizer
                     text_encoder.text_model.embeddings.position_embedding.requires_grad_(train_tenc)
             else:
