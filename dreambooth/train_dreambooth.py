@@ -572,8 +572,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             num_workers=n_workers,
         )
 
-        max_train_steps = args.num_train_epochs * len(train_dataset)
-
         # This is separate, because optimizer.step is only called once per "step" in training, so it's not
         # affected by batch size
         sched_train_steps = args.num_train_epochs * train_dataset.num_train_images
@@ -652,11 +650,16 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         if accelerator.is_main_process:
             accelerator.init_trackers("dreambooth")
 
-        # Train!
-        total_batch_size = (
-                train_batch_size * accelerator.num_processes * gradient_accumulation_steps
-        )
+        # Calc steps
+        def calc_max_steps(n_pics: int, n_batch: int):
+            steps_per_epoch = math.ceil(n_pics / n_batch) * n_batch
+            max_steps = args.num_train_epochs * steps_per_epoch
+            return max_steps
+
+        total_batch_size = train_batch_size * accelerator.num_processes * gradient_accumulation_steps
         max_train_epochs = args.num_train_epochs
+        max_train_steps = calc_max_steps(len(train_dataset), total_batch_size)
+
         # we calculate our number of tenc training epochs
         text_encoder_epochs = round(max_train_epochs * stop_text_percentage)
         global_step = 0
