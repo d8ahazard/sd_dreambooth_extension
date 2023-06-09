@@ -1715,7 +1715,7 @@ def on_ui_tabs():
         db_train_model.click(
             fn=wrap_gpu_call(start_training),
             _js="db_start_train",
-            inputs=[db_model_name, db_class_gen_method],
+            inputs=[db_model_path, db_class_gen_method],
             outputs=[db_lora_model_name, db_revision, db_epochs, db_gallery, db_status],
         )
 

@@ -1078,6 +1078,7 @@ def extract_checkpoint(new_model_name: str, checkpoint_file: str, shared_src_nam
     # Needed for V2 models so we can create the right text encoder.
     upcast_attention = False
     msg = None
+    checkpoint_file = checkpoint_file if type(checkpoint_file) is list else ''
 
     if from_hub and (new_model_url == "" or new_model_url is None) and (
             new_model_token is None or new_model_token == ""):

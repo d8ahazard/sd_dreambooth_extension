@@ -397,7 +397,7 @@ def save_config(*args):
 
     config = from_file(model_name)
     if config is None:
-        config = DreamboothConfig(model_name)
+        config = DreamboothConfig(model_name=model_name)
     config.load_params(params_dict)
     shared.db_model_config = config
     config.save()
@@ -432,7 +432,7 @@ def from_file(model_name, model_dir=None):
         with open(config_file, 'r') as openfile:
             config_dict = json.load(openfile)
 
-        config = DreamboothConfig(model_name)
+        config = DreamboothConfig(model_name=model_name)
         config.load_params(config_dict)
         shared.db_model_config = config
         return config
