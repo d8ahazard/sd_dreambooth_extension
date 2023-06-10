@@ -9,7 +9,7 @@ lion-pytorch~=0.1.2
 Pillow==9.5.0
 tqdm==4.65.0
 tomesd~=0.1.2
-transformers~=4.29.2  # > 4.26.x causes issues (db extension #1110)
+transformers~=4.30.1  # > 4.26.x causes issues (db extension #1110)
 
 # Tensor
 tensorboard==2.13.0; sys_platform != 'darwin' or platform_machine != 'arm64'
