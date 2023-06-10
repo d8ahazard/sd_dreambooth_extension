@@ -12,9 +12,9 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
+
 import gc
 import json
-import math
 import os
 import random
 import traceback
@@ -31,22 +31,21 @@ from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.state import AcceleratorState
 from accelerate.utils import ProjectConfiguration, set_seed
-from diffusers import AutoencoderKL, DDPMScheduler, StableDiffusionPipeline, UNet2DConditionModel, \
-    UniPCMultistepScheduler
+from diffusers import AutoencoderKL, DDPMScheduler, UNet2DConditionModel, \
+    StableDiffusionControlNetPipeline, ControlNetModel, UniPCMultistepScheduler
 from diffusers.optimization import get_scheduler
-from diffusers.training_utils import EMAModel
 from diffusers.utils.import_utils import is_xformers_available
 from packaging import version
 from pydantic.types import Decimal
 from torch.utils.data import DataLoader
-from transformers import CLIPTextModel, CLIPTokenizer, AutoTokenizer, PretrainedConfig
+from transformers import AutoTokenizer, PretrainedConfig
 from transformers.utils import ContextManagers
 
 from core.handlers.images import ImageHandler
 from dreambooth.dataclasses.finetune_config import FinetuneConfig
 from dreambooth.dataclasses.prompt_data import PromptData
 from dreambooth.dataset.bucket_sampler import BucketSampler
-from dreambooth.dataset.ft_dataset import FtDataset
+from dreambooth.dataset.controlnet_dataset import ControlDataset
 from dreambooth.utils.image_utils import get_scheduler_class
 from dreambooth.utils.model_utils import xformerify, torch2ify
 from helpers.mytqdm import mytqdm
@@ -114,11 +113,14 @@ def main(args: FinetuneConfig, user: str):
     def log_validation():
         logger.info("Running validation... ")
         update_status({"status": "Generating samples..."})
-        validation_pipeline = StableDiffusionPipeline.from_pretrained(
+        control_net = accelerator.unwrap_model(controlnet)
+
+        validation_pipeline = StableDiffusionControlNetPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             text_encoder=accelerator.unwrap_model(text_encoder),
             tokenizer=tokenizer,
             unet=accelerator.unwrap_model(unet),
+            controlnet=control_net,
             safety_checker=None,
             revision=args.revision,
             torch_dtype=weight_dtype,
@@ -126,6 +128,7 @@ def main(args: FinetuneConfig, user: str):
         validation_pipeline.scheduler = UniPCMultistepScheduler.from_config(validation_pipeline.scheduler.config)
         validation_pipeline = validation_pipeline.to(accelerator.device)
         validation_pipeline.set_progress_bar_config(disable=True)
+
         if args.attention == "xformers":
             validation_pipeline.enable_xformers_memory_efficient_attention()
 
@@ -227,14 +230,13 @@ def main(args: FinetuneConfig, user: str):
 
     unet = UNet2DConditionModel.from_pretrained(os.path.join(ptp, "unet"))
 
-
-    # Create EMA for the unet.
-    if args.use_ema:
-        ema_unet = UNet2DConditionModel.from_pretrained(os.path.join(ptp, "unet"))
-        ema_unet = EMAModel(ema_unet.parameters(), model_cls=UNet2DConditionModel, model_config=ema_unet.config)
+    # TODO: This can probably just be an arg with ema for one shared script. Maybe.
+    if args.controlnet_model_name_or_path:
+        logger.info("Loading existing controlnet weights")
+        controlnet = ControlNetModel.from_pretrained(args.controlnet_model_name_or_path)
     else:
-        ema_unet = None
-
+        logger.info("Initializing controlnet weights from unet")
+        controlnet = ControlNetModel.from_unet(unet)
     if args.attention == "xformers":
         if is_xformers_available():
             import xformers
@@ -250,59 +252,28 @@ def main(args: FinetuneConfig, user: str):
         xformerify(vae, False)
 
     unet = torch2ify(unet)
-
-    # TODO: Add the other attention modules here
-
-    def compute_snr(timesteps):
-        """
-        Computes SNR as per https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L847-L849
-        """
-        alphas_cumprod = noise_scheduler.alphas_cumprod
-        sqrt_alphas_cumprod = alphas_cumprod ** 0.5
-        sqrt_one_minus_alphas_cumprod = (1.0 - alphas_cumprod) ** 0.5
-
-        # Expand the tensors.
-        # Adapted from https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L1026
-        sqrt_alphas_cumprod = sqrt_alphas_cumprod.to(device=timesteps.device)[timesteps].float()
-        while len(sqrt_alphas_cumprod.shape) < len(timesteps.shape):
-            sqrt_alphas_cumprod = sqrt_alphas_cumprod[..., None]
-        alpha = sqrt_alphas_cumprod.expand(timesteps.shape)
-
-        sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod.to(device=timesteps.device)[timesteps].float()
-        while len(sqrt_one_minus_alphas_cumprod.shape) < len(timesteps.shape):
-            sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[..., None]
-        sigma = sqrt_one_minus_alphas_cumprod.expand(timesteps.shape)
-
-        # Compute SNR.
-        snr = (alpha / sigma) ** 2
-        return snr
-
     # `accelerate` 0.16.0 will have better support for customized saving
     if version.parse(accelerate.__version__) >= version.parse("0.16.0"):
         # create custom saving & loading hooks so that `accelerator.save_state(...)` serializes in a nice format
         def save_model_hook(models, weights, output_dir):
-            if args.use_ema:
-                ema_unet.save_pretrained(os.path.join(output_dir, "unet_ema"))
+            i = len(weights) - 1
 
-            for i, model in enumerate(models):
-                model.save_pretrained(os.path.join(output_dir, "unet"))
-
-                # make sure to pop weight so that corresponding model is not saved again
+            while len(weights) > 0:
                 weights.pop()
+                model = models[i]
+
+                sub_dir = "controlnet"
+                model.save_pretrained(os.path.join(output_dir, sub_dir))
+
+                i -= 1
 
         def load_model_hook(models, input_dir):
-            if args.use_ema:
-                load_model = EMAModel.from_pretrained(os.path.join(input_dir, "unet_ema"), UNet2DConditionModel)
-                ema_unet.load_state_dict(load_model.state_dict())
-                ema_unet.to(accelerator.device)
-                del load_model
-
-            for i in range(len(models)):
+            while len(models) > 0:
                 # pop models so that they are not loaded again
                 model = models.pop()
 
                 # load diffusers style into model
-                load_model = UNet2DConditionModel.from_pretrained(input_dir, subfolder="unet")
+                load_model = ControlNetModel.from_pretrained(input_dir, subfolder="controlnet")
                 model.register_to_config(**load_model.config)
 
                 model.load_state_dict(load_model.state_dict())
@@ -315,13 +286,12 @@ def main(args: FinetuneConfig, user: str):
     unet.requires_grad_(False)
     text_encoder.requires_grad_(False)
     if args.gradient_checkpointing:
-        unet.enable_gradient_checkpointing()
+        controlnet.enable_gradient_checkpointing()
 
     # Enable TF32 for faster training on Ampere GPUs,
     # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
     if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] == 8:
         torch.backends.cuda.matmul.allow_tf32 = True
-
 
     # Initialize the optimizer
     if args.optimizer == "8bit AdamW":
@@ -337,7 +307,7 @@ def main(args: FinetuneConfig, user: str):
         optimizer_cls = torch.optim.AdamW
 
     optimizer = optimizer_cls(
-        unet.parameters(),
+        controlnet.parameters(),
         lr=args.learning_rate,
         betas=(args.adam_beta1, args.adam_beta2),
         weight_decay=args.adam_weight_decay,
@@ -356,8 +326,8 @@ def main(args: FinetuneConfig, user: str):
         try:
             if unet:
                 del unet
-            if ema_unet:
-                del ema_unet
+            if controlnet:
+                del controlnet
             if text_encoder:
                 del text_encoder
             if tokenizer:
@@ -386,7 +356,7 @@ def main(args: FinetuneConfig, user: str):
         vae.requires_grad_(False)
         vae.eval()
 
-    train_dataset = FtDataset(
+    train_dataset = ControlDataset(
         instance_data_dir=args.train_data_dir,
         resolution=args.resolution,
         batch_size=args.train_batch_size,
@@ -416,15 +386,24 @@ def main(args: FinetuneConfig, user: str):
         input_ids = [example["input_ids"] for example in examples]
         pixel_values = [example["image"] for example in examples]
         pixel_values = torch.stack(pixel_values)
+
+        control_image_values = [example["control_image"] for example in examples]
+        control_image_values = torch.stack(control_image_values)
+
         if not args.cache_latents:
             pixel_values = pixel_values.to(
                 memory_format=torch.contiguous_format
             ).float()
+            control_image_values = control_image_values.to(
+                memory_format=torch.contiguous_format
+            ).float()
+
         input_ids = torch.cat(input_ids, dim=0)
 
         batch_data = {
             "input_ids": input_ids,
-            "images": pixel_values
+            "images": pixel_values,
+            "control_images": control_image_values
         }
         return batch_data
 
@@ -447,24 +426,22 @@ def main(args: FinetuneConfig, user: str):
         args.lr_scheduler,
         optimizer=optimizer,
         num_warmup_steps=args.lr_warmup_steps * args.gradient_accumulation_steps,
-        num_training_steps=args.max_train_steps * args.gradient_accumulation_steps,
+        num_training_steps=max_train_steps * args.gradient_accumulation_steps,
         num_cycles=args.lr_num_cycles,
         power=args.lr_power,
     )
 
     # Prepare everything with our `accelerator`.
-    unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-        unet, optimizer, train_dataloader, lr_scheduler
+    controlnet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+        controlnet, optimizer, train_dataloader, lr_scheduler
     )
 
-    if args.use_ema:
-        ema_unet.to(accelerator.device)
-
-    # Move text_encode and vae to gpu and cast to weight_dtype
+    # Move vae, unet and text_encoder to device and cast to weight_dtype
+    unet.to(accelerator.device, dtype=weight_dtype)
     text_encoder.to(accelerator.device, dtype=weight_dtype)
     if not args.cache_latents:
         vae.to(accelerator.device, dtype=weight_dtype)
-
+    
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = len(train_dataset)
 
@@ -476,6 +453,11 @@ def main(args: FinetuneConfig, user: str):
     # The trackers initialize automatically on the main process.
     if accelerator.is_main_process:
         tracker_config = dict(vars(args))
+
+        # tensorboard cannot handle list types for config
+        tracker_config.pop("validation_prompt")
+        tracker_config.pop("validation_image")
+
         accelerator.init_trackers(args.model_name, tracker_config)
 
     # Train!
@@ -494,7 +476,6 @@ def main(args: FinetuneConfig, user: str):
     logger.info(f"  Optimizer = {args.optimizer}")
     logger.info(f"  Resuming from checkpoint: {args.snapshot}")
     logger.info(f"  Gradient Checkpointing: {args.gradient_checkpointing}")
-    logger.info(f"  EMA: {args.use_ema}")
     global_step = 0
     first_epoch = 0
     resume_step = 0
@@ -562,10 +543,8 @@ def main(args: FinetuneConfig, user: str):
                     logger.debug("Training canceled, returning.")
                     canceled = True
                     break
-            unet.train()
             train_loss = 0.0
             for step, batch in enumerate(train_dataloader):
-                # Skip steps until we reach the resumed step
                 if status_handler is not None:
                     if status_handler.status.canceled:
                         logger.debug("Training canceled, returning.")
@@ -581,8 +560,7 @@ def main(args: FinetuneConfig, user: str):
                     stats["lifetime_step"] += args.train_batch_size
                     update_status(stats)
                     continue
-
-                with accelerator.accumulate(unet):
+                with accelerator.accumulate(controlnet):
                     # Convert images to latent space
                     if args.cache_latents:
                         latents = batch["images"].to(accelerator.device)
@@ -594,17 +572,6 @@ def main(args: FinetuneConfig, user: str):
 
                     # Sample noise that we'll add to the latents
                     noise = torch.randn_like(latents, device=latents.device)
-                    if args.offset_noise != 0:
-                        # https://www.crosslabs.org//blog/diffusion-with-offset-noise
-                        noise += args.offset_noise * torch.randn(
-                            (latents.shape[0],
-                             latents.shape[1],
-                             1,
-                             1),
-                            device=latents.device
-                        )
-                    if args.input_pertubation:
-                        new_noise = noise + args.input_pertubation * torch.randn_like(noise)
                     b_size = latents.shape[0]
                     # Sample a random timestep for each image
                     timesteps = torch.randint(
@@ -617,13 +584,23 @@ def main(args: FinetuneConfig, user: str):
 
                     # Add noise to the latents according to the noise magnitude at each timestep
                     # (this is the forward diffusion process)
-                    if args.input_pertubation:
-                        noisy_latents = noise_scheduler.add_noise(latents, new_noise, timesteps)
-                    else:
-                        noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+                    noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
                     # Get the text embedding for conditioning
                     encoder_hidden_states = text_encoder(batch["input_ids"])[0]
+
+                    if args.cache_latents:
+                        controlnet_image = batch["control_images"].to(accelerator.device)
+                    else:
+                        controlnet_image = vae.encode(batch["control_images"].to(dtype=weight_dtype)).latent_dist.sample()
+
+                    down_block_res_samples, mid_block_res_sample = controlnet(
+                        noisy_latents,
+                        timesteps,
+                        encoder_hidden_states=encoder_hidden_states,
+                        controlnet_cond=controlnet_image,
+                        return_dict=False,
+                    )
 
                     # Get the target for loss depending on the prediction type
                     if noise_scheduler.config.prediction_type == "epsilon":
@@ -633,43 +610,28 @@ def main(args: FinetuneConfig, user: str):
                     else:
                         raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
-                    # Predict the noise residual and compute loss
-                    model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+                    # Predict the noise residual
+                    model_pred = unet(
+                        noisy_latents,
+                        timesteps,
+                        encoder_hidden_states=encoder_hidden_states,
+                        down_block_additional_residuals=[
+                            sample.to(dtype=weight_dtype) for sample in down_block_res_samples
+                        ],
+                        mid_block_additional_residual=mid_block_res_sample.to(dtype=weight_dtype),
+                    ).sample
 
-                    if args.snr_gamma == 0.0:
-                        loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-                    else:
-                        # Compute loss-weights as per Section 3.4 of https://arxiv.org/abs/2303.09556.
-                        # Since we predict the noise instead of x_0, the original formulation is slightly changed.
-                        # This is discussed in Section 4.2 of the same paper.
-                        snr = compute_snr(timesteps)
-                        mse_loss_weights = (
-                                torch.stack([snr, args.snr_gamma * torch.ones_like(timesteps)], dim=1).min(dim=1)[
-                                    0] / snr
-                        )
-                        # We first calculate the original loss. Then we mean over the non-batch dimensions and
-                        # rebalance the sample-wise losses with their respective loss weights.
-                        # Finally, we take the mean of the rebalanced loss.
-                        loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
-                        loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
-                        loss = loss.mean()
+                    loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-                    # Gather the losses across all processes for logging (if we use distributed training).
-                    avg_loss = accelerator.gather(loss.repeat(args.train_batch_size)).mean()
-                    train_loss += avg_loss.item() / args.gradient_accumulation_steps
-
-                    # Backpropagate
                     accelerator.backward(loss)
                     if accelerator.sync_gradients:
-                        accelerator.clip_grad_norm_(unet.parameters(), args.max_grad_norm)
-                        if args.use_ema:
-                            ema_unet.step(unet.parameters())
+                        accelerator.clip_grad_norm_(controlnet.parameters(), args.max_grad_norm)
                         progress_bar.update(1)
                         grad_steps += 1
                         global_step += 1
                         accelerator.log({"train_loss": train_loss}, step=global_step)
                         train_loss = 0.0
-
+                        
                     optimizer.step()
                     lr_scheduler.step()
                     optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
@@ -721,19 +683,12 @@ def main(args: FinetuneConfig, user: str):
                         logger.info(f"Saved state to {save_path}")
 
                 if args.save_preview_every != 0 and epoch % args.save_preview_every == 0 and epoch != 0:
-                    if args.use_ema:
-                        # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
-                        ema_unet.store(unet.parameters())
-                        ema_unet.copy_to(unet.parameters())
                     try:
                         log_validation()
                     except:
                         logger.warning("Validation failed.")
                         traceback.print_exc()
                         cleanup()
-                    if args.use_ema:
-                        # Switch back to the original UNet parameters.
-                        ema_unet.restore(unet.parameters())
     except Exception as e:
         logger.warning(f"Exception during training: {e}")
         cleanup_memory()
@@ -743,18 +698,9 @@ def main(args: FinetuneConfig, user: str):
     # Create the pipeline using the trained modules and save it.
     accelerator.wait_for_everyone()
     if accelerator.is_main_process and save_weights:
-        unet = accelerator.unwrap_model(unet)
-        if args.use_ema:
-            ema_unet.copy_to(unet.parameters())
-        update_status({"status": f"Training complete, saving pipeline."})
-        pipeline = StableDiffusionPipeline.from_pretrained(
-            args.pretrained_model_name_or_path,
-            text_encoder=text_encoder,
-            unet=unet,
-            revision=args.revision,
-        )
-        pipeline.save_pretrained(args.pretrained_model_name_or_path)
-        del pipeline
+        controlnet = accelerator.unwrap_model(controlnet)
+        controlnet.save_pretrained(os.path.join(args.pretrained_model_name_or_path, "controlnet"))
+
     accelerator.end_training()
     cleanup_memory()
     if status_handler is not None:
