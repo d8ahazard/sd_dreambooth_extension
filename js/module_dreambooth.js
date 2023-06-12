@@ -115,9 +115,6 @@ const ftOnlyKeys = [
   'validation_prompts'
 ];
 
-
-
-
 // Define the Bootstrap "md" breakpoint as a constant
 const mdBreakpoint = 990;
 
@@ -125,11 +122,10 @@ const mdBreakpoint = 990;
 const dbModule = new Module("Dreambooth", "moduleDreambooth", "moon", false, 2, initDreambooth, refreshDreambooth);
 
 function initDreambooth() {
-    switchMode(false);
-    $("#train_ft").on("click", function () {
-        switchMode(!$(this).is(":checked"));
+    $("#train_mode").on("change", function () {
+        switchMode($(this).val());
     });
-    switchMode(!$("#train_ft").is(":checked"));
+    switchMode("auto");
     ftDataDir = $("#train_data_dir").fileBrowser({
         "dropdown": true,
         "showInfo": false,
@@ -293,7 +289,15 @@ function initDreambooth() {
     }
 }
 
-function switchMode(showDb) {
+function switchMode(mode) {
+    let showDb = (mode === "auto" || mode === "dreambooth");
+    if (showDb) mode = "db";
+    mode += "Only";
+    $(".dbOnly").hide();
+    $(".ftOnly").hide();
+    $(".loraOnly").hide();
+    $(".inpaintOnly").hide();
+    $("." + mode).show();
     let dbMode = (showDb ? "block" : "none");
     let ftMode = (showDb ? "none" : "block");
     if (showDb) {

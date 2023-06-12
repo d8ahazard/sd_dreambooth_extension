@@ -652,7 +652,7 @@ def load_model_params(model_name):
             config.revision,
             config.epoch,
             "True" if config.v2 else "False",
-            "True" if config.has_ema and not config.use_lora else "False",
+            "True" if config.has_ema and not config.train_lora else "False",
             config.src,
             config.shared_diffusers_path,
             db_model_snapshots,
@@ -1044,7 +1044,7 @@ def debug_buckets(model_name, num_epochs, batch_size):
     optimizer = AdamW(
         placeholder, lr=args.learning_rate, weight_decay=args.weight_decay
     )
-    if not args.use_lora and args.lr_scheduler == "dadapt_with_warmup":
+    if not args.train_lora and args.lr_scheduler == "dadapt_with_warmup":
         args.lora_learning_rate = args.learning_rate,
         args.lora_txt_learning_rate = args.learning_rate,
 

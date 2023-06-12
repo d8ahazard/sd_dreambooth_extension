@@ -50,6 +50,29 @@ class BaseConfig(BaseModel):
         with open(config_file, "w") as outfile:
             json.dump(self.__dict__, outfile, indent=4)
 
+    def get_params(self):
+        tc_fields = {}
+        for f, data in self.__fields__.items():
+            value = getattr(self, f)
+            try:
+                json.dumps(value)
+            except TypeError:
+                continue
+            field_dict = {}
+            for prop in ['default', 'description', 'choices']:
+                if hasattr(data.field_info, prop):
+                    value = getattr(data.field_info, prop)
+                    # Check if the property is JSON serializable
+                    try:
+                        json.dumps(value)
+                        field_dict[prop] = value
+                    except TypeError:
+                        pass
+            field_dict['value'] = getattr(self, f)
+            field_dict['type'] = data.outer_type_.__name__
+            tc_fields[f] = field_dict
+        return tc_fields
+
     def load_params(self, params_dict):
         for key, value in params_dict.items():
             try:

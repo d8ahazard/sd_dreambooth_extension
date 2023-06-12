@@ -573,7 +573,7 @@ def log_dadapt(disable: bool = True):
         return 5
 
 
-def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, params_to_optimize):
+def get_optimizer(params_to_optimize, learning_rate: float, betas: float, weight_decay: float, eps: float, optimizer: str):
     try:
         if optimizer == "8bit AdamW":
             from bitsandbytes.optim import AdamW8bit
@@ -581,6 +581,8 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
+                eps=eps,
+                betas=betas,
             )
 
         elif optimizer == "Lion":
@@ -589,6 +591,7 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
+                betas=betas,
             )
 
         elif optimizer == "AdamW Dadaptation":
@@ -599,6 +602,8 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 weight_decay=weight_decay,
                 decouple=True,
                 use_bias_correction=True,
+                betas=betas,
+                eps=eps,
                 log_every=log_dadapt(True)
             )
 
@@ -608,6 +613,7 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
+                betas=betas,
                 log_every=log_dadapt(True)
             )
 
@@ -616,6 +622,8 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
             return DAdaptAdan(
                 params_to_optimize,
                 lr=learning_rate,
+                betas=betas,
+                eps=eps,
                 weight_decay=weight_decay,
                 log_every=log_dadapt(True),
             )
@@ -634,12 +642,13 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
         traceback.print_exc()
         print(str(e))
         print("WARNING: Using default optimizer (AdamW from Torch)")
-        optimizer = "Torch AdamW"
 
     from torch.optim import AdamW
     return AdamW(
         params_to_optimize,
         lr=learning_rate,
+        betas=betas,
+        eps=eps,
         weight_decay=weight_decay,
     )
 
@@ -657,3 +666,4 @@ def get_noise_scheduler(args):
     return scheduler_class.from_pretrained(
         args.get_pretrained_model_name_or_path(), subfolder="scheduler"
     )
+    # TODO - There's some solver that needs to be set here for unipc

@@ -177,12 +177,16 @@
                         </div>
                         <div class="borderSection">
                             <div class="sectionLabel">Settings</div>
-                            <div class="form-group hide">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="train_ft" name="train_ft"
-                                           data-key="train_ft">
-                                    <label class="form-check-label" for="train_ft">Fine-Tune</label>
-                                </div>
+                            <div class="form-group db_advanced">
+                                <label class="form-label" for="train_mode">Training Mode</label>
+                                <select id="train_mode" class="form-control dbInput" name="train_mode">
+                                    <option value="dreambooth" selected>Auto</option>
+                                    <option value="finetune">Fine-Tune</option>
+                                    <option value="dreambooth_classic">Dreambooth (Original)</option>
+                                    <option value="controlnet">ControlNet</option>
+                                    <option value="inpaint" disabled>Inpainting</option>
+                                    <option value="lora" disabled>Lora</option>
+                                </select>
                             </div>
                             <div class="db-slider dbInput" id="num_train_epochs" data-max="1000" data-min="1"
                                  data-value="150" data-label="Number of Epochs"></div>

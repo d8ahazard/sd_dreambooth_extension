@@ -14,14 +14,8 @@ class DreamboothConfig2(BaseConfig):
     model_dir: str = Field("", description="Base path of the model.")
     epoch: int = Field(0, description="Epoch number of the model.")
     save_ckpt_during: bool = Field(True, description="Whether to save checkpoints during training.")
-    pretrained_model_name_or_path: str = Field(
-        "",
-        description="Path to pretrained model or model identifier from huggingface.co/models."
-    )
-    revision: Optional[str] = Field(
-        None,
-        description="Revision of pretrained model identifier from huggingface.co/models. Trainable model components should be float32 precision."
-    )
+    pretrained_model_name_or_path: str = Field("", description="Path to pretrained model or model identifier from huggingface.co/models.")
+    revision: Optional[str] = Field(None, description="Revision of pretrained model identifier from huggingface.co/models. Trainable model components should be float32 precision.")
     instance_data_dir: str = Field(
         "",
         description="A folder containing the training data of instance images."

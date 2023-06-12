@@ -64,10 +64,10 @@ def get_scheduler(
     return schedule_func(optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
 
 
-def optim_to(profiler, optim: torch.optim.Optimizer, device="cpu"):
-    if profiler is None:
-        torch.cuda.empty_cache()
-        gc.collect()
+def optim_to(optim: torch.optim.Optimizer, device="cpu"):
+
+    torch.cuda.empty_cache()
+    gc.collect()
 
     def inplace_move(obj: torch.Tensor, target):
         if hasattr(obj, 'data'):
@@ -82,6 +82,6 @@ def optim_to(profiler, optim: torch.optim.Optimizer, device="cpu"):
         for key, value in optim.state.items():
             if isinstance(value, torch.Tensor):
                 inplace_move(value, device)
-    if profiler is None:
-        torch.cuda.empty_cache()
-        gc.collect()
+
+    torch.cuda.empty_cache()
+    gc.collect()

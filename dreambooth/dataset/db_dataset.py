@@ -43,6 +43,7 @@ class DbDataset(torch.utils.data.Dataset):
         super().__init__()
         self.batch_indices = []
         self.batch_samples = []
+        self.class_count = 0
         self.cache_dir = os.path.join(model_dir, "cache")
         if not os.path.exists(self.cache_dir):
             os.makedirs(self.cache_dir)
@@ -277,6 +278,7 @@ class DbDataset(torch.utils.data.Dataset):
         inst_str = str(total_instances).rjust(len(str(ni)), " ")
         class_str = str(total_classes).rjust(len(str(nc)), " ")
         tot_str = str(total_len).rjust(len(str(ti)), " ")
+        self.class_count = total_classes
         self.pbar.write(
             f"Total Buckets {bucket_str} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {tot_str}")
         self._length = total_len

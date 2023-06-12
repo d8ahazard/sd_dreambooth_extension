@@ -18,6 +18,7 @@ from fastapi import FastAPI
 
 import scripts.api
 from dreambooth import shared
+from dreambooth.dataclasses.aio_config import TrainingConfig
 from dreambooth.dataclasses.db_config import DreamboothConfig, from_file
 from dreambooth.dataclasses.db_config_2 import DreamboothConfig2
 from dreambooth.dataclasses.finetune_config import FinetuneConfig
@@ -254,14 +255,17 @@ async def _get_model_config(data, return_json=True):
     model_dir = model["path"]
     db_config = DreamboothConfig().load_from_file(model_dir)
     ft_config = FinetuneConfig().load_from_file(model_dir)
+    train_config = TrainingConfig().load_from_file(model_dir)
     if db_config.concepts_path and os.path.exists(db_config.concepts_path):
         with open(db_config.concepts_path, "r") as f:
             db_config.concepts_list = json.load(f)
         db_config.concepts_path = ""
         db_config.use_concepts = False
         db_config.save()
+
+
     if return_json:
-        return {"db_config": db_config.__dict__, "ft_config": ft_config.__dict__}
+        return {"db_config": db_config.__dict__, "ft_config": ft_config.__dict__, "tc": train_config.get_params()}
     return db_config, ft_config
 
 
