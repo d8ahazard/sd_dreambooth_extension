@@ -394,20 +394,17 @@ def main(args: DreamboothConfig, class_gen_method: str = "Native Diffusers", use
             unet.requires_grad_(False)
 
         unet_lora_params = None
+        text_encoder_lora_params = None
 
         # Determine whether to use lora and set paths
-        use_lora = args.use_lora and args.lora_model_name
-        lora_path = os.path.join(args.model_dir, "loras", args.lora_model_name) if use_lora else None
-        lora_txt = lora_path.replace(".pt", "_txt.pt") if use_lora else None
+        if args.use_lora:
+            lora_path = os.path.join(args.model_dir, "loras", args.lora_model_name)
+            lora_txt = lora_path.replace(".pt", "_txt.pt")
 
-        # Handle invalid paths
-        if use_lora and (not os.path.exists(lora_path) or not os.path.isfile(lora_path)):
-            lora_path, lora_txt = None, None
-            use_lora = False
+            # Handle invalid paths
+            if not os.path.exists(lora_path) or not os.path.isfile(lora_path):
+                lora_path, lora_txt = None, None
 
-        # Define unet parameters
-        unet_lora_params = None
-        if use_lora:
             injectable_lora = get_target_module("injection", args.use_lora_extended)
             target_module = get_target_module("module", args.use_lora_extended)
             unet_lora_params, _ = injectable_lora(
@@ -417,20 +414,16 @@ def main(args: DreamboothConfig, class_gen_method: str = "Native Diffusers", use
                 target_replace_module=target_module,
             )
 
-        # Define text encoder parameters
-        text_encoder_lora_params = None
-        if use_lora and stop_text_percentage != 0:
-            text_encoder.requires_grad_(False)
-            inject_trainable_txt_lora = get_target_module("injection", False)
-            text_encoder_lora_params, _ = inject_trainable_txt_lora(
-                text_encoder,
-                target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
-                r=args.lora_txt_rank,
-                loras=lora_txt,
-            )
+            if stop_text_percentage != 0:
+                text_encoder.requires_grad_(False)
+                inject_trainable_txt_lora = get_target_module("injection", False)
+                text_encoder_lora_params, _ = inject_trainable_txt_lora(
+                    text_encoder,
+                    target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
+                    r=args.lora_txt_rank,
+                    loras=lora_txt,
+                )
 
-        # Combine parameters to optimize
-        if use_lora:
             params_to_optimize = itertools.chain(*unet_lora_params) if stop_text_percentage == 0 else [
                 {"params": itertools.chain(*unet_lora_params), "lr": learning_rate},
                 {"params": itertools.chain(*text_encoder_lora_params), "lr": txt_learning_rate},

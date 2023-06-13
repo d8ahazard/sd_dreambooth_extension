@@ -8,6 +8,7 @@ import logging
 import math
 import os
 import random
+import time
 import traceback
 from decimal import Decimal
 
@@ -27,10 +28,9 @@ from accelerate.utils import ProjectConfiguration
 from diffusers import (
     AutoencoderKL,
     DiffusionPipeline,
-    UNet2DConditionModel, UniPCMultistepScheduler, DDPMScheduler, EMAModel, StableDiffusionControlNetPipeline,
+    UNet2DConditionModel, UniPCMultistepScheduler, EMAModel, StableDiffusionControlNetPipeline,
     ControlNetModel, StableDiffusionPipeline
 )
-from diffusers.models.attention_processor import LoRAAttnProcessor
 from diffusers.utils import logging as dl, is_xformers_available, randn_tensor
 from packaging import version
 from torch.utils.data import Dataset
@@ -39,7 +39,7 @@ from transformers.utils import ContextManagers
 
 from core.handlers.images import ImageHandler
 from dreambooth import shared
-from dreambooth.dataclasses.aio_config import TrainingConfig
+from dreambooth.dataclasses.training_config import TrainingConfig
 from dreambooth.dataclasses.prompt_data import PromptData
 from dreambooth.dataclasses.train_result import TrainResult
 from dreambooth.dataset.bucket_sampler import BucketSampler
@@ -47,7 +47,8 @@ from dreambooth.dataset.controlnet_dataset import ControlDataset
 from dreambooth.dataset.ft_dataset import FtDataset
 from dreambooth.optimization import UniversalScheduler, get_optimizer, get_noise_scheduler
 from dreambooth.shared import status
-from dreambooth.training_utils import current_prior_loss, set_seed, deepspeed_zero_init_disabled_context_manager
+from dreambooth.training_utils import current_prior_loss, set_seed, deepspeed_zero_init_disabled_context_manager, \
+    save_lora, load_lora, compute_snr
 from dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
 from dreambooth.utils.model_utils import (
     unload_system_models,
@@ -61,8 +62,8 @@ from dreambooth.utils.text_utils import encode_hidden_state
 from dreambooth.utils.utils import cleanup, printm
 from helpers.log_parser import LogParser
 from helpers.mytqdm import mytqdm
-from lora_diffusion.extra_networks import save_extra_networks
-from lora_diffusion.lora import get_target_module, save_lora_weight, TEXT_ENCODER_DEFAULT_TARGET_REPLACE
+from lora_diffusion.extra_networks import apply_lora
+from lora_diffusion.lora import get_target_module, TEXT_ENCODER_DEFAULT_TARGET_REPLACE
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
@@ -77,6 +78,9 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     """
     cleanup()
     status_handler = None
+    last_samples = []
+    last_prompts = []
+
     logging_dir = os.path.join(args.model_dir, "logging")
     try:
         from core.handlers.status import StatusHandler
@@ -115,30 +119,47 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
             "torch_dtype": weight_dtype
         }
 
-        if vae is not None:
-            pipeline_args["vae"] = vae
+        if args.train_lora:
+            tgt_module = get_target_module("module", True)
 
-        if text_encoder is not None:
-            pipeline_args["text_encoder"] = accelerator.unwrap_model(text_encoder)
+            unwrapped_unet = accelerator.unwrap_model(unet)
+            unwrapped_tenc = accelerator.unwrap_model(text_encoder)
 
-        if controlnet is not None:
-            pipeline_args["controlnet"] = controlnet
-        # create pipeline (note: unet and vae are loaded again in float32)
-        if args.train_mode == "controlnet":
-            validation_pipeline = StableDiffusionControlNetPipeline.from_pretrained(
-                args.pretrained_model_name_or_path,
-                unet=accelerator.unwrap_model(unet)
-                     ** pipeline_args,
-            )
-        else:
+            modelmap = {"unet": (unwrapped_unet, tgt_module)}
+
+            # save text_encoder
+            if stop_text_percentage:
+                modelmap["text_encoder"] = (unwrapped_tenc, TEXT_ENCODER_DEFAULT_TARGET_REPLACE)
             # TODO: Load LORA if training.
-            # If src is a checkpoint, load from that
-
-            validation_pipeline = DiffusionPipeline.from_pretrained(
-                args.pretrained_model_name_or_path,
-                unet=accelerator.unwrap_model(unet)
-                     ** pipeline_args,
+            validation_pipeline = StableDiffusionPipeline.from_pretrained(
+                args.src
             )
+            validation_pipeline = apply_lora(validation_pipeline, model_map=modelmap)
+
+        else:
+            if vae is not None:
+                pipeline_args["vae"] = vae
+
+            if text_encoder is not None:
+                pipeline_args["text_encoder"] = accelerator.unwrap_model(text_encoder)
+
+            if controlnet is not None:
+                pipeline_args["controlnet"] = controlnet
+
+            # create pipeline (note: unet and vae are loaded again in float32)
+            if args.train_mode == "controlnet":
+                validation_pipeline = StableDiffusionControlNetPipeline.from_pretrained(
+                    args.pretrained_model_name_or_path,
+                    unet=accelerator.unwrap_model(unet)
+                    ** pipeline_args,
+                )
+            else:
+                # If src is a checkpoint, load from that
+                validation_pipeline = DiffusionPipeline.from_pretrained(
+                    args.pretrained_model_name_or_path,
+                    unet=accelerator.unwrap_model(unet)
+                    ** pipeline_args,
+                )
 
         scheduler_args = {}
 
@@ -335,6 +356,10 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
         args.get_pretrained_model_name_or_path(), args.revision
     )
 
+    ema_unet = None
+    unet_lora_params = None
+    text_encoder_lora_params = None
+
     # Load scheduler and models
     with ContextManagers(deepspeed_zero_init_disabled_context_manager()):
         text_encoder = text_encoder_cls.from_pretrained(
@@ -357,62 +382,21 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     controlnet = None
 
     if args.train_mode == "controlnet":
-        if args.controlnet_model_name_or_path:
+        controlnet_dir = os.path.join(args.pretrained_model_name_or_path, "controlnet")
+        if os.path.exists(controlnet_dir):
             logger.info("Loading existing controlnet weights")
-            controlnet = ControlNetModel.from_pretrained(args.controlnet_model_name_or_path)
+            controlnet = ControlNetModel.from_pretrained(controlnet_dir)
         else:
             logger.info("Initializing controlnet weights from unet")
             controlnet = ControlNetModel.from_unet(unet)
 
-    if stop_text_percentage == 0:
-        text_encoder.requires_grad_(False)
-
-    # Set correct lora layers
     if args.train_lora:
-        learning_rate = args.lora_learning_rate
-        txt_learning_rate = args.lora_txt_learning_rate
+        unet_lora_params, text_encoder_lora_params, text_encoder = load_lora(args, stop_text_percentage, unet,
+                                                                             text_encoder)
 
-    if train_lora or not args.train_unet:
-        unet.requires_grad_(False)
-
-    # Determine whether to use lora and set paths
-    use_lora = args.train_lora and args.lora_model_name
-
-    unet_lora_params = None
-    text_encoder_lora_params = None
-
-    if use_lora:
-        lora_path = os.path.join(args.model_dir, "loras", args.lora_model_name)
-        lora_txt = lora_path.replace(".pt", "_txt.pt")
-
-        if not os.path.exists(lora_path) or not os.path.exists(lora_txt):
-            lora_path, lora_txt = None, None
-
-        injectable_lora = get_target_module("injection", args.use_lora_extended)
-        target_module = get_target_module("module", args.use_lora_extended)
-        unet_lora_params, _ = injectable_lora(
-            unet,
-            r=args.lora_unet_rank,
-            loras=lora_path,
-            target_replace_module=target_module
-        )
-
-        if stop_text_percentage != 0:
-            text_encoder.requires_grad_(False)
-            inject_trainable_txt_lora = get_target_module("injection", False)
-            text_encoder_lora_params, _ = inject_trainable_txt_lora(
-                text_encoder,
-                target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
-                r=args.lora_txt_rank,
-                loras=lora_txt,
-            )
-
-    # Create EMA for the unet.
-    if args.use_ema:
+    elif args.use_ema:
         ema_unet = UNet2DConditionModel.from_pretrained(os.path.join(args.pretrained_model_name_or_path, "unet"))
         ema_unet = EMAModel(ema_unet.parameters(), model_cls=UNet2DConditionModel, model_config=ema_unet.config)
-    else:
-        ema_unet = None
 
     if args.attention == "xformers" and not args.cpu_only:
         if is_xformers_available():
@@ -436,58 +420,8 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
         # TODO: Add lora saving hooks here.
         def save_model_hook(models, weights, output_dir):
             if args.train_lora:
-                pbar2.reset(1)
-                pbar2.set_description("Saving Lora Weights...")
-                # setup directory
-                if user_model_dir != "":
-                    loras_dir = os.path.join(user_model_dir, "loras")
-                else:
-                    loras_dir = os.path.join(args.model_dir, "loras")
-                os.makedirs(loras_dir, exist_ok=True)
-                # setup pt path
-                if args.custom_model_name == "":
-                    lora_model_name = args.model_name
-                else:
-                    lora_model_name = args.custom_model_name
-                lora_file_prefix = f"{lora_model_name}_{args.revision}"
-                out_file = os.path.join(
-                    loras_dir, f"{lora_file_prefix}.pt"
-                )
-                # create pt
-                tgt_module = get_target_module(
-                    "module", args.use_lora_extended
-                )
-                unwrapped_unet = accelerator.unwrap_model(unet)
-                unwrapped_tenc = accelerator.unwrap_model(text_encoder)
-                save_lora_weight(unwrapped_unet, out_file, tgt_module)
-
-                modelmap = {"unet": (unwrapped_unet, tgt_module)}
-                # save text_encoder
-                if stop_text_percentage != 0:
-                    out_txt = out_file.replace(".pt", "_txt.pt")
-                    modelmap["text_encoder"] = (
-                        unwrapped_tenc,
-                        TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
-                    )
-                    save_lora_weight(
-                        unwrapped_tenc,
-                        out_txt,
-                        target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
-                    )
-                    pbar2.update()
-                # save extra_net
-                if args.save_lora_for_extra_net:
-                    pbar2.reset(1)
-                    pbar2.set_description("Saving Extra Networks")
-                    os.makedirs(
-                        shared.ui_lora_models_path, exist_ok=True
-                    )
-                    out_safe = os.path.join(
-                        shared.ui_lora_models_path,
-                        f"{lora_file_prefix}.safetensors",
-                    )
-                    save_extra_networks(modelmap, out_safe)
-                    pbar2.update(0)
+                save_lora(args, stop_text_percentage, accelerator, unet, text_encoder, pbar2,
+                          user_model_dir=user_model_dir)
             else:
                 if args.use_ema:
                     ema_unet.save_pretrained(os.path.join(output_dir, "unet_ema"))
@@ -538,18 +472,22 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
         accelerator.register_save_state_pre_hook(save_model_hook)
         accelerator.register_load_state_pre_hook(load_model_hook)
 
-    vae.requires_grad_(False)
-    unet.requires_grad_(False)
-    text_encoder.requires_grad_(False)
+    # control requires_grad attribute based on conditions
+    text_encoder.requires_grad_(not stop_text_percentage == 0)
+    unet.requires_grad_(not (train_lora or not train_unet))
+
+    # control gradient_checkpointing based on args.gradient_checkpointing flag
     if args.gradient_checkpointing:
         if controlnet is not None:
             controlnet.enable_gradient_checkpointing()
-        if train_unet:
+        if train_unet and not train_lora:
             unet.enable_gradient_checkpointing()
         if stop_text_percentage != 0:
             text_encoder.gradient_checkpointing_enable()
-        else:
-            text_encoder.to(accelerator.device, dtype=weight_dtype)
+
+    # move text_encoder to the appropriate device
+    if stop_text_percentage != 0:
+        text_encoder.to(accelerator.device, dtype=weight_dtype)
 
     # Enable TF32 for faster training on Ampere GPUs,
     # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
@@ -562,8 +500,9 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     txt_learning_rate = args.txt_learning_rate
 
     if train_lora:
-        learning_rate *= 0.1
-        txt_learning_rate *= 0.1
+        learning_rate *= 10
+        txt_learning_rate *= 10
+        logger.info("Training LoRA. Learning rate for unet: {}, text encoder: {}".format(learning_rate, txt_learning_rate))
         params_to_optimize = itertools.chain(*unet_lora_params) if stop_text_percentage == 0 else [
             {"params": itertools.chain(*unet_lora_params), "lr": learning_rate},
             {"params": itertools.chain(*text_encoder_lora_params), "lr": txt_learning_rate},
@@ -572,7 +511,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
         params_to_optimize = [
             {"params": itertools.chain(unet.parameters()), "lr": learning_rate},
             {"params": itertools.chain(text_encoder.parameters()), "lr": txt_learning_rate},
-        ] if args.train_unet else [
+        ] if train_unet else [
             {"params": itertools.chain(text_encoder.parameters()), "lr": txt_learning_rate},
         ]
     else:
@@ -916,7 +855,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
         else:
             resume_from_checkpoint = True
             accelerator.print(f"Resuming from checkpoint {path}")
-            accelerator.load_state(os.path.join(args.model_dir, "snapshots", path))
+            accelerator.load_state(os.path.join(args.model_dir, "checkpoints", path))
             global_step = int(path.split("-")[1])
 
             resume_global_step = global_step * args.gradient_accumulation_steps
@@ -1022,7 +961,6 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                 if status_handler is not None:
                     if status_handler.status.canceled:
                         logger.info("Training canceled, returning.")
-                        canceled = True
                         if epoch > 0:
                             save_weights = True
                         break
@@ -1036,6 +974,9 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                         stats["lifetime_step"] += args.train_batch_size
                         update_status(stats)
                         continue
+                if args.simulate_training:
+                    time.sleep(0.1)
+                    continue
 
                 # List to hold models
                 accumulate_models = []
@@ -1145,50 +1086,66 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                     else:
                         # Predict the noise residual and compute loss
                         model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+                    if args.train_mode == "db":
+                        # TODO: set a prior preservation flag and use that to ensure this ony happens in dreambooth
+                        if not args.split_loss and not with_prior_preservation:
+                            loss = instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                            loss *= batch["loss_avg"]
 
-                    # TODO: set a prior preservation flag and use that to ensure this ony happens in dreambooth
-                    if not args.split_loss and not with_prior_preservation:
-                        loss = instance_loss = torch.nn.functional.mse_loss(
-                            model_pred.float(), target.float(), reduction="mean"
-                        )
-                        loss *= batch["loss_avg"]
+                        else:
+                            # Predict the noise residual
 
+                            if model_pred.shape[1] == 6:
+                                model_pred, _ = torch.chunk(model_pred, 2, dim=1)
+
+                            if with_prior_preservation:
+                                # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
+                                model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
+                                target, target_prior = torch.chunk(target, 2, dim=0)
+
+                                # Compute instance loss
+                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+                                # Compute prior loss
+                                prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
+
+                            accelerator.backward(loss)
+
+                            if accelerator.sync_gradients:
+                                params_to_clip = (
+                                    controlnet.parameters() if controlnet is not None else unet.parameters()
+                                )
+                                accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
+                                if args.use_ema:
+                                    ema_unet.step(unet.parameters())
+                                progress_bar.update(1)
+                                grad_steps += 1
+                                global_step += 1
+                                accelerator.log({"train_loss": train_loss}, step=global_step)
+                                train_loss = 0.0
+
+                            optimizer.step()
+                            lr_scheduler.step(args.train_batch_size)
+
+                            optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
                     else:
-                        # Predict the noise residual
-
-                        if model_pred.shape[1] == 6:
-                            model_pred, _ = torch.chunk(model_pred, 2, dim=1)
-
-                        if with_prior_preservation:
-                            # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
-                            model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
-                            target, target_prior = torch.chunk(target, 2, dim=0)
-
-                            # Compute instance loss
+                        if args.snr_gamma == 0:
                             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-
-                            # Compute prior loss
-                            prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
-
-                        accelerator.backward(loss)
-
-                        if accelerator.sync_gradients:
-                            params_to_clip = (
-                                controlnet.parameters() if controlnet is not None else unet.parameters()
+                        else:
+                            # Compute loss-weights as per Section 3.4 of https://arxiv.org/abs/2303.09556.
+                            # Since we predict the noise instead of x_0, the original formulation is slightly changed.
+                            # This is discussed in Section 4.2 of the same paper.
+                            snr = compute_snr(timesteps, noise_scheduler)
+                            mse_loss_weights = (
+                                    torch.stack([snr, args.snr_gamma * torch.ones_like(timesteps)], dim=1).min(dim=1)[
+                                        0] / snr
                             )
-                            accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
-                            if args.use_ema:
-                                ema_unet.step(unet.parameters())
-                            progress_bar.update(1)
-                            grad_steps += 1
-                            global_step += 1
-                            accelerator.log({"train_loss": train_loss}, step=global_step)
-                            train_loss = 0.0
-
-                        optimizer.step()
-                        lr_scheduler.step(args.train_batch_size)
-
-                        optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
+                            # We first calculate the original loss. Then we mean over the non-batch dimensions and
+                            # re-balance the sample-wise losses with their respective loss weights.
+                            # Finally, we take the mean of the rebalanced loss.
+                            loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
+                            loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
+                            loss = loss.mean()
 
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)

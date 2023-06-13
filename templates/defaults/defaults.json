@@ -65,7 +65,7 @@
     "value": 768,
     "min": 512,
     "max": 1024,
-    "step": 64
+    "step": 8
   },
   "train_batch_size": {
     "value": 5,

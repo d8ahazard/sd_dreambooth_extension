@@ -5,9 +5,12 @@ import os
 import accelerate
 import torch
 from accelerate.state import AcceleratorState
+from accelerate.utils.random import set_seed as set_seed2
 from diffusers import AutoencoderKL
 from huggingface_hub import model_info
-from accelerate.utils.random import set_seed as set_seed2
+
+from lora_diffusion.extra_networks import save_extra_networks
+from lora_diffusion.lora import get_target_module, TEXT_ENCODER_DEFAULT_TARGET_REPLACE
 
 logger = logging.getLogger(__name__)
 
@@ -95,3 +98,71 @@ def compute_snr(timesteps, noise_scheduler):
     # Compute SNR.
     snr = (alpha / sigma) ** 2
     return snr
+
+
+from dreambooth import shared
+
+
+def save_lora(args, stop_text_percentage, accelerator, unet, text_encoder, pbar2, user_model_dir=None):
+    pbar2.reset(1)
+    pbar2.set_description("Saving Lora Weights...")
+
+    # setup directory
+    loras_dir = os.path.join(user_model_dir, "loras") if user_model_dir else shared.ui_lora_models_path
+
+    os.makedirs(loras_dir, exist_ok=True)
+
+    # setup pt path
+    lora_model_name = args.model_name
+    lora_file_prefix = f"{lora_model_name}_{args.revision}"
+
+    tgt_module = get_target_module("module", True)
+
+    unwrapped_unet = accelerator.unwrap_model(unet)
+    unwrapped_tenc = accelerator.unwrap_model(text_encoder)
+
+    modelmap = {"unet": (unwrapped_unet, tgt_module)}
+
+    # save text_encoder
+    if stop_text_percentage:
+        modelmap["text_encoder"] = (unwrapped_tenc, TEXT_ENCODER_DEFAULT_TARGET_REPLACE)
+
+    pbar2.reset(1)
+    pbar2.set_description("Saving Extra Networks")
+
+    out_safe = os.path.join(shared.ui_lora_models_path, f"{lora_file_prefix}.safetensors")
+    save_extra_networks(modelmap, out_safe)
+
+    pbar2.update(0)
+
+
+def load_lora(args, stop_text_percentage, unet, text_encoder):
+    if not os.path.exists(args.lora_model_name):
+        lora_path = os.path.join(args.model_dir, "loras", args.lora_model_name)
+    else:
+        lora_path = args.lora_model_name
+    lora_txt = lora_path.replace(".pt", "_txt.pt")
+
+    # Handle invalid paths
+    if not os.path.exists(lora_path) or not os.path.isfile(lora_path):
+        lora_path, lora_txt = None, None
+
+    injectable_lora = get_target_module("injection", args.use_lora_extended)
+    target_module = get_target_module("module", args.use_lora_extended)
+    unet_lora_params, _ = injectable_lora(
+        unet,
+        r=args.lora_unet_rank,
+        loras=lora_path,
+        target_replace_module=target_module,
+    )
+    text_encoder_lora_params = None
+    if stop_text_percentage != 0:
+        text_encoder.requires_grad_(False)
+        inject_trainable_txt_lora = get_target_module("injection", False)
+        text_encoder_lora_params, _ = inject_trainable_txt_lora(
+            text_encoder,
+            target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
+            r=args.lora_txt_rank,
+            loras=lora_txt,
+        )
+    return unet_lora_params, text_encoder_lora_params, text_encoder

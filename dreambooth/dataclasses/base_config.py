@@ -59,7 +59,7 @@ class BaseConfig(BaseModel):
             except TypeError:
                 continue
             field_dict = {}
-            for prop in ['default', 'description', 'choices']:
+            for prop in ['default', 'description', 'choices', 'title']:
                 if hasattr(data.field_info, prop):
                     value = getattr(data.field_info, prop)
                     # Check if the property is JSON serializable

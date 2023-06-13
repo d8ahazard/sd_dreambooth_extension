@@ -18,13 +18,12 @@ from fastapi import FastAPI
 
 import scripts.api
 from dreambooth import shared
-from dreambooth.dataclasses.aio_config import TrainingConfig
+from dreambooth.dataclasses.training_config import TrainingConfig
 from dreambooth.dataclasses.db_config import DreamboothConfig, from_file
 from dreambooth.dataclasses.db_config_2 import DreamboothConfig2
 from dreambooth.dataclasses.finetune_config import FinetuneConfig
 from dreambooth.sd_to_diff import extract_checkpoint
 from dreambooth.train_dreambooth import main
-from dreambooth.train_text_to_image import main as ft_main
 from module_src.gradio_parser import parse_gr_code
 
 logger = logging.getLogger(__name__)
@@ -103,16 +102,10 @@ async def _train_dreambooth(request):
     try:
         loop = asyncio.get_event_loop()
         with ThreadPoolExecutor() as pool:
-            if fine_tune:
-                await loop.run_in_executor(pool, lambda: (
-                    sh.start(0, "Starting Dreambooth Training..."),
-                    ft_main(user=user, args=config)
-                ))
-            else:
-                await loop.run_in_executor(pool, lambda: (
-                    sh.start(0, "Starting Dreambooth Training..."),
-                    main(args=config, user=user)
-                ))
+            await loop.run_in_executor(pool, lambda: (
+                sh.start(0, "Starting Dreambooth Training..."),
+                main(args=config, user=user)
+            ))
     except Exception as e:
         logger.error(f"Error in training: {e}")
         traceback.print_exc()
