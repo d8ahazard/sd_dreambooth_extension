@@ -43,137 +43,764 @@
   "db_train_unfrozen": {
     "value": true
   },
-  "num_train_epochs": {
-    "value": 150,
-    "min": 1,
-    "max": 1000,
-    "step": 1
+  "model_dir": {
+    "default": "",
+    "description": "[model] Model directory.",
+    "title": "Model Directory",
+    "value": "E:\\dev\\stable-diffusion-plus\\data_protected\\users\\admin\\models\\dreambooth\\mega",
+    "type": "str"
   },
-  "save_embedding_every": {
-    "value": 0,
-    "min": 0,
-    "max": 100,
-    "step": 1
-  },
-  "save_preview_every": {
-    "value": 0,
-    "min": 0,
-    "max": 100,
-    "step": 1
-  },
-  "resolution": {
-    "value": 768,
-    "min": 512,
-    "max": 1024,
-    "step": 8
-  },
-  "train_batch_size": {
-    "value": 5,
-    "min": 1,
-    "max": 100,
-    "step": 1
-  },
-  "gradient_accumulation_steps": {
-    "value": 1,
-    "min": 1,
-    "max": 100,
-    "step": 1
-  },
-  "mixed_precision": {
+  "model_name": {
+    "default": "",
+    "description": "[model] Model name.",
+    "title": "Model Name",
     "value": "",
-    "options": {}
+    "type": "str"
+  },
+  "revision": {
+    "default": 0,
+    "description": "[model] Model Revision.",
+    "title": "Revision",
+    "value": 0,
+    "type": "int"
+  },
+  "config_prefix": {
+    "default": "",
+    "description": "Prefix for the config file.",
+    "value": "",
+    "type": "str"
+  },
+  "pretrained_model_name_or_path": {
+    "default": "",
+    "description": "[model] Pretrained model name or path.",
+    "title": "Pretrained Model Name or Path",
+    "value": "",
+    "type": "str"
+  },
+  "adam_beta1": {
+    "default": 0.9,
+    "description": "The beta1 parameter for the Adam optimizer.",
+    "title": "Adam Beta 1",
+    "min": 0,
+    "max": 1,
+    "step": 0.01,
+    "value": 0.9,
+    "type": "ConstrainedFloatValue"
+  },
+  "adam_beta2": {
+    "default": 0.999,
+    "description": "The beta2 parameter for the Adam optimizer.",
+    "title": "Adam Beta 2",
+    "min": 0,
+    "max": 1,
+    "step": 0.01,
+    "value": 0.999,
+    "type": "ConstrainedFloatValue"
+  },
+  "adam_epsilon": {
+    "default": 1e-8,
+    "description": "Epsilon value for the Adam optimizer.",
+    "title": "Adam Epsilon",
+    "value": 1e-8,
+    "type": "float"
+  },
+  "adam_weight_decay": {
+    "default": 0.01,
+    "description": "Weight decay to use.",
+    "title": "Adam Weight Decay",
+    "value": 0.01,
+    "type": "float"
   },
   "attention": {
-    "value": "",
-    "options": {}
+    "default": "xformers",
+    "description": "Attention model.",
+    "title": "Attention",
+    "value": "xformers",
+    "type": "str"
   },
-  "optimizer": {
-    "value": "",
-    "options": {}
+  "cache_latents": {
+    "default": true,
+    "description": "Cache latents.",
+    "title": "Cache Latents",
+    "value": true,
+    "type": "bool"
   },
-  "lr_scheduler": {
-    "value": "",
-    "options": {}
+  "center_crop": {
+    "default": false,
+    "description": "[finetune, controlnet] Whether to center crop the input images to the resolution.",
+    "title": "Center Crop",
+    "value": false,
+    "type": "bool"
   },
-  "learning_rate": {
-    "value": 0.000002
-  },
-  "txt_learning_rate": {
-    "value": 0.000002
-  },
-  "min_learning_rate": {
-    "value": 0.000001
-  },
-  "lr_warmup_steps": {
-    "value": 500,
+  "checkpoints_total_limit": {
+    "default": 0,
+    "description": "[finetune] Max number of checkpoints to store.",
+    "title": "Checkpoints Total Limit",
     "min": 0,
-    "max": 10000,
-    "step": 1
-  },
-  "weight_decay": {
-    "value": 0.01,
-    "min": 0,
-    "max": 1,
-    "step": 0.001
-  },
-  "tenc_weight_decay": {
-    "value": 0.01,
-    "min": 0,
-    "max": 1,
-    "step": 0.001
-  },
-  "offset_noise": {
+    "max": 100,
     "value": 0,
-    "min": -1,
-    "max": 1,
-    "step": 0.01
+    "type": "ConstrainedIntValue"
   },
   "clip_skip": {
+    "default": 1,
+    "description": "[db] Number of CLIP Normalization layers to skip.",
+    "min": 0,
+    "max": 4,
     "value": 1,
-    "min": 1,
-    "max": 12,
-    "step": 1
+    "type": "ConstrainedIntValue"
   },
-  "tenc_grad_clip_norm": {
-    "value": 0,
-    "min": 0,
-    "max": 128,
-    "step": 0.25
+  "cpu_only": {
+    "default": false,
+    "description": "[db] CPU only.",
+    "title": "CPU Only",
+    "value": false,
+    "type": "bool"
   },
-  "max_token_length": {
-    "value": 75,
-    "min": 75,
-    "max": 300,
-    "step": 75
+  "concepts_list": {
+    "default": [],
+    "description": "[db] Concepts list.",
+    "title": "Concepts List",
+    "value": [],
+    "type": "List"
   },
-  "stop_text_encoder": {
-    "value": 0.75,
-    "min": 0,
-    "max": 1,
-    "step": 0.01
+  "concepts_path": {
+    "default": "",
+    "description": "[db] Path to the concepts.",
+    "title": "Concepts Path",
+    "value": "",
+    "type": "str"
   },
-  "shuffle_tags": {
-    "value": true
-  },
-  "strict_tokens": {
-    "value": true
-  },
-  "gradient_checkpointing": {
-    "value": false
-  },
-  "gradient_set_to_none": {
-    "value": true
-  },
-  "freeze_clip_normalization": {
-    "value": false
-  },
-  "use_ema": {
-    "value": false
-  },
-  "train_unet": {
-    "value": true
+  "disable_class_matching": {
+    "default": false,
+    "description": "[db] Disable class matching.",
+    "title": "Disable Class Matching",
+    "value": false,
+    "type": "bool"
   },
   "disable_logging": {
-    "value": true
+    "default": false,
+    "description": "Disable log parsing.",
+    "title": "Disable Logging",
+    "value": false,
+    "type": "bool"
+  },
+  "epoch": {
+    "default": 0,
+    "description": "[model] Lifetime trained epoch.",
+    "title": "Epoch",
+    "value": 0,
+    "type": "int"
+  },
+  "freeze_clip_normalization": {
+    "default": false,
+    "description": "Freeze clip normalization.",
+    "title": "Freeze Clip Normalization",
+    "value": false,
+    "type": "bool"
+  },
+  "gradient_accumulation_steps": {
+    "default": 1,
+    "description": "Number of updates steps to accumulate before performing a backward/update pass.",
+    "title": "Gradient Accumulation Steps",
+    "min": 1,
+    "max": 1000,
+    "value": 1,
+    "type": "ConstrainedIntValue"
+  },
+  "gradient_checkpointing": {
+    "default": false,
+    "description": "Whether or not to use gradient checkpointing.",
+    "title": "Gradient Checkpointing",
+    "value": false,
+    "type": "bool"
+  },
+  "gradient_set_to_none": {
+    "default": false,
+    "description": "Whether or not to set gradients to None when zeroing.",
+    "title": "Gradient Set To None",
+    "value": false,
+    "type": "bool"
+  },
+  "graph_smoothing": {
+    "default": 0.1,
+    "description": "The scale of graph smoothing.",
+    "title": "Graph Smoothing",
+    "min": 0,
+    "max": 1,
+    "step": 0.1,
+    "value": 0.1,
+    "type": "ConstrainedFloatValue"
+  },
+  "hflip": {
+    "default": false,
+    "description": "Horizontal flip.",
+    "title": "Horizontal Flip",
+    "value": false,
+    "type": "bool"
+  },
+  "input_pertubation": {
+    "default": 0.1,
+    "description": "[finetune, controlnet] The scale of input pertubation. Recommended 0.1.",
+    "title": "Input Pertubation",
+    "min": 0,
+    "max": 1,
+    "step": 0.1,
+    "value": 0.1,
+    "type": "ConstrainedFloatValue"
+  },
+  "learning_rate": {
+    "default": 0.000005,
+    "description": "Initial learning rate.",
+    "title": "Learning Rate",
+    "value": 0.000005,
+    "type": "float"
+  },
+  "learning_rate_lora": {
+    "default": 0.00005,
+    "description": "[lora] LoRA learning rate.",
+    "title": "LoRA Learning Rate",
+    "value": 0.00005,
+    "type": "float"
+  },
+  "learning_rate_lora_txt": {
+    "default": 0.00005,
+    "description": "[lora] LoRA txt learning rate.",
+    "title": "LoRA Text Learning Rate",
+    "value": 0.00005,
+    "type": "float"
+  },
+  "learning_rate_min": {
+    "default": 0.000001,
+    "description": "Minimum learning rate.",
+    "title": "Learning Rate Min",
+    "value": 0.000001,
+    "type": "float"
+  },
+  "learning_rate_txt": {
+    "default": 0.000005,
+    "description": "[db] Text learning rate.",
+    "title": "Text Learning Rate",
+    "value": 0.000005,
+    "type": "float"
+  },
+  "lifetime_revision": {
+    "default": 0,
+    "description": "Lifetime revision.",
+    "title": "Lifetime Revision",
+    "value": 0,
+    "type": "int"
+  },
+  "lora_model_name": {
+    "default": "",
+    "description": "[lora] LoRA model name.",
+    "title": "LoRA Model Name",
+    "value": "",
+    "type": "str"
+  },
+  "lora_txt_rank": {
+    "default": 4,
+    "description": "[lora] LoRA text rank.",
+    "title": "LoRA Text Rank",
+    "value": 4,
+    "type": "int"
+  },
+  "lora_txt_weight": {
+    "default": 1,
+    "description": "[lora] LoRA text weight.",
+    "title": "LoRA Text Weight",
+    "min": 0,
+    "max": 1,
+    "step": 0.1,
+    "value": 1,
+    "type": "ConstrainedFloatValue"
+  },
+  "lora_unet_rank": {
+    "default": 4,
+    "description": "[lora] LoRA UNet rank.",
+    "title": "LoRA UNet Rank",
+    "value": 4,
+    "type": "int"
+  },
+  "lora_weight": {
+    "default": 1,
+    "description": "[lora] LoRA weight.",
+    "title": "LoRA Weight",
+    "value": 1,
+    "type": "float"
+  },
+  "lr_factor": {
+    "default": 0.5,
+    "description": "Learning rate factor.",
+    "title": "Learning rate factor",
+    "min": 0,
+    "max": 1,
+    "step": 0.1,
+    "value": 0.5,
+    "type": "ConstrainedFloatValue"
+  },
+  "lr_num_cycles": {
+    "default": 1,
+    "description": "Learning rate cycles.",
+    "title": "Learning rate cycle",
+    "min": 0,
+    "max": 1,
+    "step": 0.1,
+    "value": 1,
+    "type": "ConstrainedIntValue"
+  },
+  "lr_power": {
+    "default": 1,
+    "description": "Learning rate power.",
+    "title": "Learning rate power",
+    "min": 0,
+    "max": 1,
+    "step": 0.1,
+    "value": 1,
+    "type": "ConstrainedFloatValue"
+  },
+  "lr_scale_pos": {
+    "default": 0.5,
+    "description": "Learning rate scale position.",
+    "title": "Learning rate scale position",
+    "value": 0.5,
+    "type": "float"
+  },
+  "lr_scheduler": {
+    "default": "constant_with_warmup",
+    "description": "Learning rate scheduler.",
+    "title": "Learning Rate Scheduler",
+    "value": "constant_with_warmup",
+    "type": "str"
+  },
+  "lr_warmup_steps": {
+    "default": 500,
+    "description": "Number of steps for the warmup in the lr scheduler.",
+    "title": "Learning Rate Warmup Steps",
+    "min": 0,
+    "max": 10000,
+    "value": 500,
+    "type": "ConstrainedIntValue"
+  },
+  "max_grad_norm": {
+    "default": 1,
+    "description": "[finetune] Max gradient norm.",
+    "title": "Max Gradient Norm",
+    "min": 0,
+    "max": 1,
+    "step": 0.01,
+    "value": 1,
+    "type": "ConstrainedFloatValue"
+  },
+  "max_token_length": {
+    "default": 75,
+    "description": "[db] Max token length.",
+    "title": "Max Token Length",
+    "min": 75,
+    "max": 1000,
+    "step": 75,
+    "value": 75,
+    "type": "ConstrainedIntValue"
+  },
+  "max_train_samples": {
+    "description": "[finetune, controlnet] For debugging purposes or quicker training, truncate the number of training examples to this value if set.",
+    "title": "Max Train Samples",
+    "min": 0,
+    "max": 10000,
+    "value": null,
+    "type": "ConstrainedIntValue"
+  },
+  "mixed_precision": {
+    "default": "no",
+    "description": "Whether to use mixed precision.",
+    "title": "Mixed Precision",
+    "value": "no",
+    "type": "str"
+  },
+  "model_path": {
+    "default": "",
+    "description": "[model] Model path.",
+    "title": "Model Path",
+    "value": "",
+    "type": "str"
+  },
+  "noise_scheduler": {
+    "default": "DDPM",
+    "description": "Noise scheduler used during training.",
+    "title": "Noise Scheduler",
+    "value": "DDPM",
+    "type": "str"
+  },
+  "num_save_samples": {
+    "default": 4,
+    "description": "[finetune, controlnet] Number of samples to save.",
+    "title": "Number of Save Samples",
+    "min": 0,
+    "max": 1000,
+    "value": 4,
+    "type": "ConstrainedIntValue"
+  },
+  "num_train_epochs": {
+    "default": 100,
+    "description": "Number of training epochs.",
+    "title": "Number of Training Epochs",
+    "min": 1,
+    "max": 10000,
+    "value": 100,
+    "type": "ConstrainedIntValue"
+  },
+  "offset_noise": {
+    "default": 0,
+    "description": "[finetune, db] The scale of noise offset.",
+    "title": "Offset Noise",
+    "min": 0,
+    "max": 1,
+    "step": 0.1,
+    "value": 0,
+    "type": "ConstrainedFloatValue"
+  },
+  "optimizer": {
+    "default": "8bit AdamW",
+    "description": "Optimizer.",
+    "title": "Optimizer",
+    "value": "8bit AdamW",
+    "type": "str"
+  },
+  "pad_tokens": {
+    "default": true,
+    "description": "[db] Pad tokens.",
+    "title": "Pad Tokens",
+    "value": true,
+    "type": "bool"
+  },
+  "pretrained_vae_name_or_path": {
+    "default": "",
+    "description": "[db] Pretrained VAE model name or path.",
+    "title": "Pretrained VAE Model Name or Path",
+    "value": "",
+    "type": "str"
+  },
+  "prior_loss_scale": {
+    "default": false,
+    "description": "[db] Prior loss scale.",
+    "title": "Prior Loss Scale",
+    "value": false,
+    "type": "bool"
+  },
+  "prior_loss_target": {
+    "default": 100,
+    "description": "[db] Prior loss target.",
+    "title": "Prior Loss Target",
+    "min": 0,
+    "max": 1000,
+    "value": 100,
+    "type": "ConstrainedIntValue"
+  },
+  "prior_loss_weight": {
+    "default": 0.75,
+    "description": "[db] Prior loss weight.",
+    "title": "Prior Loss Weight",
+    "min": 0,
+    "max": 1,
+    "step": 0.1,
+    "value": 0.75,
+    "type": "ConstrainedFloatValue"
+  },
+  "prior_loss_weight_min": {
+    "default": 0.1,
+    "description": "[db] Minimum prior loss weight.",
+    "title": "Minimum Prior Loss Weight",
+    "min": 0,
+    "max": 1,
+    "step": 0.1,
+    "value": 0.1,
+    "type": "ConstrainedFloatValue"
+  },
+  "proportion_empty_prompts": {
+    "default": 0,
+    "description": "[controlnet] Proportion of image prompts to be replaced with empty strings. Defaults to 0 (no prompt replacement).",
+    "title": "Proportion Empty Prompts",
+    "min": 0,
+    "max": 1,
+    "step": 0.1,
+    "value": 0,
+    "type": "ConstrainedFloatValue"
+  },
+  "random_flip": {
+    "default": false,
+    "description": "[finetune] Whether to randomly flip images horizontally.",
+    "title": "Random Flip",
+    "value": false,
+    "type": "bool"
+  },
+  "resolution": {
+    "default": 512,
+    "description": "Maximum resolution for input images.",
+    "title": "Resolution",
+    "min": 8,
+    "max": 4096,
+    "step": 8,
+    "value": 512,
+    "type": "ConstrainedIntValue"
+  },
+  "sample_batch_size": {
+    "default": 1,
+    "description": "[db] Sample batch size.",
+    "title": "Sample Batch Size",
+    "min": 1,
+    "max": 1000,
+    "value": 1,
+    "type": "ConstrainedIntValue"
+  },
+  "sanity_prompt": {
+    "default": "",
+    "description": "Sanity prompt.",
+    "title": "Sanity Prompt",
+    "value": "",
+    "type": "str"
+  },
+  "save_on_cancel": {
+    "default": true,
+    "description": "Save checkpoint when training is canceled.",
+    "title": "Save on Cancel",
+    "value": true,
+    "type": "bool"
+  },
+  "save_embedding_every": {
+    "default": 25,
+    "description": "Save a checkpoint of the training state every X epochs.",
+    "title": "Save Weights Frequency",
+    "min": 0,
+    "max": 1000,
+    "value": 25,
+    "type": "ConstrainedIntValue"
+  },
+  "save_lora_for_extra_net": {
+    "default": true,
+    "description": "Save LoRA for extra net.",
+    "title": "Save LoRA for Extra Net",
+    "value": true,
+    "type": "bool"
+  },
+  "save_preview_every": {
+    "default": 5,
+    "description": "Save preview every.",
+    "title": "Save Preview Frequency",
+    "min": 0,
+    "max": 1000,
+    "value": 5,
+    "type": "ConstrainedIntValue"
+  },
+  "scale_lr": {
+    "default": false,
+    "description": "[finetune] Scale the learning rate.",
+    "title": "Scale Learning Rate",
+    "value": false,
+    "type": "bool"
+  },
+  "scheduler": {
+    "default": "ddim",
+    "description": "[model] Scheduler.",
+    "title": "Scheduler",
+    "value": "DDIM",
+    "type": "str"
+  },
+  "seed": {
+    "default": 420420,
+    "description": "Seed for reproducability, sanity prompt.",
+    "title": "Seed",
+    "min": -1,
+    "max": 21474836147,
+    "value": 420420,
+    "type": "ConstrainedIntValue"
+  },
+  "shuffle_tags": {
+    "default": true,
+    "description": "Shuffle tags.",
+    "title": "Shuffle Tags",
+    "value": true,
+    "type": "bool"
+  },
+  "simulate_training": {
+    "default": false,
+    "description": "Simulate training.",
+    "title": "Simulate Training",
+    "value": false,
+    "type": "bool"
+  },
+  "snapshot": {
+    "description": "Whether training should be resumed from a previous checkpoint. Use 'latest' to use the latest checkpoint in the output directory, or specify a revision.",
+    "title": "Snapshot",
+    "value": null,
+    "type": "str"
+  },
+  "snr_gamma": {
+    "default": 0,
+    "description": "[finetune, controlnet] SNR weighting gamma to be used if rebalancing the loss. Recommended value is 5.0.",
+    "title": "SNR Gamma",
+    "min": 10,
+    "max": 0,
+    "step": 0.1,
+    "value": 0,
+    "type": "ConstrainedFloatValue"
+  },
+  "split_loss": {
+    "default": true,
+    "description": "Split loss.",
+    "title": "Split Loss",
+    "value": true,
+    "type": "bool"
+  },
+  "src": {
+    "default": "",
+    "description": "[model] The source checkpoint.",
+    "title": "Source Checkpoint",
+    "value": "",
+    "type": "str"
+  },
+  "stop_text_encoder": {
+    "default": 1,
+    "description": "[db, controlnet] Stop text encoder.",
+    "title": "Stop Text Encoder Percentage",
+    "min": 0,
+    "max": 1,
+    "step": 0.01,
+    "value": 1,
+    "type": "ConstrainedFloatValue"
+  },
+  "strict_tokens": {
+    "default": false,
+    "description": "[db, finetune, controlnet] Strict tokens.",
+    "title": "Strict Tokens",
+    "value": false,
+    "type": "bool"
+  },
+  "dynamic_img_norm": {
+    "default": false,
+    "description": "[db, finetune, controlnet] Dynamic image normalization.",
+    "title": "Dynamic Image Normalization",
+    "value": false,
+    "type": "bool"
+  },
+  "tenc_weight_decay": {
+    "default": 0.01,
+    "description": "[db] Text encoder weight decay.",
+    "title": "Text Encoder Weight Decay",
+    "min": 0,
+    "max": 1,
+    "step": 0.01,
+    "value": 0.01,
+    "type": "ConstrainedFloatValue"
+  },
+  "tenc_grad_clip_norm": {
+    "default": 0,
+    "description": "[db] Text encoder gradient clipping norm.",
+    "title": "Text Encoder Gradient Clipping Norm",
+    "min": 0,
+    "max": 1,
+    "step": 0.01,
+    "value": 0,
+    "type": "ConstrainedFloatValue"
+  },
+  "tomesd": {
+    "default": 0,
+    "description": "[db] TomesD.",
+    "title": "TomesD",
+    "value": 0,
+    "type": "float"
+  },
+  "train_batch_size": {
+    "default": 1,
+    "description": "Batch size for the training dataloader.",
+    "title": "Train Batch Size",
+    "max": 1000,
+    "min": 1,
+    "value": 1,
+    "type": "ConstrainedIntValue"
+  },
+  "train_data_dir": {
+    "description": "[finetune, controlnet] A folder containing the training data.",
+    "title": "Train Data Directory",
+    "value": null,
+    "type": "str"
+  },
+  "train_mode": {
+    "default": "db",
+    "description": "The training mode to use.",
+    "title": "Train Mode",
+    "value": "db",
+    "type": "str"
+  },
+  "train_unet": {
+    "default": true,
+    "description": "[db] Train UNet.",
+    "title": "Train UNet",
+    "value": true,
+    "type": "bool"
+  },
+  "train_unfrozen": {
+    "default": true,
+    "description": "[db] Train unfrozen.",
+    "title": "Train Unfrozen",
+    "value": true,
+    "type": "bool"
+  },
+  "use_ema": {
+    "default": false,
+    "description": "[finetune, db] Whether to use EMA model.",
+    "title": "Use EMA",
+    "value": false,
+    "type": "bool"
+  },
+  "use_dir_tags": {
+    "default": false,
+    "description": "[finetune, controlnet] Whether to use the directory name as the tag. Will be appended if not found in the caption.",
+    "title": "Use Directory Tags",
+    "value": false,
+    "type": "bool"
+  },
+  "train_lora": {
+    "default": false,
+    "description": "Use LoRA.",
+    "title": "Use LoRA",
+    "value": false,
+    "type": "bool"
+  },
+  "use_subdir": {
+    "default": false,
+    "description": "Use subdirectory when saving weights.",
+    "title": "Use Subdirectory",
+    "value": false,
+    "type": "bool"
+  },
+  "v2": {
+    "default": false,
+    "description": "[model] If this is a V2 Model or not.",
+    "title": "V2",
+    "value": false,
+    "type": "bool"
+  },
+  "precisions": {
+    "default": [
+      "no",
+      "fp16",
+      "bf16"
+    ],
+    "value": [
+      "no",
+      "fp16",
+      "bf16"
+    ],
+    "type": "list"
+  },
+  "attentions": {
+    "default": [
+      "default",
+      "xformers"
+    ],
+    "value": [
+      "default",
+      "xformers"
+    ],
+    "type": "list"
   }
 }

@@ -496,12 +496,10 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
 
     # Create shared unet/tenc learning rate variables
 
-    learning_rate = args.learning_rate
-    txt_learning_rate = args.txt_learning_rate
+    learning_rate = args.learning_rate if not train_lora else args.learning_rate_lora
+    txt_learning_rate = args.learning_rate_txt if not train_lora else args.learning_rate_txt
 
     if train_lora:
-        learning_rate *= 10
-        txt_learning_rate *= 10
         logger.info("Training LoRA. Learning rate for unet: {}, text encoder: {}".format(learning_rate, txt_learning_rate))
         params_to_optimize = itertools.chain(*unet_lora_params) if stop_text_percentage == 0 else [
             {"params": itertools.chain(*unet_lora_params), "lr": learning_rate},

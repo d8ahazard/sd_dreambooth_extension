@@ -214,6 +214,23 @@ function initDreambooth() {
                 }
             }
         }
+        let defaults = response["defaults"];
+        let existing_elements = [];
+        let new_elements = [];
+        for (let key in defaults) {
+            let params = defaults[key];
+            if (key.indexOf("db_") === -1) {
+                key = "db_" + key;
+            }
+            let element = $(`#${key}`);
+            if (element.length > 0) {
+                existing_elements.push(params);
+            } else {
+                new_elements.push(params);
+            }
+        }
+        console.log("Existing elements: ", existing_elements);
+        console.log("New elements: ", new_elements);
     });
 
     // utility function to convert a string to Title Case

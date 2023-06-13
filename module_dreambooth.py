@@ -77,7 +77,8 @@ async def _get_db_vars(request):
         "precisions": precisions,
         "optimizers": optimizers,
         "schedulers": schedulers,
-        "infer_schedulers": infer_schedulers
+        "infer_schedulers": infer_schedulers,
+        "defaults": ConfigHandler().get_module_defaults("dreambooth"),
     }
 
 
@@ -255,7 +256,6 @@ async def _get_model_config(data, return_json=True):
         db_config.concepts_path = ""
         db_config.use_concepts = False
         db_config.save()
-
 
     if return_json:
         return {"db_config": db_config.__dict__, "ft_config": ft_config.__dict__, "tc": train_config.get_params()}
