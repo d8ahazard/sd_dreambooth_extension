@@ -53,13 +53,15 @@ Stable-diffusion-webui, not just reload it.
 
 ## Usage
 
+Check the step by step at [Wiki - ELI5 Training](https://github.com/d8ahazard/sd_dreambooth_extension/wiki/ELI5-Training)
+
 ### Create a Model
 
 1. Go to the Dreambooth tab.
 
 2. Under the "Create Model" sub-tab, enter a new model name and select the source checkpoint to train from.
-   If you want to use a model from the HF Hub instead, specify the model URL and token. URL format should be '
-   runwayml/stable-diffusion-v1-5'
+   If you want to use a model from the HF Hub instead, specify the model URL and token. URL format should be like:
+   `runwayml/stable-diffusion-v1-5`
 
    The source checkpoint will be extracted to models\dreambooth\MODELNAME\working.
 
@@ -194,12 +196,9 @@ GPUs, and enabled/disabled by default.
 slower, uses less VRAM, can only be used with *Mixed Precision* = 'fp16' (no impact on Apple Silicon); 'flash_attention': slowest, requires lowest
 VRAM.
 
-*Don't Cache Latents* - Why is this not just called "cache" latents? Because that's what the original script uses, and
-I'm trying to maintain the ability to update this as easily as possible. Anyway...when this box is *checked* latents
-will not be cached. When latents are not cached, you will save a bit of VRAM, but train slightly slower.
+*Cache Latents* - When this box is *checked* latents will be cached, making the train faster but requiring more VRAM.
 
-*Train Text Encoder* - Not required, but recommended. Requires more VRAM, may not work on <12 GB GPUs. Drastically
-improves output results.
+*Train UNET* - Not required, but recommended. Requires more VRAM, may not work on <12 GB GPUs. Drastically improves output results.
 
 *Prior Loss Weight* - The weight to use when calculating prior loss. You probably want to leave this at 1.
 
