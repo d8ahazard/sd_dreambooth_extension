@@ -521,10 +521,10 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
         params_to_optimize = [
             {"params": itertools.chain(controlnet.parameters()), "lr": learning_rate},
         ]
-
+    logger.debug(f"Getting da optimizer: {args.optimizer} {learning_rate}")
     optimizer = get_optimizer(
         params_to_optimize,
-        learning_rate=args.learning_rate,
+        learning_rate=learning_rate,
         betas=(args.adam_beta1, args.adam_beta2),
         weight_decay=args.adam_weight_decay,
         eps=args.adam_epsilon,
@@ -584,7 +584,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     train_dataset = None
     with_prior_preservation = False
 
-    if args.train_mode == "db":
+    if args.train_mode == "default":
         count, instance_prompts, class_prompts = generate_classifiers(args, accelerator=accelerator, ui=False,
                                                                       pbar=pbar2)
 
@@ -763,6 +763,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     if with_prior_preservation:
         lr_scale_pos *= 2
 
+    logger.debug(f"Setting learning rate to {learning_rate} and tenc to {txt_learning_rate}")
     lr_scheduler = UniversalScheduler(
         name=args.lr_scheduler,
         optimizer=optimizer,
@@ -828,7 +829,6 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     text_encoder_epochs = round(max_train_epochs * stop_text_percentage)
     global_step = 0
     global_epoch = 0
-    session_epoch = 0
     first_epoch = 0
     resume_step = 0
     grad_steps = 0
@@ -876,6 +876,10 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     logger.info(f"  Optimizer = {args.optimizer}")
     logger.info(f"  Resuming from checkpoint: {args.snapshot}")
     logger.info(f"  Gradient Checkpointing: {args.gradient_checkpointing}")
+    logger.info(f"  Initial learning rate = {args.learning_rate}")
+    logger.info(f"  Initial txt learning rate = {txt_learning_rate}")
+    logger.info(f"  Learning rate scheduler = {args.scheduler}")
+
     logger.info(f"  EMA: {args.use_ema}")
     os.environ.__setattr__("CUDA_LAUNCH_BLOCKING", 1)
 
@@ -893,7 +897,6 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
         0
     )
     lifetime_step = args.revision
-    lifetime_epoch = args.epoch
     status.job_count = max_train_steps
     status.job_no = global_step
     update_status({"progress_1_total": max_train_steps, "progress_1_job_current": global_step})
@@ -925,7 +928,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
 
     if stop_text_percentage != 0:
         stats["tenc_lr"] = txt_learning_rate
-
+    save_weights = False
     try:
         for epoch in range(first_epoch, max_train_epochs):
             if training_complete:
@@ -1084,7 +1087,8 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                     else:
                         # Predict the noise residual and compute loss
                         model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
-                    if args.train_mode == "db":
+
+                    if args.train_mode == "default":
                         # TODO: set a prior preservation flag and use that to ensure this ony happens in dreambooth
                         if not args.split_loss and not with_prior_preservation:
                             loss = instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
@@ -1106,26 +1110,9 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
 
                                 # Compute prior loss
                                 prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
-
-                            accelerator.backward(loss)
-
-                            if accelerator.sync_gradients:
-                                params_to_clip = (
-                                    controlnet.parameters() if controlnet is not None else unet.parameters()
-                                )
-                                accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
-                                if args.use_ema:
-                                    ema_unet.step(unet.parameters())
-                                progress_bar.update(1)
-                                grad_steps += 1
-                                global_step += 1
-                                accelerator.log({"train_loss": train_loss}, step=global_step)
-                                train_loss = 0.0
-
-                            optimizer.step()
-                            lr_scheduler.step(args.train_batch_size)
-
-                            optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
+                            else:
+                                # Compute loss
+                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
                     else:
                         if args.snr_gamma == 0:
                             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
@@ -1145,120 +1132,140 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                             loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
                             loss = loss.mean()
 
-                allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
-                cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
-                lr_data = lr_scheduler.get_last_lr()
-                last_lr = lr_data[0]
-                last_tenc_lr = 0
-                stats["lr_data"] = lr_data
-                try:
-                    if len(optimizer.param_groups) > 1:
-                        last_tenc_lr = optimizer.param_groups[1]["lr"] if train_tenc else 0
-                except:
-                    logger.debug("Exception getting tenc lr")
-                    pass
+                    accelerator.backward(loss)
 
-                if 'adapt' in args.optimizer:
-                    last_lr = optimizer.param_groups[0]["d"] * optimizer.param_groups[0]["lr"]
-                    if len(optimizer.param_groups) > 1:
-                        try:
-                            last_tenc_lr = optimizer.param_groups[1]["d"] * optimizer.param_groups[1]["lr"]
-                        except:
-                            logger.warning("Exception setting tenc weight decay")
-                            traceback.print_exc()
+                    if accelerator.sync_gradients:
+                        params_to_clip = (
+                            controlnet.parameters() if controlnet is not None else unet.parameters()
+                        )
+                        accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
+                        if args.use_ema:
+                            ema_unet.step(unet.parameters())
+                        progress_bar.update(1)
+                        grad_steps += 1
+                        global_step += 1
+                        accelerator.log({"loss": loss}, step=global_step)
+                        train_loss = 0.0
 
-                update_status(stats)
-                global_step += args.train_batch_size
-                args.revision += args.train_batch_size
-                status.job_no += args.train_batch_size
-                loss_step = loss.detach().item()
-                loss_total += loss_step
+                    optimizer.step()
+                    lr_scheduler.step(args.train_batch_size)
 
-                stats["session_step"] += args.train_batch_size
-                stats["lifetime_step"] += args.train_batch_size
-                stats["loss"] = loss_step
+                    optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
 
-                logs = {
-                    "lr": float(last_lr),
-                    "loss": float(loss_step),
-                    "vram": float(cached),
-                }
+                    allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
+                    cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
+                    lr_data = lr_scheduler.get_last_lr()
+                    last_lr = lr_data[0]
+                    last_tenc_lr = 0
+                    stats["lr_data"] = lr_data
+                    try:
+                        if len(optimizer.param_groups) > 1:
+                            last_tenc_lr = optimizer.param_groups[1]["lr"] if train_tenc else 0
+                    except:
+                        logger.debug("Exception getting tenc lr")
+                        pass
 
-                stats["vram"] = logs["vram"]
-                stats["unet_lr"] = '{:.2E}'.format(Decimal(last_lr))
-                if stop_text_percentage != 0:
-                    stats["tenc_lr"] = '{:.2E}'.format(Decimal(last_tenc_lr))
+                    if 'adapt' in args.optimizer:
+                        last_lr = optimizer.param_groups[0]["d"] * optimizer.param_groups[0]["lr"]
+                        if len(optimizer.param_groups) > 1:
+                            try:
+                                last_tenc_lr = optimizer.param_groups[1]["d"] * optimizer.param_groups[1]["lr"]
+                            except:
+                                logger.warning("Exception setting tenc weight decay")
+                                traceback.print_exc()
 
-                if args.split_loss and with_prior_preservation:
-                    logs["inst_loss"] = float(instance_loss.detach().item())
-                    logs["prior_loss"] = float(prior_loss.detach().item())
-                    stats["instance_loss"] = logs["inst_loss"]
-                    stats["prior_loss"] = logs["prior_loss"]
+                    update_status(stats)
+                    global_step += args.train_batch_size
+                    args.revision += args.train_batch_size
+                    status.job_no += args.train_batch_size
+                    loss_step = loss.detach().item()
+                    loss_total += loss_step
 
-                if 'adapt' in args.optimizer:
-                    status.textinfo2 = (
-                        f"Loss: {'%.2f' % loss_step}, UNET DLR: {'{:.2E}'.format(Decimal(last_lr))}, TENC DLR: {'{:.2E}'.format(Decimal(last_tenc_lr))}, "
-                        f"VRAM: {allocated}/{cached} GB"
-                    )
-                else:
-                    status.textinfo2 = (
-                        f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, "
-                        f"VRAM: {allocated}/{cached} GB"
-                    )
+                    stats["session_step"] += args.train_batch_size
+                    stats["lifetime_step"] += args.train_batch_size
+                    stats["loss"] = loss_step
 
-                progress_bar.update(args.train_batch_size)
-                rate = progress_bar.format_dict["rate"] if "rate" in progress_bar.format_dict else None
-                if rate is None:
-                    rate_string = ""
-                else:
-                    if rate > 1:
-                        rate_string = f"{rate:.2f} it/s"
+                    logs = {
+                        "lr": float(last_lr),
+                        "loss": float(loss_step),
+                        "vram": float(cached),
+                    }
+
+                    stats["vram"] = logs["vram"]
+                    stats["unet_lr"] = '{:.2E}'.format(Decimal(last_lr))
+                    if stop_text_percentage != 0:
+                        stats["tenc_lr"] = '{:.2E}'.format(Decimal(last_tenc_lr))
+
+                    if args.split_loss and with_prior_preservation:
+                        logs["inst_loss"] = float(instance_loss.detach().item())
+                        logs["prior_loss"] = float(prior_loss.detach().item())
+                        stats["instance_loss"] = logs["inst_loss"]
+                        stats["prior_loss"] = logs["prior_loss"]
+
+                    if 'adapt' in args.optimizer:
+                        status.textinfo2 = (
+                            f"Loss: {'%.2f' % loss_step}, UNET DLR: {'{:.2E}'.format(Decimal(last_lr))}, TENC DLR: {'{:.2E}'.format(Decimal(last_tenc_lr))}, "
+                            f"VRAM: {allocated}/{cached} GB"
+                        )
                     else:
-                        rate_string = f"{1 / rate:.2f} s/it" if rate != 0 else "N/A"
-                stats["iterations_per_second"] = rate_string
-                progress_bar.set_postfix(**logs)
-                accelerator.log(logs, step=args.revision)
+                        status.textinfo2 = (
+                            f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, "
+                            f"VRAM: {allocated}/{cached} GB"
+                        )
 
-                logs = {"epoch_loss": loss_total / len(train_dataloader)}
-                accelerator.log(logs, step=global_step)
-                stats["epoch_loss"] = '%.2f' % (loss_total / len(train_dataloader))
-
-                status.job_count = max_train_steps
-                status.job_no = global_step
-                stats["lifetime_step"] = args.revision
-                stats["session_step"] = global_step
-                # status0 = f"Steps: {global_step}/{max_train_steps} (Current), {rate_string}"
-                # status1 = f"{args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
-                status.textinfo = (
-                    f"Steps: {global_step}/{max_train_steps} (Current), {rate_string}"
-                    f" {args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
-                )
-                update_status(stats)
-
-                if math.isnan(loss_step):
-                    logger.warning("Loss is NaN, your model is dead. Cancelling training.")
-                    status.interrupted = True
-                    if status_handler:
-                        status_handler.end("Training interrrupted due to NaN loss.")
-
-                # Log completion message
-                if training_complete or status.interrupted:
-                    shared.in_progress = False
-                    shared.in_progress_step = 0
-                    shared.in_progress_epoch = 0
-                    logger.debug("  Training complete (step check).")
-                    if status.interrupted:
-                        state = "canceled"
+                    progress_bar.update(args.train_batch_size)
+                    rate = progress_bar.format_dict["rate"] if "rate" in progress_bar.format_dict else None
+                    if rate is None:
+                        rate_string = ""
                     else:
-                        state = "complete"
+                        if rate > 1:
+                            rate_string = f"{rate:.2f} it/s"
+                        else:
+                            rate_string = f"{1 / rate:.2f} s/it" if rate != 0 else "N/A"
+                    stats["iterations_per_second"] = rate_string
+                    progress_bar.set_postfix(**logs)
+                    accelerator.log(logs, step=args.revision)
 
+                    logs = {"epoch_loss": loss_total / len(train_dataloader)}
+                    accelerator.log(logs, step=global_step)
+                    stats["epoch_loss"] = '%.2f' % (loss_total / len(train_dataloader))
+
+                    status.job_count = max_train_steps
+                    status.job_no = global_step
+                    stats["lifetime_step"] = args.revision
+                    stats["session_step"] = global_step
+                    # status0 = f"Steps: {global_step}/{max_train_steps} (Current), {rate_string}"
+                    # status1 = f"{args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
                     status.textinfo = (
-                        f"Training {state} {global_step}/{max_train_steps}, {args.revision}"
-                        f" total."
+                        f"Steps: {global_step}/{max_train_steps} (Current), {rate_string}"
+                        f" {args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
                     )
-                    if status_handler:
-                        status_handler.end(status.textinfo)
-                    break
+                    update_status(stats)
+
+                    if math.isnan(loss_step):
+                        logger.warning("Loss is NaN, your model is dead. Cancelling training.")
+                        status.interrupted = True
+                        if status_handler:
+                            status_handler.end("Training interrrupted due to NaN loss.")
+
+                    # Log completion message
+                    if training_complete or status.interrupted:
+                        shared.in_progress = False
+                        shared.in_progress_step = 0
+                        shared.in_progress_epoch = 0
+                        logger.debug("  Training complete (step check).")
+                        if status.interrupted:
+                            state = "canceled"
+                        else:
+                            state = "complete"
+
+                        status.textinfo = (
+                            f"Training {state} {global_step}/{max_train_steps}, {args.revision}"
+                            f" total."
+                        )
+                        if status_handler:
+                            status_handler.end(status.textinfo)
+                        break
             # Create the pipeline using the trained modules and save it.
             if accelerator.is_main_process:
                 accelerator.wait_for_everyone()
@@ -1291,6 +1298,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                         ema_unet.restore(unet.parameters())
     except Exception as e:
         logger.warning(f"Exception during training: {e}")
+        traceback.print_exc()
         cleanup_memory()
         if status_handler is not None:
             status_handler.end(f"Training failed: {e}")

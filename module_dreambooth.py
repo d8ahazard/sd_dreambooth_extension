@@ -23,7 +23,7 @@ from dreambooth.dataclasses.db_config import DreamboothConfig, from_file
 from dreambooth.dataclasses.db_config_2 import DreamboothConfig2
 from dreambooth.dataclasses.finetune_config import FinetuneConfig
 from dreambooth.sd_to_diff import extract_checkpoint
-from dreambooth.train_dreambooth import main
+from dreambooth.train_dreambooth_original import main
 from module_src.gradio_parser import parse_gr_code
 
 logger = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ async def _get_db_vars(request):
         "optimizers": optimizers,
         "schedulers": schedulers,
         "infer_schedulers": infer_schedulers,
-        "defaults": ConfigHandler().get_module_defaults("dreambooth"),
+        "defaults": TrainingConfig().get_params(),
     }
 
 
@@ -266,12 +266,8 @@ async def _set_model_config(data: dict, return_config: bool = False) -> Union[Di
     logger.debug(f"Set model called: {data}")
     model = data["data"]["model"]
     training_params = data["data"]
-    fine_tune = training_params["fine_tune"] if "fine_tune" in training_params else False
     del training_params["model"]
-    if fine_tune:
-        config = FinetuneConfig().load_from_file(model["path"])
-    else:
-        config = DreamboothConfig().load_from_file(model["path"])
+    config = TrainingConfig().load_from_file(model["path"])
     config.load_params(training_params)
     config.pretrained_model_name_or_path = os.path.join(model["path"], "working")
     config.save()

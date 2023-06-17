@@ -115,6 +115,10 @@
     "default": "xformers",
     "description": "Attention model.",
     "title": "Attention",
+    "options": [
+      "default",
+      "xformers"
+    ],
     "value": "xformers",
     "type": "str"
   },
@@ -413,6 +417,11 @@
     "default": "no",
     "description": "Whether to use mixed precision.",
     "title": "Mixed Precision",
+    "options": [
+      "no",
+      "fp16",
+      "bf16"
+    ],
     "value": "no",
     "type": "str"
   },
@@ -427,6 +436,11 @@
     "default": "DDPM",
     "description": "Noise scheduler used during training.",
     "title": "Noise Scheduler",
+    "options": [
+      "DDPM",
+      "DDIM",
+      "PNDM"
+    ],
     "value": "DDPM",
     "type": "str"
   },

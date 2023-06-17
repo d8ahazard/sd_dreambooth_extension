@@ -6,11 +6,11 @@ from pydantic import BaseModel, Field
 
 
 class BaseConfig(BaseModel):
-    model_dir: str = Field("sd-model", description="Base path of the model.")
-    model_name: str = Field("sd-model", description="Name of the model.")
-    revision: int = Field(0, description="Revision number of the model.")
-    config_prefix: str = Field("", description="Prefix for the config file.")
-    pretrained_model_name_or_path: str = Field("", description="Path to the pretrained model.")
+    model_dir: str = Field("sd-model", description="[model] Base path of the model.")
+    model_name: str = Field("sd-model", description="[model] Name of the model.")
+    revision: int = Field(0, description="[model] Revision number of the model.")
+    config_prefix: str = Field("", description="[model] Prefix for the config file.")
+    pretrained_model_name_or_path: str = Field("", description="[model] Path to the pretrained model.")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -59,7 +59,8 @@ class BaseConfig(BaseModel):
             except TypeError:
                 continue
             field_dict = {}
-            for prop in ['default', 'description', 'choices', 'title', 'ge', 'le', 'gt', 'lt', 'multiple_of']:
+
+            for prop in ['default', 'description', 'title', 'ge', 'le', 'gt', 'lt', 'multiple_of']:
                 if hasattr(data.field_info, prop):
                     value = getattr(data.field_info, prop)
                     # Check if the property is JSON serializable
@@ -82,8 +83,19 @@ class BaseConfig(BaseModel):
                         field_dict[prop] = value
                     except TypeError:
                         pass
+
             field_dict['value'] = getattr(self, f)
             field_dict['type'] = data.outer_type_.__name__
+
+            # Check if 'choices' is in 'extras'
+            if hasattr(data.field_info, "extra"):
+                extras = getattr(data.field_info, "extra")
+                if 'choices' in extras:
+                    field_dict['options'] = extras['choices']
+                if 'custom_type' in extras:
+                    field_dict['type'] = extras['custom_type']
+
+
             tc_fields[f] = field_dict
         return tc_fields
 

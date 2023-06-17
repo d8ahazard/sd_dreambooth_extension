@@ -13,106 +13,106 @@ let linkLR = false;
 let modelLoaded = false;
 
 const dbOnlyKeys = [
-  "cache_latents",
-  "clip_skip",
-  "concepts_list",
-  "concepts_path",
-  "custom_model_name",
-  "deterministic",
-  "disable_class_matching",
-  "disable_logging",
-  "dynamic_img_norm",
-  "ema_predict",
-  "epoch_pause_frequency",
-  "epoch_pause_time",
-  "freeze_clip_normalization",
-  "half_model",
-  "has_ema",
-  "hflip",
-  "infer_ema",
-  "initial_revision",
-  "learning_rate_min",
-  "lora_learning_rate",
-  "lora_model_name",
-  "lora_txt_learning_rate",
-  "lora_txt_rank",
-  "lora_txt_weight",
-  "lora_unet_rank",
-  "lora_use_buggy_requires_grad",
-  "lora_weight",
-  "lr_cycles",
-  "lr_factor",
-  "lr_power",
-  "lr_scale_pos",
-  "max_token_length",
-  "model_path",
-  "noise_scheduler",
-  "pad_tokens",
-  "pretrained_vae_name_or_path",
-  "prior_loss_scale",
-  "prior_loss_target",
-  "prior_loss_weight",
-  "prior_loss_weight_min",
-  "revision",
-  "sample_batch_size",
-  "sanity_prompt",
-  "sanity_seed",
-  "save_ckpt_after",
-  "save_ckpt_cancel",
-  "save_ema",
-  "save_embedding_every",
-  "save_lora_after",
-  "save_lora_cancel",
-  "save_lora_during",
-  "save_lora_for_extra_net",
-  "save_preview_every",
-  "save_safetensors",
-  "save_state_after",
-  "save_state_cancel",
-  "save_state_during",
-  "scheduler",
-  "shared_diffusers_path",
-  "shuffle_tags",
-  "snapshot",
-  "split_loss",
-  "stop_text_encoder",
-  "strict_tokens",
-  "tenc_grad_clip_norm",
-  "tenc_weight_decay",
-  "tomesd",
-  "train_imagic",
-  "train_unet",
-  "train_unfrozen",
-  "txt_learning_rate",
-  "use_concepts",
-  "use_lora",
-  "use_lora_extended",
-  "use_shared_src",
-  "use_subdir",
-  "weight_decay"
+    "cache_latents",
+    "clip_skip",
+    "concepts_list",
+    "concepts_path",
+    "custom_model_name",
+    "deterministic",
+    "disable_class_matching",
+    "disable_logging",
+    "dynamic_img_norm",
+    "ema_predict",
+    "epoch_pause_frequency",
+    "epoch_pause_time",
+    "freeze_clip_normalization",
+    "half_model",
+    "has_ema",
+    "hflip",
+    "infer_ema",
+    "initial_revision",
+    "learning_rate_min",
+    "lora_learning_rate",
+    "lora_model_name",
+    "lora_txt_learning_rate",
+    "lora_txt_rank",
+    "lora_txt_weight",
+    "lora_unet_rank",
+    "lora_use_buggy_requires_grad",
+    "lora_weight",
+    "lr_cycles",
+    "lr_factor",
+    "lr_power",
+    "lr_scale_pos",
+    "max_token_length",
+    "model_path",
+    "noise_scheduler",
+    "pad_tokens",
+    "pretrained_vae_name_or_path",
+    "prior_loss_scale",
+    "prior_loss_target",
+    "prior_loss_weight",
+    "prior_loss_weight_min",
+    "revision",
+    "sample_batch_size",
+    "sanity_prompt",
+    "sanity_seed",
+    "save_ckpt_after",
+    "save_ckpt_cancel",
+    "save_ema",
+    "save_embedding_every",
+    "save_lora_after",
+    "save_lora_cancel",
+    "save_lora_during",
+    "save_lora_for_extra_net",
+    "save_preview_every",
+    "save_safetensors",
+    "save_state_after",
+    "save_state_cancel",
+    "save_state_during",
+    "scheduler",
+    "shared_diffusers_path",
+    "shuffle_tags",
+    "snapshot",
+    "split_loss",
+    "stop_text_encoder",
+    "strict_tokens",
+    "tenc_grad_clip_norm",
+    "tenc_weight_decay",
+    "tomesd",
+    "train_imagic",
+    "train_unet",
+    "train_unfrozen",
+    "txt_learning_rate",
+    "use_concepts",
+    "use_lora",
+    "use_lora_extended",
+    "use_shared_src",
+    "use_subdir",
+    "weight_decay"
 ];
 const ftOnlyKeys = [
-  'adam_beta1',
-  'adam_beta2',
-  'adam_epsilon',
-  'adam_weight_decay',
-  'allow_tf32',
-  'center_crop',
-  'checkpointing_steps',
-  'checkpoints_total_limit',
-  'dataset_config_name',
-  'dataset_name',
-  'input_pertubation',
-  'local_rank',
-  'max_grad_norm',
-  'max_train_samples',
-  'random_flip',
-  'scale_lr',
-  'seed',
-  'snr_gamma',
-  'train_data_dir',
-  'validation_epochs',
-  'validation_prompts'
+    'adam_beta1',
+    'adam_beta2',
+    'adam_epsilon',
+    'adam_weight_decay',
+    'allow_tf32',
+    'center_crop',
+    'checkpointing_steps',
+    'checkpoints_total_limit',
+    'dataset_config_name',
+    'dataset_name',
+    'input_pertubation',
+    'local_rank',
+    'max_grad_norm',
+    'max_train_samples',
+    'random_flip',
+    'scale_lr',
+    'seed',
+    'snr_gamma',
+    'train_data_dir',
+    'validation_epochs',
+    'validation_prompts'
 ];
 
 // Define the Bootstrap "md" breakpoint as a constant
@@ -122,15 +122,16 @@ const mdBreakpoint = 990;
 const dbModule = new Module("Dreambooth", "moduleDreambooth", "moon", false, 2, initDreambooth, refreshDreambooth);
 
 function initDreambooth() {
-    $("#train_mode").on("change", function () {
+    $("#db_train_mode").on("change", function () {
         switchMode($(this).val());
     });
-    switchMode("auto");
-    ftDataDir = $("#train_data_dir").fileBrowser({
+    switchMode("default");
+    ftDataDir = $("#db_train_data_dir").fileBrowser({
         "dropdown": true,
         "showInfo": false,
         "showTitle": false,
-        "showSelectButton": true});
+        "showSelectButton": true
+    });
     sendMessage("get_db_vars", {}, true).then(function (response) {
         console.log("Got DB vars: ", response);
         let attentionSelect = $("#attention");
@@ -219,6 +220,7 @@ function initDreambooth() {
         let new_elements = [];
         for (let key in defaults) {
             let params = defaults[key];
+            params["key"] = key;
             if (key.indexOf("db_") === -1) {
                 key = "db_" + key;
             }
@@ -226,13 +228,48 @@ function initDreambooth() {
             if (element.length > 0) {
                 existing_elements.push(params);
             } else {
+                if (params.hasOwnProperty("options")) params["type"] = "select";
                 new_elements.push(params);
             }
         }
+        let order = ["select", "modelSelect", "text", "str", "int", "float", "ConstrainedFloatValue", "ConstrainedIntValue", "bool"];  // Define your order
+        new_elements.sort((a, b) => {
+            let aType = a.type;
+            let bType = b.type;
+            if (aType.indexOf("modelSelect") !== -1) aType = "modelSelect";
+            if (bType.indexOf("modelSelect") !== -1) bType = "modelSelect";
+            return order.indexOf(aType) - order.indexOf(bType);
+        });
         console.log("Existing elements: ", existing_elements);
         console.log("New elements: ", new_elements);
+        let advancedForm = $("#dbAdvancedForm");
+        for (let i = 0; i < new_elements.length; i++) {
+            let newElement = createElement(new_elements[i], "db", ["dbInput"]);
+            if (newElement) {
+                advancedForm.append(newElement);
+            }
+        }
+        dreamConfig = dbModule.systemConfig;
+        showAdvanced = dreamConfig["show_advanced"];
+        if (showAdvanced) {
+            $(".db-advanced").show();
+            $(".db-basic").hide();
+            $("#hub_row").hide();
+            $("#local_row").show();
+        } else {
+            $(".db-advanced").hide();
+            $(".db-basic").show();
+        }
+        switchMode("default");
     });
 
+    $("#db_train_lora").on("click", function () {
+        if ($(this).is(":checked")) {
+            $(".loraOnly").show();
+        } else {
+            $(".loraOnly").hide();
+        }
+    });
     // utility function to convert a string to Title Case
     String.prototype.toTitleCase = function () {
         return this.replace(/\w\S*/g, function (txt) {
@@ -293,61 +330,24 @@ function initDreambooth() {
 
     registerSocketMethod("train_dreambooth", "train_dreambooth", dreamResponse);
 
-    dreamConfig = dbModule.systemConfig;
-    showAdvanced = dreamConfig["show_advanced"];
-    if (showAdvanced) {
-        $(".db-advanced").show();
-        $(".db-basic").hide();
-        $("#hub_row").hide();
-        $("#local_row").show();
-    } else {
-        $(".db-advanced").hide();
-        $(".db-basic").show();
-    }
+
 }
 
 function switchMode(mode) {
-    let showDb = (mode === "auto" || mode === "dreambooth");
+    let showDb = (mode === "default");
     if (showDb) mode = "db";
-    mode += "Only";
+    let modes = ["db", "finetune", "controlnet"];
+    if (mode === "controlnet") {
+        $("#db_train_lora").parent().hide();
+    } else {
+        $("#db_train_lora").parent().show();
+    }
     $(".dbOnly").hide();
-    $(".ftOnly").hide();
+    $(".finetuneOnly").hide();
+    $(".controlnetOnly").hide();
     $(".loraOnly").hide();
     $(".inpaintOnly").hide();
-    $("." + mode).show();
-    let dbMode = (showDb ? "block" : "none");
-    let ftMode = (showDb ? "none" : "block");
-    if (showDb) {
-        $(".dbOnly").show();
-        $(".ftOnly").hide();
-    } else {
-        $(".dbOnly").hide();
-        $(".ftOnly").show();
-    }
-    for (let i = 0; i < dbOnlyKeys.length; i++) {
-            let elem_id = dbOnlyKeys[i];
-            let elem = document.getElementById(elem_id);
-            if (elem) {
-                elem.style.display = dbMode;
-            }
-            // Get the label by it's for attribute
-            let label = document.querySelector(`label[for="${elem_id}"]`);
-            if (label) {
-                label.style.display = dbMode;
-            }
-        }
-    for (let i = 0; i < ftOnlyKeys.length; i++) {
-        let elem_id = ftOnlyKeys[i];
-        let elem = document.getElementById(elem_id);
-        if (elem) {
-            elem.style.display = ftMode;
-        }
-        // Get the label by it's for attribute
-            let label = document.querySelector(`label[for="${elem_id}"]`);
-            if (label) {
-                label.style.display = ftMode;
-            }
-    }
+    $("." + mode + "Only").show();
 }
 
 function refreshDreambooth() {
@@ -363,6 +363,7 @@ function refreshDreambooth() {
         $(".db-basic").show();
     }
 }
+
 function onDbEnd() {
     $(".dbTrainBtn").addClass("hide");
     $(".dbSettingBtn").removeClass("hide");
@@ -473,7 +474,6 @@ function onDbUpdate(data) {
     console.log("Returning: ", data);
     return data;
 }
-
 
 function setModelInfo(data) {
     const keysToSelect = ["epoch", "v2", "src", "has_ema"];
@@ -614,7 +614,6 @@ function loadDbListeners() {
 
     $("#db_train").click(function () {
         let data = getSettings();
-        data.fine_tune = $("#train_ft").is(":checked");
         console.log("Settings: ", data);
         $(".dbSettingBtn").addClass("hide");
         $(".dbTrainBtn").removeClass("hide");
@@ -638,7 +637,7 @@ function loadDbListeners() {
             console.log("Fetching model data for: ", selected);
             sendMessage("get_db_config", {model: selected}, true).then((result) => {
                 console.log("Loading settings: ", result);
-                let tgt_key = $("#train_ft").is(":checked") ? "ft_config": "db_config";
+                let tgt_key = $("#train_ft").is(":checked") ? "ft_config" : "db_config";
                 for (let key in result[tgt_key]) {
                     let value = result[tgt_key][key];
                     if (value === null || value === undefined) continue;
@@ -711,7 +710,7 @@ function loadDbListeners() {
 }
 
 function loadConcepts(concepts) {
-    let conceptsContainer = $("#advancedConcepts");
+    let conceptsContainer = $("#db_concepts_list");
     conceptsList = [];
     conceptsContainer[0].innerHTML = "";
     if (concepts.length === 0 && showAdvanced) {
@@ -741,7 +740,7 @@ function loadConcepts(concepts) {
 }
 
 function addConcept(concept = false) {
-    let conceptsContainer = $("#advancedConcepts");
+    let conceptsContainer = $("#db_concepts_list");
     let removeConcept = $("#db_concept_remove");
     let controlGroup = $("#conceptControls");
     if (showAdvanced) {
@@ -811,7 +810,7 @@ function addConcept(concept = false) {
                     aria-controls="collapse-${i}">Concept ${i}</button>
                 </h2>
                 <div id="collapse-${i}" class="accordion-collapse collapse" aria-labelledby="concept-${i}"
-                     data-bs-parent="#advancedConcepts">
+                     data-bs-parent="#db_concepts_list">
                   <div class="accordion-body">
                     <form id="form-${i}"></form>
                   </div>
@@ -941,8 +940,6 @@ function getSettings() {
     // Just create one concept if advanced is disabled
     let concepts_list = [];
 
-    let conceptElements = $('[id^="concept_"]');
-
     let to_skip = ["_container", "_range", "_number"];
     let allSettings = dbModule.getSettings(".dbInput", to_skip);
     console.log("All settings: ", allSettings);
@@ -958,8 +955,13 @@ function getSettings() {
             }
             concepts[conceptIdx][conceptKey] = allSettings[key];
         } else {
-            if (key === "is_512") key = "512_model";
-            settings[key] = allSettings[key];
+            let newKey = key;
+            // If the key starts with db_, remove it
+            if (key.indexOf("db_") === 0) {
+                newKey = key.slice(3);
+            }
+            if (key === "is_512") newKey = "512_model";
+            settings[newKey] = allSettings[key];
         }
     }
     // Convert concepts to a list
