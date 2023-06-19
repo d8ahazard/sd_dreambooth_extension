@@ -63,7 +63,7 @@ from dreambooth.utils.utils import cleanup, printm
 from helpers.log_parser import LogParser
 from helpers.mytqdm import mytqdm
 from lora_diffusion.extra_networks import apply_lora
-from lora_diffusion.lora import get_target_module, TEXT_ENCODER_DEFAULT_TARGET_REPLACE
+from lora_diffusion.lora import get_target_module, TEXT_ENCODER_DEFAULT_TARGET_REPLACE, set_lora_requires_grad
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
@@ -874,7 +874,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     logger.info(f"  Precision = {args.mixed_precision}")
     logger.info(f"  Device = {accelerator.device}")
     logger.info(f"  Optimizer = {args.optimizer}")
-    logger.info(f"  Resuming from checkpoint: {args.snapshot}")
+    logger.info(f"  Checkpoint: {args.snapshot}")
     logger.info(f"  Gradient Checkpointing: {args.gradient_checkpointing}")
     logger.info(f"  Initial learning rate = {args.learning_rate}")
     logger.info(f"  Initial txt learning rate = {txt_learning_rate}")
@@ -937,6 +937,9 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
 
             if train_unet:
                 unet.train()
+            elif args.train_lora:
+                set_lora_requires_grad(unet, False)
+
             progress_bar.set_description(f"Epoch({epoch}), Steps")
             progress_bar.set_postfix(refresh=True)
 
@@ -948,6 +951,15 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                 text_encoder.eval()
             else:
                 text_encoder.train(train_tenc)
+
+            if args.train_lora:
+                set_lora_requires_grad(text_encoder, train_tenc)
+                # We need to enable gradients on an input for gradient checkpointing to work
+                # This will not be optimized because it is not a param to optimizer
+                text_encoder.text_model.embeddings.position_embedding.requires_grad_(train_tenc)
+            else:
+                text_encoder.requires_grad_(train_tenc)
+
             if last_tenc != train_tenc:
                 last_tenc = train_tenc
                 cleanup()
@@ -995,65 +1007,65 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                     for model in accumulate_models:
                         stack.enter_context(accelerator.accumulate(model))
                         # Convert images to latent space
-                        with torch.no_grad():
-                            if args.cache_latents:
-                                latents = batch["images"].to(accelerator.device)
-                            else:
-                                latents = vae.encode(
-                                    batch["images"].to(dtype=weight_dtype)
-                                ).latent_dist.sample()
-                            latents = latents * 0.18215
+                    with torch.no_grad():
+                        if args.cache_latents:
+                            latents = batch["images"].to(accelerator.device)
+                        else:
+                            latents = vae.encode(
+                                batch["images"].to(dtype=weight_dtype)
+                            ).latent_dist.sample()
+                        latents = latents * 0.18215
 
-                        # Sample noise that we'll add to the model input
-                        noise = torch.randn_like(latents, device=latents.device)
-                        if args.offset_noise != 0:
-                            # https://www.crosslabs.org//blog/diffusion-with-offset-noise
-                            noise += args.offset_noise * torch.randn(
-                                (latents.shape[0],
-                                 latents.shape[1],
-                                 1,
-                                 1),
-                                device=latents.device
-                            )
-
-                        if args.input_pertubation:
-                            new_noise = noise + args.input_pertubation * torch.randn_like(noise)
-                        b_size, channels, height, width = latents.shape
-                        # Sample a random timestep for each image
-                        timesteps = torch.randint(
-                            0,
-                            noise_scheduler.config.num_train_timesteps,
-                            (b_size,),
+                    # Sample noise that we'll add to the model input
+                    noise = torch.randn_like(latents, device=latents.device)
+                    if args.offset_noise != 0:
+                        # https://www.crosslabs.org//blog/diffusion-with-offset-noise
+                        noise += args.offset_noise * torch.randn(
+                            (latents.shape[0],
+                             latents.shape[1],
+                             1,
+                             1),
                             device=latents.device
                         )
-                        timesteps = timesteps.long()
 
-                        # Add noise to the latents according to the noise magnitude at each timestep
-                        # (this is the forward diffusion process)
-                        if args.input_pertubation:
-                            noisy_latents = noise_scheduler.add_noise(latents, new_noise, timesteps)
-                        else:
-                            noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+                    if args.input_pertubation:
+                        new_noise = noise + args.input_pertubation * torch.randn_like(noise)
+                    b_size, channels, height, width = latents.shape
+                    # Sample a random timestep for each image
+                    timesteps = torch.randint(
+                        0,
+                        noise_scheduler.config.num_train_timesteps,
+                        (b_size,),
+                        device=latents.device
+                    )
+                    timesteps = timesteps.long()
 
-                        pad_tokens = args.pad_tokens if train_tenc else False
-                        encoder_hidden_states = encode_hidden_state(
-                            text_encoder,
-                            batch["input_ids"],
-                            pad_tokens,
-                            b_size,
-                            args.max_token_length,
-                            tokenizer.model_max_length,
-                            args.clip_skip,
+                    # Add noise to the latents according to the noise magnitude at each timestep
+                    # (this is the forward diffusion process)
+                    if args.input_pertubation:
+                        noisy_latents = noise_scheduler.add_noise(latents, new_noise, timesteps)
+                    else:
+                        noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+
+                    pad_tokens = args.pad_tokens if train_tenc else False
+                    encoder_hidden_states = encode_hidden_state(
+                        text_encoder,
+                        batch["input_ids"],
+                        pad_tokens,
+                        b_size,
+                        args.max_token_length,
+                        tokenizer.model_max_length,
+                        args.clip_skip,
+                    )
+
+                    if unet.config.in_channels > channels:
+                        needed_additional_channels = unet.config.in_channels - channels
+                        additional_latents = randn_tensor(
+                            (b_size, needed_additional_channels, height, width),
+                            device=noisy_latents.device,
+                            dtype=noisy_latents.dtype,
                         )
-
-                        if unet.config.in_channels > channels:
-                            needed_additional_channels = unet.config.in_channels - channels
-                            additional_latents = randn_tensor(
-                                (b_size, needed_additional_channels, height, width),
-                                device=noisy_latents.device,
-                                dtype=noisy_latents.dtype,
-                            )
-                            noisy_latents = torch.cat([additional_latents, noisy_latents], dim=1)
+                        noisy_latents = torch.cat([additional_latents, noisy_latents], dim=1)
                     if controlnet is not None:
                         if args.cache_latents:
                             controlnet_image = batch["control_images"].to(accelerator.device)
@@ -1134,7 +1146,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
 
                     accelerator.backward(loss)
 
-                    if accelerator.sync_gradients:
+                    if accelerator.sync_gradients and not args.train_lora:
                         params_to_clip = (
                             controlnet.parameters() if controlnet is not None else unet.parameters()
                         )
@@ -1149,123 +1161,125 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
 
                     optimizer.step()
                     lr_scheduler.step(args.train_batch_size)
+                    if args.use_ema and ema_unet is not None:
+                        ema_unet.step(unet)
 
                     optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
 
-                    allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
-                    cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
-                    lr_data = lr_scheduler.get_last_lr()
-                    last_lr = lr_data[0]
-                    last_tenc_lr = 0
-                    stats["lr_data"] = lr_data
-                    try:
-                        if len(optimizer.param_groups) > 1:
-                            last_tenc_lr = optimizer.param_groups[1]["lr"] if train_tenc else 0
-                    except:
-                        logger.debug("Exception getting tenc lr")
-                        pass
+                allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
+                cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
+                lr_data = lr_scheduler.get_last_lr()
+                last_lr = lr_data[0]
+                last_tenc_lr = 0
+                stats["lr_data"] = lr_data
+                try:
+                    if len(optimizer.param_groups) > 1:
+                        last_tenc_lr = optimizer.param_groups[1]["lr"] if train_tenc else 0
+                except:
+                    logger.debug("Exception getting tenc lr")
+                    pass
 
-                    if 'adapt' in args.optimizer:
-                        last_lr = optimizer.param_groups[0]["d"] * optimizer.param_groups[0]["lr"]
-                        if len(optimizer.param_groups) > 1:
-                            try:
-                                last_tenc_lr = optimizer.param_groups[1]["d"] * optimizer.param_groups[1]["lr"]
-                            except:
-                                logger.warning("Exception setting tenc weight decay")
-                                traceback.print_exc()
+                if 'adapt' in args.optimizer:
+                    last_lr = optimizer.param_groups[0]["d"] * optimizer.param_groups[0]["lr"]
+                    if len(optimizer.param_groups) > 1:
+                        try:
+                            last_tenc_lr = optimizer.param_groups[1]["d"] * optimizer.param_groups[1]["lr"]
+                        except:
+                            logger.warning("Exception setting tenc weight decay")
+                            traceback.print_exc()
 
-                    update_status(stats)
-                    global_step += args.train_batch_size
-                    args.revision += args.train_batch_size
-                    status.job_no += args.train_batch_size
-                    loss_step = loss.detach().item()
-                    loss_total += loss_step
+                update_status(stats)
+                global_step += args.train_batch_size
+                args.revision += args.train_batch_size
+                status.job_no += args.train_batch_size
+                loss_step = loss.detach().item()
+                loss_total += loss_step
 
-                    stats["session_step"] += args.train_batch_size
-                    stats["lifetime_step"] += args.train_batch_size
-                    stats["loss"] = loss_step
+                stats["session_step"] += args.train_batch_size
+                stats["lifetime_step"] += args.train_batch_size
+                stats["loss"] = loss_step
 
-                    logs = {
-                        "lr": float(last_lr),
-                        "loss": float(loss_step),
-                        "vram": float(cached),
-                    }
+                logs = {
+                    "lr": float(last_lr),
+                    "loss": float(loss_step),
+                    "vram": float(cached),
+                }
 
-                    stats["vram"] = logs["vram"]
-                    stats["unet_lr"] = '{:.2E}'.format(Decimal(last_lr))
-                    if stop_text_percentage != 0:
-                        stats["tenc_lr"] = '{:.2E}'.format(Decimal(last_tenc_lr))
+                stats["vram"] = logs["vram"]
+                stats["unet_lr"] = '{:.2E}'.format(Decimal(last_lr))
+                if stop_text_percentage != 0:
+                    stats["tenc_lr"] = '{:.2E}'.format(Decimal(last_tenc_lr))
 
-                    if args.split_loss and with_prior_preservation:
-                        logs["inst_loss"] = float(instance_loss.detach().item())
-                        logs["prior_loss"] = float(prior_loss.detach().item())
-                        stats["instance_loss"] = logs["inst_loss"]
-                        stats["prior_loss"] = logs["prior_loss"]
+                if args.split_loss and with_prior_preservation:
+                    logs["inst_loss"] = float(instance_loss.detach().item())
+                    logs["prior_loss"] = float(prior_loss.detach().item())
+                    stats["instance_loss"] = logs["inst_loss"]
+                    stats["prior_loss"] = logs["prior_loss"]
 
-                    if 'adapt' in args.optimizer:
-                        status.textinfo2 = (
-                            f"Loss: {'%.2f' % loss_step}, UNET DLR: {'{:.2E}'.format(Decimal(last_lr))}, TENC DLR: {'{:.2E}'.format(Decimal(last_tenc_lr))}, "
-                            f"VRAM: {allocated}/{cached} GB"
-                        )
-                    else:
-                        status.textinfo2 = (
-                            f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, "
-                            f"VRAM: {allocated}/{cached} GB"
-                        )
-
-                    progress_bar.update(args.train_batch_size)
-                    rate = progress_bar.format_dict["rate"] if "rate" in progress_bar.format_dict else None
-                    if rate is None:
-                        rate_string = ""
-                    else:
-                        if rate > 1:
-                            rate_string = f"{rate:.2f} it/s"
-                        else:
-                            rate_string = f"{1 / rate:.2f} s/it" if rate != 0 else "N/A"
-                    stats["iterations_per_second"] = rate_string
-                    progress_bar.set_postfix(**logs)
-                    accelerator.log(logs, step=args.revision)
-
-                    logs = {"epoch_loss": loss_total / len(train_dataloader)}
-                    accelerator.log(logs, step=global_step)
-                    stats["epoch_loss"] = '%.2f' % (loss_total / len(train_dataloader))
-
-                    status.job_count = max_train_steps
-                    status.job_no = global_step
-                    stats["lifetime_step"] = args.revision
-                    stats["session_step"] = global_step
-                    # status0 = f"Steps: {global_step}/{max_train_steps} (Current), {rate_string}"
-                    # status1 = f"{args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
-                    status.textinfo = (
-                        f"Steps: {global_step}/{max_train_steps} (Current), {rate_string}"
-                        f" {args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
+                if 'adapt' in args.optimizer:
+                    status.textinfo2 = (
+                        f"Loss: {'%.2f' % loss_step}, UNET DLR: {'{:.2E}'.format(Decimal(last_lr))}, TENC DLR: {'{:.2E}'.format(Decimal(last_tenc_lr))}, "
+                        f"VRAM: {allocated}/{cached} GB"
                     )
-                    update_status(stats)
+                else:
+                    status.textinfo2 = (
+                        f"Loss: {'%.2f' % loss_step}, LR: {'{:.2E}'.format(Decimal(last_lr))}, "
+                        f"VRAM: {allocated}/{cached} GB"
+                    )
 
-                    if math.isnan(loss_step):
-                        logger.warning("Loss is NaN, your model is dead. Cancelling training.")
-                        status.interrupted = True
-                        if status_handler:
-                            status_handler.end("Training interrrupted due to NaN loss.")
+                progress_bar.update(args.train_batch_size)
+                rate = progress_bar.format_dict["rate"] if "rate" in progress_bar.format_dict else None
+                if rate is None:
+                    rate_string = ""
+                else:
+                    if rate > 1:
+                        rate_string = f"{rate:.2f} it/s"
+                    else:
+                        rate_string = f"{1 / rate:.2f} s/it" if rate != 0 else "N/A"
+                stats["iterations_per_second"] = rate_string
+                progress_bar.set_postfix(**logs)
+                accelerator.log(logs, step=args.revision)
 
-                    # Log completion message
-                    if training_complete or status.interrupted:
-                        shared.in_progress = False
-                        shared.in_progress_step = 0
-                        shared.in_progress_epoch = 0
-                        logger.debug("  Training complete (step check).")
-                        if status.interrupted:
-                            state = "canceled"
-                        else:
-                            state = "complete"
+                logs = {"epoch_loss": loss_total / len(train_dataloader)}
+                accelerator.log(logs, step=global_step)
+                stats["epoch_loss"] = '%.2f' % (loss_total / len(train_dataloader))
 
-                        status.textinfo = (
-                            f"Training {state} {global_step}/{max_train_steps}, {args.revision}"
-                            f" total."
-                        )
-                        if status_handler:
-                            status_handler.end(status.textinfo)
-                        break
+                status.job_count = max_train_steps
+                status.job_no = global_step
+                stats["lifetime_step"] = args.revision
+                stats["session_step"] = global_step
+                # status0 = f"Steps: {global_step}/{max_train_steps} (Current), {rate_string}"
+                # status1 = f"{args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
+                status.textinfo = (
+                    f"Steps: {global_step}/{max_train_steps} (Current), {rate_string}"
+                    f" {args.revision}/{lifetime_step + max_train_steps} (Lifetime), Epoch: {global_epoch}"
+                )
+                update_status(stats)
+
+                if math.isnan(loss_step):
+                    logger.warning("Loss is NaN, your model is dead. Cancelling training.")
+                    status.interrupted = True
+                    if status_handler:
+                        status_handler.end("Training interrrupted due to NaN loss.")
+
+                # Log completion message
+                if training_complete or status.interrupted:
+                    shared.in_progress = False
+                    shared.in_progress_step = 0
+                    shared.in_progress_epoch = 0
+                    logger.debug("  Training complete (step check).")
+                    if status.interrupted:
+                        state = "canceled"
+                    else:
+                        state = "complete"
+
+                    status.textinfo = (
+                        f"Training {state} {global_step}/{max_train_steps}, {args.revision}"
+                        f" total."
+                    )
+                    if status_handler:
+                        status_handler.end(status.textinfo)
+                    break
             # Create the pipeline using the trained modules and save it.
             if accelerator.is_main_process:
                 accelerator.wait_for_everyone()
