@@ -229,7 +229,7 @@ def ui_gen_ckpt(model_name: str):
     printm("Config loaded")
     lora_path = config.lora_model_name
     print(f"Lora path: {lora_path}")
-    res = compile_checkpoint(model_name, lora_path, True, True, config.snapshot)
+    res = compile_checkpoint(model_name, lora_path, True, True, config.checkpoint)
     return res
 
 

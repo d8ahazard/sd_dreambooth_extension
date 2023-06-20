@@ -94,7 +94,8 @@ class BaseConfig(BaseModel):
                     field_dict['options'] = extras['choices']
                 if 'custom_type' in extras:
                     field_dict['type'] = extras['custom_type']
-
+                if 'group' in extras:
+                    field_dict['group'] = extras['group']
 
             tc_fields[f] = field_dict
         return tc_fields

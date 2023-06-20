@@ -368,9 +368,9 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
             revision=args.revision,
             torch_dtype=torch.float32,
         )
-        printm("Created tenc")
-        vae = create_vae()
-        printm("Created vae")
+    printm("Created tenc")
+    vae = create_vae()
+    printm("Created vae")
 
     unet = UNet2DConditionModel.from_pretrained(
         args.get_pretrained_model_name_or_path(),
@@ -378,6 +378,10 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
         revision=args.revision,
         torch_dtype=torch.float32,
     )
+
+    # Disable info log message
+    unet_logger = logging.getLogger('diffusers.models.unet_2d_condition')
+    unet_logger.setLevel(logging.WARNING)
 
     controlnet = None
 
@@ -486,8 +490,24 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
             text_encoder.gradient_checkpointing_enable()
 
     # move text_encoder to the appropriate device
-    if stop_text_percentage != 0:
+    if stop_text_percentage == 0:
         text_encoder.to(accelerator.device, dtype=weight_dtype)
+    # Check that all trainable models are in full precision
+    low_precision_error_string = (
+        "Please make sure to always have all model weights in full float32 precision when starting training - even if"
+        " doing mixed precision training. copy of the weights should still be float32."
+    )
+
+    if accelerator.unwrap_model(unet).dtype != torch.float32:
+        raise ValueError(
+            f"Unet loaded as datatype {accelerator.unwrap_model(unet).dtype}. {low_precision_error_string}"
+        )
+
+    if stop_text_percentage != 0 and accelerator.unwrap_model(text_encoder).dtype != torch.float32:
+        raise ValueError(
+            f"Text encoder loaded as datatype {accelerator.unwrap_model(text_encoder).dtype}."
+            f" {low_precision_error_string}"
+        )
 
     # Enable TF32 for faster training on Ampere GPUs,
     # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
@@ -495,7 +515,6 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
         torch.backends.cuda.matmul.allow_tf32 = True
 
     # Create shared unet/tenc learning rate variables
-
     learning_rate = args.learning_rate if not train_lora else args.learning_rate_lora
     txt_learning_rate = args.learning_rate_txt if not train_lora else args.learning_rate_txt
 
@@ -522,6 +541,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
             {"params": itertools.chain(controlnet.parameters()), "lr": learning_rate},
         ]
     logger.debug(f"Getting da optimizer: {args.optimizer} {learning_rate}")
+    logger.debug(f"Params to optimize: {params_to_optimize}")
     optimizer = get_optimizer(
         params_to_optimize,
         learning_rate=learning_rate,
@@ -606,11 +626,11 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
             instance_data_dir=args.train_data_dir,
             resolution=args.resolution,
             batch_size=args.train_batch_size,
-            hflip=False,
-            shuffle_tags=True,
-            strict_tokens=True,
-            dynamic_img_norm=False,
-            not_pad_tokens=False,
+            hflip=args.hflip,
+            shuffle_tags=args.shuffle_tags,
+            strict_tokens=args.strict_tokens,
+            dynamic_img_norm=args.dynamic_img_norm,
+            not_pad_tokens=not args.pad_tokens,
             model_dir=args.model_dir,
             tokenizer=tokenizer,
             vae=vae,
@@ -623,11 +643,11 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
             instance_data_dir=args.train_data_dir,
             resolution=args.resolution,
             batch_size=args.train_batch_size,
-            hflip=False,
-            shuffle_tags=True,
-            strict_tokens=True,
-            dynamic_img_norm=False,
-            not_pad_tokens=False,
+            hflip=args.hflip,
+            shuffle_tags=args.shuffle_tags,
+            strict_tokens=args.strict_tokens,
+            dynamic_img_norm=args.dynamic_img_norm,
+            not_pad_tokens=not args.pad_tokens,
             model_dir=args.model_dir,
             tokenizer=tokenizer,
             vae=vae,
@@ -799,8 +819,9 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     # Conditionally prepare the text_encoder if stop_text_percentage is not zero
     if stop_text_percentage != 0:
         text_encoder = accelerator.prepare(text_encoder)
+    else:
+        text_encoder.to(accelerator.device, dtype=weight_dtype)
 
-    text_encoder.to(accelerator.device, dtype=weight_dtype)
     if not args.cache_latents and vae is not None:
         vae.to(accelerator.device, dtype=weight_dtype)
 
@@ -835,9 +856,9 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     epoch_steps = 0
     resume_from_checkpoint = False
     # Potentially load in the weights and states from a previous save
-    if args.snapshot != "":
-        if args.snapshot != "latest":
-            path = os.path.join(args.model_dir, "checkpoints", args.snapshot)
+    if args.checkpoint != "":
+        if args.checkpoint != "latest":
+            path = os.path.join(args.model_dir, "checkpoints", args.checkpoint)
         else:
             # Get the most recent checkpoint
             dirs = os.listdir(os.path.join(args.model_dir, "checkpoints"))
@@ -847,7 +868,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
 
         if path is None:
             accelerator.print(
-                f"Checkpoint '{args.snapshot}' does not exist. Starting a new training run."
+                f"Checkpoint '{args.checkpoint}' does not exist. Starting a new training run."
             )
             resume_from_checkpoint = False
         else:
@@ -874,7 +895,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     logger.info(f"  Precision = {args.mixed_precision}")
     logger.info(f"  Device = {accelerator.device}")
     logger.info(f"  Optimizer = {args.optimizer}")
-    logger.info(f"  Checkpoint: {args.snapshot}")
+    logger.info(f"  Checkpoint: {args.checkpoint}")
     logger.info(f"  Gradient Checkpointing: {args.gradient_checkpointing}")
     logger.info(f"  Initial learning rate = {args.learning_rate}")
     logger.info(f"  Initial txt learning rate = {txt_learning_rate}")
@@ -1147,9 +1168,10 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                     accelerator.backward(loss)
 
                     if accelerator.sync_gradients and not args.train_lora:
-                        params_to_clip = (
-                            controlnet.parameters() if controlnet is not None else unet.parameters()
-                        )
+                        if args.train_mode == "controlnet":
+                            params_to_clip = (controlnet.parameters())
+                        else:
+                            params_to_clip = itertools.chain(unet.parameters(), text_encoder.parameters()) if stop_text_percentage != 0 else unet.parameters()
                         accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
                         if args.use_ema:
                             ema_unet.step(unet.parameters())
@@ -1286,9 +1308,9 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                 args.epoch += 1
                 logger.debug(f"Epoch steps: {epoch_steps}, grad steps: {grad_steps}")
                 stats["session_epoch"] = epoch
-                if epoch % args.save_embedding_every == 0 and epoch != 0:
+                if args.save_embedding_every != 0 and epoch % args.save_embedding_every == 0 and epoch != 0:
                     if accelerator.is_main_process:
-                        if args.snapshot is not None and args.snapshot != "":
+                        if args.checkpoint is not None and args.checkpoint != "":
                             save_path = os.path.join(args.model_dir, "checkpoints", f"checkpoint-{global_step}")
                         else:
                             save_path = args.pretrained_model_name_or_path

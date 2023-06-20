@@ -580,9 +580,7 @@ def get_optimizer(params_to_optimize, learning_rate: float, betas: float, weight
             return AdamW8bit(
                 params_to_optimize,
                 lr=learning_rate,
-                weight_decay=weight_decay,
-                eps=eps,
-                betas=betas,
+                weight_decay=weight_decay
             )
 
         elif optimizer == "Lion":

@@ -29,109 +29,160 @@ class TrainingConfig(BaseConfig):
     attentions = list_attention()
     optimizers = list_optimizer()
     schedulers = list_schedulers()
-    adam_beta1: float = Field(0.9, description="The beta1 parameter for the Adam optimizer.", title="Adam Beta 1", ge=0, le=1, multiple_of=0.01)
-    adam_beta2: float = Field(0.999, description="The beta2 parameter for the Adam optimizer.", title="Adam Beta 2", ge=0, le=1, multiple_of=0.001)
-    adam_epsilon: float = Field(1e-08, description="Epsilon value for the Adam optimizer.", title="Adam Epsilon")
-    adam_weight_decay: float = Field(1e-2, description="Weight decay to use.", title="Adam Weight Decay", ge=0, le=1, multiple_of=0.01)
-    attention: str = Field("xformers", description="Attention model.", choices=attentions, title="Attention")
-    cache_latents: bool = Field(True, description="Cache latents.", title="Cache Latents")
-    center_crop: bool = Field(False,
-                              description="[finetune, controlnet] Whether to center crop the input images to the resolution.", title="Center Crop")
-    checkpoints_total_limit: Optional[int] = Field(0,
-                                                   description="[finetune] Max number of checkpoints to store.", title="Checkpoints Total Limit", ge=0, le=100)
-    clip_skip: int = Field(1, description="[db] Number of CLIP Normalization layers to skip.", title="Clip Skip", ge=0, le=4)
-    cpu_only: bool = Field(False, description="[db] CPU only.", title="CPU Only")
-    concepts_list: List[Dict] = Field([], description="[db] Concepts list.", title="Concepts List")
-    concepts_path: str = Field("", description="[db] Path to the concepts.", title="Concepts Path")
-    controlnet_model_name: str = Field("", description="[controlnet] Controlnet model name.", title="Controlnet Model Name", custom_type="controlnet_modelSelect")
-    disable_class_matching: bool = Field(False, description="[db] Disable class matching.", title="Disable Class Matching")
-    disable_logging: bool = Field(False, description="Disable log parsing.", title="Disable Logging")
-    epoch: int = Field(0, description="[model] Lifetime trained epoch.", title="Epoch")
-    freeze_clip_normalization: bool = Field(False, description="Freeze clip normalization.", title="Freeze Clip Normalization")
+
+    # General
+    num_train_epochs: int = Field(100, description="Number of training epochs.", title="Num Train Epochs", ge=1, le=10000, group="General")
+    train_mode: str = Field("db", description="The training mode to use.", title="Train Mode",group="General")
+    controlnet_model_name: str = Field("", description="[controlnet] Controlnet model name.",
+                                       title="Controlnet Model Name", custom_type="controlnet_modelSelect")
+
+    use_ema: bool = Field(False, description="[db, finetune] Whether to use EMA model.", title="Use EMA",group="General")
+    train_lora: bool = Field(False, description="[db, finetune] Use LoRA.", title="Use LoRA",group="General")
+    resolution: int = Field(512, description="Maximum resolution for input images.", title="Resolution", ge=8, multiple_of=8, le=4096, group="General")
+    sample_batch_size: int = Field(1, description="Sample batch size.", title="Sample Batch Size", ge=1, le=1000, group="General")
+    pretrained_vae_name_or_path: str = Field("", description="Pretrained VAE model name or path.", title="Custom VAE",
+                                             custom_type="vae_modelSelect", group="General")
+    noise_scheduler: str = Field("DDPM", description="Noise scheduler used during training.", title="Noise Scheduler",
+                                 choices=["DDPM", "DDIM", "PNDM"], group="General")
+    train_batch_size: int = Field(1, description="Batch size for the training dataloader.", title="Train Batch Size",
+                                  gt=0, le=1000, group="General")
+
     gradient_accumulation_steps: int = Field(default=1,
-                                             description="Number of updates steps to accumulate before performing a backward/update pass.", title="Gradient Accumulation Steps", ge=1, le=1000)
-    gradient_checkpointing: bool = Field(False, description="Whether or not to use gradient checkpointing.", title="Gradient Checkpointing")
-    gradient_set_to_none: bool = Field(False, description="Whether or not to set gradients to None when zeroing.", title="Gradient Set To None")
-    graph_smoothing: float = Field(0.1, description="The scale of graph smoothing.", title="Graph Smoothing", ge=0, le=1, multiple_of=0.1)
-    hflip: bool = Field(False, description="Horizontal flip.", title="Horizontal Flip")
-    input_pertubation: float = Field(0.1, description="[finetune, controlnet] The scale of input pertubation. Recommended 0.1.", title="Input Pertubation", ge=0, le=1, multiple_of=0.1)
-    learning_rate: float = Field(5e-6, description="Initial learning rate.", title="Learning Rate")
-    learning_rate_lora: float = Field(5e-5, description="[lora] LoRA learning rate.", title="LoRA Learning Rate")
-    learning_rate_lora_txt: float = Field(5e-5, description="[lora] LoRA txt learning rate.", title="LoRA Text Learning Rate")
-    learning_rate_min: float = Field(1e-6, description="Minimum learning rate.", title="Learning Rate Min")
-    learning_rate_txt: float = Field(5e-6, description="[db] Text learning rate.", title="Text Learning Rate")
-    lifetime_revision: int = Field(0, description="Lifetime revision.", title="Lifetime Revision")
-    lora_model_name: str = Field("", description="[lora] LoRA model name.", title="LoRA Model Name", custom_type="loras_modelSelect")
-    lora_txt_rank: int = Field(4, description="[lora] LoRA text rank.", title="LoRA Text Rank", ge=2, le=16)
-    lora_txt_weight: float = Field(1.0, description="[lora] LoRA text weight.", title="LoRA Text Weight", ge=-3, le=3, multiple_of=0.1)
-    lora_unet_rank: int = Field(4, description="[lora] LoRA UNet rank.", title="LoRA UNet Rank", ge=2, le=16)
-    lora_weight: float = Field(1.0, description="[lora] LoRA weight.", title="LoRA Weight", ge=-3, le=3, multiple_of=0.1)
-    lr_factor: float = Field(0.5, description="Learning rate factor.", title="LR Factor", ge=0, le=1, multiple_of=0.1)
-    lr_num_cycles: int = Field(1, description="Learning rate cycles.", title="LR Cycle", ge=0, le=1, multiple_of=0.1)
-    lr_power: float = Field(1.0, description="Learning rate power.", title="LR Power", ge=0, le=1, multiple_of=0.1)
-    lr_scale_pos: float = Field(0.5, description="Learning rate scale position.", title="LR Scale position", ge=0, le=1, multiple_of=0.1)
-    lr_scheduler: str = Field("constant_with_warmup", description="Learning rate scheduler.", title="LR Scheduler", choices=schedulers)
-    lr_warmup_steps: int = Field(500, description="Number of steps for the warmup in the lr scheduler.", title="LR Warmup Steps", ge=0, le=10000)
-    max_grad_norm: float = Field(1.0, description="[finetune] Max gradient norm.", title="Max Gradient Norm", ge=0, le=1, multiple_of=0.01)
-    max_token_length: int = Field(75, description="[db] Max token length.", title="Max Token Length", ge=75, le=1000, multiple_of=75)
-    max_train_samples: Optional[int] = Field(default=None, description="[finetune, controlnet] For debugging purposes or quicker training, truncate the number of training examples to this value if set.", title="Max Train Samples", ge=0, le=10000)
-    mixed_precision: Optional[str] = Field("no", description="Whether to use mixed precision.", choices=precisions, title="Mixed Precision")
+                                             description="Number of updates steps to accumulate before performing a backward/update pass.",
+                                             title="Gradient Accumulation Steps", ge=1, le=1000, group="General")
+
+    # Training data
+    concepts_list: List[Dict] = Field([], description="[db] Concepts list.", title="Concepts List", group="Training Data")
+    concepts_path: str = Field("", description="[db] Path to the concepts.", title="Concepts Path", group="Training Data")
+    disable_class_matching: bool = Field(False, description="[db] Disable class matching.",
+                                         title="Disable Class Matching", group="Training Data")
+
+    train_data_dir: Optional[str] = Field(None,
+                                          description="[finetune, controlnet] A folder containing the training data.",
+                                          title="Train Data Directory", group="Training Data")
+    use_dir_tags: bool = Field(False,
+                               description="[finetune, controlnet] Whether to use the directory name as the tag. Will be appended if not found in the caption.", title="Use Directory Tags", group="Training Data")
+
+
+    # Performance
+    attention: str = Field("xformers", description="Attention model.", choices=attentions, title="Attention", group="Performance")
+    cache_latents: bool = Field(True, description="Cache latents.", title="Cache Latents", group="Performance")
+    gradient_checkpointing: bool = Field(False, description="Whether or not to use gradient checkpointing.",
+                                         title="Gradient Checkpointing", group="Performance")
+    gradient_set_to_none: bool = Field(False, description="Whether or not to set gradients to None when zeroing.",
+                                       title="Gradient Set To None", group="Performance")
+    max_grad_norm: float = Field(1.0, description="Max gradient norm.", title="Max Gradient Normalization", ge=0, le=1, multiple_of=0.01, group="Performance")
+
+    mixed_precision: Optional[str] = Field("no", description="Whether to use mixed precision.", choices=precisions, title="Mixed Precision", group="Performance")
+    cpu_only: bool = Field(False, description="CPU only.", title="CPU Only", group="Performance")
+
+    # Optimizer settings
+    optimizer: str = Field("8bit AdamW", description="Optimizer.", title="Optimizer", choices=optimizers,
+                           group="Optimizer")
+    adam_beta1: float = Field(0.9, description="The beta1 parameter for the Adam optimizer.", title="Adam Beta 1", ge=0,
+                              le=1, multiple_of=0.01, group="Optimizer")
+    adam_beta2: float = Field(0.999, description="The beta2 parameter for the Adam optimizer.", title="Adam Beta 2",
+                              ge=0, le=1, multiple_of=0.001, group="Optimizer")
+    adam_epsilon: float = Field(1e-08, description="Epsilon value for the Adam optimizer.", title="Adam Epsilon",
+                                group="Optimizer")
+    adam_weight_decay: float = Field(1e-2, description="Weight decay to use.", title="Adam Weight Decay", ge=0, le=1,
+                                     multiple_of=0.01, group="Optimizer")
+
+    # Scheduler/LR
+    learning_rate: float = Field(5e-6, description="Initial learning rate.", title="Learning Rate",
+                                 group="Learning Rate")
+    learning_rate_lora: float = Field(5e-5, description="[lora] LoRA learning rate.", title="LoRA Learning Rate",
+                                      group="Learning Rate")
+    learning_rate_lora_txt: float = Field(5e-5, description="[lora] LoRA txt learning rate.",
+                                          title="LoRA Text Learning Rate", group="Learning Rate")
+    learning_rate_min: float = Field(1e-6, description="Minimum learning rate.", title="Learning Rate Min",
+                                     group="Learning Rate")
+    learning_rate_txt: float = Field(5e-6, description="[db] Text learning rate.", title="Text Learning Rate",
+                                     group="Learning Rate")
+    lr_factor: float = Field(0.5, description="Learning rate factor.", title="LR Factor", ge=0, le=1, multiple_of=0.1,
+                             group="Learning Rate")
+    lr_num_cycles: int = Field(1, description="Learning rate cycles.", title="LR Cycle", ge=0, le=1, multiple_of=0.1,
+                               group="Learning Rate")
+    lr_power: float = Field(1.0, description="Learning rate power.", title="LR Power", ge=0, le=1, multiple_of=0.1,
+                            group="Learning Rate")
+    lr_scale_pos: float = Field(0.5, description="Learning rate scale position.", title="LR Scale position", ge=0, le=1,
+                                multiple_of=0.1, group="Learning Rate")
+    lr_scheduler: str = Field("constant_with_warmup", description="Learning rate scheduler.", title="LR Scheduler",
+                              choices=schedulers, group="Learning Rate")
+    lr_warmup_steps: int = Field(500, description="Number of steps for the warmup in the lr scheduler.",
+                                 title="LR Warmup Steps", ge=0, le=10000, group="Learning Rate")
+
+    # Preprocessing
+    dynamic_img_norm: bool = Field(False, description="Dynamic image normalization.", title="Dynamic Image Normalization", group="Preprocessing")
+    hflip: bool = Field(False, description="Horizontal flip.", title="Horizontal Flip", group="Preprocessing")
+    input_pertubation: float = Field(0.1, description="The scale of input pertubation. Recommended 0.1.", title="Input Pertubation", ge=0, le=1, multiple_of=0.1, group="Preprocessing")
+    offset_noise: float = Field(0, description="The scale of noise offset.", title="Offset Noise", ge=0, le=1, multiple_of=0.1, group="Preprocessing")
+    max_token_length: int = Field(75, description="[db] Max token length.", title="Max Token Length", ge=75, le=1000,
+                                  multiple_of=75, group="Preprocessing")
+    pad_tokens: bool = Field(True, description="Pad tokens.", title="Pad Tokens", group="Preprocessing")
+    shuffle_tags: bool = Field(True, description="Shuffle tags.", title="Shuffle Tags", group="Preprocessing")
+    strict_tokens: bool = Field(False, description="Strict tokens.", title="Strict Tokens", group="Preprocessing")
+
+    # Text encoder
+    stop_text_encoder: float = Field(1.0, description="[db] Percentage of total training to train text encoder for.", title="Stop Text Pct", ge=0, le=1, multiple_of=0.01, group="Text Encoder")
+    clip_skip: int = Field(1, description="[db] Number of CLIP Normalization layers to skip.", title="Clip Skip", ge=0, le=4, group="Text Encoder")
+    freeze_clip_normalization: bool = Field(False, description="Freeze clip normalization.",title="Freeze Clip Normalization", group="Text Encoder")
+    tenc_weight_decay: float = Field(0.01, description="[db] Text encoder weight decay.", title="Tenc Weight Decay", ge=0, le=1, multiple_of=0.01, group="Text Encoder")
+    tenc_grad_clip_norm: float = Field(0.00, description="[db] Text encoder gradient clipping norm.", title="Tenc Grad Clip Norm", ge=0, le=1, multiple_of=0.01, group="Text Encoder")
+    train_unfrozen: bool = Field(True, description="[db] Train unfrozen.",  title="Train Unfrozen", group="Text Encoder")
+
+    # LORA
+    lora_model_name: str = Field("", description="[lora] LoRA model name.", title="LoRA Model Name", custom_type="loras_modelSelect", group="LoRA")
+    lora_txt_rank: int = Field(4, description="[lora] LoRA text rank.", title="LoRA Text Rank", ge=2, le=16, group="LoRA")
+    lora_txt_weight: float = Field(1.0, description="[lora] LoRA text weight.", title="LoRA Text Weight", ge=-3, le=3, multiple_of=0.1, group="LoRA")
+    lora_unet_rank: int = Field(4, description="[lora] LoRA UNet rank.", title="LoRA UNet Rank", ge=2, le=16, group="LoRA")
+    lora_weight: float = Field(1.0, description="[lora] LoRA weight.", title="LoRA Weight", ge=-3, le=3, multiple_of=0.1, group="LoRA")
+
+    # Dreambooth
+    prior_loss_scale: bool = Field(False, description="[db] Prior loss scale.", title="Prior Loss Scale",group="Dreambooth")
+    prior_loss_target: int = Field(100, description="[db] Prior loss target.", title="Prior Loss Target", ge=0, le=1000, group="Dreambooth")
+    prior_loss_weight: float = Field(0.75, description="[db] Prior loss weight.", title="Prior Loss Weight", ge=0, le=1, multiple_of=0.1, group="Dreambooth")
+    prior_loss_weight_min: float = Field(0.1, description="[db] Minimum prior loss weight.", title="Prior Loss Minimum", ge=0, le=1, multiple_of=0.1, group="Dreambooth")
+    proportion_empty_prompts: float = Field(default=0, description="[controlnet] Proportion of image prompts to be replaced with empty strings. Defaults to 0 (no prompt replacement).", title="Pct Empty Prompts", ge=0, le=1, multiple_of=0.1, group="Dreambooth")
+    split_loss: bool = Field(True, description="[db] Split loss.", title="Split Loss", group="Dreambooth")
+    train_unet: bool = Field(True, description="[db] Train UNet.", title="Train UNet", group="Dreambooth")
+
+    # Model data, these aren't shown directly in the UI
+    epoch: int = Field(0, description="[model] Lifetime trained epoch.", title="Epoch")
+    lifetime_revision: int = Field(0, description="[model] Lifetime revision.", title="Lifetime Revision")
     model_dir: str = Field("", description="[model] Model directory.", title="Model Directory")
     model_name: str = Field("", description="[model] Model name.", title="Model Name")
     model_path: str = Field("", description="[model] Model path.", title="Model Path")
-    noise_scheduler: str = Field("DDPM", description="Noise scheduler used during training.", title="Noise Scheduler", choices=["DDPM", "DDIM", "PNDM"])
-    num_save_samples: int = Field(4, description="[finetune, controlnet] Number of samples to save.", title="Num Save Samples", ge=0, le=1000)
-    num_train_epochs: int = Field(100, description="Number of training epochs.", title="Num Train Epochs", ge=1, le=10000)
-    offset_noise: float = Field(0, description="[finetune, db] The scale of noise offset.", title="Offset Noise", ge=0, le=1, multiple_of=0.1)
-    optimizer: str = Field("8bit AdamW", description="Optimizer.", title="Optimizer", choices=optimizers)
-    pad_tokens: bool = Field(True, description="[db] Pad tokens.", title="Pad Tokens")
     pretrained_model_name_or_path: str = Field("", description="[model] Pretrained model name or path.", title="Pretrained Model Name or Path")
-    pretrained_vae_name_or_path: str = Field("", description="Pretrained VAE model name or path.", title="Custom VAE", custom_type="vae_modelSelect")
-    prior_loss_scale: bool = Field(False, description="[db] Prior loss scale.", title="Prior Loss Scale")
-    prior_loss_target: int = Field(100, description="[db] Prior loss target.", title="Prior Loss Target", ge=0, le=1000)
-    prior_loss_weight: float = Field(0.75, description="[db] Prior loss weight.", title="Prior Loss Weight", ge=0, le=1, multiple_of=0.1)
-    prior_loss_weight_min: float = Field(0.1, description="[db] Minimum prior loss weight.", title="Prior Loss Minimum", ge=0, le=1, multiple_of=0.1)
-    proportion_empty_prompts: float = Field(default=0,
-                                            description="[controlnet] Proportion of image prompts to be replaced with empty strings. Defaults to 0 (no prompt replacement).", title="Pct Empty Prompts", ge=0, le=1, multiple_of=0.1)
-    random_flip: bool = Field(False,
-                              description="[finetune] Whether to randomly flip images horizontally.", title="Random Flip")
-    resolution: int = Field(512, description="Maximum resolution for input images.", title="Resolution", ge=8, multiple_of=8, le=4096)
+
     revision: int = Field(0, description="[model] Model Revision.", title="Revision")
-    sample_batch_size: int = Field(1, description="[db] Sample batch size.", title="Sample Batch Size", ge=1, le=1000)
-    sanity_prompt: str = Field("", description="Sanity prompt.", title="Sanity Prompt") # TODO: Add to new script
-    save_on_cancel: bool = Field(True, description="Save checkpoint when training is canceled.", title="Save on Cancel")
-    save_embedding_every: int = Field(25, description="Save a checkpoint of the training state every X epochs.", title="Save Weights Frequency", ge=0, le=1000)
-    save_preview_every: int = Field(5, description="Save preview every.", title="Save Preview Frequency", ge=0, le=1000)
-    scale_lr: bool = Field(False, description="[finetune] Scale the learning rate.", title="Scale LR")
-    scheduler: str = Field("ddim", description="[model] Scheduler.", title="Scheduler", choices=["ddim", "ddpm", "pndm"])
-    seed: int = Field(420420, description="Seed for reproducability, sanity prompt.", title="Seed", ge=-1, le=21474836147)
-    shuffle_tags: bool = Field(True, description="Shuffle tags.", title="Shuffle Tags")
-    simulate_training: bool = Field(False, description="Simulate training.", title="Simulate Training")
-    snapshot: Optional[str] = Field(None,
-                                    description="Whether training should be resumed from a previous checkpoint. Use 'latest' to use the latest checkpoint in the output directory, or specify a revision.",
-                                    title="Snapshot", custom_type="snapshot_modelSelect")
-    snr_gamma: Optional[float] = Field(0,
-                                       description="[finetune, controlnet] SNR weighting gamma to be used if rebalancing the loss. Recommended value is 5.0.", title="SNR Gamma",le=0, ge=10, multiple_of=0.1)
-    split_loss: bool = Field(True, description="Split loss.", title="Split Loss")
+    scheduler: str = Field("ddim", description="[model] Scheduler.", title="Scheduler",
+                           choices=["ddim", "ddpm", "pndm"])
     src: str = Field("", description="[model] The source checkpoint.", title="Source Checkpoint")
-    stop_text_encoder: float = Field(1.0, description="[db, controlnet] Percentage of total training to train text encoder for.", title="Stop Text Pct", ge=0, le=1, multiple_of=0.01)
-    strict_tokens: bool = Field(False, description="[db, finetune, controlnet] Strict tokens.", title="Strict Tokens")
-    dynamic_img_norm: bool = Field(False, description="[db, finetune, controlnet] Dynamic image normalization.", title="Dynamic Image Normalization") # TODO: Make sure this doesn't need to be readded
-    tenc_weight_decay: float = Field(0.01, description="[db] Text encoder weight decay.", title="Tenc Weight Decay", ge=0, le=1, multiple_of=0.01)
-    tenc_grad_clip_norm: float = Field(0.00, description="[db] Text encoder gradient clipping norm.", title="Tenc Grad Clip Norm", ge=0, le=1, multiple_of=0.01)
-    tomesd: bool = Field(True, description="[db] Apply TomeSD when generating images.", title="Use TomeSD")
-    train_batch_size: int = Field(1, description="Batch size for the training dataloader.", title="Train Batch Size", gt=0, le=1000)
-    train_data_dir: Optional[str] = Field(None,
-                                          description="[finetune, controlnet] A folder containing the training data.", title="Train Data Directory")
-    train_mode: str = Field("db", description="The training mode to use.", title="Train Mode")
-    train_unet: bool = Field(True, description="[db] Train UNet.", title="Train UNet")
-    train_unfrozen: bool = Field(True, description="[db] Train unfrozen.",  title="Train Unfrozen")
-    use_ema: bool = Field(False, description="[finetune, db] Whether to use EMA model.", title="Use EMA")
-    use_dir_tags: bool = Field(False,
-                               description="[finetune, controlnet] Whether to use the directory name as the tag. Will be appended if not found in the caption.", title="Use Directory Tags")
-    train_lora: bool = Field(False, description="Use LoRA.", title="Use LoRA")
-    use_subdir: bool = Field(False, description="Use subdirectory when saving weights.", title="Use Subdirectory")
     v2: bool = Field(False, description="[model] If this is a V2 Model or not.", title="V2")
+
+    # Samples, saving
+    checkpoint: Optional[str] = Field(None,
+                                      description="Whether training should be resumed from a previous checkpoint. Use 'latest' to use the latest checkpoint in the output directory, or specify a revision.",
+                                      title="Snapshot", custom_type="snapshot_modelSelect", group="Saving")
+    checkpoints_total_limit: Optional[int] = Field(0, description="[finetune] Max number of checkpoints to store.",
+                                                   title="Checkpoints Total Limit", ge=0, le=100, group="Saving")
+    max_train_samples: Optional[int] = Field(default=None,
+                                             description="[finetune, controlnet] For debugging purposes or quicker training, truncate the number of training examples to this value if set.",
+                                             title="Max Train Samples", ge=0, le=10000, group="Saving")
+    disable_logging: bool = Field(False, description="Disable log parsing.", title="Disable Logging", group="Saving")
+    graph_smoothing: float = Field(0.1, description="The scale of graph smoothing.", title="Graph Smoothing", ge=0,
+                                   le=1, multiple_of=0.1, group="Saving")
+    num_save_samples: int = Field(4, description="[finetune, controlnet] Number of samples to save.", title="Num Save Samples", ge=0, le=1000, group="Saving")
+    sanity_prompt: str = Field("", description="Sanity prompt.", title="Sanity Prompt", group="Saving")
+    save_on_cancel: bool = Field(True, description="Save checkpoint when training is canceled.", title="Save on Cancel", group="Saving")
+    save_embedding_every: int = Field(25, description="Save a checkpoint of the training state every X epochs.", title="Save Weights Frequency", ge=0, le=1000, group="Saving")
+    save_preview_every: int = Field(5, description="Save preview every.", title="Save Preview Frequency", ge=0, le=1000, group="Saving")
+    seed: int = Field(420420, description="Seed for reproducibility, sanity prompt.", title="Seed", ge=-1, le=21474836147, group="Saving")
+    simulate_training: bool = Field(False, description="Simulate training.", title="Simulate Training", group="Saving")
+    snr_gamma: Optional[float] = Field(5.0, description="SNR weighting gamma to be used if rebalancing the loss. Recommended value is 5.0.", title="SNR Gamma", le=0, ge=10, multiple_of=0.1, group="Saving")
+    tomesd: bool = Field(True, description="Apply TomeSD when generating images.", title="Use TomeSD", group="Saving")
+
 
     def __init__(
             self,

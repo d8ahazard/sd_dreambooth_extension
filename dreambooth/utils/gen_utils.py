@@ -6,6 +6,8 @@ from typing import List
 from accelerate import Accelerator
 from transformers import AutoTokenizer
 
+from dreambooth.dataclasses.training_config import TrainingConfig
+
 try:
     from core.handlers.status import StatusHandler
 except:
@@ -28,7 +30,7 @@ def generate_dataset(instance_prompts: List[PromptData] = None, class_prompts: L
         print("Generating dataset.")
     from dreambooth.ui_functions import gr_update
 
-    args = DreamboothConfig().load_from_file(model_dir)
+    args = TrainingConfig().load_from_file(model_dir)
 
     if batch_size is None:
         batch_size = args.train_batch_size
