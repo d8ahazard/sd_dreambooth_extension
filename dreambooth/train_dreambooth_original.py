@@ -398,7 +398,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
         unet_lora_params, text_encoder_lora_params, text_encoder = load_lora(args, stop_text_percentage, unet,
                                                                              text_encoder)
 
-    elif args.use_ema:
+    elif args.train_ema:
         ema_unet = UNet2DConditionModel.from_pretrained(os.path.join(args.pretrained_model_name_or_path, "unet"))
         ema_unet = EMAModel(ema_unet.parameters(), model_cls=UNet2DConditionModel, model_config=ema_unet.config)
 
@@ -427,7 +427,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                 save_lora(args, stop_text_percentage, accelerator, unet, text_encoder, pbar2,
                           user_model_dir=user_model_dir)
             else:
-                if args.use_ema:
+                if args.train_ema:
                     ema_unet.save_pretrained(os.path.join(output_dir, "unet_ema"))
 
                 for model in models:
@@ -447,7 +447,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                     weights.pop()
 
         def load_model_hook(models, input_dir):
-            if args.use_ema:
+            if args.train_ema:
                 load_model = EMAModel.from_pretrained(os.path.join(input_dir, "unet_ema"), UNet2DConditionModel)
                 ema_unet.load_state_dict(load_model.state_dict())
                 ema_unet.to(accelerator.device)
@@ -807,7 +807,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
         controlnet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
             controlnet, optimizer, train_dataloader, lr_scheduler
         )
-    if args.use_ema:
+    if args.train_ema:
         ema_unet.model, unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
             ema_unet.model, unet, optimizer, train_dataloader, lr_scheduler
         )
@@ -901,7 +901,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     logger.info(f"  Initial txt learning rate = {txt_learning_rate}")
     logger.info(f"  Learning rate scheduler = {args.scheduler}")
 
-    logger.info(f"  EMA: {args.use_ema}")
+    logger.info(f"  EMA: {args.train_ema}")
     os.environ.__setattr__("CUDA_LAUNCH_BLOCKING", 1)
 
     # Only show the progress bar once on each machine.
@@ -1173,7 +1173,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                         else:
                             params_to_clip = itertools.chain(unet.parameters(), text_encoder.parameters()) if stop_text_percentage != 0 else unet.parameters()
                         accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
-                        if args.use_ema:
+                        if args.train_ema:
                             ema_unet.step(unet.parameters())
                         progress_bar.update(1)
                         grad_steps += 1
@@ -1183,7 +1183,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
 
                     optimizer.step()
                     lr_scheduler.step(args.train_batch_size)
-                    if args.use_ema and ema_unet is not None:
+                    if args.train_ema and ema_unet is not None:
                         ema_unet.step(unet)
 
                     optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
@@ -1319,7 +1319,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                         logger.info(f"Saved state to {save_path}")
 
                 if args.save_preview_every != 0 and epoch % args.save_preview_every == 0 and epoch != 0:
-                    if args.use_ema:
+                    if args.train_ema:
                         # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
                         ema_unet.store(unet.parameters())
                         ema_unet.copy_to(unet.parameters())
@@ -1329,7 +1329,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                         logger.warning("Validation failed.")
                         traceback.print_exc()
                         cleanup()
-                    if args.use_ema:
+                    if args.train_ema:
                         # Switch back to the original UNet parameters.
                         ema_unet.restore(unet.parameters())
     except Exception as e:
@@ -1347,7 +1347,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
             controlnet.save_pretrained(os.path.join(args.pretrained_model_name_or_path, "controlnet"))
         else:
             unet = accelerator.unwrap_model(unet)
-            if args.use_ema:
+            if args.train_ema:
                 ema_unet.copy_to(unet.parameters())
             update_status({"status": f"Training complete, saving pipeline."})
             pipeline = StableDiffusionPipeline.from_pretrained(

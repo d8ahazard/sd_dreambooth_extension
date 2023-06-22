@@ -196,7 +196,7 @@ def generate_classifiers(
         image_handler = None
         try:
             from core.handlers.images import ImageHandler
-            from core.dataclasses.infer_data import InferSettings
+            from core.dataclasses.infer_settings import InferSettings
             image_handler = ImageHandler(user_name=None)
         except:
             pass

@@ -1,227 +1,103 @@
 <div class="module" id="moduleDreambooth">
     <div class="container-fluid">
         <div class="row">
-            <div class="col-12">
-                <div class="card shadow">
-                    <div class="card-body text-center justify-between">
-                        <div class="btn-group dbButtons">
-                            <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_load_params">
-                                Load Settings
-                            </button>
-                            <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_save_config">
-                                Save Settings
-                            </button>
-                            <button class="btn btn-top btn-primary dbSettingBtn" type="button" id="db_train">Train
-                            </button>
-                            <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_gen_ckpt">
-                                Generate Ckpt
-                            </button>
-                            <button class="btn btn-top btn-secondary hide dbTrainBtn" type="button"
-                                    id="db_gen_ckpt_during"> Save Weights
-                            </button>
-                            <button class="btn btn-top btn-secondary hide dbTrainBtn" type="button"
-                                    id="db_train_sample">Generate Samples
-                            </button>
-                            <button class="btn btn-top btn-secondary hide cancelButton dbTrainBtn" type="button"
-                                    id="db_cancel">Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col-12 col-md-6 col-lg-4" id="dbModelCol">
-                <div class="card shadow" id="dreamModel">
-                    <div class="card-header">Model</div>
-                    <div class="card-body">
-                        <ul class="nav nav-tabs" id="dbModelTabs" role="tablist">
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="db-model-select-tab" data-bs-toggle="tab"
-                                        data-bs-target="#db-model-select" type="button" role="tab"
-                                        aria-controls="db-model-select"
-                                        aria-selected="true">Select
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="db-model-create-tab" data-bs-toggle="tab"
-                                        data-bs-target="#db-model-create"
-                                        type="button" role="tab" aria-controls="profile" aria-selected="false">Create
-                                </button>
-                            </li>
-                        </ul>
-                        <div class="borderSection" id="myTabContent">
-                            <div class="tab-pane fade show active" id="db-model-select" role="tabpanel"
-                                 aria-labelledby="db-model-select">
-
-                                <div class="container">
-                                    <div class="row">
-                                        <div class="col-12">
-                                            <div id="dreamModelSelect" class="modelSelect" data-model_type="dreambooth"
-                                                 data-label="Select Model"></div>
-                                        </div>
-                                        <div class="col-12">
-                                            <div id="snapshotSelect" class="modelSelect db-advanced"
-                                                 data-model_type="dreamboothSnapshot"
-                                                 data-label="Snapshot to Resume"></div>
-                                        </div>
-                                    </div>
-                                    <div class="row" style="display: none;" id="loraSelect">
-                                        <div class="col-12">
-                                            <div id="loraModelSelect" class="modelSelect" data-model_type="lora"
-                                                 data-label="Lora Model"></div>
-                                        </div>
-                                    </div>
-                                    <div class="dbModelInfo">
-
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="tab-pane fade" id="db-model-create" role="tabpanel"
-                                 aria-labelledby="db-model-create">
-                                <form>
-                                    <div class="form-group">
-                                        <label class="form-label" for="db_new_model_name">Name</label>
-                                        <input type="text" class="form-control newModelParam"
-                                               id="db_new_model_name" data-key="new_model_name">
-                                    </div>
-                                    <div class="form-group db-advanced">
-                                        <div class="form-check form-switch">
-                                            <input class="newModelParam form-check-input" type="checkbox" id="is_512"
-                                                   name="is_512" data-key="is_512" checked>
-                                            <label class="form-check-label" for="is_512">512x Base Model</label>
-                                        </div>
-                                    </div>
-                                    <div class="form-group db-advanced">
-                                        <div class="form-check form-switch">
-                                            <input class="newModelParam form-check-input" type="checkbox"
-                                                   id="create_from_hub" name="create_from_hub">
-                                            <label class="form-check-label" for="create_from_hub">Create from
-                                                Hub</label>
-                                        </div>
-                                    </div>
-                                    <div class="form-group db-advanced" style="display: none;" id="hub_row">
-                                        <label class="form-label" for="db_new_model_url">Model Path</label>
-                                        <input type="text" class="form-control newModelParam"
-                                               id="db_new_model_url"
-                                               placeholder="runwayml/stable-diffusion-v1-5"
-                                               data-key="new_model_url">
-                                        <label class="form-label" for="db_new_model_token">HuggingFace Token</label>
-                                        <input type="text" class="form-control newModelParam"
-                                               id="db_new_model_token" data-key="new_model_token"
-                                               value="">
-                                    </div>
-                                    <div class="form-group" id="local_row">
-                                        <div class="modelSelect newModelParam" id="db_new_model"
-                                             data-model_type="diffusers"
-                                             data-label="Source Checkpoint"
-                                             data-key="new_model_src"></div>
-                                    </div>
-                                    <div class="form-group db-advanced">
-                                        <div class="form-check form-switch">
-                                            <input class="newModelParam form-check-input" type="checkbox"
-                                                   id="db_use_shared_src" name="use_shared_src"
-                                                   data-key="use_shared_src">
-                                            <label class="form-check-label" for="db_use_shared_src">Use Shared Base
-                                                Model (Lora)</label>
-                                        </div>
-                                    </div>
-                                    <div class="form-group" id="shared_row" style="display: none">
-                                        <div class="sharedModelSelect modelSelect"
-                                             id="new_model_shared_src"
-                                             data-add_class="newModelParam"
-                                             data-model_type="diffusers"
-                                             data-label="LoRA Shared Diffusers Source"
-                                             data-key="new_model_shared_src"></div>
-                                    </div>
-                                    <div class="form-group db-advanced">
-                                        <div class="form-check form-switch">
-                                            <input class="newModelParam form-check-input" type="checkbox"
-                                                   id="db_train_unfrozen" data-key="train_unfrozen"
-                                                   name="train_unfrozen" checked>
-                                            <label class="form-check-label" for="db_train_unfrozen">Unfreeze</label>
-                                        </div>
-                                    </div>
-                                    <div class="form-group text-center">
-                                        <button class="btn btn-primary" type="button" id="db_create_model">Create
-                                            Model
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-12 col-md-6 col-lg-4">
-                <div class="card shadow" id="dreamSettings">
+            <div class="col-12 col-md-6 order-1 order-md-0">
+                <div class="card shadow" id="dbMainCard">
                     <div class="card-header">
-                        Input
+                        Settings
                     </div>
-                    <div class="card-body">
-                        <div class="borderSection dbOnly">
-                            <div class="row justify-content-between">
-                                <div class="col-auto sectionLabel">Concepts</div>
-                                <div class="col-auto db-advanced" id="conceptControls">
-                                    <button type="button" class="btn btn-primary btn-sm" id="db_concept_add">+</button>
-                                    <button type="button" class="btn btn-danger btn-sm hide" id="db_concept_remove">-
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div id="db_concepts_list" class="form-control"></div>
-                        </div>
-                        <div class="borderSection finetuneOnly">
-                            <div class="col-auto sectionLabel">Dataset Directory</div>
-                            <div id="db_train_data_dir"></div>
-                        </div>
-                        <div class="borderSection">
-                            <div class="sectionLabel">Settings</div>
-                            <div class="form-group db-advanced">
-                                <label class="form-label" for="db_train_mode">Training Mode</label>
-                                <select id="db_train_mode" class="form-control dbInput" name="db_train_mode">
-                                    <option value="default" selected>Default</option>
-                                    <option value="finetune">Fine-Tune</option>
-                                    <option value="controlnet">ControlNet</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <div class="form-check form-switch">
-                                    <input type="checkbox" class="form-check-input dbInput"
-                                           id="db_train_lora" name="db_train_lora">
-                                    <label for="db_train_lora">Train LoRA</label>
-                                </div>
-                            </div>
-                            <div class="db-slider dbInput" id="db_num_train_epochs" data-max="1000" data-min="1"
-                                 data-value="150" data-label="Number of Epochs"></div>
-                            <div class="db-slider dbInput db-advanced" id="db_save_embedding_every"
-                                 data-max="100"
-                                 data-min="0" data-step="1"
-                                 data-value="0" data-label="Save Weight Frequency"></div>
-                            <div class="db-slider dbInput db-advanced dbOnly" id="db_save_preview_every" data-max="100"
-                                 data-min="0" data-step="1"
-                                 data-value="0" data-label="Save Preview Frequency"></div>
-                            <div class="db-slider dbInput" id="db_resolution" data-max="1024" data-min="512"
-                                 data-step="64"
-                                 data-value="768" data-label="Maximum Resolution"></div>
-                            <div class="db-slider dbInput db-advanced" id="db_train_batch_size" data-max="100" data-min="1"
-                                 data-step="1"
-                                 data-value="5" data-label="Batch Size"></div>
-                            <div class="db-slider dbInput db-advanced" id="db_gradient_accumulation_steps" data-max="100"
-                                 data-min="1" data-step="1"
-                                 data-value="1" data-label="Gradient Accumulation Steps"></div>
-                        </div>
-                        <div class="borderSection accordion db-advanced" id="dbAdvancedAccordion">
+                    <div class="card-body" id="dbContents">
+                        <div class="accordion accordion-flush" id="dbSettingsContainer">
                             <div class="accordion-item">
-                                <div id="dbAdvancedLabel" class="sectionLabel accordion-button collapsed" type="button"
-                                     data-bs-toggle="collapse" data-bs-target="#dbAdvancedSettings"
-                                     aria-expanded="false" aria-controls="dbAdvancedSettings">Advanced
-                                </div>
-                                <div id="dbAdvancedSettings" class="accordion-collapse collapse"
-                                     aria-labelledby="dbAdvancedLabel" data-bs-parent="#dbAdvancedAccordion">
-                                    <div class="accordion-body">
-                                        <form id="dbAdvancedForm">
-                                        </form>
+                                <h2 class="accordion-header" id="dbModels">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                            data-bs-target="#dbModelsCollapse" aria-expanded="false"
+                                            aria-controls="dbModelsCollapse">
+                                        Models
+                                    </button>
+                                </h2>
+                                <div id="dbModelsCollapse" class="accordion-collapse collapse"
+                                     aria-labelledby="dbModels" data-bs-parent="dbSettingsContainer">
+                                    <ul class="nav nav-tabs" id="dbModelTabs" role="tablist">
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link active" id="db-model-select-tab"
+                                                    data-bs-toggle="tab"
+                                                    data-bs-target="#db-model-select" type="button" role="tab"
+                                                    aria-controls="db-model-select"
+                                                    aria-selected="true">Select
+                                            </button>
+                                        </li>
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link" id="db-model-create-tab" data-bs-toggle="tab"
+                                                    data-bs-target="#db-model-create"
+                                                    type="button" role="tab" aria-controls="profile"
+                                                    aria-selected="false">Create
+                                            </button>
+                                        </li>
+                                    </ul>
+                                    <div id="myTabContent">
+                                        <div class="tab-pane fade show active" id="db-model-select" role="tabpanel"
+                                             aria-labelledby="db-model-select">
+                                            <div class="container">
+                                                <div class="row mt-2">
+                                                    <div class="form-group col-12">
+                                                        <div id="dreamModelSelect" class="modelSelect"
+                                                             data-model_type="dreambooth"
+                                                             data-label="Select Model"></div>
+                                                    </div>
+                                                    <div class="form-group col-12 text-center">
+                                                        <div class="btn-group btn-group-sm" role="group">
+                                                            <div class="btn btn-primary" id="loadDbSetting">Load
+                                                                Settings
+                                                            </div>
+                                                            <div class="btn btn-secondary" id="saveDbSettings">Save
+                                                                Settings
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="tab-pane fade" id="db-model-create" role="tabpanel"
+                                             aria-labelledby="db-model-create">
+                                            <form class="row mt-2">
+                                                <div class="form-group col-12">
+                                                    <label class="form-label" for="db_new_model_name">Name</label>
+                                                    <input type="text" class="form-control newModelParam"
+                                                           id="db_new_model_name" data-key="new_model_name">
+                                                </div>
+                                                <div class="form-group col-12">
+                                                    <div class="modelSelect newModelParam" id="db_new_model"
+                                                         data-model_type="diffusers"
+                                                         data-label="Source Checkpoint"
+                                                         data-key="new_model_src"></div>
+                                                </div>
+                                                <div class="form-group db-advanced col-12 col-lg-6">
+                                                    <div class="form-check form-switch form-control">
+                                                        <input class="newModelParam form-check-input" type="checkbox"
+                                                               id="is_512"
+                                                               name="is_512" data-key="is_512" checked>
+                                                        <label class="form-check-label" for="is_512">512x Base
+                                                            Model</label>
+                                                    </div>
+                                                </div>
+                                                <div class="form-group db-advanced col-12 col-lg-6">
+                                                    <div class="form-check form-switch form-control">
+                                                        <input class="newModelParam form-check-input" type="checkbox"
+                                                               id="db_train_unfrozen" data-key="train_unfrozen"
+                                                               name="train_unfrozen" checked>
+                                                        <label class="form-check-label"
+                                                               for="db_train_unfrozen">Unfreeze</label>
+                                                    </div>
+                                                </div>
+                                                <div class="form-group text-center col-12">
+                                                    <button class="btn btn-primary" type="button" id="db_create_model">
+                                                        Create
+                                                        Model
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -229,14 +105,14 @@
                     </div>
                 </div>
             </div>
-            <div class="col-12 col-md-6 col-lg-4" id="dbStatusCol">
-                <div class="card shadow" id="dreamStatus">
+            <div class="col-12 col-md-6 order-0 order-md-1">
+                <div class="card shadow" id="dbPreviewCard">
                     <div class="card-header">
                         Output
                     </div>
-                    <div class="card-body" id="dreamStatusContainer">
-                        <div class="progressGroup" id="dreamProgress"></div>
-                        <div class="image-container inline-gallery-container" id="dreamGallery"></div>
+                    <div class="card-body">
+                        <div id="dreamProgress"></div>
+                        <div id="dreamGallery"></div>
                     </div>
                 </div>
             </div>

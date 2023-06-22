@@ -1,293 +1,15 @@
-let dreamSelect;
-let dreamConfig;
-let showAdvanced;
-let dreamProgress;
-let dreamGallery;
-let ftDataDir;
+let uiMode = "normal"; // Can be one of training, normal, or creating
+let trainMode = "Default";
+let trainLora = false;
+let trainEma = false;
 let lastConcept = -1;
 let conceptsList = [];
-let dbListenersLoaded = false;
-let dbModelCol;
-let dbStatusCol;
-let linkLR = false;
-let modelLoaded = false;
 
-const dbOnlyKeys = [
-    "cache_latents",
-    "clip_skip",
-    "concepts_list",
-    "concepts_path",
-    "custom_model_name",
-    "deterministic",
-    "disable_class_matching",
-    "disable_logging",
-    "dynamic_img_norm",
-    "ema_predict",
-    "epoch_pause_frequency",
-    "epoch_pause_time",
-    "freeze_clip_normalization",
-    "half_model",
-    "has_ema",
-    "hflip",
-    "infer_ema",
-    "initial_revision",
-    "learning_rate_min",
-    "lora_learning_rate",
-    "lora_model_name",
-    "lora_txt_learning_rate",
-    "lora_txt_rank",
-    "lora_txt_weight",
-    "lora_unet_rank",
-    "lora_use_buggy_requires_grad",
-    "lora_weight",
-    "lr_cycles",
-    "lr_factor",
-    "lr_power",
-    "lr_scale_pos",
-    "max_token_length",
-    "model_path",
-    "noise_scheduler",
-    "pad_tokens",
-    "pretrained_vae_name_or_path",
-    "prior_loss_scale",
-    "prior_loss_target",
-    "prior_loss_weight",
-    "prior_loss_weight_min",
-    "revision",
-    "sample_batch_size",
-    "sanity_prompt",
-    "sanity_seed",
-    "save_ckpt_after",
-    "save_ckpt_cancel",
-    "save_ema",
-    "save_embedding_every",
-    "save_lora_after",
-    "save_lora_cancel",
-    "save_lora_during",
-    "save_lora_for_extra_net",
-    "save_preview_every",
-    "save_safetensors",
-    "save_state_after",
-    "save_state_cancel",
-    "save_state_during",
-    "scheduler",
-    "shared_diffusers_path",
-    "shuffle_tags",
-    "snapshot",
-    "split_loss",
-    "stop_text_encoder",
-    "strict_tokens",
-    "tenc_grad_clip_norm",
-    "tenc_weight_decay",
-    "tomesd",
-    "train_imagic",
-    "train_unet",
-    "train_unfrozen",
-    "txt_learning_rate",
-    "use_concepts",
-    "use_lora",
-    "use_lora_extended",
-    "use_shared_src",
-    "use_subdir",
-    "weight_decay"
-];
-const ftOnlyKeys = [
-    'adam_beta1',
-    'adam_beta2',
-    'adam_epsilon',
-    'adam_weight_decay',
-    'allow_tf32',
-    'center_crop',
-    'checkpointing_steps',
-    'checkpoints_total_limit',
-    'dataset_config_name',
-    'dataset_name',
-    'input_pertubation',
-    'local_rank',
-    'max_grad_norm',
-    'max_train_samples',
-    'random_flip',
-    'scale_lr',
-    'seed',
-    'snr_gamma',
-    'train_data_dir',
-    'validation_epochs',
-    'validation_prompts'
-];
-
-// Define the Bootstrap "md" breakpoint as a constant
-const mdBreakpoint = 990;
-
-// Register the module with the UI. Icon is from boxicons by default.
 const dbModule = new Module("Dreambooth", "moduleDreambooth", "moon", false, 2, initDreambooth, refreshDreambooth);
 
 function initDreambooth() {
-    $("#db_train_mode").on("change", function () {
-        switchMode($(this).val());
-    });
-    switchMode("default");
-    ftDataDir = $("#db_train_data_dir").fileBrowser({
-        "dropdown": true,
-        "showInfo": false,
-        "showTitle": false,
-        "showSelectButton": true
-    });
     sendMessage("get_db_vars", {}, true).then(function (response) {
-        console.log("Got DB vars: ", response);
-        let attentionSelect = $("#attention");
-        let precisionSelect = $("#mixed_precision");
-        let schedulerSelect = $("#lr_scheduler");
-        let optimizerSelect = $("#optimizer");
-        let imgSchedulerSelect = $("#scheduler");
-
-        // iterate over each array in the response and populate the corresponding select object
-        for (let key in response) {
-            let arr = response[key];
-            let select = null;
-            switch (key) {
-                case "attentions":
-                    select = attentionSelect;
-                    break;
-                case "precisions":
-                    select = precisionSelect;
-                    break;
-                case "schedulers":
-                    select = schedulerSelect;
-                    break;
-                case "optimizers":
-                    select = optimizerSelect;
-                    break;
-                case "infer_schedulers":
-                    select = imgSchedulerSelect;
-                default:
-                    break;
-            }
-            if (select) {
-                // populate the select object with options
-                for (let i = 0; i < arr.length; i++) {
-                    let value = arr[i];
-                    let displayValue = value.replace(/_/g, " ").toTitleCase();
-                    if (key === "infer_schedulers") displayValue = value;
-                    let option = $("<option></option>").attr("value", value).text(displayValue);
-                    select.append(option);
-                }
-                // set the default selected option
-                let defaultValue = null;
-                switch (key) {
-                    case "attentions":
-                        if (arr.includes("xformers")) {
-                            defaultValue = "xformers";
-                        } else {
-                            defaultValue = "default";
-                        }
-                        break;
-                    case "precisions":
-                        if (arr.includes("bf16")) {
-                            defaultValue = "bf16";
-                        } else {
-                            defaultValue = "fp16";
-                        }
-                        break;
-                    case "schedulers":
-                        defaultValue = "constant_with_warmup";
-                        break;
-                    case "optimizers":
-                        if (arr.includes("8bit AdamW")) {
-                            defaultValue = "8bit AdamW";
-                        } else if (arr.includes("Torch AdamW")) {
-                            defaultValue = "Torch AdamW";
-                        }
-                        break;
-                    case "infer_schedulers":
-                        defaultValue = "UniPCMultistep";
-                    default:
-                        break;
-                }
-                if (defaultValue) {
-                    let defaultOption = select.find(`option[value="${defaultValue}"]`);
-                    if (defaultOption.length > 0) {
-                        defaultOption.attr("selected", true);
-                    } else {
-                        select.find("option:first").attr("selected", true);
-                    }
-                } else {
-                    select.find("option:first").attr("selected", true);
-                }
-            }
-        }
-        let defaults = response["defaults"];
-        let existing_elements = [];
-        let new_elements = [];
-        for (let key in defaults) {
-            let params = defaults[key];
-            params["key"] = key;
-            if (key.indexOf("db_") === -1) {
-                key = "db_" + key;
-            }
-            let element = $(`#${key}`);
-            if (element.length > 0) {
-                existing_elements.push(params);
-            } else {
-                if (params.hasOwnProperty("options")) params["type"] = "select";
-                new_elements.push(params);
-            }
-        }
-        let order = ["select", "modelSelect", "text", "str", "int", "float", "ConstrainedFloatValue", "ConstrainedIntValue", "bool"];  // Define your order
-        new_elements.sort((a, b) => {
-            let aType = a.type;
-            let bType = b.type;
-            if (aType.indexOf("modelSelect") !== -1) aType = "modelSelect";
-            if (bType.indexOf("modelSelect") !== -1) bType = "modelSelect";
-            return order.indexOf(aType) - order.indexOf(bType);
-        });
-        console.log("Existing elements: ", existing_elements);
-        console.log("New elements: ", new_elements);
-        let advancedForm = $("#dbAdvancedForm");
-        for (let i = 0; i < new_elements.length; i++) {
-            let newElement = createElement(new_elements[i], "db", ["dbInput"]);
-            if (newElement) {
-                advancedForm.append(newElement);
-            }
-        }
-        dreamConfig = dbModule.systemConfig;
-        showAdvanced = dreamConfig["show_advanced"];
-        if (showAdvanced) {
-            $(".db-advanced").show();
-            $(".db-basic").hide();
-            $("#hub_row").hide();
-            $("#local_row").show();
-        } else {
-            $(".db-advanced").hide();
-            $(".db-basic").show();
-        }
-        switchMode("default");
-    });
-
-    $("#db_train_lora").on("click", function () {
-        if ($(this).is(":checked")) {
-            $(".loraOnly").show();
-        } else {
-            $(".loraOnly").hide();
-        }
-    });
-    // utility function to convert a string to Title Case
-    String.prototype.toTitleCase = function () {
-        return this.replace(/\w\S*/g, function (txt) {
-            return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
-        });
-    };
-
-    $("#db_new_model").modelSelect();
-    dreamSelect = $("#dreamModelSelect").modelSelect();
-    dreamSelect.setOnChangeHandler(function (value) {
-        let md = dreamSelect.getModel();
-        console.log("DS change: ", md, value);
-        if (md && md.hasOwnProperty("data")) {
-            let data = md.data;
-            if (data.hasOwnProperty("db_config")) {
-                setModelInfo(data.db_config);
-            }
-        }
+        createElements(response["defaults"]);
     });
 
     let prog_opts = {
@@ -306,394 +28,91 @@ function initDreambooth() {
         "id": "dreamProgress"
     }
 
-    window.addEventListener('resize', handleResize);
-
-    // Call the function once on page load to ensure the correct container is shown
-    handleResize();
     let pg = document.getElementById("dreamProgress");
-    dreamProgress = new ProgressGroup(document.getElementById("dreamProgress"), prog_opts);
-
+    let dreamProgress = new ProgressGroup(document.getElementById("dreamProgress"), prog_opts);
+    $("#dreamModelSelect").modelSelect();
+    $("#db_new_model").modelSelect();
     dreamProgress.setOnCancel(onDbEnd);
     dreamProgress.setOnComplete(onDbEnd);
     dreamProgress.setOnStart(onDbStart);
     dreamProgress.setOnUpdate(onDbUpdate);
 
     // Gallery creation. Options can also be passed to .update()
-    dreamGallery = new InlineGallery(document.getElementById('dreamGallery'), gallery_opts);
+    let dreamGallery = new InlineGallery(document.getElementById('dreamGallery'), gallery_opts);
 
-
-    $(".db-slider").BootstrapSlider();
-
-    if (!dbListenersLoaded) {
-        loadDbListeners();
-    }
-
-    registerSocketMethod("train_dreambooth", "train_dreambooth", dreamResponse);
-
-
-}
-
-function switchMode(mode) {
-    let showDb = (mode === "default");
-    if (showDb) mode = "db";
-    let modes = ["db", "finetune", "controlnet"];
-    if (mode === "controlnet") {
-        $("#db_train_lora").parent().hide();
-    } else {
-        $("#db_train_lora").parent().show();
-    }
-    $(".dbOnly").hide();
-    $(".finetuneOnly").hide();
-    $(".controlnetOnly").hide();
-    $(".loraOnly").hide();
-    $(".inpaintOnly").hide();
-    $("." + mode + "Only").show();
-}
-
-function refreshDreambooth() {
-    dreamConfig = dbModule.systemConfig;
-    showAdvanced = dreamConfig["show_advanced"];
-    if (showAdvanced) {
-        $(".db-advanced").show();
-        $(".db-basic").hide();
-        $("#hub_row").hide();
-        $("#local_row").show();
-    } else {
-        $(".db-advanced").hide();
-        $(".db-basic").show();
-    }
 }
 
 function onDbEnd() {
-    $(".dbTrainBtn").addClass("hide");
-    $(".dbSettingBtn").removeClass("hide");
 }
 
 function onDbStart() {
-    $(".dbTrainBtn").removeClass("hide");
-    $(".dbSettingBtn").addClass("hide");
 }
 
-function onDbUpdate(data) {
-    console.log("onDbUpdate", data);
-    // If the data is a JSON string, parse it
-    let status = data["status"];
-    if (status.hasOwnProperty("status")) {
-        status = status["status"];
-    }
-    console.log("OG status: ", status);
+function onDbUpdate() {
+}
 
-    if (typeof status === "string" && status.startsWith("{")) {
-        let stats = JSON.parse(status);
-        console.log("Stats:", stats);
-        const progress_1_total = stats.total_session_step;
-        const progress_1_current = stats.session_step;
-        const progress_2_total = stats.steps_per_epoch;
-        const progress_2_current = stats.session_step - (stats.steps_per_epoch * stats.session_epoch);
-        // Truncate loss to 2 decimal places
-        let progressContainer = $("#dreamProgress").find(".progressContainer");
-        // If there is no .plotter class in the progressContainer, add one
-        // Check if the plotter element already exists
-        if (progressContainer.find(".plotter").length === 0) {
-            // Create the plotter element if it doesn't exist
-            progressContainer.append(`<div class="plotter" id="dbChart"></div>`);
-            let plotter = document.getElementById("dbChart");
+function refreshDreambooth() {
 
-            // Initialize the plot with the initial data for loss, VRAM usage, and learning rate
-            let data = [
-                {
-                    y: [stats.loss],
-                    x: [stats.session_step],
-                    mode: 'lines',
-                    name: 'Loss',
-                    yaxis: 'y'
-                },
-                {
-                    y: [stats.unet_lr],
-                    x: [stats.session_step],
-                    mode: 'lines',
-                    name: 'LR',
-                    yaxis: 'y2'
-                }
-            ];
+}
 
-            // Specify the layout options for the plot
-            let lr = parseFloat(stats.lr_data[0]);
-            console.log("LR: ", lr);
-            let layout = {
-                autosize: true,
-                height: 300,
-                paper_bgcolor: '#7f7f7f',
-                plot_bgcolor: '#c7c7c7',
-                yaxis: {
-                    title: 'Loss',
-                    side: 'left',
-                    range: [0, 1]
-                },
-                yaxis2: {
-                    title: 'LR',
-                    side: 'right',
-                    overlaying: 'y',
-                    range: [0, lr * 1.2]
-                },
-                xaxis: {
-                    title: 'Steps'
-                }
+function createElements(defaults) {
+    let elementGroups = {};
 
-            };
-
-            // Create the plot using Plotly.newPlot
-            Plotly.newPlot(plotter, data, layout);
-        } else {
-            let plotter = document.getElementById("dbChart");
-
-            // Retrieve the existing data from the plot
-            let existingData = plotter.data;
-
-            // Extend the existing traces by adding new points for loss, VRAM usage, and learning rate
-            let lr = parseFloat(stats.lr_data[0]);
-            console.log("LR: ", lr);
-            Plotly.extendTraces(plotter, {
-                y: [[stats.loss], [lr]],
-                x: [[stats.session_step], [stats.session_step]]
-            }, existingData.map((_, i) => i)); // Update all the existing traces
+    // Enumerate key/values in defaults
+    for (let key in defaults) {
+        let value = defaults[key];
+        let group = value.hasOwnProperty("group") ? value["group"] : "NOGROUP";
+        if (!elementGroups.hasOwnProperty(group)) {
+            elementGroups[group] = [];
         }
-
-
-        data = {
-            "status": `Steps: ${progress_1_current}/${progress_1_total} (${stats.iterations_per_second})`,
-            "status_2": `Epoch: ${stats.session_epoch}/${stats.total_session_epoch} VRAM: ${stats.vram}`,
-            "progress_1_total": progress_1_total,
-            "progress_1_current": progress_1_current,
-            "progress_2_total": progress_2_total,
-            "progress_2_current": progress_2_current,
-            "target": "dreamProgress"
-        };
-
+        value["key"] = key;
+        elementGroups[group].push(value);
     }
-    console.log("Returning: ", data);
-    return data;
-}
 
-function setModelInfo(data) {
-    const keysToSelect = ["epoch", "v2", "src", "has_ema"];
-    const keyTitles = {
-        "epoch": "Model Epoch",
-        "v2": "V2 Model",
-        "src": "Source Model",
-        "has_ema": "Has EMA"
-    }
-    const dbModelInfoElement = document.querySelector(".dbModelInfo");
-    dbModelInfoElement.innerHTML = "";
-
-    keysToSelect.forEach((key) => {
-        let value = data[key];
-        if (value === "false" || value === false) value = "False";
-        // Create a div element for the key and value
-        const divElement = document.createElement("div");
-        divElement.classList.add("m-2", "d-inline-block", "col-12");
-
-        // Create a span element for the title
-        const titleSpan = document.createElement("span");
-        titleSpan.textContent = keyTitles[key] + ": ";
-
-        // Create a span element for the value
-        const valueSpan = document.createElement("span");
-        valueSpan.textContent = value;
-        valueSpan.classList.add("fit");
-
-        // Append the title and value spans to the div element
-        divElement.appendChild(titleSpan);
-        divElement.appendChild(valueSpan);
-
-        // Append the div element to the dbModelInfoElement
-        dbModelInfoElement.appendChild(divElement);
-    });
-
-
-    fitty(".fit",
-        {
-            minSize: 10,
-            maxSize: 16,
-            multiLine: false,
+    for (let group in elementGroups) {
+        let groupElements = elementGroups[group];
+        let groupTitle = group.replace(" ", "_");
+        let groupWrap = $("<div>", {class: "accordion-item dbAccordion", id: "accordionWrap" + groupTitle});
+        let groupHeader = $("<h2>", {class: "accordion-header", id: "accordionHeader" + groupTitle});
+        let groupBtn = $("<button>", {
+            class: "accordion-button collapsed",
+            type: "button",
+            'data-bs-toggle': "collapse",
+            'data-bs-target': "#accordionGroup" + groupTitle,
+            'aria-expanded': "false",
+            'aria-controls': "accordionGroup" + groupTitle
+        }).text(group);
+        let groupDiv = $("<div>", {
+            class: "accordion-collapse collapse",
+            id: "accordionGroup" + groupTitle,
+            'aria-labelledby': "accordionHeader" + groupTitle,
+            'data-bs-parent': "#dbSettingsContainer"
         });
-    if (!modelLoaded) $("#db_load_params").click();
-}
-
-function handleResize() {
-    // Get the current window width
-    const windowWidth = window.innerWidth;
-    dbModelCol = document.getElementById("dbModelCol");
-    dbStatusCol = document.getElementById("dbStatusCol");
-
-    let statusCard = document.getElementById("dreamStatus");
-    // If the window is less than the "md" breakpoint
-    if (windowWidth <= mdBreakpoint) {
-        // Check if statusCard is not already a child of dbModelCol
-        if (dbModelCol.contains(statusCard) === false) {
-            // Append statusCard to dbModelCol
-            dbModelCol.prepend(statusCard);
-            //dbModelCol.appendChild(statusCard);
-        }
-        // Hide dbStatusCol
-        dbStatusCol.style.display = "none";
-    } else {
-        // Check if statusCard is not already a child of dbStatusCol
-        if (dbStatusCol.contains(statusCard) === false) {
-            // Append statusCard to dbStatusCol
-            dbStatusCol.appendChild(statusCard);
-        }
-        // Show dbStatusCol
-        dbStatusCol.style.display = "block";
-    }
-}
-
-function loadDbListeners() {
-    $("#db_use_shared_src").click(function () {
-        let checked = $(this).is(":checked");
-        if (checked) {
-            $("#shared_row").show();
-        } else {
-            $("#shared_row").hide();
-        }
-    });
-
-    $(".linkBtn").click(function () {
-        console.log("Linkyclicky.");
-        $(this).toggleClass("active");
-        linkLR = $(this).hasClass("active");
-        $("#txt_learning_rate").prop("disabled", linkLR);
-    });
-
-    $("#learning_rate").change(function () {
-        if (linkLR) {
-            let val = $(this).val();
-            $("#txt_learning_rate").val(val);
-        }
-    });
-
-    $("#db_create_model").click(function () {
-        let data = {};
-        $(".newModelParam").each(function (index, elem) {
-            let key = $(elem).data("key");
-            let val = $(elem).val();
-            if ($(elem).is(":checkbox")) {
-                val = $(elem).is(":checked");
+        let groupBody = $("<div>", {class: "row pt-2"});
+        groupHeader.append(groupBtn);
+        groupDiv.append(groupBody);
+        groupWrap.append(groupHeader);
+        for (let i = 0; i < groupElements.length; i++) {
+            let element = groupElements[i];
+            if (element.key === "concepts_list") {
+                let conceptContainer = createConceptContainer();
+                groupBody.append(conceptContainer);
+            } else {
+                let elementDiv = createElement(element, "db", ["dbInput"]);
+                if (elementDiv !== null) {
+                    elementDiv.classList.add("col-12", "db-group");
+                    if (groupElements.length > 1) {
+                        elementDiv.classList.add("col-lg-6");
+                    }
+                    groupBody.append(elementDiv);
+                } else {
+                    // TODO: Handle model data in UI
+                }
             }
-            if ($(elem).is(".modelSelect")) {
-                let ms = $(elem).modelSelect();
-                val = ms.getModel();
-                console.log("Got ms: ", key, val);
-            }
-            if (key === "is_512") key = "512_model";
-            data[key] = val;
-        });
-        sendMessage("create_dreambooth", data, false, "dreamProgress").then(() => {
-        });
-    });
-
-    $("#db_load_settings").click(function () {
-        let selected = dreamSelect.getModel();
-        if (selected === undefined) {
-            alert("Please select a model first!");
-        } else {
-            sendMessage("get_dreambooth_settings", {model: selected}, true).then((result) => {
-                for (let key in result) {
-                    let elem = $(`#${key}`);
-                    if (elem.length) {
-                        if (elem.is(":checkbox")) {
-                            elem.prop("checked", result[key]);
-                        } else {
-                            elem.val(result[key]);
-                        }
-                    }
-                }
-            });
         }
-    });
-
-    $("#db_train").click(function () {
-        let data = getSettings();
-        console.log("Settings: ", data);
-        $(".dbSettingBtn").addClass("hide");
-        $(".dbTrainBtn").removeClass("hide");
-        sendMessage("train_dreambooth", data, false, "dreamProgress").then((result) => {
-            $(".dbSettingBtn").addClass("hide");
-            $(".dbTrainBtn").removeClass("hide");
-        });
-    });
-
-    $("#db_cancel").click(function () {
-        $(".dbSettingBtn").removeClass("hide");
-        $(".dbTrainBtn").addClass("hide");
-    });
-
-    $("#db_load_params").click(function () {
-        modelLoaded = true;
-        let selected = $("#dreamModelSelect").modelSelect().getModel();
-        if (selected === undefined) {
-            alert("Please select a model first!");
-        } else {
-            console.log("Fetching model data for: ", selected);
-            sendMessage("get_db_config", {model: selected}, true).then((result) => {
-                console.log("Loading settings: ", result);
-                let tgt_key = $("#train_ft").is(":checked") ? "ft_config" : "db_config";
-                for (let key in result[tgt_key]) {
-                    let value = result[tgt_key][key];
-                    if (value === null || value === undefined) continue;
-                    if (key === "concepts_list") {
-                        let concepts = result[tgt_key][key];
-                        loadConcepts(concepts);
-                        continue;
-                    }
-                    let elem_selector = "#" + key;
-                    let element = $(elem_selector);
-
-                    if (element.length !== 0) {
-
-                        if (element.hasClass("db-slider")) {
-                            let slider = element.data("BootstrapSlider");
-                            if (slider) {
-                                slider.setValue(value);
-                            }
-                        } else if (element.is(":checkbox")) {
-                            element.prop("checked", value);
-                        } else if (key === "train_data_dir") {
-                            ftDataDir.setCurrentPath(value);
-                            ftDataDir.setValue(value);
-                        } else {
-                            element.val(value);
-                        }
-                    }
-
-                }
-
-            });
-        }
-    });
-
-    $("#db_save_config").click(function () {
-        let selected = $("#dreamModelSelect").modelSelect().getModel();
-        if (selected === undefined) {
-            alert("Please select a model first!");
-        } else {
-            let data = getSettings();
-            data["fine_tune"] = $("#train_ft").is(":checked");
-            sendMessage("save_db_config", data, true).then((result) => {
-                console.log("Res: ", result);
-            });
-        }
-    });
-
-    $("#db_create_from_hub").change(function () {
-        if ($(this).is(":checked")) {
-            $("#hub_row").show();
-            $("#local_row").hide();
-        } else {
-            $("#hub_row").hide();
-            $("#local_row").show();
-        }
-    });
+        groupWrap.append(groupDiv);
+        $("#dbSettingsContainer").append(groupWrap);
+    }
 
     $("#db_concept_add").click(function () {
         addConcept(false);
@@ -704,42 +123,70 @@ function loadDbListeners() {
         removeConcept();
     });
 
-    keyListener.register("ctrl+Enter", "#dreamSettings", startDreambooth);
-
-    dbListenersLoaded = true;
+    $("#db_train_mode").change(function () {
+        trainMode = $(this).val();
+        toggleElements();
+    });
+    $("#db_train_lora").change(function () {
+        trainLora = $(this).is(":checked");
+        toggleElements();
+    });
+    $("#db_train_ema").change(function () {
+        trainEma = $(this).is(":checked");
+        toggleElements();
+    });
+    toggleElements();
 }
 
-function loadConcepts(concepts) {
-    let conceptsContainer = $("#db_concepts_list");
-    conceptsList = [];
-    conceptsContainer[0].innerHTML = "";
-    if (concepts.length === 0 && showAdvanced) {
-        let removeConceptButton = $("#db_concept_remove");
-        let controlGroup = $("#conceptControls");
-        controlGroup.removeClass("btn-group");
-        removeConceptButton.addClass("hide");
-        removeConceptButton.hide();
-        return;
-    }
+function toggleElements() {
+    $(".FineTuneOnly").hide();
+    $(".DefaultOnly").hide();
+    $(".ControlNetOnly").hide();
+    let dreamConfig = dbModule.systemConfig;
+    let showAdvanced = dreamConfig["show_advanced"];
+    $(".db-advanced").toggle(showAdvanced);
+    $(".db-basic").toggle(!showAdvanced);
+    $("." + trainMode + "Only").show();
+    $(".loraOnly").toggle(trainLora);
+    $(".emaOnly").toggle(trainEma);
 
-    if (showAdvanced) {
-        for (let i = 0; i < concepts.length; i++) {
-            let concept = concepts[i];
-            addConcept(concept);
-        }
-    } else {
-        if (concepts.length > 0) {
-            let concept = concepts[0];
-            console.log("Creating existing concept: ", concept);
-            addConcept(concept);
-        } else {
-            console.log("Creating new concept");
-            addConcept(false);
-        }
-    }
+    // For each .dbAccordion, check if all .dbInput inside are hidden. If so, hide the .dbAccordion.
+    $(".dbAccordion").each(function () {
+        let accordion = $(this);
+        let allHidden = accordion.find(".db-group").filter(function () {
+            return $(this).css("display") !== "none";
+        }).length === 0;
+        accordion.toggle(!allHidden);
+    });
+}
+
+
+function createConceptContainer() {
+    // Create elements
+    let formGroupDiv = $("<div>", {class: "form-group"});
+    let rowDiv = $("<div>", {class: "row justify-content-between"});
+    let sectionLabelDiv = $("<div>", {class: "col-auto sectionLabel", text: "Concepts"});
+    let conceptControlsDiv = $("<div>", {class: "col-auto db-advanced", id: "conceptControls"});
+    let addButton = $("<button>", {type: "button", class: "btn btn-primary btn-sm", id: "db_concept_add", text: "+"});
+    let removeButton = $("<button>", {
+        type: "button",
+        class: "btn btn-danger btn-sm hide",
+        id: "db_concept_remove",
+        text: "-"
+    });
+    let conceptsListDiv = $("<div>", {id: "db_concepts_list", class: "form-control"});
+
+    // Structure elements
+    conceptControlsDiv.append(addButton, removeButton);
+    rowDiv.append(sectionLabelDiv, conceptControlsDiv);
+    formGroupDiv.append(rowDiv, conceptsListDiv);
+
+    return formGroupDiv;
 }
 
 function addConcept(concept = false) {
+    let dreamConfig = dbModule.systemConfig;
+    let showAdvanced = dreamConfig["show_advanced"];
     let conceptsContainer = $("#db_concepts_list");
     let removeConcept = $("#db_concept_remove");
     let controlGroup = $("#conceptControls");
@@ -757,7 +204,6 @@ function addConcept(concept = false) {
     let textFieldKeys = ["class_negative_prompt", "save_sample_negative_prompt", "save_sample_prompt", "save_sample_template"];
     let textKeys = ["class_prompt", "class_token", "instance_prompt", "instance_token"];
     let numberKeys = ["sample_seed"];
-    console.log("Concept: ", concept);
     if (!concept) {
         concept = {
             "class_data_dir": "",
@@ -933,55 +379,19 @@ function removeConcept() {
     loadConcepts(conceptsList);
 }
 
+
+function setListeners() {
+
+}
+
+function updateUiButtons() {
+
+}
+
+function updateUi() {
+
+}
+
 function getSettings() {
-    let settings = {};
-    settings["model"] = $("#dreamModelSelect").modelSelect().getModel();
-    settings["train_data_dir"] = ftDataDir.value;
-    // Just create one concept if advanced is disabled
-    let concepts_list = [];
-
-    let to_skip = ["_container", "_range", "_number"];
-    let allSettings = dbModule.getSettings(".dbInput", to_skip);
-    console.log("All settings: ", allSettings);
-    // Enumerate through allSettings, removing any element with "concept_" in the key and putting it in a new dict.
-    let concepts = {};
-
-    for (let key in allSettings) {
-        if (key.indexOf("concept_") !== -1) {
-            let conceptIdx = key.split("-")[0].split("_")[1];
-            let conceptKey = key.split("-")[1];
-            if (!(conceptIdx in concepts)) {
-                concepts[conceptIdx] = {};
-            }
-            concepts[conceptIdx][conceptKey] = allSettings[key];
-        } else {
-            let newKey = key;
-            // If the key starts with db_, remove it
-            if (key.indexOf("db_") === 0) {
-                newKey = key.slice(3);
-            }
-            if (key === "is_512") newKey = "512_model";
-            settings[newKey] = allSettings[key];
-        }
-    }
-    // Convert concepts to a list
-    concepts_list = [];
-    for (let key in concepts) {
-        concepts_list.push(concepts[key]);
-    }
-    settings["concepts_list"] = concepts_list;
-    console.log("Cleaned settings: ", settings);
-    if (!showAdvanced) {
-        settings["txt_learning_rate"] = settings["learning_rate"] / 2;
-    }
-    return settings;
-}
-
-
-function dreamResponse() {
-
-}
-
-function startDreambooth() {
 
 }

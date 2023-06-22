@@ -52,6 +52,7 @@ class BaseConfig(BaseModel):
 
     def get_params(self):
         tc_fields = {}
+        keys = []
         for f, data in self.__fields__.items():
             value = getattr(self, f)
             try:
@@ -96,8 +97,9 @@ class BaseConfig(BaseModel):
                     field_dict['type'] = extras['custom_type']
                 if 'group' in extras:
                     field_dict['group'] = extras['group']
-
+            keys.append(f)
             tc_fields[f] = field_dict
+        tc_fields['keys'] = keys
         return tc_fields
 
     def load_params(self, params_dict):
