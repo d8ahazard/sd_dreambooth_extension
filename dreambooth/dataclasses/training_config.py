@@ -51,8 +51,9 @@ class TrainingConfig(BaseConfig):
     train_ema: bool = Field(False,
                             description="[Default, Fine-Tune] Whether to use Estimated Moving Averages when training.",
                             title="Use EMA", group="General")
-    train_lora: bool = Field(False, description="[Default, Fine-Tune] Use LoRA.", title="Use LoRA", group="General")
 
+    train_lora: bool = Field(False, description="[Default, Fine-Tune] Use LoRA.", title="Use LoRA", group="General", toggle_fields=["lora_model_name", "lora_unet_rank", "lora_weight", "lora_txt_weight", "lora_txt_rank"], advanced=True)
+    train_oft: bool = Field(False, description="[Default, Fine-Tune] Use OFT.", title="Use OFT", group="General")
     pretrained_vae_name_or_path: str = Field("", description="Custom VAE to use for training and image generation.",
                                              title="Custom VAE", custom_type="vae_modelSelect", group="General")
     noise_scheduler: str = Field("DDPM", description="Noise scheduler used during training.", title="Noise Scheduler",
@@ -169,6 +170,14 @@ class TrainingConfig(BaseConfig):
                                 group="LoRA")
     lora_weight: float = Field(1.0, description="[lora] LoRA weight.", title="LoRA Weight", ge=-3, le=3,
                                multiple_of=0.1, group="LoRA")
+
+    # OFT
+    oft_model_name: str = Field("", description="[oft] OFT model name.", title="OFT Model Name",
+                                custom_type="ofts_modelSelect", group="OFT")
+    oft_eps: float = Field(0.1, description="[oft] The control strength of COFT. The freedom of rotation. Only has an effect if args.coft is set to True.", title="OFT Epsilon",
+                           ge=0, le=1, multiple_of=0.01, group="OFT")
+    oft_rank: int = Field(4, description="[oft] The factor to divide the orthogonal matrix to smaller blocks.", title="OFT Rank", ge=2, le=16, group="OFT")
+    oft_coft: bool = Field(True, description="[oft] Whether to use the constrainted variant of OFT.", title="USE COFT", group="OFT")
 
     # Dreambooth
     prior_loss_scale: bool = Field(False, description="[Default] Prior loss scale.", title="Prior Loss Scale",

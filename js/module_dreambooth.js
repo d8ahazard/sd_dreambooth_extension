@@ -9,6 +9,7 @@ const dbModule = new Module("Dreambooth", "moduleDreambooth", "moon", false, 2, 
 
 function initDreambooth() {
     sendMessage("get_db_vars", {}, true).then(function (response) {
+        console.log("Got DB vars: ", response);
         createElements(response["defaults"]);
     });
 
