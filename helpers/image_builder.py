@@ -10,6 +10,7 @@ from PIL import Image
 from accelerate import Accelerator
 from diffusers import DiffusionPipeline, AutoencoderKL, UNet2DConditionModel
 from diffusers.models.attention_processor import AttnProcessor2_0
+from diffusers.utils.import_utils import is_xformers_available
 
 from dreambooth import shared
 from dreambooth.dataclasses.db_config import DreamboothConfig
@@ -107,7 +108,8 @@ class ImageBuilder:
             self.image_pipe.unet.set_attn_processor(AttnProcessor2_0())
             if os.name != "nt":
                 self.image_pipe.unet = torch.compile(self.image_pipe.unet)
-            self.image_pipe.enable_xformers_memory_efficient_attention()
+            if is_xformers_available():
+                self.image_pipe.enable_xformers_memory_efficient_attention()
             self.image_pipe.vae.enable_slicing()
             tomesd.apply_patch(self.image_pipe, ratio=0.5)
             self.image_pipe.scheduler.config["solver_type"] = "bh2"
