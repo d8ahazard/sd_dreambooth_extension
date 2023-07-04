@@ -483,7 +483,7 @@ def dreambooth_api(_, app: FastAPI):
         if config is None:
             return JSONResponse(status_code=422, content={"message": "Invalid config."})
         model_dir = config.model_dir
-        models_path = os.path.join(shared.models_path, "stable-diffusion")
+        models_path = os.path.join(shared.models_path, "Stable-diffusion")
         model_base = config.custom_model_name if config.custom_model_name else config.model_name
         if config.use_subdir:
             models_path = os.path.join(models_path, model_base)
