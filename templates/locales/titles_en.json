@@ -1,7 +1,7 @@
 {
   "module": {
-    "label": "Dreambooth",
-    "title": "Fine-Tune Diffusion Models using Dreambooth"
+    "label": "Fine-Tune",
+    "title": "Fine-Tune Diffusion Models using Dreambooth and other methods."
   },
   "db_load_params": {
     "label": "Load Settings",

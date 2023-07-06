@@ -1,116 +1,147 @@
 <div class="module" id="moduleDreambooth">
     <div class="container-fluid">
         <div class="row">
-            <div class="col-12 col-md-6 order-1 order-md-0">
+            <div class="order-last order-md-first col-sm-12 col-md-6 col-lg-5 col-xl-4">
                 <div class="card shadow" id="dbMainCard">
                     <div class="card-header">
                         Settings
                     </div>
-                    <div class="card-body" id="dbContents">
-                        <div class="accordion accordion-flush" id="dbSettingsContainer">
-                            <div class="accordion-item">
-                                <h2 class="accordion-header" id="dbModels">
-                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                            data-bs-target="#dbModelsCollapse" aria-expanded="false"
-                                            aria-controls="dbModelsCollapse">
-                                        Models
-                                    </button>
-                                </h2>
-                                <div id="dbModelsCollapse" class="accordion-collapse collapse"
-                                     aria-labelledby="dbModels" data-bs-parent="dbSettingsContainer">
-                                    <ul class="nav nav-tabs" id="dbModelTabs" role="tablist">
-                                        <li class="nav-item" role="presentation">
-                                            <button class="nav-link active" id="db-model-select-tab"
-                                                    data-bs-toggle="tab"
-                                                    data-bs-target="#db-model-select" type="button" role="tab"
-                                                    aria-controls="db-model-select"
-                                                    aria-selected="true">Select
+                    <div class="card-body settingPanel" id="dbContents">
+                        <div class="col-12">
+                            <div class="btn-group dbButtons form-control justify-content-center">
+                                <button class="btn btn-top btn-primary dbSettingBtn" type="button" id="db_train">Train
+                                </button>
+                                <button class="btn btn-top btn-secondary dbSettingBtn" type="button" id="db_gen_ckpt">
+                                    Generate Ckpt
+                                </button>
+                                <button class="btn btn-top btn-secondary hide dbTrainBtn" type="button"
+                                        id="db_gen_ckpt_during"> Save Weights
+                                </button>
+                                <button class="btn btn-top btn-secondary hide dbTrainBtn" type="button"
+                                        id="db_train_sample">Generate Samples
+                                </button>
+                                <button class="btn btn-top btn-secondary hide cancelButton dbTrainBtn" type="button"
+                                        id="db_cancel">Cancel
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="accordion accordion-flush" id="dbSettingsContainer">
+                                <div class="form-group">
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header" id="dbModels">
+                                            <button class="accordion-button collapsed" type="button"
+                                                    data-bs-toggle="collapse"
+                                                    data-bs-target="#dbModelsCollapse" aria-expanded="false"
+                                                    aria-controls="dbModelsCollapse">
+                                                Models
                                             </button>
-                                        </li>
-                                        <li class="nav-item" role="presentation">
-                                            <button class="nav-link" id="db-model-create-tab" data-bs-toggle="tab"
-                                                    data-bs-target="#db-model-create"
-                                                    type="button" role="tab" aria-controls="profile"
-                                                    aria-selected="false">Create
-                                            </button>
-                                        </li>
-                                    </ul>
-                                    <div id="myTabContent">
-                                        <div class="tab-pane fade show active" id="db-model-select" role="tabpanel"
-                                             aria-labelledby="db-model-select">
-                                            <div class="container">
-                                                <div class="row mt-2">
-                                                    <div class="form-group col-12">
-                                                        <div id="dreamModelSelect" class="modelSelect"
-                                                             data-model_type="dreambooth"
-                                                             data-label="Select Model"></div>
-                                                    </div>
-                                                    <div class="form-group col-12 text-center">
-                                                        <div class="btn-group btn-group-sm" role="group">
-                                                            <div class="btn btn-primary" id="loadDbSetting">Load
-                                                                Settings
+                                        </h2>
+                                        <div id="dbModelsCollapse" class="accordion-collapse collapse"
+                                             aria-labelledby="dbModels" data-bs-parent="dbSettingsContainer">
+                                            <ul class="nav nav-tabs" id="dbModelTabs" role="tablist">
+                                                <li class="nav-item" role="presentation">
+                                                    <button class="nav-link active" id="db-model-select-tab"
+                                                            data-bs-toggle="tab"
+                                                            data-bs-target="#db-model-select" type="button" role="tab"
+                                                            aria-controls="db-model-select"
+                                                            aria-selected="true">Select
+                                                    </button>
+                                                </li>
+                                                <li class="nav-item" role="presentation">
+                                                    <button class="nav-link" id="db-model-create-tab"
+                                                            data-bs-toggle="tab"
+                                                            data-bs-target="#db-model-create"
+                                                            type="button" role="tab" aria-controls="profile"
+                                                            aria-selected="false">Create
+                                                    </button>
+                                                </li>
+                                            </ul>
+                                            <div id="myTabContent">
+                                                <div class="tab-pane fade show active" id="db-model-select"
+                                                     role="tabpanel"
+                                                     aria-labelledby="db-model-select">
+                                                    <div class="container">
+                                                        <div class="row mt-2">
+                                                            <div class="form-group col-12">
+                                                                <div id="dreamModelSelect" class="modelSelect"
+                                                                     data-model_type="dreambooth"
+                                                                     data-label="Select Model"></div>
                                                             </div>
-                                                            <div class="btn btn-secondary" id="saveDbSettings">Save
-                                                                Settings
+                                                            <div class="form-group col-12 text-center">
+                                                                <div class="btn-group btn-group-sm" role="group">
+                                                                    <div class="btn btn-primary" id="loadDbSetting">Load
+                                                                        Settings
+                                                                    </div>
+                                                                    <div class="btn btn-secondary" id="saveDbSettings">
+                                                                        Save
+                                                                        Settings
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
+                                                <div class="tab-pane fade" id="db-model-create" role="tabpanel"
+                                                     aria-labelledby="db-model-create">
+                                                    <form class="row mt-2">
+                                                        <div class="form-group col-12">
+                                                            <label class="form-label"
+                                                                   for="db_new_model_name">Name</label>
+                                                            <input type="text" class="form-control newModelParam"
+                                                                   id="db_new_model_name" data-key="new_model_name">
+                                                        </div>
+                                                        <div class="form-group col-12">
+                                                            <div class="modelSelect newModelParam" id="db_new_model"
+                                                                 data-model_type="diffusers"
+                                                                 data-label="Source Checkpoint"
+                                                                 data-key="new_model_src"></div>
+                                                        </div>
+                                                        <div class="form-group db-advanced col-12 col-lg-6">
+                                                            <div class="form-check form-switch form-control">
+                                                                <input class="newModelParam form-check-input"
+                                                                       type="checkbox"
+                                                                       id="is_512"
+                                                                       name="is_512" data-key="is_512" checked>
+                                                                <label class="form-check-label" for="is_512">512x Base
+                                                                    Model</label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="form-group db-advanced col-12 col-lg-6">
+                                                            <div class="form-check form-switch form-control">
+                                                                <input class="newModelParam form-check-input"
+                                                                       type="checkbox"
+                                                                       id="db_train_unfrozen" data-key="train_unfrozen"
+                                                                       name="train_unfrozen" checked>
+                                                                <label class="form-check-label"
+                                                                       for="db_train_unfrozen">Unfreeze</label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="form-group text-center col-12">
+                                                            <button class="btn btn-primary" type="button"
+                                                                    id="db_create_model">
+                                                                Create
+                                                                Model
+                                                            </button>
+                                                        </div>
+                                                    </form>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div class="tab-pane fade" id="db-model-create" role="tabpanel"
-                                             aria-labelledby="db-model-create">
-                                            <form class="row mt-2">
-                                                <div class="form-group col-12">
-                                                    <label class="form-label" for="db_new_model_name">Name</label>
-                                                    <input type="text" class="form-control newModelParam"
-                                                           id="db_new_model_name" data-key="new_model_name">
-                                                </div>
-                                                <div class="form-group col-12">
-                                                    <div class="modelSelect newModelParam" id="db_new_model"
-                                                         data-model_type="diffusers"
-                                                         data-label="Source Checkpoint"
-                                                         data-key="new_model_src"></div>
-                                                </div>
-                                                <div class="form-group db-advanced col-12 col-lg-6">
-                                                    <div class="form-check form-switch form-control">
-                                                        <input class="newModelParam form-check-input" type="checkbox"
-                                                               id="is_512"
-                                                               name="is_512" data-key="is_512" checked>
-                                                        <label class="form-check-label" for="is_512">512x Base
-                                                            Model</label>
-                                                    </div>
-                                                </div>
-                                                <div class="form-group db-advanced col-12 col-lg-6">
-                                                    <div class="form-check form-switch form-control">
-                                                        <input class="newModelParam form-check-input" type="checkbox"
-                                                               id="db_train_unfrozen" data-key="train_unfrozen"
-                                                               name="train_unfrozen" checked>
-                                                        <label class="form-check-label"
-                                                               for="db_train_unfrozen">Unfreeze</label>
-                                                    </div>
-                                                </div>
-                                                <div class="form-group text-center col-12">
-                                                    <button class="btn btn-primary" type="button" id="db_create_model">
-                                                        Create
-                                                        Model
-                                                    </button>
-                                                </div>
-                                            </form>
                                         </div>
                                     </div>
                                 </div>
+                                <div class="form-group row" id="dbGeneral"></div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-12 col-md-6 order-0 order-md-1">
+            <div class="order-first order-md-last col-sm-12 col-md-6 col-lg-7 col-xl-8">
                 <div class="card shadow" id="dbPreviewCard">
                     <div class="card-header">
                         Output
                     </div>
-                    <div class="card-body">
+                    <div class="card-body fullPanel">
                         <div id="dreamProgress"></div>
                         <div id="dreamGallery"></div>
                     </div>

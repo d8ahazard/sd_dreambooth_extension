@@ -4,8 +4,9 @@ let trainLora = false;
 let trainEma = false;
 let lastConcept = -1;
 let conceptsList = [];
+let dbListenersLoaded = false;
 
-const dbModule = new Module("Dreambooth", "moduleDreambooth", "moon", false, 2, initDreambooth, refreshDreambooth);
+const dbModule = new Module("Training", "moduleDreambooth", "moon", false, 2, initDreambooth, refreshDreambooth);
 
 function initDreambooth() {
     sendMessage("get_db_vars", {}, true).then(function (response) {
@@ -40,7 +41,7 @@ function initDreambooth() {
 
     // Gallery creation. Options can also be passed to .update()
     let dreamGallery = new InlineGallery(document.getElementById('dreamGallery'), gallery_opts);
-
+    loadDbListeners();
 }
 
 function onDbEnd() {
@@ -72,27 +73,38 @@ function createElements(defaults) {
 
     for (let group in elementGroups) {
         let groupElements = elementGroups[group];
+
         let groupTitle = group.replace(" ", "_");
-        let groupWrap = $("<div>", {class: "accordion-item dbAccordion", id: "accordionWrap" + groupTitle});
-        let groupHeader = $("<h2>", {class: "accordion-header", id: "accordionHeader" + groupTitle});
-        let groupBtn = $("<button>", {
-            class: "accordion-button collapsed",
-            type: "button",
-            'data-bs-toggle': "collapse",
-            'data-bs-target': "#accordionGroup" + groupTitle,
-            'aria-expanded': "false",
-            'aria-controls': "accordionGroup" + groupTitle
-        }).text(group);
-        let groupDiv = $("<div>", {
-            class: "accordion-collapse collapse",
-            id: "accordionGroup" + groupTitle,
-            'aria-labelledby': "accordionHeader" + groupTitle,
-            'data-bs-parent': "#dbSettingsContainer"
-        });
-        let groupBody = $("<div>", {class: "row pt-2"});
-        groupHeader.append(groupBtn);
-        groupDiv.append(groupBody);
-        groupWrap.append(groupHeader);
+        let groupBody = document.getElementById("db" + groupTitle);
+        let groupWrap = false;
+        let groupDiv = false;
+        console.log("Group: ", group, groupTitle, groupBody);
+        if (groupBody === null) {
+            console.log("Creating group: ", groupTitle);
+            groupWrap = $("<div>", {class: "accordion-item dbAccordion", id: "accordionWrap" + groupTitle});
+            let groupHeader = $("<h2>", {class: "accordion-header", id: "accordionHeader" + groupTitle});
+            let groupBtn = $("<button>", {
+                class: "accordion-button collapsed",
+                type: "button",
+                'data-bs-toggle': "collapse",
+                'data-bs-target': "#accordionGroup" + groupTitle,
+                'aria-expanded': "false",
+                'aria-controls': "accordionGroup" + groupTitle
+            }).text(group);
+            let groupDiv = $("<div>", {
+                class: "accordion-collapse collapse",
+                id: "accordionGroup" + groupTitle,
+                'aria-labelledby': "accordionHeader" + groupTitle,
+                'data-bs-parent': "#dbSettingsContainer"
+            });
+            groupBody = $("<div>", {class: "row pt-2", id: "db" + groupTitle});
+            groupHeader.append(groupBtn);
+            groupDiv.append(groupBody);
+            groupWrap.append(groupHeader);
+            groupWrap.append(groupDiv);
+            $("#dbSettingsContainer").append(groupWrap);
+        }
+
         for (let i = 0; i < groupElements.length; i++) {
             let element = groupElements[i];
             if (element.key === "concepts_list") {
@@ -103,7 +115,7 @@ function createElements(defaults) {
                 if (elementDiv !== null) {
                     elementDiv.classList.add("col-12", "db-group");
                     if (groupElements.length > 1) {
-                        elementDiv.classList.add("col-lg-6");
+                        elementDiv.classList.add("col-md-6");
                     }
                     groupBody.append(elementDiv);
                 } else {
@@ -111,31 +123,9 @@ function createElements(defaults) {
                 }
             }
         }
-        groupWrap.append(groupDiv);
-        $("#dbSettingsContainer").append(groupWrap);
+
     }
 
-    $("#db_concept_add").click(function () {
-        addConcept(false);
-    });
-
-    $("#db_concept_remove").click(function (event) {
-        event.preventDefault();
-        removeConcept();
-    });
-
-    $("#db_train_mode").change(function () {
-        trainMode = $(this).val();
-        toggleElements();
-    });
-    $("#db_train_lora").change(function () {
-        trainLora = $(this).is(":checked");
-        toggleElements();
-    });
-    $("#db_train_ema").change(function () {
-        trainEma = $(this).is(":checked");
-        toggleElements();
-    });
     toggleElements();
 }
 
@@ -381,9 +371,204 @@ function removeConcept() {
 }
 
 
-function setListeners() {
+function loadDbListeners() {
+    $("#db_train_mode").change(function () {
+        trainMode = $(this).val();
+        toggleElements();
+    });
+    $("#db_train_lora").change(function () {
+        trainLora = $(this).is(":checked");
+        toggleElements();
+    });
+    $("#db_train_ema").change(function () {
+        trainEma = $(this).is(":checked");
+        toggleElements();
+    });
+    $("#db_use_shared_src").click(function () {
+        let checked = $(this).is(":checked");
+        if (checked) {
+            $("#shared_row").show();
+        } else {
+            $("#shared_row").hide();
+        }
+    });
+
+    $(".linkBtn").click(function () {
+        console.log("Linkyclicky.");
+        $(this).toggleClass("active");
+        linkLR = $(this).hasClass("active");
+        $("#txt_learning_rate").prop("disabled", linkLR);
+    });
+
+    $("#learning_rate").change(function () {
+        if (linkLR) {
+            let val = $(this).val();
+            $("#txt_learning_rate").val(val);
+        }
+    });
+
+    $("#db_create_model").click(function () {
+        let data = {};
+        $(".newModelParam").each(function (index, elem) {
+            let key = $(elem).data("key");
+            let val = $(elem).val();
+            if ($(elem).is(":checkbox")) {
+                val = $(elem).is(":checked");
+            }
+            if ($(elem).is(".modelSelect")) {
+                let ms = $(elem).modelSelect();
+                val = ms.getModel();
+                console.log("Got ms: ", key, val);
+            }
+            if (key === "is_512") key = "512_model";
+            data[key] = val;
+        });
+        sendMessage("create_dreambooth", data, false, "dreamProgress").then(() => {
+        });
+    });
+
+    $("#db_load_settings").click(function () {
+        let selected = dreamSelect.getModel();
+        if (selected === undefined) {
+            alert("Please select a model first!");
+        } else {
+            sendMessage("get_dreambooth_settings", {model: selected}, true).then((result) => {
+                for (let key in result) {
+                    let elem = $(`#${key}`);
+                    if (elem.length) {
+                        if (elem.is(":checkbox")) {
+                            elem.prop("checked", result[key]);
+                        } else {
+                            elem.val(result[key]);
+                        }
+                    }
+                }
+            });
+        }
+    });
+
+    $("#db_train").click(function () {
+        let data = getSettings();
+        console.log("Settings: ", data);
+        $(".dbSettingBtn").addClass("hide");
+        $(".dbTrainBtn").removeClass("hide");
+        sendMessage("train_dreambooth", data, false, "dreamProgress").then((result) => {
+            $(".dbSettingBtn").addClass("hide");
+            $(".dbTrainBtn").removeClass("hide");
+        });
+    });
+
+    $("#db_cancel").click(function () {
+        $(".dbSettingBtn").removeClass("hide");
+        $(".dbTrainBtn").addClass("hide");
+    });
+
+    $("#db_load_params").click(function () {
+        modelLoaded = true;
+        let selected = $("#dreamModelSelect").modelSelect().getModel();
+        if (selected === undefined) {
+            alert("Please select a model first!");
+        } else {
+            console.log("Fetching model data for: ", selected);
+            sendMessage("get_db_config", {model: selected}, true).then((result) => {
+                console.log("Loading settings: ", result);
+                let tgt_key = $("#train_ft").is(":checked") ? "ft_config" : "db_config";
+                for (let key in result[tgt_key]) {
+                    let value = result[tgt_key][key];
+                    if (value === null || value === undefined) continue;
+                    if (key === "concepts_list") {
+                        let concepts = result[tgt_key][key];
+                        loadConcepts(concepts);
+                        continue;
+                    }
+                    let elem_selector = "#" + key;
+                    let element = $(elem_selector);
+
+                    if (element.length !== 0) {
+
+                        if (element.hasClass("db-slider")) {
+                            let slider = element.data("BootstrapSlider");
+                            if (slider) {
+                                slider.setValue(value);
+                            }
+                        } else if (element.is(":checkbox")) {
+                            element.prop("checked", value);
+                        } else if (key === "train_data_dir") {
+                            ftDataDir.setCurrentPath(value);
+                            ftDataDir.setValue(value);
+                        } else {
+                            element.val(value);
+                        }
+                    }
+
+                }
+
+            });
+        }
+    });
+
+    $("#db_save_config").click(function () {
+        let selected = $("#dreamModelSelect").modelSelect().getModel();
+        if (selected === undefined) {
+            alert("Please select a model first!");
+        } else {
+            let data = getSettings();
+            data["fine_tune"] = $("#train_ft").is(":checked");
+            sendMessage("save_db_config", data, true).then((result) => {
+                console.log("Res: ", result);
+            });
+        }
+    });
+
+    $("#db_create_from_hub").change(function () {
+        if ($(this).is(":checked")) {
+            $("#hub_row").show();
+            $("#local_row").hide();
+        } else {
+            $("#hub_row").hide();
+            $("#local_row").show();
+        }
+    });
+
+    $("#db_concept_add").click(function () {
+        addConcept(false);
+    });
+
+    $("#db_concept_remove").click(function (event) {
+        event.preventDefault();
+        removeConcept();
+    });
+
+    keyListener.register("ctrl+Enter", "#dreamSettings", startTraining);
+
+    dbListenersLoaded = true;
+}
+
+function startTraining() {
+    
+}
+
+function loadConcepts(concepts) {
+    let conceptsContainer = $("#db_concepts_list");
+    conceptsList = [];
+    conceptsContainer[0].innerHTML = "";
+    if (concepts.length === 0) {
+        let removeConceptButton = $("#db_concept_remove");
+        let controlGroup = $("#conceptControls");
+        controlGroup.removeClass("btn-group");
+        removeConceptButton.addClass("hide");
+        removeConceptButton.hide();
+        return;
+    }
+
+
+    for (let i = 0; i < concepts.length; i++) {
+        let concept = concepts[i];
+        addConcept(concept);
+    }
 
 }
+
 
 function updateUiButtons() {
 

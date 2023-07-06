@@ -34,30 +34,32 @@ class TrainingConfig(BaseConfig):
     train_mode: str = Field("Default", description="The training mode to use.", title="Train Mode", group="General",
                             choices=["Default", "Fine-Tune", "ControlNet"])
     controlnet_model_name: str = Field("", description="[ControlNet] Controlnet model name.",
-                                       title="Controlnet Model Name", custom_type="controlnet_modelSelect",
+                                       title="Controlnet Model", custom_type="controlnet_modelSelect",
                                        group="General")
 
-    num_train_epochs: int = Field(100, description="Number of training epochs.", title="Num Train Epochs", ge=1,
+    num_train_epochs: int = Field(100, description="Number of training epochs.", title="Epochs", ge=1,
                                   le=10000, group="General")
-    train_batch_size: int = Field(1, description="Batch size for the training dataloader.", title="Train Batch Size",
+    train_batch_size: int = Field(1, description="Batch size for the training dataloader.", title="Batch Size",
                                   gt=0, le=1000, group="General")
-    gradient_accumulation_steps: int = Field(default=1,
-                                             description="Number of updates steps to accumulate before performing a backward/update pass.",
-                                             title="Grad Steps", ge=1, le=1000, group="General")
     resolution: int = Field(512, description="Maximum resolution for input images.", title="Max Resolution", ge=8,
                             multiple_of=8, le=4096, group="General")
+
+    gradient_accumulation_steps: int = Field(default=1,
+                                             description="Number of updates steps to accumulate before performing a backward/update pass.",
+                                             title="Grad Steps", ge=1, le=1000, group="Advanced")
     sample_batch_size: int = Field(1, description="Sample batch size.", title="Sample Batch Size", ge=1, le=1000,
-                                   group="General")
+                                   group="Advanced")
+    pretrained_vae_name_or_path: str = Field("", description="Custom VAE to use for training and image generation.",
+                                             title="Custom VAE", custom_type="vae_modelSelect", group="Advanced")
+    noise_scheduler: str = Field("DDPM", description="Noise scheduler used during training.", title="Noise Scheduler",
+                                 choices=["DDPM", "DDIM", "PNDM"], group="Advanced")
+
     train_ema: bool = Field(False,
                             description="[Default, Fine-Tune] Whether to use Estimated Moving Averages when training.",
-                            title="Use EMA", group="General")
+                            title="Use EMA", group="Advanced")
 
-    train_lora: bool = Field(False, description="[Default, Fine-Tune] Use LoRA.", title="Use LoRA", group="General", toggle_fields=["lora_model_name", "lora_unet_rank", "lora_weight", "lora_txt_weight", "lora_txt_rank"], advanced=True)
-    train_oft: bool = Field(False, description="[Default, Fine-Tune] Use OFT.", title="Use OFT", group="General")
-    pretrained_vae_name_or_path: str = Field("", description="Custom VAE to use for training and image generation.",
-                                             title="Custom VAE", custom_type="vae_modelSelect", group="General")
-    noise_scheduler: str = Field("DDPM", description="Noise scheduler used during training.", title="Noise Scheduler",
-                                 choices=["DDPM", "DDIM", "PNDM"], group="General")
+    train_lora: bool = Field(False, description="[Default, Fine-Tune] Use LoRA.", title="Use LoRA", group="Advanced", toggle_fields=["lora_model_name", "lora_unet_rank", "lora_weight", "lora_txt_weight", "lora_txt_rank"], advanced=True)
+    train_oft: bool = Field(False, description="[Default, Fine-Tune] Use OFT.", title="Use OFT", group="Advanced")
 
     # Training data
     concepts_list: List[Dict] = Field([], description="[Default] Concepts list.", title="Concepts List",
