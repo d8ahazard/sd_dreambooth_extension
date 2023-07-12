@@ -32,7 +32,7 @@ class TrainingConfig(BaseConfig):
 
     # General
     train_mode: str = Field("Default", description="The training mode to use.", title="Train Mode", group="General",
-                            choices=["Default", "Fine-Tune", "ControlNet"])
+                            choices=["Default", "Fine-Tune", "ControlNet", "SDXL"])
     controlnet_model_name: str = Field("", description="[ControlNet] Controlnet model name.",
                                        title="Controlnet Model", custom_type="controlnet_modelSelect",
                                        group="General")
@@ -55,16 +55,16 @@ class TrainingConfig(BaseConfig):
                                  choices=["DDPM", "DDIM", "PNDM"], group="Advanced")
 
     train_ema: bool = Field(False,
-                            description="[Default, Fine-Tune] Whether to use Estimated Moving Averages when training.",
+                            description="[Default, Fine-Tune, SDXL] Whether to use Estimated Moving Averages when training.",
                             title="Use EMA", group="Advanced")
 
-    train_lora: bool = Field(False, description="[Default, Fine-Tune] Use LoRA.", title="Use LoRA", group="Advanced", toggle_fields=["lora_model_name", "lora_unet_rank", "lora_weight", "lora_txt_weight", "lora_txt_rank"], advanced=True)
-    train_oft: bool = Field(False, description="[Default, Fine-Tune] Use OFT.", title="Use OFT", group="Advanced")
+    train_lora: bool = Field(False, description="[Default, Fine-Tune, SDXL] Use LoRA.", title="Use LoRA", group="Advanced", toggle_fields=["lora_model_name", "lora_unet_rank", "lora_weight", "lora_txt_weight", "lora_txt_rank"], advanced=True)
+    train_oft: bool = Field(False, description="[Default, Fine-Tune, SDXL] Use OFT.", title="Use OFT", group="Advanced")
 
     # Training data
-    concepts_list: List[Dict] = Field([], description="[Default] Concepts list.", title="Concepts List",
+    concepts_list: List[Dict] = Field([], description="[Default, SDXL] Concepts list.", title="Concepts List",
                                       group="Training Data", custom_type="ConceptsList")
-    disable_class_matching: bool = Field(False, description="[Default] Disable class matching.",
+    disable_class_matching: bool = Field(False, description="[Default, SDXL] Disable class matching.",
                                          title="Disable Class Matching", group="Training Data")
     train_data_dir: Optional[str] = Field(None,
                                           description="[Fine-Tune, ControlNet] A folder containing the training data.",
@@ -150,7 +150,7 @@ class TrainingConfig(BaseConfig):
     stop_text_encoder: float = Field(1.0,
                                      description="[Default] Percentage of total training to train text encoder for.",
                                      title="Txt Training Percent", ge=0, le=1, multiple_of=0.01, group="Text Encoder")
-    clip_skip: int = Field(1, description="[Default] Number of CLIP Normalization layers to skip.", title="Clip Skip",
+    clip_skip: int = Field(1, description="Number of CLIP Normalization layers to skip.", title="Clip Skip",
                            ge=0, le=4, group="Text Encoder")
     tenc_weight_decay: float = Field(0.01, description="[Default] Text encoder weight decay.",
                                      title="Tenc Weight Decay", ge=0, le=1, multiple_of=0.01, group="Text Encoder")
@@ -182,13 +182,13 @@ class TrainingConfig(BaseConfig):
     oft_coft: bool = Field(True, description="[oft] Whether to use the constrainted variant of OFT.", title="USE COFT", group="OFT")
 
     # Dreambooth
-    prior_loss_scale: bool = Field(False, description="[Default] Prior loss scale.", title="Prior Loss Scale",
+    prior_loss_scale: bool = Field(False, description="[Default, SDXL] Prior loss scale.", title="Prior Loss Scale",
                                    group="Dreambooth")
-    prior_loss_target: int = Field(100, description="[Default] Prior loss target.", title="Prior Loss Target", ge=0,
+    prior_loss_target: int = Field(100, description="[Default, SDXL] Prior loss target.", title="Prior Loss Target", ge=0,
                                    le=1000, group="Dreambooth")
-    prior_loss_weight: float = Field(0.75, description="[Default] Prior loss weight.", title="Prior Loss Weight", ge=0,
+    prior_loss_weight: float = Field(0.75, description="[Default, SDXL] Prior loss weight.", title="Prior Loss Weight", ge=0,
                                      le=1, multiple_of=0.1, group="Dreambooth")
-    prior_loss_weight_min: float = Field(0.1, description="[Default] Minimum prior loss weight.",
+    prior_loss_weight_min: float = Field(0.1, description="[Default, SDXL] Minimum prior loss weight.",
                                          title="Prior Loss Minimum", ge=0, le=1, multiple_of=0.1, group="Dreambooth")
     proportion_empty_prompts: float = Field(default=0,
                                             description="[ControlNet] Proportion of image prompts to be replaced with empty strings. Defaults to 0 (no prompt replacement).",

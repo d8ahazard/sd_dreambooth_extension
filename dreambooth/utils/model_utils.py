@@ -3,6 +3,7 @@ from __future__ import annotations
 import collections
 import os
 import re
+from typing import Dict
 
 import torch
 from diffusers.utils import is_xformers_available
@@ -196,10 +197,10 @@ def reload_system_models():
         pass
 
 
-def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision):
+def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision, subfolder: str = "text_encoder"):
     text_encoder_config = PretrainedConfig.from_pretrained(
         pretrained_model_name_or_path,
-        subfolder="text_encoder",
+        subfolder=subfolder,
         revision=revision,
     )
     model_class = text_encoder_config.architectures[0]
@@ -208,6 +209,9 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
         from transformers import CLIPTextModel
 
         return CLIPTextModel
+    elif model_class == "CLIPTextModelWithProjection":
+        from transformers import CLIPTextModelWithProjection
+        return CLIPTextModelWithProjection
     elif model_class == "RobertaSeriesModelWithTransformation":
         from diffusers.pipelines.alt_diffusion.modeling_roberta_series import RobertaSeriesModelWithTransformation
 
@@ -216,7 +220,20 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
         raise ValueError(f"{model_class} is not supported.")
 
 
-# from modules.sd_models import CheckpointInfo
+def unet_attn_processors_state_dict(unet) -> Dict[str, torch.tensor]:
+    """
+    Returns:
+        a state dict containing just the attention processor parameters.
+    """
+    attn_processors = unet.attn_processors
+
+    attn_processors_state_dict = {}
+
+    for attn_processor_key, attn_processor in attn_processors.items():
+        for parameter_key, parameter in attn_processor.state_dict().items():
+            attn_processors_state_dict[f"{attn_processor_key}.{parameter_key}"] = parameter
+
+    return attn_processors_state_dict
 
 def get_checkpoint_match(search_string):
     try:

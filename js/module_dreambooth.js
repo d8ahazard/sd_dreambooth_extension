@@ -12,36 +12,37 @@ function initDreambooth() {
     sendMessage("get_db_vars", {}, true).then(function (response) {
         console.log("Got DB vars: ", response);
         createElements(response["defaults"]);
+        let prog_opts = {
+            "primary_status": "Status 1", // Status 1 text
+            "secondary_status": "Status 2", // Status 2...
+            "bar1_progress": 0, // Progressbar 1 position
+            "bar2_progress": 0, // etc
+            "id": "dreamProgress" // ID of the progress group
+        }
+
+        let gallery_opts = {
+            "thumbnail": true,
+            "closeable": false,
+            "show_maximize": true,
+            "start_open": true,
+            "id": "dreamProgress"
+        }
+
+        let pg = document.getElementById("dreamProgress");
+        let dreamProgress = new ProgressGroup(document.getElementById("dreamProgress"), prog_opts);
+        $("#dreamModelSelect").modelSelect();
+        $("#db_new_model").modelSelect();
+        dreamProgress.setOnCancel(onDbEnd);
+        dreamProgress.setOnComplete(onDbEnd);
+        dreamProgress.setOnStart(onDbStart);
+        dreamProgress.setOnUpdate(onDbUpdate);
+
+        // Gallery creation. Options can also be passed to .update()
+        let dreamGallery = new InlineGallery(document.getElementById('dreamGallery'), gallery_opts);
+        loadDbListeners();
     });
 
-    let prog_opts = {
-        "primary_status": "Status 1", // Status 1 text
-        "secondary_status": "Status 2", // Status 2...
-        "bar1_progress": 0, // Progressbar 1 position
-        "bar2_progress": 0, // etc
-        "id": "dreamProgress" // ID of the progress group
-    }
 
-    let gallery_opts = {
-        "thumbnail": true,
-        "closeable": false,
-        "show_maximize": true,
-        "start_open": true,
-        "id": "dreamProgress"
-    }
-
-    let pg = document.getElementById("dreamProgress");
-    let dreamProgress = new ProgressGroup(document.getElementById("dreamProgress"), prog_opts);
-    $("#dreamModelSelect").modelSelect();
-    $("#db_new_model").modelSelect();
-    dreamProgress.setOnCancel(onDbEnd);
-    dreamProgress.setOnComplete(onDbEnd);
-    dreamProgress.setOnStart(onDbStart);
-    dreamProgress.setOnUpdate(onDbUpdate);
-
-    // Gallery creation. Options can also be passed to .update()
-    let dreamGallery = new InlineGallery(document.getElementById('dreamGallery'), gallery_opts);
-    loadDbListeners();
 }
 
 function onDbEnd() {
@@ -130,6 +131,7 @@ function createElements(defaults) {
 }
 
 function toggleElements() {
+    console.log("Toggling elements, train mode is: ", trainMode);
     $(".FineTuneOnly").hide();
     $(".DefaultOnly").hide();
     $(".ControlNetOnly").hide();
@@ -463,7 +465,7 @@ function loadDbListeners() {
         $(".dbTrainBtn").addClass("hide");
     });
 
-    $("#db_load_params").click(function () {
+    $("#loadDbSetting").click(function () {
         modelLoaded = true;
         let selected = $("#dreamModelSelect").modelSelect().getModel();
         if (selected === undefined) {
@@ -472,13 +474,12 @@ function loadDbListeners() {
             console.log("Fetching model data for: ", selected);
             sendMessage("get_db_config", {model: selected}, true).then((result) => {
                 console.log("Loading settings: ", result);
-                let tgt_key = $("#train_ft").is(":checked") ? "ft_config" : "db_config";
-                for (let key in result[tgt_key]) {
-                    let value = result[tgt_key][key];
+                const trainConfig = result["tc"];
+                for (let key in trainConfig) {
+                    let value = trainConfig[key];
                     if (value === null || value === undefined) continue;
                     if (key === "concepts_list") {
-                        let concepts = result[tgt_key][key];
-                        loadConcepts(concepts);
+                        loadConcepts(value);
                         continue;
                     }
                     let elem_selector = "#" + key;
@@ -507,7 +508,7 @@ function loadDbListeners() {
         }
     });
 
-    $("#db_save_config").click(function () {
+    $("#saveDbSettings").click(function () {
         let selected = $("#dreamModelSelect").modelSelect().getModel();
         if (selected === undefined) {
             alert("Please select a model first!");
@@ -545,7 +546,7 @@ function loadDbListeners() {
 }
 
 function startTraining() {
-    
+
 }
 
 function loadConcepts(concepts) {

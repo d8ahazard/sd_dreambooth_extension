@@ -247,9 +247,7 @@ async def _get_model_config(data, return_json=True):
     logger.debug(f"Get model called: {data}")
     model = data["data"]["model"]
     model_dir = model["path"]
-    db_config = DreamboothConfig().load_from_file(model_dir)
-    ft_config = FinetuneConfig().load_from_file(model_dir)
-    train_config = TrainingConfig().load_from_file(model_dir)
+    db_config = TrainingConfig().load_from_file(model_dir)
     if db_config.concepts_path and os.path.exists(db_config.concepts_path):
         with open(db_config.concepts_path, "r") as f:
             db_config.concepts_list = json.load(f)
@@ -258,8 +256,8 @@ async def _get_model_config(data, return_json=True):
         db_config.save()
 
     if return_json:
-        return {"db_config": db_config.__dict__, "ft_config": ft_config.__dict__, "tc": train_config.get_params()}
-    return db_config, ft_config
+        return {"config": db_config.get_params()}
+    return db_config
 
 
 async def _set_model_config(data: dict, return_config: bool = False) -> Union[Dict, DreamboothConfig, FinetuneConfig]:
@@ -271,7 +269,7 @@ async def _set_model_config(data: dict, return_config: bool = False) -> Union[Di
     config.load_params(training_params)
     config.pretrained_model_name_or_path = os.path.join(model["path"], "working")
     config.save()
-    return {"config": config.__dict__} if not return_config else config
+    return {"config": config.get_params()} if not return_config else config
 
 
 async def set_ft_model_config(data: dict, return_config: bool = False) -> Union[Dict, FinetuneConfig]:
