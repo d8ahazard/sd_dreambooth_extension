@@ -1,4 +1,5 @@
 import copy
+import logging
 import os.path
 import random
 import traceback
@@ -6,6 +7,7 @@ from typing import List, Tuple, Union
 
 import safetensors.torch
 import torch.utils.data
+from PIL.Image import Image
 from torchvision.transforms import transforms
 from transformers import CLIPTokenizer
 
@@ -16,6 +18,8 @@ from dreambooth.utils.image_utils import make_bucket_resolutions, \
     closest_resolution, shuffle_tags, open_and_trim
 from dreambooth.utils.text_utils import build_strict_tokens
 from helpers.mytqdm import mytqdm
+
+logger = logging.getLogger(__name__)
 
 
 class DbDataset(torch.utils.data.Dataset):
@@ -30,12 +34,15 @@ class DbDataset(torch.utils.data.Dataset):
             class_prompts: List[PromptData],
             tokens: List[Tuple[str, str]],
             tokenizer: Union[CLIPTokenizer, List[CLIPTokenizer], None],
+            text_encoder,
+            accelerator,
             resolution: int,
             hflip: bool,
             shuffle_tags: bool,
             strict_tokens: bool,
             dynamic_img_norm: bool,
             not_pad_tokens: bool,
+            max_token_length: int,
             debug_dataset: bool,
             model_dir: str,
             pbar: mytqdm = None
@@ -44,6 +51,7 @@ class DbDataset(torch.utils.data.Dataset):
         self.batch_indices = []
         self.batch_samples = []
         self.class_count = 0
+        self.max_token_length = max_token_length
         self.cache_dir = os.path.join(model_dir, "cache")
         if not os.path.exists(self.cache_dir):
             os.makedirs(self.cache_dir)
@@ -52,8 +60,8 @@ class DbDataset(torch.utils.data.Dataset):
         self.latents_cache = {}
         # A dictionary of string/input_ids(s) pairs matching image paths
         self.caption_cache = {}
-        # An optional dictionary of string/input_ids(s) pairs matching image paths
-        self.caption_cache_2 = {}
+        # An optional dictionary of string/(input_id, addtl_kwargs) for SDXL
+        self.sdxl_cache = {}
         # A dictionary of (int, int) / List[(string, string)] of resolutions and the corresponding image paths/captions
         self.train_dict = {}
         # A dictionary of (int, int) / List[(string, string)] of resolutions and the corresponding image paths/captions
@@ -84,7 +92,8 @@ class DbDataset(torch.utils.data.Dataset):
             self.tokenizers = [tokenizer]
         elif isinstance(tokenizer, list):
             self.tokenizers = tokenizer
-
+        self.text_encoders = text_encoder
+        self.accelerator = accelerator
         self.resolution = resolution
         self.debug_dataset = debug_dataset
         self.shuffle_tags = shuffle_tags
@@ -119,8 +128,140 @@ class DbDataset(torch.utils.data.Dataset):
         norm = transforms.Normalize(mean, std)
         return norm(img)
 
-    def load_image(self, image_path, caption, res):
+    def encode_prompt(self, prompt):
+        prompt_embeds_list = []
+        pooled_prompt_embeds = None  # default declaration
+        bs_embed = None  # default declaration
 
+        auto_add_special_tokens = False if self.strict_tokens else True
+        if self.shuffle_tags:
+            prompt = shuffle_tags(prompt)
+        for tokenizer, text_encoder in zip(self.tokenizers, self.text_encoders):
+            if self.strict_tokens:
+                prompt = build_strict_tokens(prompt, tokenizer.bos_token, tokenizer.eos_token)
+
+            b_size = 1  # as we are working with a single prompt
+            n_size = 1 if self.max_token_length is None else self.max_token_length // 75
+
+            text_inputs = tokenizer(
+                prompt,
+                padding="max_length",
+                max_length=tokenizer.model_max_length,
+                truncation=True,
+                add_special_tokens=auto_add_special_tokens,
+                return_tensors="pt",
+            )
+            text_input_ids = text_inputs.input_ids.view(-1,
+                                                        tokenizer.model_max_length)  # reshape to handle different token lengths
+
+            untruncated_ids = tokenizer(prompt, padding="longest", return_tensors="pt").input_ids
+
+            if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not torch.equal(text_input_ids,
+                                                                                         untruncated_ids):
+                removed_text = tokenizer.batch_decode(untruncated_ids[:, tokenizer.model_max_length - 1: -1])
+                logger.warning(
+                    "The following part of your input was truncated because the model can only handle sequences up to"
+                    f" {tokenizer.model_max_length} tokens: {removed_text}"
+                )
+
+            enc_out = text_encoder(
+                text_input_ids.to(text_encoder.device),
+                output_hidden_states=True,
+                return_dict=True
+            )
+
+            # get hidden states and handle reshaping
+            prompt_embeds = enc_out["hidden_states"][-2]  # penuultimate layer
+            prompt_embeds = prompt_embeds.reshape(
+                (b_size, -1, prompt_embeds.shape[-1]))  # reshape to handle different token lengths
+
+            # handle varying max token lengths
+            if self.max_token_length is not None:
+                states_list = [prompt_embeds[:, 0].unsqueeze(1)]
+                for i in range(1, self.max_token_length, tokenizer.model_max_length):
+                    states_list.append(prompt_embeds[:, i: i + tokenizer.model_max_length - 2])
+                states_list.append(prompt_embeds[:, -1].unsqueeze(1))
+                prompt_embeds = torch.cat(states_list, dim=1)
+
+            # We are only ALWAYS interested in the pooled output of the final text encoder
+            pooled_prompt_embeds = enc_out["text_embeds"]
+            if self.max_token_length is not None:
+                pooled_prompt_embeds = pooled_prompt_embeds[::n_size]
+
+            bs_embed, seq_len, _ = prompt_embeds.shape
+            prompt_embeds = prompt_embeds.view(bs_embed, seq_len, -1)
+            prompt_embeds_list.append(prompt_embeds)
+
+        prompt_embeds = torch.cat(prompt_embeds_list, dim=-1)
+        pooled_prompt_embeds = pooled_prompt_embeds.view(bs_embed, -1)
+        return prompt_embeds, pooled_prompt_embeds
+
+    def encode_prompt_og(self, prompt):
+        prompt_embeds_list = []
+        pooled_prompt_embeds = None  # default declaration
+        bs_embed = None  # default declaration
+
+        auto_add_special_tokens = False if self.strict_tokens else True
+        if self.shuffle_tags:
+            prompt = shuffle_tags(prompt)
+        for tokenizer, text_encoder in zip(self.tokenizers, self.text_encoders):
+            if self.strict_tokens:
+                prompt = build_strict_tokens(prompt, tokenizer.bos_token, tokenizer.eos_token)
+
+            text_inputs = tokenizer(
+                prompt,
+                padding="max_length",
+                max_length=tokenizer.model_max_length,
+                truncation=True,
+                add_special_tokens=auto_add_special_tokens,
+                return_tensors="pt",
+            )
+            text_input_ids = text_inputs.input_ids
+            untruncated_ids = tokenizer(prompt, padding="longest", return_tensors="pt").input_ids
+
+            if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not torch.equal(text_input_ids,
+                                                                                         untruncated_ids):
+                removed_text = tokenizer.batch_decode(untruncated_ids[:, tokenizer.model_max_length - 1: -1])
+                logger.warning(
+                    "The following part of your input was truncated because CLIP can only handle sequences up to"
+                    f" {tokenizer.model_max_length} tokens: {removed_text}"
+                )
+
+            prompt_embeds = text_encoder(
+                text_input_ids.to(text_encoder.device),
+                output_hidden_states=True,
+            )
+
+            # We are only ALWAYS interested in the pooled output of the final text encoder
+            pooled_prompt_embeds = prompt_embeds[0]
+            prompt_embeds = prompt_embeds.hidden_states[-2]
+            bs_embed, seq_len, _ = prompt_embeds.shape
+            prompt_embeds = prompt_embeds.view(bs_embed, seq_len, -1)
+            prompt_embeds_list.append(prompt_embeds)
+
+        prompt_embeds = torch.concat(prompt_embeds_list, dim=-1)
+        pooled_prompt_embeds = pooled_prompt_embeds.view(bs_embed, -1)
+        return prompt_embeds, pooled_prompt_embeds
+
+    def compute_embeddings(self, reso, prompt):
+        original_size = reso
+        target_size = reso
+        crops_coords_top_left = (0, 0)
+        with torch.no_grad():
+            prompt_embeds, pooled_prompt_embeds = self.encode_prompt(prompt)
+            add_text_embeds = pooled_prompt_embeds
+
+            # Adapted from pipeline.StableDiffusionXLPipeline._get_add_time_ids
+            add_time_ids = list(original_size + crops_coords_top_left + target_size)
+            add_time_ids = torch.tensor([add_time_ids])
+
+            prompt_embeds = prompt_embeds.to(self.accelerator.device)
+            add_text_embeds = add_text_embeds.to(self.accelerator.device)
+            add_time_ids = add_time_ids.to(self.accelerator.device, dtype=prompt_embeds.dtype)
+            unet_added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids}
+        return prompt_embeds, unet_added_cond_kwargs
+
+    def load_image(self, image_path, caption, res):
         input_ids_2 = None
         if self.debug_dataset:
             image = os.path.splitext(image_path)
@@ -132,12 +273,10 @@ class DbDataset(torch.utils.data.Dataset):
                 img = open_and_trim(image_path, res, False)
                 image = self.image_transform(img)
             if self.shuffle_tags:
-                caption, input_ids, input_ids_2 = self.cache_caption(image_path, caption)
+                caption, input_ids = self.cache_caption(image_path, caption)
             else:
                 input_ids = self.caption_cache[image_path]
-                if image_path in self.caption_cache_2:
-                    input_ids_2 = self.caption_cache_2[image_path]
-        return image, input_ids, input_ids_2
+        return image, input_ids
 
     def cache_latent(self, image_path, res):
         if self.vae is not None:
@@ -149,9 +288,8 @@ class DbDataset(torch.utils.data.Dataset):
 
     def cache_caption(self, image_path, caption):
         input_ids = None
-        input_ids_2 = None
         auto_add_special_tokens = False if self.strict_tokens else True
-        if len(self.tokenizers > 0) and (image_path not in self.caption_cache or self.debug_dataset):
+        if len(self.tokenizers) > 0 and (image_path not in self.caption_cache or self.debug_dataset):
             if self.shuffle_tags:
                 caption = shuffle_tags(caption)
             if self.strict_tokens:
@@ -160,24 +298,14 @@ class DbDataset(torch.utils.data.Dataset):
                 input_ids = self.tokenizers[0](caption, padding=True, truncation=True,
                                                add_special_tokens=auto_add_special_tokens,
                                                return_tensors="pt").input_ids
-                if len(self.tokenizers > 1):
-                    input_ids_2 = self.tokenizers[1](caption, padding=True, truncation=True,
-                                                     add_special_tokens=auto_add_special_tokens,
-                                                     return_tensors="pt").input_ids
-
             else:
                 input_ids = self.tokenizers[0](caption, padding='max_length', truncation=True,
                                                add_special_tokens=auto_add_special_tokens,
                                                return_tensors='pt').input_ids
-                if len(self.tokenizers > 1):
-                    input_ids_2 = self.tokenizers[1](caption, padding='max_length', truncation=True,
-                                                     add_special_tokens=auto_add_special_tokens,
-                                                     return_tensors='pt').input_ids
             if not self.shuffle_tags:
                 self.caption_cache[image_path] = input_ids
-                if input_ids_2 is not None:
-                    self.caption_cache_2[image_path] = input_ids_2
-        return caption, input_ids, input_ids_2
+
+        return caption, input_ids
 
     def make_buckets_with_caching(self, vae):
         self.vae = vae
@@ -213,6 +341,10 @@ class DbDataset(torch.utils.data.Dataset):
                     if img_path not in latents_cache:
                         if self.cache_latents and not self.debug_dataset:
                             self.cache_latent(img_path, reso)
+
+                    if len(self.tokenizers) == 2 and img_path not in self.sdxl_cache:
+                        foo1, foo2 = self.compute_embeddings(reso, cap)
+                        self.sdxl_cache[img_path] = (foo1, foo2)
                     # Otherwise, load it from existing cache
                     else:
                         self.latents_cache[img_path] = latents_cache[img_path]
@@ -366,28 +498,22 @@ class DbDataset(torch.utils.data.Dataset):
         return image_index, repeats
 
     def __getitem__(self, index):
+        example = {}
         image_path, caption, is_class_image = self.sample_cache[index]
         if not self.debug_dataset:
-            image_data, input_ids, input_ids_2 = self.load_image(image_path, caption, self.active_resolution)
+            image_data, input_ids, = self.load_image(image_path, caption, self.active_resolution)
+            if len(self.tokenizers) > 1:
+                input_ids, added_conditions = self.sdxl_cache[image_path]
+                example["instance_added_cond_kwargs"] = added_conditions
         else:
             image_data = image_path
-            # print(f"Recoding: {caption}")
-            caption, cap_tokens, cap_tokens_2 = self.cache_caption(image_path, caption)
+            caption, cap_tokens = self.cache_caption(image_path, caption)
             rebuilt = self.tokenizers[0].decode(cap_tokens.tolist()[0])
-            input_ids_2 = None
-            if len(self.tokenizers > 1):
-                rebuilt_2 = self.tokenizers[1].decode(cap_tokens_2.tolist()[0])
-                input_ids_2 = (caption, rebuilt_2)
             input_ids = (caption, rebuilt)
 
-        # If we have reached the end of our bucket, increment to the next, update the count, reset image index.
-        example = {
-            "image": image_data,
-            "input_ids": input_ids,
-            "res": self.active_resolution,
-            "is_class": is_class_image
-        }
-        if input_ids_2 is not None:
-            example["input_ids_2"] = input_ids_2
+        example["input_ids"] = input_ids
+        example["image"] = image_data
+        example["res"] = self.active_resolution
+        example["is_class"] = is_class_image
 
         return example

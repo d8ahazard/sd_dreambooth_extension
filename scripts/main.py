@@ -1236,7 +1236,6 @@ def on_ui_tabs():
         # List of all the things that we need to save
         # db_model_name must be first due to save_config() parsing
         params_to_save = [
-            db_weight_decay,
             db_attention,
             db_cache_latents,
             db_clip_skip,
@@ -1329,6 +1328,7 @@ def on_ui_tabs():
             db_use_lora_extended,
             db_use_shared_src,
             db_use_subdir,
+            db_weight_decay,
 
             c1_class_data_dir,
             c1_class_guidance_scale,

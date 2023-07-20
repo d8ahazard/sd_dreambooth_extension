@@ -270,8 +270,8 @@ def load_lora(args, stop_text_percentage, unet, text_encoder):
     if not os.path.exists(lora_path) or not os.path.isfile(lora_path):
         lora_path, lora_txt = None, None
 
-    injectable_lora = get_target_module("injection", args.use_lora_extended)
-    target_module = get_target_module("module", args.use_lora_extended)
+    injectable_lora = get_target_module("injection", True)
+    target_module = get_target_module("module", True)
     unet_lora_params, _ = injectable_lora(
         unet,
         r=args.lora_unet_rank,

@@ -5,7 +5,7 @@ let trainEma = false;
 let lastConcept = -1;
 let conceptsList = [];
 let dbListenersLoaded = false;
-
+let dbDefaults;
 const dbModule = new Module("Training", "moduleDreambooth", "moon", false, 2, initDreambooth, refreshDreambooth);
 
 function initDreambooth() {
@@ -60,7 +60,7 @@ function refreshDreambooth() {
 
 function createElements(defaults) {
     let elementGroups = {};
-
+    dbDefaults = defaults;
     // Enumerate key/values in defaults
     for (let key in defaults) {
         let value = defaults[key];
@@ -280,7 +280,7 @@ function addConcept(concept = false) {
             let fileBrowser = $(`
                     <div class="form-group">
                         <label>${fileBrowserLabel}</label>
-                        <div id="${inputId}" class="db-file-browser dbInput" data-elem_id="${inputId}"></div>
+                        <div id="${inputId}" class="db-file-browser dbInput conceptInput" data-elem_id="${inputId}"></div>
                     </div>
                 `);
             formElements.append(fileBrowser);
@@ -305,7 +305,7 @@ function addConcept(concept = false) {
             let sliderMin = (key.indexOf("sample") !== -1 || key.indexOf("images") !== -1) ? 0 : 1;
             let sliderDiv = $(`
                     <div class="form-group db-advanced">
-                        <div id="${inputId}" class="db-slider dbInput" data-elem_id="${inputId}" data-max="${sliderMax}" data-min="${sliderMin}" data-step="${sliderStep}" data-value="${concept[key]}" data-label="${bootstrapSliderLabel}"></div>
+                        <div id="${inputId}" class="db-slider dbInput conceptInput" data-elem_id="${inputId}" data-max="${sliderMax}" data-min="${sliderMin}" data-step="${sliderStep}" data-value="${concept[key]}" data-label="${bootstrapSliderLabel}"></div>
                     </div>
                 `);
 
@@ -321,7 +321,7 @@ function addConcept(concept = false) {
             let textField = $(`
                         <div class="form-group db-advanced">
                             <label for="${inputId}">${textFieldLabel}</label>
-                            <input type="text" class="form-control dbInput" id="${inputId}" value="${concept[key]}">
+                            <input type="text" class="form-control dbInput conceptInput" id="${inputId}" value="${concept[key]}">
                         </div>
                     `);
             formElements.append(textField);
@@ -333,7 +333,7 @@ function addConcept(concept = false) {
             let text = $(`
                         <div class="form-group">
                             <label for="${inputId}">${textLabel}</label>
-                            <input type="text" class="form-control dbInput" id="${inputId}" value="${concept[key]}">
+                            <input type="text" class="form-control dbInput conceptInput" id="${inputId}" value="${concept[key]}">
                         </div>
                     `);
 
@@ -343,7 +343,7 @@ function addConcept(concept = false) {
             let number = $(`
                         <div class="form-group">
                             <label for="${inputId}">${numberLabel}</label>
-                            <input type="number" class="form-control dbInput" id="${inputId}" value="${concept[key]}">
+                            <input type="number" class="form-control dbInput conceptInput" id="${inputId}" value="${concept[key]}">
                         </div>
                     `);
             formElements.append(number);
@@ -473,10 +473,11 @@ function loadDbListeners() {
         } else {
             console.log("Fetching model data for: ", selected);
             sendMessage("get_db_config", {model: selected}, true).then((result) => {
-                console.log("Loading settings: ", result);
-                const trainConfig = result["tc"];
+                const trainConfig = result["config"];
+                console.log("Loading settings: ", trainConfig);
                 for (let key in trainConfig) {
-                    let value = trainConfig[key];
+                    let value = trainConfig[key]["value"];
+                    console.log("Loading: ", key, value);
                     if (value === null || value === undefined) continue;
                     if (key === "concepts_list") {
                         loadConcepts(value);
@@ -514,7 +515,9 @@ function loadDbListeners() {
             alert("Please select a model first!");
         } else {
             let data = getSettings();
-            data["fine_tune"] = $("#train_ft").is(":checked");
+            console.log("Got settings:", data);
+            data["pretrained_model_name_or_path"] = selected["path"];
+            data["model_name"] = selected["name"];
             sendMessage("save_db_config", data, true).then((result) => {
                 console.log("Res: ", result);
             });
@@ -550,6 +553,7 @@ function startTraining() {
 }
 
 function loadConcepts(concepts) {
+    console.log("Loading concepts: ", concepts);
     let conceptsContainer = $("#db_concepts_list");
     conceptsList = [];
     conceptsContainer[0].innerHTML = "";
@@ -579,6 +583,65 @@ function updateUi() {
 
 }
 
-function getSettings() {
+function getConcepts() {
+    let concepts = [];
+    // Find all the elements in the container who's
+    let conceptElements = $(".conceptInput");
+    let outputs = {};
+    console.log("Concept elements: ", conceptElements);
+    for (let i = 0; i < conceptElements.length; i++) {
+        let conceptElement = conceptElements[i];
+        let elementId = conceptElement.id;
+        let parts = elementId.split("-");
+        let keyName = parts[1]
+        let conceptKey = parts[0].replace("concept_", "");
+        let value = getElementValue(elementId);
+        if (value !== null) {
+            if (outputs[conceptKey] === undefined) {
+                outputs[conceptKey] = {};
+            }
+            outputs[conceptKey][keyName] = value;
+        }
+    }
+    // Convert the dictionary to a list
+    for (let key in outputs) {
+        concepts.push(outputs[key]);
+    }
+    return concepts;
+}
 
+function getSettings() {
+    let selected = $("#dreamModelSelect").modelSelect().getModel();
+    console.log("Selected: ", selected);
+    let params = {};
+    if (selected !== undefined && selected !== null) {
+        params["pretrained_model_name_or_path"] = selected["path"];
+        params["model_name"] = selected["name"];
+    }
+    params["model"] = selected;
+    let elementValue;
+    console.log("Getting db params: ", dbDefaults);
+    for (let key in dbDefaults) {
+        let dbObj = dbDefaults[key];
+        if (dbObj.hasOwnProperty("description")) {
+            if (dbObj.description.indexOf("[model]") !== -1) {
+                continue;
+            }
+        }
+        let lookKey = key;
+        if (key === "concepts_list") {
+            elementValue = getConcepts();
+        } else {
+            let element = $("#db_" + lookKey);
+            if (element.length === 0) {
+                console.log("Could not find element(0) with id: ", "db_" + lookKey);
+            } else {
+                elementValue = getElementValue("db_" + lookKey);
+            }
+        }
+        if (elementValue !== null) {
+            params[key] = elementValue;
+        }
+    }
+    return params;
 }

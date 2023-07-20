@@ -62,7 +62,7 @@ from dreambooth.oft_utils import MHE_OFT
 from dreambooth.optimization import UniversalScheduler, get_optimizer, get_noise_scheduler
 from dreambooth.shared import status
 from dreambooth.training_utils import current_prior_loss, set_seed, deepspeed_zero_init_disabled_context_manager, \
-    save_lora, load_lora, compute_snr, apply_oft, create_vae, get_size_embeddings
+    save_lora, load_lora, compute_snr, apply_oft, create_vae
 from dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
 from dreambooth.utils.model_utils import (
     unload_system_models,
@@ -71,7 +71,7 @@ from dreambooth.utils.model_utils import (
     xformerify,
     torch2ify, unet_attn_processors_state_dict,
 )
-from dreambooth.utils.text_utils import encode_hidden_state, get_hidden_states
+from dreambooth.utils.text_utils import encode_hidden_state
 from dreambooth.utils.utils import cleanup, printm
 from helpers.log_parser import LogParser
 from helpers.mytqdm import mytqdm
@@ -144,7 +144,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                 modelmap["text_encoder"] = (unwrapped_tenc, TEXT_ENCODER_DEFAULT_TARGET_REPLACE)
             # TODO: Load LORA if training.
             if args.train_mode == "SDXL":
-                validation_pipeline = StableDiffusionXLPipeline.from_pretrained(args.src)
+                validation_pipeline = StableDiffusionXLPipeline.from_pretrained(args.pretrained_model_name_or_path)
             else:
                 validation_pipeline = StableDiffusionPipeline.from_pretrained(
                     args.src
@@ -255,7 +255,6 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
         stop_text_percentage = 0
 
     if args.train_mode == "SDXL":
-        train_lora = False
         train_ema = False
 
     if not train_unet:
@@ -358,9 +357,11 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
 
     disable_safe_unpickle()
 
+    tokenizer_path = os.path.join(args.get_pretrained_model_name_or_path(), "tokenizer")
+    logger.debug(f"Loading tokenizer from {tokenizer_path}")
     # Load the tokenizers
     tokenizer = AutoTokenizer.from_pretrained(
-        os.path.join(args.get_pretrained_model_name_or_path(), "tokenizer"),
+        tokenizer_path,
         revision=args.revision,
         use_fast=False,
     )
@@ -386,6 +387,8 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
         )
     printm("Created tenc")
     vae = create_vae(args, accelerator.device, weight_dtype)
+    vae_factor = vae.config.scaling_factor
+
     printm("Created vae")
 
     unet = UNet2DConditionModel.from_pretrained(
@@ -409,8 +412,12 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
             controlnet = ControlNetModel.from_unet(unet)
 
     if train_lora:
-        unet_lora_params, text_encoder_lora_params, text_encoder = load_lora(args, stop_text_percentage, unet,
-                                                                             text_encoder)
+        if args.train_mode == "SDXL":
+            unet.requires_grad_(False)
+            unet.to(accelerator.device, dtype=weight_dtype)
+        else:
+            unet_lora_params, text_encoder_lora_params, text_encoder = load_lora(args, stop_text_percentage, unet,
+                                                                                 text_encoder)
     elif train_ema:
         ema_unet = UNet2DConditionModel.from_pretrained(os.path.join(args.pretrained_model_name_or_path, "unet"))
         ema_unet = EMAModel(ema_unet.parameters(), model_cls=UNet2DConditionModel, model_config=ema_unet.config)
@@ -443,7 +450,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
         text_encoder_two.to(accelerator.device, dtype=weight_dtype)
         if args.train_lora:
             unet_lora_attn_procs = {}
-            unet_lora_parameters = []
+            unet_lora_params = []
             for name, attn_processor in unet.attn_processors.items():
                 cross_attention_dim = None if name.endswith("attn1.processor") else unet.config.cross_attention_dim
                 hidden_size = None
@@ -461,7 +468,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                     )
                     module = lora_attn_processor_class(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim)
                     unet_lora_attn_procs[name] = module
-                    unet_lora_parameters.extend(module.parameters())
+                    unet_lora_params.extend(module.parameters())
 
             unet.set_attn_processor(unet_lora_attn_procs)
 
@@ -490,10 +497,12 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                 oft_unet = accelerator.unwrap_model(unet)
                 oft_unet.save_attn_procs(os.path.join(output_dir, "unet_oft"))
 
-            elif train_lora:
+            elif train_lora and args.train_mode != "SDXL":
                 save_lora(args, stop_text_percentage, accelerator, unet, text_encoder, pbar2,
                           user_model_dir=user_model_dir)
-            elif args.train_mode == "SDXL" and args.train_lora:
+            elif train_lora and args.train_mode == "SDXL":
+                logger.debug("Saving lora weights...")
+                update_status({"status": "Saving lora weights..."})
                 unet_lora_layers_to_save = None
 
                 for model in models:
@@ -506,6 +515,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                     output_dir,
                     unet_lora_layers=unet_lora_layers_to_save,
                     text_encoder_lora_layers=None,
+                    safe_serialization=True
                 )
             else:
                 if train_ema:
@@ -594,13 +604,16 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     # move text_encoder to the appropriate device
     if stop_text_percentage == 0:
         text_encoder.to(accelerator.device, dtype=weight_dtype)
+        if text_encoder_two is not None:
+            text_encoder_two.to(accelerator.device, dtype=weight_dtype)
+
     # Check that all trainable models are in full precision
     low_precision_error_string = (
         "Please make sure to always have all model weights in full float32 precision when starting training - even if"
         " doing mixed precision training. copy of the weights should still be float32."
     )
 
-    if accelerator.unwrap_model(unet).dtype != torch.float32:
+    if accelerator.unwrap_model(unet).dtype != torch.float32 and not train_lora and args.train_mode != "SDXL":
         raise ValueError(
             f"Unet loaded as datatype {accelerator.unwrap_model(unet).dtype}. {low_precision_error_string}"
         )
@@ -621,12 +634,42 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     txt_learning_rate = args.learning_rate_txt if not train_lora else args.learning_rate_txt
 
     if train_lora:
-        logger.info(
-            "Training LoRA. Learning rate for unet: {}, text encoder: {}".format(learning_rate, txt_learning_rate))
-        params_to_optimize = itertools.chain(*unet_lora_params) if stop_text_percentage == 0 else [
-            {"params": itertools.chain(*unet_lora_params), "lr": learning_rate},
-            {"params": itertools.chain(*text_encoder_lora_params), "lr": txt_learning_rate},
-        ]
+        if args.train_mode == "SDXL":
+            logger.debug("Loading SDXL Lora...")
+            # now we will add new LoRA weights to the attention layers
+            # Set correct lora layers
+            unet_lora_attn_procs = {}
+            unet_lora_params = []
+            unet.requires_grad_(False)
+            hidden_size = None
+            for name, attn_processor in unet.attn_processors.items():
+                cross_attention_dim = None if name.endswith("attn1.processor") else unet.config.cross_attention_dim
+                if name.startswith("mid_block"):
+                    hidden_size = unet.config.block_out_channels[-1]
+                elif name.startswith("up_blocks"):
+                    block_id = int(name[len("up_blocks.")])
+                    hidden_size = list(reversed(unet.config.block_out_channels))[block_id]
+                elif name.startswith("down_blocks"):
+                    block_id = int(name[len("down_blocks.")])
+                    hidden_size = unet.config.block_out_channels[block_id]
+
+                if hidden_size is not None:
+                    lora_attn_processor_class = (
+                        LoRAAttnProcessor2_0 if hasattr(F, "scaled_dot_product_attention") else LoRAAttnProcessor
+                    )
+                    module = lora_attn_processor_class(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim)
+                    unet_lora_attn_procs[name] = module
+                    unet_lora_params.extend(module.parameters())
+            unet.set_attn_processor(unet_lora_attn_procs)
+            params_to_optimize = unet_lora_params
+            logger.debug(f"We have {len(unet_lora_params)} LoRA parameters")
+        else:
+            logger.info(
+                "Training LoRA. Learning rate for unet: {}, text encoder: {}".format(learning_rate, txt_learning_rate))
+            params_to_optimize = itertools.chain(*unet_lora_params) if stop_text_percentage == 0 else [
+                {"params": itertools.chain(*unet_lora_params), "lr": learning_rate},
+                {"params": itertools.chain(*text_encoder_lora_params), "lr": txt_learning_rate},
+            ]
     elif train_oft:
         params_to_optimize = oft_params
     elif stop_text_percentage != 0:
@@ -646,7 +689,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
             {"params": itertools.chain(controlnet.parameters()), "lr": learning_rate},
         ]
     logger.debug(f"Getting da optimizer: {args.optimizer} {learning_rate}")
-    logger.debug(f"Params to optimize: {params_to_optimize}")
+
     optimizer = get_optimizer(
         params_to_optimize,
         learning_rate=learning_rate,
@@ -676,8 +719,12 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                 del ema_unet
             if text_encoder:
                 del text_encoder
+            if text_encoder_two:
+                del text_encoder_two
             if tokenizer:
                 del tokenizer
+            if tokenizer_two:
+                del tokenizer_two
             if optimizer:
                 del optimizer
             if train_dataloader:
@@ -692,14 +739,9 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
             pass
         cleanup(True)
 
-    # We ALWAYS pre-compute the additional condition embeddings needed for SDXL
-    # UNet as the model is already big and it uses two text encoders.
-    # TODO: when we add support for text encoder training, will reivist.
-    tokenizers = [tokenizer, tokenizer_two]
-    text_encoders = [text_encoder, text_encoder_two]
-
-    # Here, we compute not just the text embeddings but also the additional embeddings
-    # needed for the SD XL UNet to operate.
+    if args.train_mode == "SDXL":
+        logger.debug("Training SDXL, enabling latent caching.")
+        args.cache_latents = True
 
     if args.cache_latents:
         vae.to(accelerator.device, dtype=weight_dtype)
@@ -718,18 +760,23 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     train_dataset = None
     with_prior_preservation = False
 
-    if args.train_mode == "default":
+    if args.train_mode == "default" or args.train_mode == "SDXL":
         count, instance_prompts, class_prompts = generate_classifiers(args, accelerator=accelerator, ui=False,
                                                                       pbar=pbar2)
-
+        tokenizers = [tokenizer] if tokenizer_two is None else [tokenizer, tokenizer_two]
+        text_encoders = [text_encoder] if text_encoder_two is None else [text_encoder, text_encoder_two]
+        logger.debug(f"Creating DB/SDXL Dataset: {len(text_encoders)}")
         train_dataset = generate_dataset(
             instance_prompts=instance_prompts,
             class_prompts=class_prompts,
             batch_size=args.train_batch_size,
-            tokenizer=tokenizer,
+            tokenizer=tokenizers,
+            text_encoder=text_encoders,
+            accelerator=accelerator,
             vae=vae if args.cache_latents else None,
             debug=False,
             model_dir=args.model_dir,
+            max_token_length=args.max_token_length,
             pbar=pbar2
         )
         if train_dataset.class_count > 0:
@@ -826,7 +873,58 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
             "types": types,
             "loss_avg": loss_avg,
         }
+        if "input_ids2" in examples[0]:
+            input_ids_2 = [example["input_ids2"] for example in examples]
+            input_ids_2 = torch.stack(input_ids_2)
+
+            batch_data["input_ids2"] = input_ids_2
+            batch_data["original_sizes_hw"] = torch.stack([torch.LongTensor(x["original_sizes_hw"]) for x in examples])
+            batch_data["crop_top_lefts"] = torch.stack([torch.LongTensor(x["crop_top_lefts"]) for x in examples])
+            batch_data["target_sizes_hw"] = torch.stack([torch.LongTensor(x["target_sizes_hw"]) for x in examples])
         return batch_data
+
+    def collate_fn_sdxl(examples):
+        has_attention_mask = "instance_attention_mask" in examples[0]
+
+        input_ids = [example["input_ids"] for example in examples if not example["is_class"]]
+        pixel_values = [example["image"] for example in examples if not example["is_class"]]
+        add_text_embeds = [example["instance_added_cond_kwargs"]["text_embeds"] for example in examples if
+                           not example["is_class"]]
+        add_time_ids = [example["instance_added_cond_kwargs"]["time_ids"] for example in examples if
+                        not example["is_class"]]
+        # if has_attention_mask:
+        #     attention_mask = [example["instance_attention_mask"] for example in examples]
+
+        # Concat class and instance examples for prior preservation.
+        # We do this to avoid doing two forward passes.
+        if with_prior_preservation:
+            input_ids += [example["input_ids"] for example in examples if example["is_class"]]
+            pixel_values += [example["images"] for example in examples if example["is_class"]]
+            add_text_embeds += [example["class_added_cond_kwargs"]["text_embeds"] for example in examples if
+                                example["is_class"]]
+            add_time_ids += [example["class_added_cond_kwargs"]["time_ids"] for example in examples if
+                             example["is_class"]]
+
+            # if has_attention_mask:
+            #     attention_mask += [example["class_attention_mask"] for example in examples]
+
+        pixel_values = torch.stack(pixel_values)
+        pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
+
+        input_ids = torch.cat(input_ids, dim=0)
+        add_text_embeds = torch.cat(add_text_embeds, dim=0)
+        add_time_ids = torch.cat(add_time_ids, dim=0)
+
+        batch = {
+            "input_ids": input_ids,
+            "images": pixel_values,
+            "unet_added_conditions": {"text_embeds": add_text_embeds, "time_ids": add_time_ids},
+        }
+
+        # if has_attention_mask:
+        #     batch["attention_mask"] = attention_mask
+
+        return batch
 
     def collate_fn_finetune(examples):
         input_ids = [example["input_ids"] for example in examples]
@@ -880,12 +978,12 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     sampler = BucketSampler(train_dataset, args.train_batch_size)
 
     collate_fn = collate_fn_db
-    if args.train_mode == "finetune":
+    if args.train_mode == "SDXL":
+        collate_fn = collate_fn_sdxl
+    elif args.train_mode == "finetune":
         collate_fn = collate_fn_finetune
     elif args.train_mode == "controlnet":
         collate_fn = collate_fn_controlnet
-
-    # TODO: Add controlnet collate fn
 
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
@@ -993,7 +1091,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     epoch_steps = 0
     resume_from_checkpoint = False
     # Potentially load in the weights and states from a previous save
-    if args.checkpoint != "":
+    if args.checkpoint != "" and args.checkpoint is not None:
         if args.checkpoint != "latest":
             path = os.path.join(args.model_dir, "checkpoints", args.checkpoint)
         else:
@@ -1037,7 +1135,8 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     logger.info(f"  Initial learning rate = {args.learning_rate}")
     logger.info(f"  Initial txt learning rate = {txt_learning_rate}")
     logger.info(f"  Learning rate scheduler = {args.scheduler}")
-
+    logger.info(f"  Text encoder epochs = {text_encoder_epochs}")
+    logger.info(f"  Train UNET = {train_unet}")
     logger.info(f"  EMA: {train_ema}")
     logger.info(f"  LoRA: {train_lora}")
     logger.info(f"  OFT: {train_oft}")
@@ -1066,6 +1165,22 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
     last_tenc = 0 < text_encoder_epochs
     if stop_text_percentage == 0:
         last_tenc = False
+        if args.train_mode == "SDXL" and not args.train_lora:
+            del text_encoders
+            del tokenizers
+            if text_encoder is not None:
+                del text_encoder
+            if text_encoder_two is not None:
+                del text_encoder_two
+            if tokenizer is not None:
+                del tokenizer
+            if tokenizer_two is not None:
+                del tokenizer_two
+            text_encoder = None
+            text_encoder_two = None
+            tokenizer = None
+            tokenizer_two = None
+            printm("Deleted text encoders.")
 
     cleanup()
     stats = {
@@ -1115,16 +1230,17 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
             if stop_text_percentage == 0:
                 train_tenc = False
 
-            if args.freeze_clip_normalization:
-                text_encoder.eval()
-                if text_encoder_two is not None:
-                    text_encoder_two.eval()
-            else:
-                text_encoder.train(train_tenc)
-                if text_encoder_two is not None:
-                    text_encoder_two.train(train_tenc)
+            if text_encoder is not None:
+                if args.freeze_clip_normalization:
+                    text_encoder.eval()
+                    if text_encoder_two is not None:
+                        text_encoder_two.eval()
+                else:
+                    text_encoder.train(train_tenc)
+                    if text_encoder_two is not None:
+                        text_encoder_two.train(train_tenc)
 
-            if train_lora:
+            if train_lora and text_encoder is not None:
                 set_lora_requires_grad(text_encoder, train_tenc)
                 # We need to enable gradients on an input for gradient checkpointing to work
                 # This will not be optimized because it is not a param to optimizer
@@ -1132,7 +1248,8 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                 if text_encoder_two is not None:
                     text_encoder_two.text_model.embeddings.position_embedding.requires_grad_(train_tenc)
             else:
-                text_encoder.requires_grad_(train_tenc)
+                if text_encoder is not None:
+                    text_encoder.requires_grad_(train_tenc)
                 if text_encoder_two is not None:
                     text_encoder_two.requires_grad_(train_tenc)
 
@@ -1175,7 +1292,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                     accumulate_models.append(controlnet)
                 elif train_unet:
                     accumulate_models.append(unet)
-                if stop_text_percentage > 0:
+                if stop_text_percentage > 0 and text_encoder is not None:
                     accumulate_models.append(text_encoder)
                     if text_encoder_two is not None:
                         accumulate_models.append(text_encoder_two)
@@ -1192,7 +1309,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                             latents = vae.encode(
                                 batch["images"].to(dtype=weight_dtype)
                             ).latent_dist.sample()
-                        latents = latents * vae.config.scaling_factor
+                        latents = latents * vae_factor
 
                     # Sample noise that we'll add to the model input
                     noise = torch.randn_like(latents, device=latents.device)
@@ -1228,49 +1345,9 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                     # TODO: Figure out if we need to do something different here for SDXL
                     pad_tokens = args.pad_tokens if train_tenc else False
 
-                    if args.train_mode == "SDXL":
-                        with torch.set_grad_enabled(train_tenc):
-                            input_ids1 = input_ids1.to(accelerator.device)
-                            input_ids2 = input_ids2.to(accelerator.device)
-                            encoder_hidden_states, encoder_hidden_states_two, pool2 = get_hidden_states(
-                                args,
-                                input_ids1,
-                                input_ids2,
-                                tokenizer,
-                                tokenizer_two,
-                                text_encoder,
-                                text_encoder_two,
-                                weight_dtype,
-                            )
-                        # else:
-                        #     encoder_hidden_states1 = []
-                        #     encoder_hidden_states2 = []
-                        #     pool2 = []
-                        #     for input_id1, input_id2 in zip(input_ids1, input_ids2):
-                        #         input_id1_cache_key = tuple(input_id1.squeeze(0).flatten().tolist())
-                        #         input_id2_cache_key = tuple(input_id2.squeeze(0).flatten().tolist())
-                        #         encoder_hidden_states1.append(text_encoder1_cache[input_id1_cache_key])
-                        #         hidden_states2, p2 = text_encoder2_cache[input_id2_cache_key]
-                        #         encoder_hidden_states2.append(hidden_states2)
-                        #         pool2.append(p2)
-                        #     encoder_hidden_states1 = torch.stack(encoder_hidden_states1).to(accelerator.device).to(
-                        #         weight_dtype)
-                        #     encoder_hidden_states2 = torch.stack(encoder_hidden_states2).to(accelerator.device).to(
-                        #         weight_dtype)
-                        #     pool2 = torch.stack(pool2).to(accelerator.device).to(weight_dtype)
-
-                        # get size embeddings
-                        orig_size = batch["original_sizes_hw"]
-                        crop_size = batch["crop_top_lefts"]
-                        target_size = batch["target_sizes_hw"]
-                        embs = get_size_embeddings(orig_size, crop_size, target_size,
-                                                   accelerator.device).to(weight_dtype)
-
-                        # concat embeddings
-                        vector_embedding = torch.cat([pool2, embs], dim=1).to(weight_dtype)
-                        text_embedding = torch.cat([encoder_hidden_states, encoder_hidden_states_two], dim=2).to(
-                            weight_dtype)
-                    else:
+                    input_ids = batch["input_ids"]
+                    encoder_hidden_states = None
+                    if args.train_mode != "SDXL" and text_encoder is not None:
                         encoder_hidden_states = encode_hidden_state(
                             text_encoder,
                             batch["input_ids"],
@@ -1322,21 +1399,22 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                     else:
                         if args.train_mode == "SDXL":
                             with accelerator.autocast():
-                                model_pred = unet(noisy_latents, timesteps, text_embedding, vector_embedding)
+                                model_pred = unet(
+                                    noisy_latents, timesteps, batch["input_ids"],
+                                    added_cond_kwargs=batch["unet_added_conditions"]
+                                ).sample
                         else:
                             # Predict the noise residual and compute loss
                             model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
-                    if args.train_mode == "default" or args.train_mode == "SDXL":
+                    if args.train_mode == "default":
                         # TODO: set a prior preservation flag and use that to ensure this ony happens in dreambooth
                         if not args.split_loss and not with_prior_preservation:
                             loss = instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(),
                                                                                 reduction="mean")
                             loss *= batch["loss_avg"]
-
                         else:
                             # Predict the noise residual
-
                             if model_pred.shape[1] == 6:
                                 model_pred, _ = torch.chunk(model_pred, 2, dim=1)
 
@@ -1354,6 +1432,22 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                             else:
                                 # Compute loss
                                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                    elif args.train_mode == "SDXL":
+                        if with_prior_preservation:
+                            # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
+                            model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
+                            target, target_prior = torch.chunk(target, 2, dim=0)
+
+                            # Compute instance loss
+                            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+                            # Compute prior loss
+                            prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
+
+                            # Add the prior loss to the instance loss.
+                            loss = loss + args.prior_loss_weight * prior_loss
+                        else:
+                            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
                     else:
                         if args.snr_gamma == 0:
                             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
@@ -1387,7 +1481,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                                                                      text_encoder_two.parameters())
                                 else:
                                     params_to_clip = itertools.chain(unet.parameters(),
-                                                             text_encoder.parameters())
+                                                                     text_encoder.parameters())
                             else:
                                 params_to_clip = unet.parameters()
 
@@ -1526,6 +1620,7 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                     if status_handler:
                         status_handler.end(status.textinfo)
                     break
+
             # Create the pipeline using the trained modules and save it.
             if accelerator.is_main_process:
                 accelerator.wait_for_everyone()
@@ -1573,15 +1668,28 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
             unet = accelerator.unwrap_model(unet)
             if train_ema:
                 ema_unet.copy_to(unet.parameters())
-            update_status({"status": f"Training complete, saving pipeline."})
-            pipeline = StableDiffusionPipeline.from_pretrained(
-                args.pretrained_model_name_or_path,
-                text_encoder=text_encoder,
-                unet=unet,
-                revision=args.revision,
-            )
-            pipeline.save_pretrained(args.pretrained_model_name_or_path)
-            del pipeline
+            elif train_lora:
+                if args.train_mode == "SDXL" and train_lora:
+                    unet = unet.to(torch.float32)
+                    unet_lora_layers = unet_attn_processors_state_dict(unet)
+
+                    LoraLoaderMixin.save_lora_weights(
+                        save_directory=args.output_dir,
+                        unet_lora_layers=unet_lora_layers,
+                        text_encoder_lora_layers=None,
+                    )
+                else:
+                    save_lora(args, stop_text_percentage, accelerator, unet, text_encoder, pbar2, True)
+            else:
+                update_status({"status": f"Training complete, saving pipeline."})
+                pipeline = DiffusionPipeline.from_pretrained(
+                    args.pretrained_model_name_or_path,
+                    text_encoder=accelerator.unwrap_model(text_encoder),
+                    unet=unet,
+                    revision=args.revision,
+                )
+                pipeline.save_pretrained(args.pretrained_model_name_or_path)
+                del pipeline
     accelerator.end_training()
     cleanup_memory()
     if status_handler is not None:
