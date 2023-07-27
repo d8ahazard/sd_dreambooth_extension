@@ -928,6 +928,19 @@ def dreambooth_api(_, app: FastAPI):
 
         return status
 
+    @app.post("/dreambooth/edit_file")
+    async def edit_file(
+        file_path: str = Query(description="The file path for the folder the file resides in."),
+        file_name: str = Query(description="The file name."),
+        file_data: dict = Body(description="Dictionary of data to save."),
+    ):
+        try:
+            edit_file = os.path.join(file_path, file_name)
+            with open(edit_file, "w") as outfile:
+                json.dump(file_data, outfile, indent=4)
+        except BaseException as e:
+            logger.debug("Edit file failed.")
+
 
 try:
     import modules.script_callbacks as script_callbacks
