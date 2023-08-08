@@ -164,6 +164,9 @@ class DreamState:
     time_left_force_display = False
     active = False
     new_ui = False
+    in_progress = False
+    in_progress_epoch = 0
+    in_progress_step = 0
 
     def interrupt(self):
         if self.status_handler:
