@@ -315,7 +315,11 @@ class DreamboothConfig(BaseModel):
     def get_pretrained_model_name_or_path(self):
         if self.shared_diffusers_path != "" and not self.use_lora:
             raise Exception(f"shared_diffusers_path is \"{self.shared_diffusers_path}\" but use_lora is false")
-        return self.shared_diffusers_path if self.shared_diffusers_path != "" else self.pretrained_model_name_or_path
+        if self.shared_diffusers_path != "":
+            return self.shared_diffusers_path
+        if not self.pretrained_model_name_or_path or self.pretrained_model_name_or_path == "":
+            return os.path.join(self.model_dir, "working")
+        return self.pretrained_model_name_or_path
 
 
 def concepts_from_file(concepts_path: str):
@@ -343,6 +347,7 @@ def concepts_from_file(concepts_path: str):
                 concepts.append(concept.__dict__)
     except Exception as e:
         print(f"Exception parsing concepts: {e}")
+    print(f"Loaded concepts: {concepts}")
     return concepts
 
 

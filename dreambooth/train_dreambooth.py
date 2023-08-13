@@ -243,6 +243,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             status.textinfo = msg
             update_status({"status": msg})
             stop_text_percentage = 0
+        pretrained_path = args.get_pretrained_model_name_or_path()
+        logger.debug(f"Pretrained path: {pretrained_path}")
+
         count, instance_prompts, class_prompts = generate_classifiers(
             args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False, pbar=pbar2
         )
@@ -274,8 +277,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
         disable_safe_unpickle()
         # Load the tokenizer
+
         tokenizer = AutoTokenizer.from_pretrained(
-            os.path.join(args.get_pretrained_model_name_or_path(), "tokenizer"),
+            os.path.join(pretrained_path, "tokenizer"),
             revision=args.revision,
             use_fast=False,
         )
