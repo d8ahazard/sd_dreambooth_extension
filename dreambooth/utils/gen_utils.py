@@ -24,8 +24,18 @@ from helpers.image_builder import ImageBuilder
 from helpers.mytqdm import mytqdm
 
 
-def generate_dataset(instance_prompts: List[PromptData] = None, class_prompts: List[PromptData] = None,
-                     batch_size=None, tokenizer=None, vae=None, debug=True, model_dir="", pbar = None):
+def generate_dataset(
+        instance_prompts: List[PromptData] = None,
+        class_prompts: List[PromptData] = None,
+        batch_size=None,
+        tokenizer=None,
+        text_encoder=None,
+        accelerator=None,
+        vae=None,
+        debug=True,
+        model_dir="",
+        max_token_length=77,
+        pbar=None):
     if debug:
         print("Generating dataset.")
     from dreambooth.ui_functions import gr_update
@@ -62,12 +72,15 @@ def generate_dataset(instance_prompts: List[PromptData] = None, class_prompts: L
         class_prompts=class_prompts,
         tokens=tokens,
         tokenizer=tokenizer,
+        text_encoder=text_encoder,
+        accelerator=accelerator,
         resolution=args.resolution,
         hflip=args.hflip,
         shuffle_tags=args.shuffle_tags,
         strict_tokens=args.strict_tokens,
         dynamic_img_norm=args.dynamic_img_norm,
         not_pad_tokens=not args.pad_tokens,
+        max_token_length=max_token_length,
         debug_dataset=debug,
         model_dir=model_dir,
         pbar=pbar

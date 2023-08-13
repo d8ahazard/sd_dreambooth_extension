@@ -25,12 +25,6 @@ def sanitize_name(name):
 
 
 class TrainingConfig(BaseConfig):
-    precisions = list_precisions()
-    attentions = list_attention()
-    optimizers = list_optimizer()
-    schedulers = list_schedulers()
-
-    # General
     train_mode: str = Field("Default", description="The training mode to use.", title="Train Mode", group="General",
                             choices=["Default", "Fine-Tune", "ControlNet", "SDXL"])
     controlnet_model_name: str = Field("", description="[ControlNet] Controlnet model name.",
@@ -75,9 +69,9 @@ class TrainingConfig(BaseConfig):
                                title="Use Directory Tags", group="Training Data")
 
     # Performance
-    attention: str = Field("xformers", description="Attention model.", choices=attentions, title="Attention",
+    attention: str = Field("xformers", description="Attention model.", choices=list_attention(), title="Attention",
                            group="Performance")
-    mixed_precision: Optional[str] = Field("no", description="Whether to use mixed precision.", choices=precisions,
+    mixed_precision: Optional[str] = Field("no", description="Whether to use mixed precision.", choices=list_precisions(),
                                            title="Mixed Precision", group="Performance")
     max_grad_norm: float = Field(1.0,
                                  description="Max gradient norm for clipping. This is used to prevent large gradients that can destabilize the training. If the gradient exceeds this threshold, it is clipped to this value.",
@@ -99,7 +93,7 @@ class TrainingConfig(BaseConfig):
                            title="CPU Only", group="Performance")
 
     # Optimizer settings
-    optimizer: str = Field("8bit AdamW", description="Optimizer.", title="Optimizer", choices=optimizers,
+    optimizer: str = Field("8bit AdamW", description="Optimizer.", title="Optimizer", choices=list_optimizer(),
                            group="Optimizer")
     adam_beta1: float = Field(0.9,
                               description="The exponential decay rate for the first moment estimates in the Adam optimizer. This impacts the speed and stability of the optimizer's convergence.",
@@ -120,7 +114,7 @@ class TrainingConfig(BaseConfig):
 
     # Scheduler/LR
     lr_scheduler: str = Field("constant_with_warmup", description="Learning rate scheduler.", title="Scheduler",
-                              choices=schedulers, group="Learning Rate")
+                              choices=list_schedulers(), group="Learning Rate")
     lr_warmup_steps: int = Field(500, description="Number of steps for the warmup in the lr scheduler.",
                                  title="LR Warmup Steps", ge=0, le=10000, group="Learning Rate")
 
@@ -412,13 +406,7 @@ class TrainingConfig(BaseConfig):
     def concepts(self, required: int = -1):
         concepts = []
         c_idx = 0
-        # If using a file for concepts and not requesting from UI, load from file
-        if self.train_mode == "db" and self.concepts_path and required == -1:
-            concepts_list = concepts_from_file(self.concepts_path)
-
-        # Otherwise, use 'stored' list
-        else:
-            concepts_list = self.concepts_list
+        concepts_list = self.concepts_list
         if required == -1:
             required = len(concepts_list)
 
@@ -456,8 +444,6 @@ class TrainingConfig(BaseConfig):
             return None
 
     def get_pretrained_model_name_or_path(self):
-        if self.train_lora:
-            return self.src
         return self.pretrained_model_name_or_path
 
     def load_from_file(self, model_dir=None):
@@ -542,6 +528,8 @@ def save_config(*args):
         config = TrainingConfig(model_name=model_name)
     config.load_params(params_dict)
     shared.db_model_config = config
+    logging.getLogger(__name__).debug("Saving config.")
+    traceback.print_exc()
     config.save()
 
 
@@ -568,7 +556,7 @@ def from_file(model_name, model_dir=None):
         models_path = shared.dreambooth_models_path
         if models_path == "" or models_path is None:
             models_path = os.path.join(shared.models_path, "dreambooth")
-    config_file = os.path.join(models_path, model_name, "train_config.json")
+    config_file = os.path.join(models_path, model_name, "db_config.json")
     try:
         with open(config_file, 'r') as openfile:
             config_dict = json.load(openfile)

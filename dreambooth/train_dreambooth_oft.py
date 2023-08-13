@@ -65,7 +65,7 @@ from oft_utils.attention_processor import OFTAttnProcessor
 from oft_utils.mhe import MHE_OFT as MHE
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
-check_min_version("0.16.0.dev0")
+check_min_version("0.19.0.dev0")
 
 logger = get_logger(__name__)
 

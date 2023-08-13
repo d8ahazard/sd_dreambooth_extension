@@ -19,11 +19,8 @@ from fastapi import FastAPI
 import scripts.api
 from dreambooth import shared
 from dreambooth.dataclasses.training_config import TrainingConfig
-from dreambooth.dataclasses.db_config import DreamboothConfig, from_file
-from dreambooth.dataclasses.db_config_2 import DreamboothConfig2
-from dreambooth.dataclasses.finetune_config import FinetuneConfig
 from dreambooth.sd_to_diff import extract_checkpoint
-from dreambooth.train_dreambooth_original import main
+from dreambooth.train_dreambooth import main
 from module_src.gradio_parser import parse_gr_code
 
 logger = logging.getLogger(__name__)
@@ -125,17 +122,13 @@ async def _create_model(data):
     target = data["target"] if "target" in data else None
     mh = ModelHandler(user_name=data["user"] if "user" in data else None)
     sh = StatusHandler(user_name=data["user"] if "user" in data else None, target=target)
-    logger.debug(f"Full message: {data}")
     data = data["data"] if "data" in data else None
-    logger.debug(f"Create model called: {data}")
     model_name = data["new_model_name"] if "new_model_name" in data else None
     src_hash = data["new_model_src"]
     src_model = await mh.find_model("diffusers", src_hash)
-    logger.debug(f"SRC Model result: {src_model}")
     src = src_model.path if src_model else None
     shared_src = data["new_model_shared_src"] if "new_model_shared_src" in data else None
     from_hub = data["create_from_hub"] if "create_from_hub" in data else False
-    logger.debug(f"SRC - {src} and {from_hub}")
     if not src:
         logger.debug("Unable to find source model.")
         return {"status": "Unable to find source model.."}
@@ -166,32 +159,23 @@ async def _create_model(data):
 
 async def copy_model(model_name: str, src: str, is_512: bool, mh: ModelHandler, sh: StatusHandler):
     models_path = mh.models_path
-    logger.debug(f"Models paths: {models_path}")
     model_dir = models_path[0]
     mp = os.path.join(model_dir, "dreambooth")
     dest_dir = os.path.join(model_dir, "dreambooth", model_name, "working")
     if os.path.exists(dest_dir):
         shutil.rmtree(dest_dir, True)
     ch = ConfigHandler(user_name=mh.user_name)
+
+    # TODO: Undo the other junk files I created here, rename this
     base = ch.get_module_defaults("dreambooth_model_defaults")
-    base2 = ch.get_module_defaults("dreambooth2_model_defaults")
-    ft_base = ch.get_module_defaults("ft_model_defaults")
 
     if not os.path.exists(dest_dir):
         logger.debug(f"Copying model from {src} to {dest_dir}")
         await copy_directory(src, dest_dir, sh)
-        cfg = DreamboothConfig(model_name=model_name, src=src, resolution=512 if is_512 else 768, models_path=mp)
-        cfg_2 = DreamboothConfig2(model_name=model_name, src=src, resolution=512 if is_512 else 768, models_path=mp)
-        cfg_3 = FinetuneConfig(model_name=model_name, src=src, resolution=512 if is_512 else 768, models_path=mp)
+        cfg = TrainingConfig(model_name=model_name, src=src, resolution=512 if is_512 else 768, models_path=mp)
         if base is not None:
             cfg.load_params(base)
             cfg.save()
-        if base2 is not None:
-            cfg_2.load_params(base2)
-            cfg_2.save()
-        if ft_base is not None:
-            cfg_3.load_params(ft_base)
-            cfg_3.save()
 
     else:
         logger.debug(f"Destination directory '{dest_dir}' already exists, skipping copy.")
@@ -235,33 +219,22 @@ def get_directory_size(dir_path):
 
 
 async def _get_layout(data):
-    logger.debug(f"Get layout called: {data}")
     layout_file = os.path.join(os.path.dirname(__file__), "scripts", "main.py")
-    logger.debug(f"Trying to parse: {layout_file}")
     output = parse_gr_code(layout_file)
-    logger.debug(f"Output: {output}")
     return {"status": "Layout created.", "layout": output}
 
 
 async def _get_model_config(data, return_json=True):
-    logger.debug(f"Get model called: {data}")
     model = data["data"]["model"]
     model_dir = model["path"]
     db_config = TrainingConfig().load_from_file(model_dir)
-    if db_config.concepts_path and os.path.exists(db_config.concepts_path):
-        with open(db_config.concepts_path, "r") as f:
-            db_config.concepts_list = json.load(f)
-        db_config.concepts_path = ""
-        db_config.use_concepts = False
-        db_config.save()
 
     if return_json:
         return {"config": db_config.get_params()}
     return db_config
 
 
-async def _set_model_config(data: dict, return_config: bool = False) -> Union[Dict, DreamboothConfig, FinetuneConfig]:
-    logger.debug(f"Set model called: {data}")
+async def _set_model_config(data: dict, return_config: bool = False) -> Union[Dict]:
     model = data["data"]["model"]
     training_params = data["data"]
     del training_params["model"]
@@ -270,14 +243,3 @@ async def _set_model_config(data: dict, return_config: bool = False) -> Union[Di
     config.pretrained_model_name_or_path = os.path.join(model["path"], "working")
     config.save()
     return {"config": config.get_params()} if not return_config else config
-
-
-async def set_ft_model_config(data: dict, return_config: bool = False) -> Union[Dict, FinetuneConfig]:
-    logger.debug(f"Set model called: {data}")
-    model = data["data"]["model"]
-    training_params = data["data"]
-    del training_params["model"]
-    config = from_file(model["name"], os.path.dirname(model["path"]))
-    config.load_params(training_params)
-    config.save()
-    return {"config": config.__dict__} if not return_config else config
