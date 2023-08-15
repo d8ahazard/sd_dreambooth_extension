@@ -238,6 +238,79 @@ def main(args: TrainingConfig, user: str = None) -> TrainResult:
                 tracker.writer.add_images("validation", np_images, epoch, dataformats="NHWC")
             else:
                 logger.warning(f"image logging not implemented for {tracker.name}")
+                msg = f"Exception initializing accelerator: {e}"
+            logger.warning(msg)
+            result.msg = msg
+            result.config = args
+            stop_profiler(profiler)
+            return result
+
+        # This is the secondary status bar
+        pbar2 = mytqdm(
+            disable=not accelerator.is_local_main_process,
+            position=1,
+            user=user,
+            target="dreamProgress",
+            index=1
+        )
+        # Currently, it's not possible to do gradient accumulation when training two models with
+        # accelerate.accumulate This will be enabled soon in accelerate. For now, we don't allow gradient
+        # accumulation when training two models.
+        # TODO (patil-suraj): Remove this check when gradient accumulation with two models is enabled in accelerate.
+        if (
+                stop_text_percentage != 0
+                and gradient_accumulation_steps > 1
+                and accelerator.num_processes > 1
+        ):
+            msg = (
+                "Gradient accumulation is not supported when training the text encoder in distributed training. "
+                "Please set gradient_accumulation_steps to 1. This feature will be supported in the future. Text "
+                "encoder training will be disabled."
+            )
+            logger.warning(msg)
+            status.textinfo = msg
+            update_status({"status": msg})
+            stop_text_percentage = 0
+        pretrained_path = args.get_pretrained_model_name_or_path()
+        logger.debug(f"Pretrained path: {pretrained_path}")
+
+        count, instance_prompts, class_prompts = generate_classifiers(
+            args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False, pbar=pbar2
+        )
+        pbar2.reset()
+        if status.interrupted:
+            result.msg = "Training interrupted."
+            stop_profiler(profiler)
+            return result
+
+        if class_gen_method == "Native Diffusers" and count > 0:
+            unload_system_models()
+
+        def create_vae():
+            vae_path = (
+                args.pretrained_vae_name_or_path
+                if args.pretrained_vae_name_or_path
+                else args.get_pretrained_model_name_or_path()
+            )
+            disable_safe_unpickle()
+            new_vae = AutoencoderKL.from_pretrained(
+                vae_path,
+                subfolder=None if args.pretrained_vae_name_or_path else "vae",
+                revision=args.revision,
+            )
+            enable_safe_unpickle()
+            new_vae.requires_grad_(False)
+            new_vae.to(accelerator.device, dtype=weight_dtype)
+            return new_vae
+
+        disable_safe_unpickle()
+        # Load the tokenizer
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            os.path.join(pretrained_path, "tokenizer"),
+            revision=args.revision,
+            use_fast=False,
+        )
 
         del validation_pipeline
         cleanup()

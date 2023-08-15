@@ -57,6 +57,7 @@ class ClassDataset(Dataset):
 
         for concept_idx, concept in enumerate(concepts):
             pbar.set_description(f"Processing concept {concept_idx + 1}/{len(concepts)}")
+            instance_dir = concept.instance_data_dir
 
             if not concept.is_valid:
                 continue
