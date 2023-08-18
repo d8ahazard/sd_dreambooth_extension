@@ -71,6 +71,7 @@ class DreamboothConfig(BaseModel):
     model_dir: str = ""
     model_name: str = ""
     model_path: str = ""
+    model_type: str = "v1x"
     noise_scheduler: str = "DDPM"
     num_train_epochs: int = 100
     offset_noise: float = 0

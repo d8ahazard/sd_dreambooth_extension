@@ -300,15 +300,15 @@ def on_ui_tabs():
                             gr.HTML(value="Model Epoch:")
                             db_epochs = gr.HTML(elem_id="db_epochs")
                         with gr.Row():
-                            gr.HTML(value="V2 Model:")
-                            db_v2 = gr.HTML(elem_id="db_v2")
+                            gr.HTML(value="Model type:")
+                            db_model_type = gr.HTML(elem_id="db_model_type")
                         with gr.Row():
                             gr.HTML(value="Has EMA:")
                             db_has_ema = gr.HTML(elem_id="db_has_ema")
                         with gr.Row():
                             gr.HTML(value="Source Checkpoint:")
                             db_src = gr.HTML()
-                        with gr.Row():
+                        with gr.Row(visible=False):
                             gr.HTML(value="Experimental Shared Source:")
                             db_shared_diffusers_path = gr.HTML()
                     with gr.Tab("Create"):
@@ -321,9 +321,9 @@ def on_ui_tabs():
                             db_create_from_hub = gr.Checkbox(
                                 label="Create From Hub", value=False
                             )
-                            db_512_model = gr.Checkbox(label="512x Model", value=True)
+                            db_model_type_select=gr.Dropdown(label="Model Type", choices=["v1x", "v2x-512", "v2x", "SDXL", "ControlNet"])
                             db_use_shared_src = gr.Checkbox(
-                                label="Experimental Shared Src", value=False
+                                label="Experimental Shared Src", value=False, visible=False
                             )
                         with gr.Column(visible=False) as hub_row:
                             db_new_model_url = gr.Textbox(
@@ -1406,6 +1406,7 @@ def on_ui_tabs():
             db_model_path,
             db_revision,
             db_src,
+            db_model_type,
             db_shared_diffusers_path,
         ]
 
@@ -1561,7 +1562,7 @@ def on_ui_tabs():
                 db_model_path,
                 db_revision,
                 db_epochs,
-                db_v2,
+                db_model_type,
                 db_has_ema,
                 db_src,
                 db_shared_diffusers_path,
@@ -1696,7 +1697,7 @@ def on_ui_tabs():
                 db_new_model_token,
                 db_new_model_extract_ema,
                 db_train_unfrozen,
-                db_512_model,
+                db_model_type_select
             ],
             outputs=[
                 db_model_name,
@@ -1706,7 +1707,7 @@ def on_ui_tabs():
                 db_src,
                 db_shared_diffusers_path,
                 db_has_ema,
-                db_v2,
+                db_model_type,
                 db_resolution,
                 db_status,
             ],

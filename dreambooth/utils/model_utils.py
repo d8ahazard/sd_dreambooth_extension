@@ -3,6 +3,7 @@ from __future__ import annotations
 import collections
 import os
 import re
+import sys
 
 import torch
 from diffusers.utils import is_xformers_available
@@ -11,6 +12,8 @@ from transformers import PretrainedConfig
 from dreambooth import shared  # noqa
 from dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
 from dreambooth.utils.utils import cleanup  # noqa
+from modules import hashes
+from modules.safe import unsafe_torch_load, load
 
 checkpoints_list = {}
 checkpoint_alisases = {}
@@ -233,6 +236,7 @@ def disable_safe_unpickle():
     try:
         from modules import shared as auto_shared
         auto_shared.cmd_opts.disable_safe_unpickle = True
+        torch.load = unsafe_torch_load
     except:
         pass
 
@@ -241,6 +245,7 @@ def enable_safe_unpickle():
     try:
         from modules import shared as auto_shared
         auto_shared.cmd_opts.disable_safe_unpickle = False
+        torch.load = load
     except:
         pass
 

@@ -40,7 +40,7 @@ from dreambooth.utils.model_utils import (
     get_lora_models,
     get_checkpoint_match,
     get_model_snapshots,
-    LORA_SHARED_SRC_CREATE,
+    LORA_SHARED_SRC_CREATE, get_db_models,
 )
 from dreambooth.utils.utils import printm, cleanup
 from helpers.image_builder import ImageBuilder
@@ -651,7 +651,7 @@ def load_model_params(model_name):
             config.model_dir,
             config.revision,
             config.epoch,
-            "True" if config.v2 else "False",
+            config.model_type,
             "True" if config.has_ema and not config.use_lora else "False",
             config.src,
             config.shared_diffusers_path,
@@ -937,10 +937,17 @@ def create_model(
         new_model_token="",
         extract_ema=False,
         train_unfrozen=False,
-        is_512=True,
+        model_type="v1"
 ):
     printm("Extracting model.")
-    res = 512 if is_512 else 768
+    res = 512
+    is_512 = model_type == "v1"
+    if model_type == "v1x" or model_type=="v2x-512":
+        res = 512
+    elif model_type == "v2x":
+        res = 768
+    elif model_type == "sdxl":
+        res = 1024
     sh = None
     try:
         from core.handlers.status import StatusHandler
@@ -970,17 +977,18 @@ def create_model(
         ckpt_path = checkpoint_info.filename
 
     unload_system_models()
-    result = extract_checkpoint(
-        new_model_name,
-        ckpt_path,
-        shared_src,
-        from_hub,
-        new_model_url,
-        new_model_token,
-        extract_ema,
-        train_unfrozen,
-        is_512,
-    )
+    result = extract_checkpoint(new_model_name=new_model_name,
+                                checkpoint_file=ckpt_path,
+                                extract_ema=extract_ema,
+                                train_unfrozen=train_unfrozen,
+                                image_size=res,
+                                model_type=model_type)
+    if result is None:
+        err_msg = "Unable to extract checkpoint!"
+        print(err_msg)
+        if sh is not None:
+            sh.end(desc=err_msg)
+        return "", "", "", 0, 0, "", "", "", "", res, "", err_msg
     try:
         from core.handlers.models import ModelHandler
         mh = ModelHandler()
@@ -993,8 +1001,16 @@ def create_model(
     printm("Extraction complete.")
     if sh is not None:
         sh.end(desc="Extraction complete.")
-
-    return result
+    return gr_update(choices=sorted(get_db_models()), value=new_model_name), \
+        result.model_dir, \
+        result.revision, \
+        result.epoch, \
+        result.src, \
+        "", \
+        "True" if result.has_ema else "False", \
+        "True" if result.v2 else "False", \
+        result.resolution, \
+        "Checkpoint extracted successfully."
 
 
 def debug_collate_fn(examples):
