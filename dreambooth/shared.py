@@ -164,13 +164,16 @@ class DreamState:
     time_left_force_display = False
     active = False
     new_ui = False
+    in_progress = False
+    in_progress_epoch = 0
+    in_progress_step = 0
 
     def interrupt(self):
         if self.status_handler:
             self.status_handler.end(desc="Interrupted")
         self.interrupted = True
         self.in_progress = False
-        
+
     def interrupt_after_save(self):
         self.interrupted_after_save = True
         self.in_progress = False
