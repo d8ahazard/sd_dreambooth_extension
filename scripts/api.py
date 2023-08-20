@@ -429,8 +429,8 @@ def dreambooth_api(_, app: FastAPI):
             create_from_hub: bool = Query(False, description="Create this model from the hub", ),
             new_model_url: str = Query(None,
                                        description="The hub URL to use for this model. Must contain diffusers model.", ),
-            is_512: bool = Query(False,
-                                 description="Whether or not the model is 512x resolution.", ),
+            model_type: str = Query("v1x",
+                                 description="Model type (v1x/v2x-512/v2x/sdxl)", ),
             train_unfrozen: bool = Query(True,
                                          description="Un-freeze the model.", ),
             new_model_token: str = Query(None, description="Your huggingface hub token.", ),
@@ -465,7 +465,7 @@ def dreambooth_api(_, app: FastAPI):
                            new_model_token=new_model_token,
                            extract_ema=new_model_extract_ema,
                            train_unfrozen=train_unfrozen,
-                           is_512=is_512)
+                           model_type=model_type)
 
         return JSONResponse(res[-1])
 
