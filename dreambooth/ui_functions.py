@@ -749,6 +749,7 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
         traceback.print_exc()
         pass
 
+    status.end()
     cleanup()
     reload_system_models()
     lora_model_name = ""
