@@ -435,7 +435,7 @@ def dreambooth_api(_, app: FastAPI):
                                          description="Un-freeze the model.", ),
             new_model_token: str = Query(None, description="Your huggingface hub token.", ),
             new_model_extract_ema: bool = Query(False, description="Whether to extract EMA weights if present.", ),
-            api_key: str = Query("", description="If an API key is set, this must be present.", ),  
+            api_key: str = Query("", description="If an API key is set, this must be present.", ),
     ):
         """
         Create a new Dreambooth model.
@@ -684,7 +684,7 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        return JSONResponse(content={"current_state": f"{json.dumps(shared.status.dict())}"})
+        return JSONResponse(content={"current_state": shared.status.dict()})
 
     @app.get("/dreambooth/status_images")
     async def check_status_images(
