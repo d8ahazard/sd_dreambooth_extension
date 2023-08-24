@@ -66,6 +66,8 @@ from lora_diffusion.lora import (
     TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
     get_target_module,
     set_lora_requires_grad,
+    save_pipe,
+    merge_loras_to_pipe
 )
 
 logger = logging.getLogger(__name__)
@@ -968,18 +970,72 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     # Get the path to a temporary directory
                     tmp_dir = tempfile.mkdtemp()
                     s_pipeline.save_pretrained(tmp_dir, safe_serialization=True)
+                    lora_pipeline_path = os.path.join(tmp_dir, "lora_pipeline.pt")
+                    lora_pipeline_txt_path = os.path.join(tmp_dir, "lora_pipeline.text_encoder.pt")
+                    target_module = get_target_module("module", args.use_lora_extended)
+
+                    # save lora before deleting pipeline
+                    if args.use_lora:
+                        save_pipe(
+                            s_pipeline,
+                            lora_pipeline_path, 
+                            target_replace_module_unet=target_module,
+                            target_replace_module_text=TEXT_ENCODER_DEFAULT_TARGET_REPLACE
+                        )
                     del s_pipeline
                     cleanup()
                     s_pipeline = DiffusionPipeline.from_pretrained(
                         tmp_dir,
                         vae=vae,
-                        torch_dtype=weight_dtype,
+                        # for lora half models conversions are done after lora is merged
+                        torch_dtype=torch.float32 if args.use_lora else weight_dtype,
                         low_cpu_mem_usage=False,
                         device_map=None
                     )
 
                     if args.tomesd:
                         tomesd.apply_patch(s_pipeline, ratio=args.tomesd, use_rand=False)
+
+                    # Extra steps for lora training
+                    if args.use_lora:
+                        # re-inject lora to unet 
+                        injectable_lora = get_target_module("injection", args.use_lora_extended)
+                        injectable_lora(
+                            s_pipeline.unet,
+                            r=args.lora_unet_rank,
+                            loras=lora_pipeline_path,
+                            target_replace_module=target_module,
+                        )
+                        
+                        # if needed, reinject lora to text_encoder
+                        if stop_text_percentage != 0:
+                            inject_trainable_txt_lora = get_target_module("injection", False)
+                            inject_trainable_txt_lora(
+                                s_pipeline.text_encoder,
+                                r=args.lora_txt_rank,
+                                loras=lora_pipeline_txt_path,
+                                target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
+                            )
+                        
+                        # copy the original unet and text_encoder states after injection
+                        s_pipeline.unet.load_state_dict(unet.state_dict(), strict=False)
+                        s_pipeline.text_encoder.load_state_dict(text_encoder.state_dict(), strict=False)
+
+                        # collapse lora
+                        merge_loras_to_pipe(
+                            s_pipeline,
+                            lora_pipeline_path,
+                            lora_alpha = args.lora_weight,
+                            lora_txt_alpha = args.lora_txt_weight,
+                            r = args.lora_unet_rank,
+                            r_txt = args.lora_txt_rank,
+                            unet_target_module=target_module
+                        )
+
+                    # if its a half model, convert to half for inference
+                    if(args.half_model):
+                        s_pipeline.unet.to(dtype=weight_dtype)
+                        s_pipeline.text_encoder.to(dtype=weight_dtype)
 
                     s_pipeline.enable_vae_tiling()
                     s_pipeline.enable_vae_slicing()
