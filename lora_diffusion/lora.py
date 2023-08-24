@@ -939,7 +939,7 @@ def patch_pipe(
             unet_path = maybe_unet_path
 
         ti_path = _ti_lora_path(unet_path)
-        text_path = _text_lora_path_ui(unet_path)
+        text_path = _text_lora_path(unet_path)
 
         disable_safe_unpickle()
         if patch_unet:
