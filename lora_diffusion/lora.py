@@ -1030,7 +1030,7 @@ def save_pipe(
     )
     print("Unet saved to ", save_unet_path)
 
-    save_txt_path = _text_lora_path(save_unet_path),
+    save_txt_path = _text_lora_path(save_unet_path)
     save_lora_weight(
         pipeline.text_encoder,
         save_txt_path,
