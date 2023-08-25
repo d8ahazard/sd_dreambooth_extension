@@ -11,11 +11,13 @@ import shutil
 import tempfile
 import time
 import traceback
+from contextlib import ExitStack
 from decimal import Decimal
 from pathlib import Path
 
 import tomesd
 import torch
+import torch.nn.functional as F
 import torch.backends.cuda
 import torch.backends.cudnn
 from accelerate import Accelerator
@@ -25,9 +27,9 @@ from diffusers import (
     DiffusionPipeline,
     UNet2DConditionModel,
     DEISMultistepScheduler,
-    UniPCMultistepScheduler
+    UniPCMultistepScheduler, StableDiffusionXLPipeline
 )
-from diffusers.utils import logging as dl, is_xformers_available
+from diffusers.utils import logging as dl, is_xformers_available, randn_tensor
 from packaging import version
 from torch.cuda.profiler import profile
 from torch.utils.data import Dataset
@@ -75,6 +77,21 @@ dl.set_verbosity_error()
 last_samples = []
 last_prompts = []
 
+
+class ConditionalAccumulator:
+    def __init__(self, accelerator, *encoders):
+        self.accelerator = accelerator
+        self.encoders = encoders
+        self.stack = ExitStack()
+
+    def __enter__(self):
+        for encoder in self.encoders:
+            if encoder is not None:
+                self.stack.enter_context(self.accelerator.accumulate(encoder))
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.stack.__exit__(exc_type, exc_value, traceback)
 
 def check_and_patch_scheduler(scheduler_class):
     if not hasattr(scheduler_class, 'get_velocity'):
@@ -173,6 +190,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
     def inner_loop(train_batch_size: int, gradient_accumulation_steps: int, profiler: profile):
 
         text_encoder = None
+        text_encoder_two = None
         global last_samples
         global last_prompts
         stop_text_percentage = args.stop_text_encoder
@@ -284,6 +302,14 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             use_fast=False,
         )
 
+        tokenizer_two = None
+        if args.model_type == "SDXL":
+            tokenizer_two = AutoTokenizer.from_pretrained(
+                os.path.join(pretrained_path, "tokenizer_2"),
+                revision=args.revision,
+                use_fast=False,
+            )
+
         # import correct text encoder class
         text_encoder_cls = import_model_class_from_model_name_or_path(
             args.get_pretrained_model_name_or_path(), args.revision
@@ -296,6 +322,21 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             revision=args.revision,
             torch_dtype=torch.float32,
         )
+
+        if args.model_type == "SDXL":
+            # import correct text encoder class
+            text_encoder_cls_two = import_model_class_from_model_name_or_path(
+                args.get_pretrained_model_name_or_path(), args.revision, subfolder="text_encoder_2"
+            )
+
+            # Load models and create wrapper for stable diffusion
+            text_encoder_two = text_encoder_cls_two.from_pretrained(
+                args.get_pretrained_model_name_or_path(),
+                subfolder="text_encoder_2",
+                revision=args.revision,
+                torch_dtype=torch.float32,
+            )
+
         printm("Created tenc")
         vae = create_vae()
         printm("Created vae")
@@ -350,12 +391,18 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 unet.enable_gradient_checkpointing()
             if stop_text_percentage != 0:
                 text_encoder.gradient_checkpointing_enable()
+                if args.model_type == "SDXL":
+                    text_encoder_two.gradient_checkpointing_enable()
                 if args.use_lora:
                     # We need to enable gradients on an input for gradient checkpointing to work
                     # This will not be optimized because it is not a param to optimizer
                     text_encoder.text_model.embeddings.position_embedding.requires_grad_(True)
+                    if args.model_type == "SDXL":
+                        text_encoder_two.text_model.embeddings.position_embedding.requires_grad_(True)
             else:
                 text_encoder.to(accelerator.device, dtype=weight_dtype)
+                if args.model_type == "SDXL":
+                    text_encoder_two.to(accelerator.device, dtype=weight_dtype)
 
         ema_model = None
         if args.use_ema:
@@ -397,6 +444,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
         unet_lora_params = None
         text_encoder_lora_params = None
+        text_encoder_two_lora_params = None
         lora_path = None
         lora_txt = None
 
@@ -428,6 +476,14 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     r=args.lora_txt_rank,
                     loras=lora_txt,
                 )
+                if args.model_type == "SDXL":
+                    text_encoder_two.requires_grad_(False)
+                    text_encoder_two_lora_params, _ = inject_trainable_txt_lora(
+                        text_encoder_two,
+                        target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
+                        r=args.lora_txt_rank,
+                        loras=lora_txt,
+                    )
             printm("Lora loaded")
             cleanup()
             printm("Cleaned")
@@ -443,14 +499,27 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         "lr": txt_learning_rate,
                     },
                 ]
+                if args.model_type == "SDXL":
+                    params_to_optimize.append(
+                        {
+                            "params": itertools.chain(*text_encoder_two_lora_params),
+                            "lr": txt_learning_rate,
+                        }
+                    )
             else:
                 params_to_optimize = itertools.chain(*unet_lora_params)
 
         elif stop_text_percentage != 0:
             if args.train_unet:
-                params_to_optimize = itertools.chain(unet.parameters(), text_encoder.parameters())
+                if args.model_type == "SDXL":
+                    params_to_optimize = itertools.chain(unet.parameters(), text_encoder.parameters(), text_encoder_two.parameters())
+                else:
+                    params_to_optimize = itertools.chain(unet.parameters(), text_encoder.parameters())
             else:
-                params_to_optimize = itertools.chain(text_encoder.parameters())
+                if args.model_type == "SDXL":
+                    params_to_optimize = itertools.chain(text_encoder.parameters(), text_encoder_two.parameters())
+                else:
+                    params_to_optimize = itertools.chain(text_encoder.parameters())
         else:
             params_to_optimize = unet.parameters()
 
@@ -459,6 +528,14 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             try:
                 optimizer.param_groups[1]["weight_decay"] = args.tenc_weight_decay
                 optimizer.param_groups[1]["grad_clip_norm"] = args.tenc_grad_clip_norm
+            except:
+                logger.warning("Exception setting tenc weight decay")
+                traceback.print_exc()
+
+        if len(optimizer.param_groups) > 2:
+            try:
+                optimizer.param_groups[2]["weight_decay"] = args.tenc_weight_decay
+                optimizer.param_groups[2]["grad_clip_norm"] = args.tenc_grad_clip_norm
             except:
                 logger.warning("Exception setting tenc weight decay")
                 traceback.print_exc()
@@ -503,9 +580,11 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         pbar2.reset()
         pbar2.set_description("Loading dataset")
 
+        with_prior_preservation = False
         tokenizers = [tokenizer] if tokenizer_two is None else [tokenizer, tokenizer_two]
         text_encoders = [text_encoder] if text_encoder_two is None else [text_encoder, text_encoder_two]
         train_dataset = generate_dataset(
+            model_name=args.model_name,
             instance_prompts=instance_prompts,
             class_prompts=class_prompts,
             batch_size=args.train_batch_size,
@@ -545,83 +624,75 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             stop_profiler(profiler)
             return result
 
-    def collate_fn_db(examples):
-        input_ids = [example["input_ids"] for example in examples]
-        pixel_values = [example["image"] for example in examples]
-        types = [example["is_class"] for example in examples]
-        weights = [
-            current_prior_loss_weight if example["is_class"] else 1.0
-            for example in examples
-        ]
-        loss_avg = 0
-        for weight in weights:
-            loss_avg += weight
-        loss_avg /= len(weights)
-        pixel_values = torch.stack(pixel_values)
-        if not args.cache_latents:
-            pixel_values = pixel_values.to(
-                memory_format=torch.contiguous_format
-            ).float()
-        input_ids = torch.cat(input_ids, dim=0)
 
-        batch_data = {
-            "input_ids": input_ids,
-            "images": pixel_values,
-            "types": types,
-            "loss_avg": loss_avg,
-        }
-        if "input_ids2" in examples[0]:
-            input_ids_2 = [example["input_ids2"] for example in examples]
-            input_ids_2 = torch.stack(input_ids_2)
+        def collate_fn_db(examples):
+            input_ids = [example["input_ids"] for example in examples]
+            pixel_values = [example["image"] for example in examples]
+            types = [example["is_class"] for example in examples]
+            weights = [
+                current_prior_loss_weight if example["is_class"] else 1.0
+                for example in examples
+            ]
+            loss_avg = 0
+            for weight in weights:
+                loss_avg += weight
+            loss_avg /= len(weights)
+            pixel_values = torch.stack(pixel_values)
+            if not args.cache_latents:
+                pixel_values = pixel_values.to(
+                    memory_format=torch.contiguous_format
+                ).float()
+            input_ids = torch.cat(input_ids, dim=0)
 
-            batch_data["input_ids2"] = input_ids_2
-            batch_data["original_sizes_hw"] = torch.stack([torch.LongTensor(x["original_sizes_hw"]) for x in examples])
-            batch_data["crop_top_lefts"] = torch.stack([torch.LongTensor(x["crop_top_lefts"]) for x in examples])
-            batch_data["target_sizes_hw"] = torch.stack([torch.LongTensor(x["target_sizes_hw"]) for x in examples])
-        return batch_data
+            batch_data = {
+                "input_ids": input_ids,
+                "images": pixel_values,
+                "types": types,
+                "loss_avg": loss_avg,
+            }
+            if "input_ids2" in examples[0]:
+                input_ids_2 = [example["input_ids2"] for example in examples]
+                input_ids_2 = torch.stack(input_ids_2)
 
-    def collate_fn_sdxl(examples):
-        has_attention_mask = "instance_attention_mask" in examples[0]
+                batch_data["input_ids2"] = input_ids_2
+                batch_data["original_sizes_hw"] = torch.stack([torch.LongTensor(x["original_sizes_hw"]) for x in examples])
+                batch_data["crop_top_lefts"] = torch.stack([torch.LongTensor(x["crop_top_lefts"]) for x in examples])
+                batch_data["target_sizes_hw"] = torch.stack([torch.LongTensor(x["target_sizes_hw"]) for x in examples])
+            return batch_data
 
-        input_ids = [example["input_ids"] for example in examples if not example["is_class"]]
-        pixel_values = [example["image"] for example in examples if not example["is_class"]]
-        add_text_embeds = [example["instance_added_cond_kwargs"]["text_embeds"] for example in examples if
-                           not example["is_class"]]
-        add_time_ids = [example["instance_added_cond_kwargs"]["time_ids"] for example in examples if
-                        not example["is_class"]]
-        # if has_attention_mask:
-        #     attention_mask = [example["instance_attention_mask"] for example in examples]
+        def collate_fn_sdxl(examples):
+            input_ids = [example["input_ids"] for example in examples if not example["is_class"]]
+            pixel_values = [example["image"] for example in examples if not example["is_class"]]
+            add_text_embeds = [example["instance_added_cond_kwargs"]["text_embeds"] for example in examples if
+                               not example["is_class"]]
+            add_time_ids = [example["instance_added_cond_kwargs"]["time_ids"] for example in examples if
+                            not example["is_class"]]
 
-        # Concat class and instance examples for prior preservation.
-        # We do this to avoid doing two forward passes.
-        if with_prior_preservation:
-            input_ids += [example["input_ids"] for example in examples if example["is_class"]]
-            pixel_values += [example["images"] for example in examples if example["is_class"]]
-            add_text_embeds += [example["class_added_cond_kwargs"]["text_embeds"] for example in examples if
-                                example["is_class"]]
-            add_time_ids += [example["class_added_cond_kwargs"]["time_ids"] for example in examples if
-                             example["is_class"]]
+            # Concat class and instance examples for prior preservation.
+            # We do this to avoid doing two forward passes.
+            if with_prior_preservation:
+                input_ids += [example["input_ids"] for example in examples if example["is_class"]]
+                pixel_values += [example["images"] for example in examples if example["is_class"]]
+                add_text_embeds += [example["class_added_cond_kwargs"]["text_embeds"] for example in examples if
+                                    example["is_class"]]
+                add_time_ids += [example["class_added_cond_kwargs"]["time_ids"] for example in examples if
+                                 example["is_class"]]
 
-            # if has_attention_mask:
-            #     attention_mask += [example["class_attention_mask"] for example in examples]
+            pixel_values = torch.stack(pixel_values)
+            pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
 
-        pixel_values = torch.stack(pixel_values)
-        pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
+            input_ids = torch.cat(input_ids, dim=0)
+            add_text_embeds = torch.cat(add_text_embeds, dim=0)
+            add_time_ids = torch.cat(add_time_ids, dim=0)
 
-        input_ids = torch.cat(input_ids, dim=0)
-        add_text_embeds = torch.cat(add_text_embeds, dim=0)
-        add_time_ids = torch.cat(add_time_ids, dim=0)
+            batch = {
+                "input_ids": input_ids,
+                "images": pixel_values,
+                "unet_added_conditions": {"text_embeds": add_text_embeds, "time_ids": add_time_ids},
+            }
 
-        batch = {
-            "input_ids": input_ids,
-            "images": pixel_values,
-            "unet_added_conditions": {"text_embeds": add_text_embeds, "time_ids": add_time_ids},
-        }
 
-        # if has_attention_mask:
-        #     batch["attention_mask"] = attention_mask
-
-        return batch
+            return batch
 
         sampler = BucketSampler(train_dataset, train_batch_size)
 
@@ -881,7 +952,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             # Create the pipeline using the trained modules and save it.
             if accelerator.is_main_process:
                 printm("Pre-cleanup.")
-
+                torch_rng_state = None
+                cuda_gpu_rng_state = None
+                cuda_cpu_rng_state = None
                 # Save random states so sample generation doesn't impact training.
                 if shared.device.type == 'cuda':
                     torch_rng_state = torch.get_rng_state()
@@ -898,19 +971,35 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     vae = create_vae()
 
                 printm("Creating pipeline.")
-
-                s_pipeline = DiffusionPipeline.from_pretrained(
-                    args.get_pretrained_model_name_or_path(),
-                    unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=True),
-                    text_encoder=accelerator.unwrap_model(
-                        text_encoder, keep_fp32_wrapper=True
-                    ),
-                    vae=vae,
-                    torch_dtype=weight_dtype,
-                    revision=args.revision,
-                    safety_checker=None,
-                    requires_safety_checker=None,
-                )
+                if args.model_type == "SDXL":
+                    s_pipeline = StableDiffusionXLPipeline.from_pretrained(
+                        args.get_pretrained_model_name_or_path(),
+                        unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=True),
+                        text_encoder=accelerator.unwrap_model(
+                            text_encoder, keep_fp32_wrapper=True
+                        ),
+                        text_encoder_2=accelerator.unwrap_model(
+                            text_encoder_two, keep_fp32_wrapper=True
+                        ),
+                        vae=vae,
+                        torch_dtype=weight_dtype,
+                        revision=args.revision,
+                        safety_checker=None,
+                        requires_safety_checker=None,
+                    )
+                else:
+                    s_pipeline = DiffusionPipeline.from_pretrained(
+                        args.get_pretrained_model_name_or_path(),
+                        unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=True),
+                        text_encoder=accelerator.unwrap_model(
+                            text_encoder, keep_fp32_wrapper=True
+                        ),
+                        vae=vae,
+                        torch_dtype=weight_dtype,
+                        revision=args.revision,
+                        safety_checker=None,
+                        requires_safety_checker=None,
+                    )
 
                 # Is inference_mode() needed here to prevent issues when saving?
                 with accelerator.autocast(), torch.inference_mode():
@@ -995,6 +1084,18 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                         out_txt,
                                         target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
                                     )
+                                    if args.model_type == "SDXL":
+                                        # Save text_encoder_two
+                                        out_txt2 = out_file.replace(".pt", "_txt2.pt")
+                                        modelmap["text_encoder_2"] = (
+                                            s_pipeline.text_encoder_2,
+                                            TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
+                                        )
+                                        save_lora_weight(
+                                            s_pipeline.text_encoder_2,
+                                            out_txt2,
+                                            target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
+                                        )
                                     pbar2.update()
                                 # save extra_net
                                 if args.save_lora_for_extra_net:
@@ -1252,8 +1353,12 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
             if args.freeze_clip_normalization:
                 text_encoder.eval()
+                if args.model_type == "SDXL":
+                    text_encoder_two.eval()
             else:
                 text_encoder.train(train_tenc)
+                if args.model_type == "SDXL":
+                    text_encoder_two.train(train_tenc)
 
             if args.use_lora:
                 if not args.lora_use_buggy_requires_grad:
@@ -1261,8 +1366,13 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     # We need to enable gradients on an input for gradient checkpointing to work
                     # This will not be optimized because it is not a param to optimizer
                     text_encoder.text_model.embeddings.position_embedding.requires_grad_(train_tenc)
+                    if args.model_type == "SDXL":
+                        set_lora_requires_grad(text_encoder_two, train_tenc)
+                        text_encoder_two.text_model.embeddings.position_embedding.requires_grad_(train_tenc)
             else:
                 text_encoder.requires_grad_(train_tenc)
+                if args.model_type == "SDXL":
+                    text_encoder_two.requires_grad_(train_tenc)
 
             if last_tenc != train_tenc:
                 last_tenc = train_tenc
@@ -1288,7 +1398,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     stats["lifetime_step"] += train_batch_size
                     update_status(stats)
                     continue
-                with accelerator.accumulate(unet), accelerator.accumulate(text_encoder):
+
+                with ConditionalAccumulator(accelerator, unet, text_encoder, text_encoder_two):
                     # Convert images to latent space
                     with torch.no_grad():
                         if args.cache_latents:
@@ -1299,27 +1410,25 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             ).latent_dist.sample()
                         latents = latents * 0.18215
 
-                    # Sample noise that we'll add to the latents
-                    if args.offset_noise < 0:
-                        noise = torch.randn_like(latents, device=latents.device)
-                    else:
-                        noise = torch.randn_like(
-                            latents, device=latents.device
-                        ) + args.offset_noise * torch.randn(
-                            latents.shape[0],
-                            latents.shape[1],
-                            1,
-                            1,
-                            device=latents.device,
+                    # Sample noise that we'll add to the model input
+                    noise = torch.randn_like(latents, device=latents.device)
+                    if args.offset_noise != 0:
+                        # https://www.crosslabs.org//blog/diffusion-with-offset-noise
+                        noise += args.offset_noise * torch.randn(
+                            (latents.shape[0],
+                             latents.shape[1],
+                             1,
+                             1),
+                            device=latents.device
                         )
-                    b_size = latents.shape[0]
+                    b_size, channels, height, width = latents.shape
 
                     # Sample a random timestep for each image
                     timesteps = torch.randint(
                         0,
                         noise_scheduler.config.num_train_timesteps,
                         (b_size,),
-                        device=latents.device,
+                        device=latents.device
                     )
                     timesteps = timesteps.long()
 
@@ -1327,91 +1436,95 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     # (this is the forward diffusion process)
                     noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
                     pad_tokens = args.pad_tokens if train_tenc else False
-                    encoder_hidden_states = encode_hidden_state(
-                        text_encoder,
-                        batch["input_ids"],
-                        pad_tokens,
-                        b_size,
-                        args.max_token_length,
-                        tokenizer.model_max_length,
-                        args.clip_skip,
-                    )
+                    input_ids = batch["input_ids"]
+                    encoder_hidden_states = None
+                    if args.model_type != "SDXL" and text_encoder is not None:
+                        encoder_hidden_states = encode_hidden_state(
+                            text_encoder,
+                            batch["input_ids"],
+                            pad_tokens,
+                            b_size,
+                            args.max_token_length,
+                            tokenizer.model_max_length,
+                            args.clip_skip,
+                        )
 
-                    # Predict the noise residual
-                    if args.use_ema and args.ema_predict:
-                        noise_pred = ema_model(
-                            noisy_latents, timesteps, encoder_hidden_states
-                        ).sample
-                    else:
-                        noise_pred = unet(
-                            noisy_latents, timesteps, encoder_hidden_states
-                        ).sample
-
+                    if unet.config.in_channels > channels:
+                        needed_additional_channels = unet.config.in_channels - channels
+                        additional_latents = randn_tensor(
+                            (b_size, needed_additional_channels, height, width),
+                            device=noisy_latents.device,
+                            dtype=noisy_latents.dtype,
+                        )
+                        noisy_latents = torch.cat([additional_latents, noisy_latents], dim=1)
                     # Get the target for loss depending on the prediction type
-                    if noise_scheduler.config.prediction_type == "v_prediction":
+                    if noise_scheduler.config.prediction_type == "epsilon":
+                        target = noise
+                    elif noise_scheduler.config.prediction_type == "v_prediction":
                         target = noise_scheduler.get_velocity(latents, noise, timesteps)
                     else:
-                        target = noise
+                        raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
-                    if not args.split_loss:
-                        loss = instance_loss = torch.nn.functional.mse_loss(
-                            noise_pred.float(), target.float(), reduction="mean"
-                        )
-                        loss *= batch["loss_avg"]
-
+                    if args.model_type == "SDXL":
+                        with accelerator.autocast():
+                            model_pred = unet(
+                                noisy_latents, timesteps, batch["input_ids"],
+                                added_cond_kwargs=batch["unet_added_conditions"]
+                            ).sample
                     else:
-                        model_pred_chunks = torch.split(noise_pred, 1, dim=0)
-                        target_pred_chunks = torch.split(target, 1, dim=0)
-                        instance_chunks = []
-                        prior_chunks = []
-                        instance_pred_chunks = []
-                        prior_pred_chunks = []
+                        # Predict the noise residual and compute loss
+                        model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
-                        # Iterate over the list of boolean values in batch["types"]
-                        for i, is_prior in enumerate(batch["types"]):
-                            # If is_prior is False, append the corresponding chunk to instance_chunks
-                            if not is_prior:
-                                instance_chunks.append(model_pred_chunks[i])
-                                instance_pred_chunks.append(target_pred_chunks[i])
-                            # If is_prior is True, append the corresponding chunk to prior_chunks
-                            else:
-                                prior_chunks.append(model_pred_chunks[i])
-                                prior_pred_chunks.append(target_pred_chunks[i])
-
-                        # initialize with 0 in case we are having batch = 1
-                        instance_loss = torch.tensor(0)
-                        prior_loss = torch.tensor(0)
-
-                        # Concatenate the chunks in instance_chunks to form the model_pred_instance tensor
-                        if len(instance_chunks):
-                            model_pred = torch.stack(instance_chunks, dim=0)
-                            target = torch.stack(instance_pred_chunks, dim=0)
-                            instance_loss = torch.nn.functional.mse_loss(
-                                model_pred.float(), target.float(), reduction="mean"
-                            )
-
-                        if len(prior_pred_chunks):
-                            model_pred_prior = torch.stack(prior_chunks, dim=0)
-                            target_prior = torch.stack(prior_pred_chunks, dim=0)
-                            prior_loss = torch.nn.functional.mse_loss(
-                                model_pred_prior.float(),
-                                target_prior.float(),
-                                reduction="mean",
-                            )
-
-                        if len(instance_chunks) and len(prior_chunks):
-                            # Add the prior loss to the instance loss.
-                            loss = instance_loss + current_prior_loss_weight * prior_loss
-                        elif len(instance_chunks):
-                            loss = instance_loss
+                    if args.model_type != "SDXL":
+                        # TODO: set a prior preservation flag and use that to ensure this ony happens in dreambooth
+                        if not args.split_loss and not with_prior_preservation:
+                            loss = instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(),
+                                                                                reduction="mean")
+                            loss *= batch["loss_avg"]
                         else:
-                            loss = prior_loss * current_prior_loss_weight
+                            # Predict the noise residual
+                            if model_pred.shape[1] == 6:
+                                model_pred, _ = torch.chunk(model_pred, 2, dim=1)
+
+                            if with_prior_preservation:
+                                # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
+                                model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
+                                target, target_prior = torch.chunk(target, 2, dim=0)
+
+                                # Compute instance loss
+                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+                                # Compute prior loss
+                                prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
+                                                        reduction="mean")
+                            else:
+                                # Compute loss
+                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                    else:
+                        if with_prior_preservation:
+                            # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
+                            model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
+                            target, target_prior = torch.chunk(target, 2, dim=0)
+
+                            # Compute instance loss
+                            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+                            # Compute prior loss
+                            prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
+
+                            # Add the prior loss to the instance loss.
+                            loss = loss + args.prior_loss_weight * prior_loss
+                        else:
+                            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
                     accelerator.backward(loss)
 
                     if accelerator.sync_gradients and not args.use_lora:
                         if train_tenc:
-                            params_to_clip = itertools.chain(unet.parameters(), text_encoder.parameters())
+                            if args.model_type == "SDXL":
+                                params_to_clip = itertools.chain(unet.parameters(), text_encoder.parameters(), text_encoder_two.parameters())
+                            else:
+                                params_to_clip = itertools.chain(unet.parameters(), text_encoder.parameters())
                         else:
                             params_to_clip = unet.parameters()
                         accelerator.clip_grad_norm_(params_to_clip, 1)
@@ -1424,10 +1537,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         profiler.step()
 
                     optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
-
-                    # Track current step and epoch for OOM resume
-                    # shared.in_progress_epoch = global_epoch
-                    # shared.in_progress_steps = global_step
 
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
@@ -1452,7 +1561,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             traceback.print_exc()
 
                 update_status(stats)
-                del noise_pred
                 del latents
                 del encoder_hidden_states
                 del noise
@@ -1480,7 +1588,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 stats["unet_lr"] = '{:.2E}'.format(Decimal(last_lr))
                 stats["tenc_lr"] = '{:.2E}'.format(Decimal(last_tenc_lr))
 
-                if args.split_loss:
+                if args.split_loss and with_prior_preservation:
                     logs["inst_loss"] = float(instance_loss.detach().item())
                     logs["prior_loss"] = float(prior_loss.detach().item())
                     stats["instance_loss"] = logs["inst_loss"]
