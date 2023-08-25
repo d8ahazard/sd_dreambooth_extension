@@ -503,17 +503,23 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         pbar2.reset()
         pbar2.set_description("Loading dataset")
 
+        tokenizers = [tokenizer] if tokenizer_two is None else [tokenizer, tokenizer_two]
+        text_encoders = [text_encoder] if text_encoder_two is None else [text_encoder, text_encoder_two]
         train_dataset = generate_dataset(
-            model_name=args.model_name,
             instance_prompts=instance_prompts,
             class_prompts=class_prompts,
-            batch_size=train_batch_size,
-            tokenizer=tokenizer,
+            batch_size=args.train_batch_size,
+            tokenizer=tokenizers,
+            text_encoder=text_encoders,
+            accelerator=accelerator,
             vae=vae if args.cache_latents else None,
             debug=False,
             model_dir=args.model_dir,
+            max_token_length=args.max_token_length,
             pbar=pbar2
         )
+        if train_dataset.class_count > 0:
+            with_prior_preservation = True
         pbar2.reset()
         printm("Dataset loaded.")
 
@@ -539,35 +545,89 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             stop_profiler(profiler)
             return result
 
-        def collate_fn(examples):
-            input_ids = [example["input_ids"] for example in examples]
-            pixel_values = [example["image"] for example in examples]
-            types = [example["is_class"] for example in examples]
-            weights = [
-                current_prior_loss_weight if example["is_class"] else 1.0
-                for example in examples
-            ]
-            loss_avg = 0
-            for weight in weights:
-                loss_avg += weight
-            loss_avg /= len(weights)
-            pixel_values = torch.stack(pixel_values)
-            if not args.cache_latents:
-                pixel_values = pixel_values.to(
-                    memory_format=torch.contiguous_format
-                ).float()
-            input_ids = torch.cat(input_ids, dim=0)
+    def collate_fn_db(examples):
+        input_ids = [example["input_ids"] for example in examples]
+        pixel_values = [example["image"] for example in examples]
+        types = [example["is_class"] for example in examples]
+        weights = [
+            current_prior_loss_weight if example["is_class"] else 1.0
+            for example in examples
+        ]
+        loss_avg = 0
+        for weight in weights:
+            loss_avg += weight
+        loss_avg /= len(weights)
+        pixel_values = torch.stack(pixel_values)
+        if not args.cache_latents:
+            pixel_values = pixel_values.to(
+                memory_format=torch.contiguous_format
+            ).float()
+        input_ids = torch.cat(input_ids, dim=0)
 
-            batch_data = {
-                "input_ids": input_ids,
-                "images": pixel_values,
-                "types": types,
-                "loss_avg": loss_avg,
-            }
-            return batch_data
+        batch_data = {
+            "input_ids": input_ids,
+            "images": pixel_values,
+            "types": types,
+            "loss_avg": loss_avg,
+        }
+        if "input_ids2" in examples[0]:
+            input_ids_2 = [example["input_ids2"] for example in examples]
+            input_ids_2 = torch.stack(input_ids_2)
+
+            batch_data["input_ids2"] = input_ids_2
+            batch_data["original_sizes_hw"] = torch.stack([torch.LongTensor(x["original_sizes_hw"]) for x in examples])
+            batch_data["crop_top_lefts"] = torch.stack([torch.LongTensor(x["crop_top_lefts"]) for x in examples])
+            batch_data["target_sizes_hw"] = torch.stack([torch.LongTensor(x["target_sizes_hw"]) for x in examples])
+        return batch_data
+
+    def collate_fn_sdxl(examples):
+        has_attention_mask = "instance_attention_mask" in examples[0]
+
+        input_ids = [example["input_ids"] for example in examples if not example["is_class"]]
+        pixel_values = [example["image"] for example in examples if not example["is_class"]]
+        add_text_embeds = [example["instance_added_cond_kwargs"]["text_embeds"] for example in examples if
+                           not example["is_class"]]
+        add_time_ids = [example["instance_added_cond_kwargs"]["time_ids"] for example in examples if
+                        not example["is_class"]]
+        # if has_attention_mask:
+        #     attention_mask = [example["instance_attention_mask"] for example in examples]
+
+        # Concat class and instance examples for prior preservation.
+        # We do this to avoid doing two forward passes.
+        if with_prior_preservation:
+            input_ids += [example["input_ids"] for example in examples if example["is_class"]]
+            pixel_values += [example["images"] for example in examples if example["is_class"]]
+            add_text_embeds += [example["class_added_cond_kwargs"]["text_embeds"] for example in examples if
+                                example["is_class"]]
+            add_time_ids += [example["class_added_cond_kwargs"]["time_ids"] for example in examples if
+                             example["is_class"]]
+
+            # if has_attention_mask:
+            #     attention_mask += [example["class_attention_mask"] for example in examples]
+
+        pixel_values = torch.stack(pixel_values)
+        pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
+
+        input_ids = torch.cat(input_ids, dim=0)
+        add_text_embeds = torch.cat(add_text_embeds, dim=0)
+        add_time_ids = torch.cat(add_time_ids, dim=0)
+
+        batch = {
+            "input_ids": input_ids,
+            "images": pixel_values,
+            "unet_added_conditions": {"text_embeds": add_text_embeds, "time_ids": add_time_ids},
+        }
+
+        # if has_attention_mask:
+        #     batch["attention_mask"] = attention_mask
+
+        return batch
 
         sampler = BucketSampler(train_dataset, train_batch_size)
 
+        collate_fn = collate_fn_db
+        if args.train_mode == "SDXL":
+            collate_fn = collate_fn_sdxl
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset,
             batch_size=1,

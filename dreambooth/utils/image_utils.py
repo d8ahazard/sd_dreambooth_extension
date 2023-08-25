@@ -253,9 +253,11 @@ def get_scheduler_names():
 
 
 def get_scheduler_class(scheduler_name):
+    if "Scheduler" not in scheduler_name:
+        scheduler_name += 'Scheduler'
     try:
         # Get the class type by name from the KarrasDiffusionSchedulers enum
-        scheduler_class = getattr(sys.modules["diffusers"], scheduler_name + 'Scheduler')
+        scheduler_class = getattr(sys.modules["diffusers"], scheduler_name)
     except AttributeError:
         raise ValueError(f"No scheduler named {scheduler_name} found")
 
