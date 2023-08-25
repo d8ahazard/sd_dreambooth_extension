@@ -697,7 +697,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         sampler = BucketSampler(train_dataset, train_batch_size)
 
         collate_fn = collate_fn_db
-        if args.train_mode == "SDXL":
+        if args.model_type == "SDXL":
             collate_fn = collate_fn_sdxl
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset,
