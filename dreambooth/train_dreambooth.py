@@ -1131,28 +1131,38 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 if save_image:
                     logger.debug("Saving images...")
                     # Get the path to a temporary directory
-                    tmp_dir = tempfile.mkdtemp()
+                    model_path = args.get_pretrained_model_name_or_path()
+                    tmp_dir = f"{model_path}_temp"
                     s_pipeline.save_pretrained(tmp_dir, safe_serialization=True)
                     del s_pipeline
                     cleanup()
-                    s_pipeline = DiffusionPipeline.from_pretrained(
-                        tmp_dir,
-                        vae=vae,
-                        torch_dtype=weight_dtype,
-                        low_cpu_mem_usage=False,
-                        device_map=None
-                    )
+                    if args.model_type == "SDXL":
+                        s_pipeline = StableDiffusionXLPipeline.from_pretrained(
+                            tmp_dir,
+                            vae=vae,
+                            torch_dtype=weight_dtype,
+                            low_cpu_mem_usage=False,
+                            device_map=None,
+                        )
+                    else:
+                        s_pipeline = DiffusionPipeline.from_pretrained(
+                            tmp_dir,
+                            vae=vae,
+                            torch_dtype=weight_dtype,
+                            low_cpu_mem_usage=False,
+                            device_map=None
+                        )
 
-                    if args.tomesd:
-                        tomesd.apply_patch(s_pipeline, ratio=args.tomesd, use_rand=False)
+                        if args.tomesd:
+                            tomesd.apply_patch(s_pipeline, ratio=args.tomesd, use_rand=False)
 
-                    s_pipeline.enable_vae_tiling()
-                    s_pipeline.enable_vae_slicing()
                     try:
+                        s_pipeline.enable_vae_tiling()
+                        s_pipeline.enable_vae_slicing()
+                        s_pipeline.enable_sequential_cpu_offload()
                         s_pipeline.enable_xformers_memory_efficient_attention()
                     except:
                         pass
-                    s_pipeline.enable_sequential_cpu_offload()
 
                     s_pipeline.scheduler = get_scheduler_class("UniPCMultistep").from_config(s_pipeline.scheduler.config)
                     s_pipeline.scheduler.config.solver_type = "bh2"

@@ -184,8 +184,7 @@ class DbDataset(torch.utils.data.Dataset):
                 prompt_embeds = torch.cat(states_list, dim=1)
 
             if "text_embeds" not in enc_out:
-                logger.warning("Can't find text embeds in enc_out out of keys: {}".format(enc_out.keys()))
-                # We are only interested in the pooled output of the final text encoder
+                # Thanks autopilot!
                 pooled_prompt_embeds = enc_out["pooler_output"]
             else:
                 # We are only ALWAYS interested in the pooled output of the final text encoder
