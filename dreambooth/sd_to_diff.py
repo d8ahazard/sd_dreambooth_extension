@@ -23,6 +23,7 @@ import traceback
 from typing import Union
 
 import torch
+from diffusers import StableDiffusionXLPipeline
 from diffusers.pipelines.stable_diffusion.convert_from_ckpt import download_from_original_stable_diffusion_ckpt
 
 from dreambooth import shared
@@ -47,9 +48,10 @@ def get_config_path(
         model_version: str = "v1",
         train_type: str = "default",
         config_base_name: str = "training",
-        prediction_type: str = "epsilon"
+        prediction_type: str = ""
 ):
-    train_type = f"{train_type}" if not prediction_type == "v_prediction" else f"{train_type}-v"
+    if prediction_type != "":
+        train_type = f"{train_type}-{prediction_type}"
 
     return os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
@@ -59,24 +61,29 @@ def get_config_path(
     )
 
 
-def get_config_file(train_unfrozen=False, v2=False, prediction_type="epsilon"):
+def get_config_file(train_unfrozen=False, model_type: str="v1x"):
     config_base_name = "training"
 
     model_versions = {
-        "v1": "v1",
-        "v2": "v2"
+        "v1x": "v1",
+        "v2x-512": "v2",
+        "v2x": "v2",
+        "SDXL": "SDXL",
+    }
+    model_pred_string = {
+        "v1x": "",
+        "v2x-512": "",
+        "v2x": "v",
+        "SDXL": "",
     }
     train_types = {
         "default": "default",
         "unfrozen": "unfrozen",
     }
 
-    model_train_type = train_types["default"]
-    model_version_name = f"{model_versions['v1'] if not v2 else model_versions['v2']}"
-
-    if train_unfrozen:
-        model_train_type = train_types["unfrozen"]
-
+    model_train_type = train_types["default"] if not train_unfrozen else train_types["unfrozen"]
+    model_version_name = model_versions[model_type]
+    prediction_type = model_pred_string[model_type]
     return get_config_path(model_version_name, model_train_type, config_base_name, prediction_type)
 
 
@@ -129,9 +136,13 @@ def extract_checkpoint(
     #         modules.shared.status.update(status)
     disable_safe_unpickle()
     if image_size is None:
-        image_size = 512 if is_512 else 768
+        image_size = 512
+        if model_type == "v2x":
+            image_size = 768
+        if model_type == "SDXL":
+            image_size = 1024
 
-    to_safetensors = True
+    to_safetensors = False
     if pipeline_class_name is not None:
         library = importlib.import_module("diffusers")
         class_obj = getattr(library, pipeline_class_name)
@@ -140,7 +151,7 @@ def extract_checkpoint(
         pipeline_class = None
 
     if original_config_file is None:
-        original_config_file = get_config_file(train_unfrozen, v2=is_512 == False, prediction_type=prediction_type)
+        original_config_file = get_config_file(train_unfrozen, model_type)
     print(f"Extracting config from {original_config_file}")
     checkpoint_file = os.path.join(shared.models_path, checkpoint_file)
     print(f"Extracting checkpoint from {checkpoint_file}")
@@ -153,6 +164,8 @@ def extract_checkpoint(
     db_config.model_type = model_type
     db_config.resolution = image_size
     db_config.save()
+    if model_type == "SDXL":
+        pipeline_class = StableDiffusionXLPipeline
     try:
         pipe = download_from_original_stable_diffusion_ckpt(
             checkpoint_path=checkpoint_file,
@@ -179,12 +192,13 @@ def extract_checkpoint(
 
         dump_path = db_config.get_pretrained_model_name_or_path()
         if controlnet:
+            print("Saving controlnet model")
             # only save the controlnet model
             pipe.controlnet.save_pretrained(dump_path, safe_serialization=to_safetensors)
         else:
             try:
                 tmp_path = f"{dump_path}_tmp"
-                pipe.save_pretrained(dump_path, safe_serialization=True)
+                pipe.save_pretrained(dump_path, safe_serialization=False)
             except:
                 print("Couldn't save the pipe")
                 traceback.print_exc()
