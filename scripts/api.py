@@ -26,6 +26,7 @@ try:
     from dreambooth.dataclasses.db_concept import Concept
     from dreambooth.dataclasses.db_config import from_file, DreamboothConfig
     from dreambooth.diff_to_sd import compile_checkpoint
+    from dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_sdxl
     from dreambooth.secret import get_secret
     from dreambooth.shared import DreamState
     from dreambooth.ui_functions import create_model, generate_samples, \
@@ -221,7 +222,10 @@ def dreambooth_api(_, app: FastAPI):
             global active
             shared.status.begin()
             active = True
-            ckpt_result = compile_checkpoint(model_name, reload_models=False, log=False)
+            if config.model_type == "SDXL":
+                ckpt_result = compile_checkpoint_sdxl(model_name, reload_models=False, log=False)
+            else:
+                ckpt_result = compile_checkpoint(model_name, reload_models=False, log=False)
             active = False
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()

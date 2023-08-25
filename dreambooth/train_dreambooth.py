@@ -42,6 +42,7 @@ from dreambooth.dataset.bucket_sampler import BucketSampler
 from dreambooth.dataset.sample_dataset import SampleDataset
 from dreambooth.deis_velocity import get_velocity
 from dreambooth.diff_to_sd import compile_checkpoint, copy_diffusion_model
+from dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_xl
 from dreambooth.memory import find_executable_batch_size
 from dreambooth.optimization import UniversalScheduler, get_optimizer, get_noise_scheduler
 from dreambooth.shared import status
@@ -355,7 +356,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 xformers_version = version.parse(xformers.__version__)
                 if xformers_version == version.parse("0.0.16"):
                     logger.warning(
-                        "xFormers 0.0.16 cannot be used for training in some GPUs. If you observe problems during training, please update xFormers to at least 0.0.17. See https://huggingface.co/docs/diffusers/main/en/optimization/xformers for more details."
+                        "xFormers 0.0.16 cannot be used for training in some GPUs. If you observe problems during training, please update xFormers to at least 0.0.21. See https://huggingface.co/docs/diffusers/main/en/optimization/xformers for more details."
                     )
             else:
                 raise ValueError(
@@ -1035,7 +1036,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 pbar2.set_description("Saving diffusion model")
                                 s_pipeline.save_pretrained(
                                     os.path.join(args.model_dir, "working"),
-                                    safe_serialization=True,
+                                    safe_serialization=False,
                                 )
                                 if ema_model is not None:
                                     ema_model.save_pretrained(
@@ -1043,7 +1044,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                             args.get_pretrained_model_name_or_path(),
                                             "ema_unet",
                                         ),
-                                        safe_serialization=True,
+                                        safe_serialization=False,
                                     )
                                 pbar2.update()
 
@@ -1118,8 +1119,12 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 if export_diffusers:
                                     copy_diffusion_model(args.model_name, os.path.join(user_model_dir, "diffusers"))
                                 else:
-                                    compile_checkpoint(args.model_name, reload_models=False, lora_file_name=out_file,
-                                                       log=False, snap_rev=snap_rev, pbar=pbar2)
+                                    if args.model_type == "SDXL":
+                                        compile_checkpoint_xl(args.model_name, reload_models=False, lora_file_name=out_file,
+                                                              log=False, snap_rev=snap_rev, pbar=pbar2)
+                                    else:
+                                        compile_checkpoint(args.model_name, reload_models=False, lora_file_name=out_file,
+                                                           log=False, snap_rev=snap_rev, pbar=pbar2)
                                 printm("Restored, moved to acc.device.")
                                 pbar2.update()
                         except Exception as ex:
@@ -1133,7 +1138,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     # Get the path to a temporary directory
                     model_path = args.get_pretrained_model_name_or_path()
                     tmp_dir = f"{model_path}_temp"
-                    s_pipeline.save_pretrained(tmp_dir, safe_serialization=True)
+                    s_pipeline.save_pretrained(tmp_dir, safe_serialization=False)
                     del s_pipeline
                     cleanup()
                     if args.model_type == "SDXL":

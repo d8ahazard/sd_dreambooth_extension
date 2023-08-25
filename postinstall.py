@@ -93,7 +93,7 @@ def check_xformers():
     """
     try:
         xformers_version = importlib_metadata.version("xformers")
-        xformers_outdated = Version(xformers_version) < Version("0.0.17.dev")
+        xformers_outdated = Version(xformers_version) < Version("0.0.20")
         if xformers_outdated:
             try:
                 torch_version = importlib_metadata.version("torch")
@@ -143,7 +143,7 @@ def check_versions():
     is_mac = sys_platform == 'darwin' and platform.machine() == 'arm64'
 
     dependencies = [
-        Dependency(module="xformers", version="0.0.17.dev", required=False),
+        Dependency(module="xformers", version="0.0.21", required=False),
         Dependency(module="torch", version="1.13.1" if is_mac else "1.13.1+cu116"),
         Dependency(module="torchvision", version="0.14.1" if is_mac else "0.14.1+cu116"),
         Dependency(module="accelerate", version="0.17.1"),
@@ -207,7 +207,7 @@ def print_xformers_installation_error(err):
     print("#                                       XFORMERS ISSUE DETECTED                                       #")
     print("#######################################################################################################")
     print("#")
-    print(f"# Dreambooth could not find a compatible version of xformers (>= 0.0.17.dev built with torch {torch_ver})")
+    print(f"# Dreambooth could not find a compatible version of xformers (>= 0.0.21 built with torch {torch_ver})")
     print("# xformers will not be available for Dreambooth. Consider upgrading to Torch 2.")
     print("#")
     print("# Xformers installation exception:")
@@ -253,8 +253,8 @@ def check_torch_unsafe_load():
 
 def print_xformers_torch1_instructions(xformers_version):
     print(f"# Your version of xformers is {xformers_version}.")
-    print("# xformers >= 0.0.17.dev is required to be available on the Dreambooth tab.")
-    print("# Torch 1 wheels of xformers >= 0.0.17.dev are no longer available on PyPI,")
+    print("# xformers >= 0.0.20 is required to be available on the Dreambooth tab.")
+    print("# Torch 1 wheels of xformers >= 0.0.20 are no longer available on PyPI,")
     print("# but you can manually download them by going to:")
     print("https://github.com/facebookresearch/xformers/actions")
     print("# Click on the most recent action tagged with a release (middle column).")

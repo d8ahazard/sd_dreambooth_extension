@@ -103,8 +103,8 @@ def xformers_check():
             import torch
             if version.Version(torch.__version__) < version.Version("1.12"):
                 raise ValueError("PyTorch version must be >= 1.12")
-            if version.Version(_xformers_version) < version.Version("0.0.17.dev"):
-                raise ValueError("Xformers version must be >= 0.0.17.dev")
+            if version.Version(_xformers_version) < version.Version("0.0.21"):
+                raise ValueError("Xformers version must be >= 0.0.21")
         has_xformers = True
     except Exception as e:
         # print(f"Exception importing xformers: {e}")
@@ -128,7 +128,11 @@ def list_optimizer():
         optimizer_list.append("Lion")
     except:
         pass
-
+    try:
+        from transformers import Adafactor
+        optimizer_list.append("Adafactor")
+    except:
+        pass
     try:
         from dadaptation import DAdaptAdam
         optimizer_list.append("AdamW Dadaptation")

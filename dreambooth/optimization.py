@@ -582,7 +582,20 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 lr=learning_rate,
                 weight_decay=weight_decay,
             )
-
+        elif optimizer == "Adafactor":
+            from transformers import Adafactor
+            return Adafactor(
+                params_to_optimize,
+                lr=learning_rate,
+                eps=(1e-30, 1e-3),
+                clip_threshold=1.0,
+                decay_rate=-0.8,
+                beta1=None,
+                weight_decay=0.0,
+                relative_step=False,
+                scale_parameter=False,
+                warmup_init=False,
+            )
         elif optimizer == "Lion":
             from lion_pytorch import Lion
             return Lion(
