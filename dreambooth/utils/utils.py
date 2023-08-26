@@ -103,8 +103,8 @@ def xformers_check():
             import torch
             if version.Version(torch.__version__) < version.Version("1.12"):
                 raise ValueError("PyTorch version must be >= 1.12")
-            if version.Version(_xformers_version) < version.Version("0.0.17.dev"):
-                raise ValueError("Xformers version must be >= 0.0.17.dev")
+            if version.Version(_xformers_version) < version.Version("0.0.21"):
+                raise ValueError("Xformers version must be >= 0.0.21")
         has_xformers = True
     except Exception as e:
         # print(f"Exception importing xformers: {e}")
@@ -118,23 +118,35 @@ def list_optimizer():
 
     try:
         if shared.device.type != "mps":
-            from bitsandbytes.optim import AdamW8bit
+            from bitsandbytes.optim.adamw import AdamW8bit
             optimizer_list.append("8bit AdamW")
     except:
         pass
 
     try:
-        from lion_pytorch import Lion
+        from pytorch_optimizer.optimizer import lion
         optimizer_list.append("Lion")
     except:
         pass
-
+    
+    try:
+        from transformers.optimization import Adafactor
+        optimizer_list.append("Adafactor")
+    except:
+        pass
+    
     try:
         from dadaptation import DAdaptAdam
         optimizer_list.append("AdamW Dadaptation")
     except:
         pass
-
+    
+    try:
+        from dadaptation.experimental import dadapt_adan_ip
+        optimizer_list.append("AdanIP Dadaptation")
+    except:
+        pass
+    
     try:
         from dadaptation import DAdaptLion
         optimizer_list.append("Lion Dadaptation")
@@ -152,9 +164,32 @@ def list_optimizer():
         optimizer_list.append("SGD Dadaptation")
     except:
         pass
-
+        
+    try:
+        from pytorch_optimizer.optimizer import prodigy
+        optimizer_list.append("Prodigy")
+    except:
+        pass
+    
+    try:
+        from pytorch_optimizer.optimizer import tiger
+        optimizer_list.append("Tiger")
+    except:
+        pass
+    
+    try:
+        from bitsandbytes.optim.lion import Lion8bit
+        optimizer_list.append("8bit Lion")
+    except:
+        pass
+    
+    try:
+        from pytorch_optimizer.optimizer import came
+        optimizer_list.append("CAME")
+    except:
+        pass
+        
     return optimizer_list
-
 
 def list_attention():
     has_xformers = xformers_check()
@@ -189,7 +224,7 @@ def list_schedulers():
         "polynomial",
         "constant",
         "constant_with_warmup",
-        "dadapt_with_warmup",
+        "rex",
     ]
 
 

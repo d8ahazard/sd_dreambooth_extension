@@ -37,7 +37,7 @@ logger = logging.get_logger(__name__)
 
 
 class SchedulerType(Enum):
-    DADAPT_WITH_WARMUP = "dadapt_with_warmup"
+    REX = "rex"
     LINEAR = "linear"
     LINEAR_WITH_WARMUP = "linear_with_warmup"
     COSINE = "cosine"
@@ -49,36 +49,32 @@ class SchedulerType(Enum):
     CONSTANT_WITH_WARMUP = "constant_with_warmup"
 
 
-def get_dadapt_with_warmup(optimizer, num_warmup_steps: int = 0, unet_lr: float = 1.0, tenc_lr: float = 1.0):
+def get_rex_scheduler(optimizer: Optimizer, total_training_steps):
     """
-    Adjust LR from initial rate to the minimum specified LR over the maximum number of steps.
-    See <a href='https://miro.medium.com/max/828/1*Bk4xhtvg_Su42GmiVtvigg.webp'> for an example.
+    Returns a learning rate scheduler based on the REx (Relative Exploration) algorithm.
+
     Args:
-        optimizer ([`~torch.optim.Optimizer`]):
-            The optimizer for which to schedule the learning rate.
-        num_warmup_steps (`int`, *optional*, defaults to 0):
-            The number of steps for the warmup phase.
-        unet_lr (`float`, *optional*, defaults to 1.0):
-            The learning rate used to control d-dadaption for the UNET
-        tenc_lr (`float`, *optional*, defaults to 1.0):
-            The learning rate used to control d-dadaption for the TENC
+        optimizer (Optimizer): The optimizer to use for training.
+        total_training_steps (int): The total number of training steps.
 
-    Return:
-        `torch.optim.lr_scheduler.LambdaLR` with the appropriate LR schedules for TENC and UNET.
+    Returns:
+        A tuple containing the original optimizer object and a lambda function that can be used to create a PyTorch learning rate scheduler.
     """
-    def unet_lambda(current_step: int):
-        if current_step < num_warmup_steps:
-            return float(current_step) / float(max(unet_lr, num_warmup_steps))
-        else:
-            return unet_lr
+    def lr_lambda(current_step: int):
+        # https://arxiv.org/abs/2107.04197
+        max_lr = 1
+        min_lr = 0
+        d = 0.9
 
-    def tenc_lambda(current_step: int):
-        if current_step < num_warmup_steps:
-            return (float(current_step) / float(max(tenc_lr, num_warmup_steps)))
+        if current_step < total_training_steps:
+            progress = (current_step / total_training_steps)
+            div = (1 - d) + (d * (1 - progress))
+            return min_lr + (max_lr - min_lr) * ((1 - progress) / div)
         else:
-            return tenc_lr
+            return min_lr
 
-    return LambdaLR(optimizer, [unet_lambda, tenc_lambda], last_epoch=-1, verbose=False)
+    return LambdaLR(optimizer, lr_lambda)
+
 
 
 
@@ -492,15 +488,12 @@ def get_scheduler(
             num_cycles=num_cycles,
         )
 
-    if name == SchedulerType.DADAPT_WITH_WARMUP:
-        return get_dadapt_with_warmup(
-            optimizer,
-            num_warmup_steps=num_warmup_steps,
-            unet_lr=unet_lr,
-            tenc_lr=tenc_lr,
+    if name == SchedulerType.REX:
+        return get_rex_scheduler(
+            optimizer, 
+            total_training_steps=total_training_steps
         )
-
-
+        
 class UniversalScheduler:
     def __init__(
             self,
@@ -576,16 +569,31 @@ def log_dadapt(disable: bool = True):
 def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, params_to_optimize):
     try:
         if optimizer == "8bit AdamW":
-            from bitsandbytes.optim import AdamW8bit
+            from bitsandbytes.optim.adamw import AdamW8bit
             return AdamW8bit(
                 params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
             )
-
+            
+        elif optimizer == "Adafactor":
+            from transformers.optimization import Adafactor
+            return Adafactor(
+                params_to_optimize,
+                lr=learning_rate,
+                eps=(1e-30, 1e-3),
+                clip_threshold=1.0,
+                decay_rate=-0.8,
+                beta1=None,
+                weight_decay=0.0,
+                relative_step=False,
+                scale_parameter=False,
+                warmup_init=False,
+            )
+        
         elif optimizer == "Lion":
-            from lion_pytorch import Lion
-            return Lion(
+            from pytorch_optimizer.optimizer import lion
+            return lion(
                 params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
@@ -619,6 +627,15 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 weight_decay=weight_decay,
                 log_every=log_dadapt(True),
             )
+        
+        elif optimizer == "AdanIP Dadaptation":
+            from dadaptation.experimental import DAdaptAdanIP
+            return DAdaptAdanIP(
+                params_to_optimize,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                log_every=log_dadapt(True),
+            )
 
         elif optimizer == "SGD Dadaptation":
             from dadaptation import DAdaptSGD
@@ -628,7 +645,72 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 weight_decay=weight_decay,
                 log_every=log_dadapt(True),
             )
-
+            
+        elif optimizer == "Prodigy":
+            from pytorch_optimizer.optimizer import prodigy
+            return prodigy(
+                    params_to_optimize,
+                    lr=learning_rate,
+                    weight_decay=weight_decay,
+                    decouple=True,
+                    use_bias_correction=True,
+                    safeguard_warmup=False,
+                    d0=1e-6,
+                    d_coef=1.0,
+                )
+            
+        elif optimizer == "Tiger":
+            from pytorch_optimizer.optimizer import tiger
+            return tiger(
+                params_to_optimize,
+                lr=learning_rate,
+                beta = 0.965,
+                weight_decay=0.01,
+                weight_decouple=True,
+                fixed_decay=False,
+            )
+            
+        elif optimizer == "CAME":
+            from pytorch_optimizer.optimizer import came
+            return came(
+                params_to_optimize,
+                lr=learning_rate,
+                weight_decay=0.0,
+                weight_decouple=True,
+                fixed_decay=False,
+                clip_threshold=1.0,
+                eps1=1e-30,
+                eps2=1e-16,
+                )
+        
+        elif optimizer == "Lion8bit":
+            from bitsandbytes.optim.lion import Lion8bit
+            return Lion8bit(
+                params_to_optimize,
+                lr=learning_rate,
+                betas=(0.9, 0.99), 
+                weight_decay=0
+            )
+                
+        elif optimizer == "PagedLion8bit":
+            from bitsandbytes.optim.lion import PagedLion8bit
+            return PagedLion8bit(
+                params_to_optimize,
+                lr=learning_rate,
+                betas=(0.9, 0.99),
+                weight_decay=0,
+            )
+        
+        elif optimizer == "PagedAdamW8bit":   
+            from bitsandbytes.optim.adamw import PagedAdamW8bit
+            return PagedAdamW8bit(
+                params_to_optimize,
+                lr=learning_rate,
+                betas=(0.9, 0.999),
+                eps=1e-8,
+                weight_decay=1e-2,
+            )
+            
     except Exception as e:
         logger.warning(f"Exception importing {optimizer}: {e}")
         traceback.print_exc()
