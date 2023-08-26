@@ -5,7 +5,7 @@ diffusers~=0.19.3
 discord-webhook~=1.1.0
 fastapi~=0.94.1
 gitpython~=3.1.31
-lion-pytorch~=0.1.2
+pytorch_optimizer==2.11.1
 Pillow==9.5.0
 tqdm==4.65.0
 tomesd~=0.1.2
