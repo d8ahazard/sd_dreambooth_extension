@@ -1,3 +1,4 @@
+import gc
 import glob
 import importlib
 import importlib.util
@@ -727,7 +728,9 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
             except:
                 from dreambooth.train_dreambooth import main  # noqa
             result = main(class_gen_method=class_gen_method)
-
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
         config = result.config
         images = result.samples
         if config.revision != total_steps:

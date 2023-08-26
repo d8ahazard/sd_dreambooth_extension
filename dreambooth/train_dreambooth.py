@@ -120,6 +120,17 @@ def set_seed(deterministic: bool):
     else:
         torch.backends.cudnn.deterministic = False
 
+to_delete = []
+def clean_global_state():
+    for check in to_delete:
+        if check:
+            try:
+                obj_name = check.__name__
+                del check
+                # Log the name of the thing deleted
+                logger.debug(f"Deleted {obj_name}")
+            except:
+                pass
 
 def current_prior_loss(args, current_epoch):
     if not args.prior_loss_scale:
@@ -182,13 +193,13 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
     result = TrainResult
     result.config = args
-
     set_seed(args.deterministic)
 
     @find_executable_batch_size(
         starting_batch_size=args.train_batch_size,
         starting_grad_size=args.gradient_accumulation_steps,
         logging_dir=logging_dir,
+        cleanup_function=clean_global_state()
     )
     def inner_loop(train_batch_size: int, gradient_accumulation_steps: int, profiler: profile):
 
@@ -564,15 +575,20 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 traceback.print_exc()
 
         noise_scheduler = get_noise_scheduler(args)
-
+        global to_delete
+        to_delete = [unet, text_encoder, text_encoder_two, tokenizer, tokenizer_two, optimizer, vae]
         def cleanup_memory():
             try:
                 if unet:
                     del unet
                 if text_encoder:
                     del text_encoder
+                if text_encoder_two:
+                    del text_encoder_two
                 if tokenizer:
                     del tokenizer
+                if tokenizer_two:
+                    del tokenizer_two
                 if optimizer:
                     del optimizer
                 if train_dataloader:

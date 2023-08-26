@@ -51,7 +51,7 @@ profiler = None
 
 
 def find_executable_batch_size(function: callable = None, starting_batch_size: int = 128,
-                               starting_grad_size: int = 128, logging_dir: str = ""):
+                               starting_grad_size: int = 128, logging_dir: str = "", cleanup_function: callable = None):
     """
     A basic decorator that will try to execute `function`. If it fails from exceptions related to out-of-memory or
     CUDNN, the batch size is cut in half and passed to `function`
@@ -67,6 +67,8 @@ def find_executable_batch_size(function: callable = None, starting_batch_size: i
             The starting number of grad accumulation steps to use. Will be divided by 2 every loop.
         logging_dir:
             The directory to use for logging.
+        cleanup_function:
+            A function to call after each loop. Useful for clearing memory.
     """
     global profiler
     try:
@@ -114,6 +116,11 @@ def find_executable_batch_size(function: callable = None, starting_batch_size: i
             )
         while True:
             if batch_size == 0:
+                gc.collect()
+                torch.cuda.empty_cache()
+                # Execute cleanup_function if it is not None
+                if cleanup_function is not None:
+                    cleanup_function()
                 raise RuntimeError("No executable batch size found, reached zero.")
             try:
                 return function(batch_size, grad_size, prof, *args, **kwargs)
