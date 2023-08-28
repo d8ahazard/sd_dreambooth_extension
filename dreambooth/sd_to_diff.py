@@ -28,7 +28,8 @@ from diffusers.pipelines.stable_diffusion.convert_from_ckpt import download_from
 
 from dreambooth import shared
 from dreambooth.dataclasses.db_config import DreamboothConfig
-from dreambooth.utils.model_utils import enable_safe_unpickle, disable_safe_unpickle
+from dreambooth.utils.model_utils import enable_safe_unpickle, disable_safe_unpickle, unload_system_models, \
+    reload_system_models
 
 
 def copy_config_file(original_config_file, dest_dir, model_name):
@@ -141,7 +142,7 @@ def extract_checkpoint(
             image_size = 768
         if model_type == "SDXL":
             image_size = 1024
-
+    unload_system_models()
     to_safetensors = False
     if pipeline_class_name is not None:
         library = importlib.import_module("diffusers")
@@ -221,6 +222,7 @@ def extract_checkpoint(
             break
     remove_dirs = ["logging", "samples"]
     enable_safe_unpickle()
+    reload_system_models()
     if success:
         for rd in remove_dirs:
             rem_dir = os.path.join(db_config.model_dir, rd)
