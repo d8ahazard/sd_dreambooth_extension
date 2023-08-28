@@ -68,7 +68,7 @@ def get_config_file(train_unfrozen=False, model_type: str="v1x"):
         "v1x": "v1",
         "v2x-512": "v2",
         "v2x": "v2",
-        "SDXL": "SDXL",
+        "SDXL": "sdxl",
     }
     model_pred_string = {
         "v1x": "",

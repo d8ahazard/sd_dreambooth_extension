@@ -978,7 +978,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     save_lora
                 )
 
-            return save_model
+            return save_model, save_image
 
         def save_weights(
                 save_image, save_diffusers, save_snapshot, save_checkpoint, save_lora
@@ -1131,7 +1131,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                     elif save_diffusers:
                         # We are saving weights, we need to ensure revision is saved
-                        args.save()
+                        if "_tmp" not in weights_dir:
+                            args.save()
                         try:
                             out_file = None
                             status.textinfo = (
@@ -1139,6 +1140,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             )
                             update_status({"status": status.textinfo})
                             pbar2.reset(1)
+                            
                             pbar2.set_description("Saving diffusion model")
                             s_pipeline.save_pretrained(
                                 weights_dir,
