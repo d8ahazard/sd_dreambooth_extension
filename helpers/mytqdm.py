@@ -2,11 +2,13 @@ from typing import Iterable
 
 from tqdm import tqdm
 
-from dreambooth import shared
 
 
 class mytqdm(tqdm):
+
     def __init__(self, iterable: Iterable = None, **kwargs):
+        from dreambooth import shared
+
         self.user = None
         self.target = None
         self.status_handler = None
@@ -53,6 +55,8 @@ class mytqdm(tqdm):
         super().__init__(iterable=iterable, **kwargs)
 
     def __iter__(self):
+        from dreambooth import shared
+
         """Backward-compatibility to use: for x in tqdm(iterable)"""
         # Inlining instance variables as locals (speed optimisation)
         iterable = self.iterable
@@ -92,6 +96,8 @@ class mytqdm(tqdm):
             self.close()
 
     def update(self, n=1):
+        from dreambooth import shared
+
         if self.update_ui:
             shared.status.job_no += n
             if shared.status.job_no > shared.status.job_count:
@@ -101,6 +107,8 @@ class mytqdm(tqdm):
         super().update(n)
 
     def reset(self, total=None):
+        from dreambooth import shared
+
         self.set_description(None)
         if total is not None and self.update_ui:
             shared.status.job_no = 0
@@ -111,6 +119,8 @@ class mytqdm(tqdm):
         super().reset(total)
 
     def set_description(self, desc=None, refresh=True):
+        from dreambooth import shared
+
         if self.update_ui:
             shared.status.textinfo = desc
             if self.status_handler is not None and desc is not None:
@@ -121,6 +131,8 @@ class mytqdm(tqdm):
 
     # Set the description without ":" appended
     def set_description_str(self, desc=None, refresh=True):
+        from dreambooth import shared
+
         if self.update_ui:
             shared.status.textinfo = desc
             if self.status_handler is not None:

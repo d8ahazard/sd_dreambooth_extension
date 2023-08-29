@@ -1,45 +1,19 @@
+from dreambooth.utils.utils import get_scheduler_names
 import importlib
 import time
 from typing import List
 
 import gradio as gr
 
-from dreambooth.dataclasses.db_config import from_file, save_config
-from dreambooth.diff_to_sd import compile_checkpoint
-from dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_sdxl
-from dreambooth.secret import (
-    get_secret,
-    create_secret,
-    clear_secret,
-)
-from dreambooth.shared import (
-    status,
-    get_launch_errors,
-)
-from dreambooth.ui_functions import (
-    performance_wizard,
-    training_wizard,
-    training_wizard_person,
-    load_model_params,
-    ui_classifiers,
-    debug_buckets,
-    create_model,
-    generate_samples,
-    load_params,
-    start_training,
-    update_extension,
-    start_crop,
-)
-from dreambooth.utils.image_utils import (
-    get_scheduler_names,
-)
-from dreambooth.utils.model_utils import (
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, save_config
+
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import (
     get_db_models,
     get_sorted_lora_models,
     get_model_snapshots,
     get_shared_models,
 )
-from dreambooth.utils.utils import (
+from extensions.sd_dreambooth_extension.dreambooth.utils.utils import (
     list_attention,
     list_precisions,
     wrap_gpu_call,
@@ -47,21 +21,21 @@ from dreambooth.utils.utils import (
     list_optimizer,
     list_schedulers,
 )
-from dreambooth.webhook import save_and_test_webhook
+from extensions.sd_dreambooth_extension.dreambooth.webhook import save_and_test_webhook
 from helpers.log_parser import LogParser
 from helpers.version_helper import check_updates
-from modules import script_callbacks, sd_models
+from modules import script_callbacks
 from modules.ui import gr_show, create_refresh_button
 
-params_to_save = []
-params_to_load = []
 refresh_symbol = "\U0001f504"  # 🔄
 delete_symbol = "\U0001F5D1"  # 🗑️
 update_symbol = "\U0001F51D"  # 🠝
+
 log_parser = LogParser()
 
-
 def get_sd_models():
+    from modules import sd_models
+
     sd_models.list_models()
     sd_list = sd_models.checkpoints_list
     names = []
@@ -69,32 +43,32 @@ def get_sd_models():
         names.append(key)
     return names
 
-
 def calc_time_left(progress, threshold, label, force_display):
     if progress == 0:
         return ""
-    else:
-        if status.time_start is None:
-            time_since_start = 0
-        else:
-            time_since_start = time.time() - status.time_start
-        eta = time_since_start / progress
-        eta_relative = eta - time_since_start
-        if (eta_relative > threshold and progress > 0.02) or force_display:
-            if eta_relative > 86400:
-                days = eta_relative // 86400
-                remainder = days * 86400
-                eta_relative -= remainder
-                return f"{label}{days}:{time.strftime('%H:%M:%S', time.gmtime(eta_relative))}"
-            if eta_relative > 3600:
-                return label + time.strftime("%H:%M:%S", time.gmtime(eta_relative))
-            elif eta_relative > 60:
-                return label + time.strftime("%M:%S", time.gmtime(eta_relative))
-            else:
-                return label + time.strftime("%Ss", time.gmtime(eta_relative))
-        else:
-            return ""
 
+    from dreambooth.shared import status
+
+    if status.time_start is None:
+        time_since_start = 0
+    else:
+        time_since_start = time.time() - status.time_start
+    eta = time_since_start / progress
+    eta_relative = eta - time_since_start
+    if (eta_relative > threshold and progress > 0.02) or force_display:
+        if eta_relative > 86400:
+            days = eta_relative // 86400
+            remainder = days * 86400
+            eta_relative -= remainder
+            return f"{label}{days}:{time.strftime('%H:%M:%S', time.gmtime(eta_relative))}"
+        if eta_relative > 3600:
+            return label + time.strftime("%H:%M:%S", time.gmtime(eta_relative))
+        elif eta_relative > 60:
+            return label + time.strftime("%M:%S", time.gmtime(eta_relative))
+        else:
+            return label + time.strftime("%Ss", time.gmtime(eta_relative))
+    else:
+        return ""
 
 def has_face_swap():
     script_class = None
@@ -115,7 +89,6 @@ def has_face_swap():
         print(f"Can't check face swap: {f}")
     return script_class is not None
 
-
 def check_progress_call():
     """
     Check the progress from share dreamstate and return appropriate UI elements.
@@ -128,6 +101,7 @@ def check_progress_call():
     sample_prompts: List = A list of prompts corresponding with gallery contents
     check_progress_initial: Hides the manual 'check progress' button
     """
+    from dreambooth.shared import status
     active_box = gr.update(value=status.active)
     if not status.active:
         return (
@@ -198,8 +172,8 @@ def check_progress_call():
         gr_show(False),
     )
 
-
 def check_progress_call_initial():
+    from dreambooth.shared import status
     status.begin()
     (
         active_box,
@@ -220,7 +194,6 @@ def check_progress_call_initial():
         gr_show(False),
     )
 
-
 def ui_gen_ckpt(model_name: str):
     if isinstance(model_name, List):
         model_name = model_name[0]
@@ -231,13 +204,119 @@ def ui_gen_ckpt(model_name: str):
     lora_path = config.lora_model_name
     print(f"Lora path: {lora_path}")
     if config.model_type == "SDXL":
+        from extensions.sd_dreambooth_extension.dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_sdxl
+
         res = compile_checkpoint_sdxl(model_name, lora_path, True, False, config.snapshot)
     else:
+        from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
         res = compile_checkpoint(model_name, lora_path, True, True, config.snapshot)
     return res
 
+params_to_save = []
+params_to_load = []
+
 
 def on_ui_tabs():
+    def build_concept_panel(concept: int):
+        with gr.Column():
+            gr.HTML(value="Directories")
+            instance_data_dir = gr.Textbox(
+                label="Dataset Directory",
+                placeholder="Path to directory with input images",
+                elem_id=f"idd{concept}",
+            )
+            class_data_dir = gr.Textbox(
+                label="Classification Dataset Directory",
+                placeholder="(Optional) Path to directory with "
+                            "classification/regularization images",
+                elem_id=f"cdd{concept}",
+            )
+        with gr.Column():
+            gr.HTML(value="Filewords")
+            instance_token = gr.Textbox(
+                label="Instance Token",
+                placeholder="When using [filewords], this is the subject to use when building prompts.",
+            )
+            class_token = gr.Textbox(
+                label="Class Token",
+                placeholder="When using [filewords], this is the class to use when building prompts.",
+            )
+
+        with gr.Column():
+            gr.HTML(value="Training Prompts")
+            instance_prompt = gr.Textbox(
+                label="Instance Prompt",
+                placeholder="Optionally use [filewords] to read image "
+                            "captions from files.",
+            )
+            class_prompt = gr.Textbox(
+                label="Class Prompt",
+                placeholder="Optionally use [filewords] to read image "
+                            "captions from files.",
+            )
+            class_negative_prompt = gr.Textbox(
+                label="Classification Image Negative Prompt"
+            )
+        with gr.Column():
+            gr.HTML(value="Sample Prompts")
+            save_sample_prompt = gr.Textbox(
+                label="Sample Image Prompt",
+                placeholder="Leave blank to use instance prompt. "
+                            "Optionally use [filewords] to base "
+                            "sample captions on instance images.",
+            )
+            save_sample_negative_prompt = gr.Textbox(
+                label="Sample Negative Prompt"
+            )
+            sample_template = gr.Textbox(
+                label="Sample Prompt Template File",
+                placeholder="Enter the path to a txt file containing sample prompts.",
+            )
+
+        with gr.Column():
+            gr.HTML("Class Image Generation")
+            num_class_images_per = gr.Slider(
+                label="Class Images Per Instance Image", value=0, precision=0
+            )
+            class_guidance_scale = gr.Slider(
+                label="Classification CFG Scale", value=7.5, maximum=12, minimum=1, step=0.1
+            )
+            class_infer_steps = gr.Slider(
+                label="Classification Steps", value=40, minimum=10, maximum=200, step=1
+            )
+
+        with gr.Column():
+            gr.HTML("Sample Image Generation")
+            n_save_sample = gr.Slider(
+                label="Number of Samples to Generate", value=1, maximum=100, step=1
+            )
+            sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
+            save_guidance_scale = gr.Slider(
+                label="Sample CFG Scale", value=7.5, maximum=12, minimum=1, step=0.1
+            )
+            save_infer_steps = gr.Slider(
+                label="Sample Steps", value=20, minimum=10, maximum=200, step=1
+            )
+        return [
+            instance_data_dir,
+            class_data_dir,
+            instance_prompt,
+            class_prompt,
+            save_sample_prompt,
+            sample_template,
+            instance_token,
+            class_token,
+            num_class_images_per,
+            class_negative_prompt,
+            class_guidance_scale,
+            class_infer_steps,
+            save_sample_negative_prompt,
+            n_save_sample,
+            sample_seed,
+            save_guidance_scale,
+            save_infer_steps,
+        ]
+
     with gr.Blocks() as dreambooth_interface:
         # Top button row
         with gr.Row(equal_height=True, elem_id="DbTopRow"):
@@ -378,7 +457,6 @@ def on_ui_tabs():
             with gr.Column(variant="panel", elem_id="SettingsPanel"):
                 gr.HTML(value="<span class='hh'>Input</span>")
                 with gr.Tab("Settings", elem_id="TabSettings"):
-                    db_performance_wizard = gr.Button(value="Performance Wizard (WIP)")
                     with gr.Accordion(open=True, label="Basic"):
                         with gr.Column():
                             gr.HTML(value="General")
@@ -681,9 +759,13 @@ def on_ui_tabs():
                                     label="Concepts List",
                                     placeholder="Path to JSON file with concepts to train.",
                                 )
+                                def ui_get_secret():
+                                    from dreambooth.secret import get_secret
+                                    return get_secret()
+
                                 with gr.Row():
                                     db_secret = gr.Textbox(
-                                        label="API Key", value=get_secret, interactive=False
+                                        label="API Key", value=ui_get_secret, interactive=False
                                     )
                                     db_refresh_button = gr.Button(
                                         value=refresh_symbol, elem_id="refresh_secret"
@@ -694,7 +776,7 @@ def on_ui_tabs():
 
                             with gr.Column():
                                 # In the future change this to something more generic and list the supported types
-                                # from DreamboothWebhookTarget enum; for now, Discord is what I use ;)
+                                # from extensions.sd_dreambooth_extension.dreamboothWebhookTarget enum; for now, Discord is what I use ;)
                                 # Add options to include notifications on training complete and exceptions that halt training
                                 db_notification_webhook_url = gr.Textbox(
                                     label="Discord Webhook",
@@ -710,13 +792,6 @@ def on_ui_tabs():
                             gr.HTML(value="")
                 with gr.Tab("Concepts", elem_id="TabConcepts") as concept_tab:
                     with gr.Column(variant="panel"):
-                        with gr.Row():
-                            db_train_wizard_person = gr.Button(
-                                value="Training Wizard (Person)"
-                            )
-                            db_train_wizard_object = gr.Button(
-                                value="Training Wizard (Object/Style)"
-                            )
                         with gr.Tab("Concept 1"):
                             (
                                 c1_instance_data_dir,
@@ -907,7 +982,6 @@ def on_ui_tabs():
                     gr.HTML(value="Manual Class Generation")
                     with gr.Column():
                         db_generate_classes = gr.Button(value="Generate Class Images")
-                        db_generate_graph = gr.Button(value="Generate Graph")
                         db_graph_smoothing = gr.Slider(
                             value=50,
                             label="Graph Smoothing Steps",
@@ -1062,8 +1136,12 @@ def on_ui_tabs():
                 db_update_params = gr.Button(
                     "Update Parameters", elem_id="db_update_params", visible=False
                 )
+                def ui_get_launch_errors():
+                    from dreambooth.shared import get_launch_errors
+                    return get_launch_errors()
+
                 db_launch_error = gr.HTML(
-                    elem_id="launch_errors", visible=False, value=get_launch_errors
+                    elem_id="launch_errors", visible=False, value=ui_get_launch_errors
                 )
 
                 def check_toggles(
@@ -1107,9 +1185,13 @@ def on_ui_tabs():
                         standard_lr
                     )
 
+                def crop_ui(src, dst, max, bucket, dry):
+                    from dreambooth.ui_functions import start_crop
+                    return start_crop(src, dst, max, bucket, dry)
+
                 db_start_crop.click(
                     _js="db_start_crop",
-                    fn=start_crop,
+                    fn=crop_ui,
                     inputs=[
                         db_crop_src_path,
                         db_crop_dst_path,
@@ -1149,7 +1231,11 @@ def on_ui_tabs():
                     ],
                 )
 
-                db_update_extension.click(fn=update_extension, inputs=[], outputs=[])
+                def ui_update():
+                    from dreambooth.ui_functions import update_extension
+                    update_extension()
+
+                db_update_extension.click(fn=ui_update, inputs=[], outputs=[])
 
                 notification_webhook_test_btn.click(
                     fn=save_and_test_webhook,
@@ -1157,8 +1243,12 @@ def on_ui_tabs():
                     outputs=[db_status],
                 )
 
+                def ui_create_secret():
+                    from dreambooth.secret import create_secret
+                    return create_secret()
+
                 db_refresh_button.click(
-                    fn=create_secret, inputs=[], outputs=[db_secret]
+                    fn=ui_create_secret, inputs=[], outputs=[db_secret]
                 )
 
                 def update_stop_tenc(train_unet):
@@ -1174,7 +1264,11 @@ def on_ui_tabs():
                     outputs=[db_stop_text_encoder],
                 )
 
-                db_clear_secret.click(fn=clear_secret, inputs=[], outputs=[db_secret])
+                def ui_clear_secret():
+                    from dreambooth.secret import clear_secret
+                    return clear_secret()
+
+                db_clear_secret.click(fn=ui_clear_secret, inputs=[], outputs=[db_secret])
 
                 # Elements to update when progress changes
                 progress_elements = [
@@ -1428,7 +1522,7 @@ def on_ui_tabs():
 
         ui_keys.append("db_status")
         params_to_load.append(db_status)
-        from dreambooth.dataclasses import db_config
+        from extensions.sd_dreambooth_extension.dreambooth.dataclasses import db_config
         db_config.save_keys = save_keys
         db_config.ui_keys = ui_keys
 
@@ -1436,9 +1530,13 @@ def on_ui_tabs():
             _js="check_save", fn=save_config, inputs=params_to_save, outputs=[]
         )
 
+        def ui_load_params(model_name):
+            from dreambooth.ui_functions import load_params
+            return load_params(model_name)
+
         db_load_params.click(
             _js="db_start_load_params",
-            fn=load_params,
+            fn=ui_load_params,
             inputs=[db_model_name],
             outputs=params_to_load,
         )
@@ -1558,9 +1656,13 @@ def on_ui_tabs():
             outputs=[db_scheduler],
         )
 
+        def ui_load_model_params(name):
+            from dreambooth.ui_functions import load_model_params
+            return load_model_params(name)
+
         db_model_name.change(
             _js="clear_loaded",
-            fn=load_model_params,
+            fn=ui_load_model_params,
             inputs=[db_model_name],
             outputs=[
                 db_model_path,
@@ -1582,72 +1684,23 @@ def on_ui_tabs():
             outputs=[concept_tab],
         )
 
-        db_generate_graph.click(
-            _js="db_start_logs",
-            fn=log_parser.parse_logs,
-            inputs=[db_model_name, gr.Checkbox(value=True, visible=False)],
-            outputs=[db_gallery, db_prompt_list],
-        )
+        def ui_debug_buckets(name, epochs, batch):
+            from dreambooth.ui_functions import debug_buckets
+            debug_buckets(name, epochs, batch)
 
         db_debug_buckets.click(
             _js="db_start_buckets",
-            fn=debug_buckets,
+            fn=ui_debug_buckets,
             inputs=[db_model_name, db_bucket_epochs, db_bucket_batch],
             outputs=[db_status, db_status],
         )
 
-        db_performance_wizard.click(
-            fn=performance_wizard,
-            _js="db_start_pwizard",
-            inputs=[db_model_name],
-            outputs=[
-                db_attention,
-                db_gradient_checkpointing,
-                db_gradient_accumulation_steps,
-                db_mixed_precision,
-                db_cache_latents,
-                db_optimizer,
-                db_sample_batch_size,
-                db_train_batch_size,
-                db_stop_text_encoder,
-                db_use_lora,
-                db_use_ema,
-                db_save_preview_every,
-                db_save_embedding_every,
-                db_status,
-            ],
-        )
-
-        db_train_wizard_person.click(
-            fn=training_wizard_person,
-            _js="db_start_twizard",
-            inputs=[db_model_name],
-            outputs=[
-                db_num_train_epochs,
-                c1_num_class_images_per,
-                c2_num_class_images_per,
-                c3_num_class_images_per,
-                c4_num_class_images_per,
-                db_status,
-            ],
-        )
-
-        db_train_wizard_object.click(
-            fn=training_wizard,
-            _js="db_start_twizard",
-            inputs=[db_model_name],
-            outputs=[
-                db_num_train_epochs,
-                c1_num_class_images_per,
-                c2_num_class_images_per,
-                c3_num_class_images_per,
-                c4_num_class_images_per,
-                db_status,
-            ],
-        )
+        def ui_generate_samples(name, prompt, file, negative, width, height, num_samples, batch_size, seed, steps, scale, txt2img, scheduler, swap_faces, swap_prompt, swap_negative, swap_steps, swap_batch):
+            from dreambooth.ui_functions import generate_samples
+            return generate_samples(name, prompt, file, negative, width, height, num_samples, batch_size, seed, steps, scale, txt2img, scheduler, swap_faces, swap_prompt, swap_negative, swap_steps, swap_batch)
 
         db_generate_sample.click(
-            fn=wrap_gpu_call(generate_samples),
+            fn=wrap_gpu_call(ui_generate_samples),
             _js="db_start_sample",
             inputs=[
                 db_model_name,
@@ -1680,17 +1733,22 @@ def on_ui_tabs():
         )
 
         def set_gen_ckpt():
+            from dreambooth.shared import status
             status.do_save_model = True
 
         def set_gen_sample():
+            from dreambooth.shared import status
             status.do_save_samples = True
 
         db_generate_checkpoint_during.click(fn=set_gen_ckpt, inputs=[], outputs=[])
 
         db_train_sample.click(fn=set_gen_sample, inputs=[], outputs=[])
 
+        def ui_create_model(name, src, shared_src, from_hub, url, token, extract_ema, train_unfrozen, model_type):
+            from dreambooth.ui_functions import create_model
+            return create_model(name, src, shared_src, from_hub, url, token, extract_ema, train_unfrozen, model_type)
         db_create_model.click(
-            fn=wrap_gpu_call(create_model),
+            fn=wrap_gpu_call(ui_create_model),
             _js="db_start_create",
             inputs=[
                 db_new_model_name,
@@ -1717,128 +1775,38 @@ def on_ui_tabs():
             ],
         )
 
+        def ui_start_training(name, class_gen_method):
+            from dreambooth.ui_functions import start_training
+            return start_training(name, class_gen_method)
+
         db_train_model.click(
-            fn=wrap_gpu_call(start_training),
+            fn=wrap_gpu_call(ui_start_training),
             _js="db_start_train",
             inputs=[db_model_name, db_class_gen_method],
             outputs=[db_lora_model_name, db_revision, db_epochs, db_gallery, db_status],
         )
 
+        def ui_ui_classifiers(name, class_gen_method):
+            from dreambooth.ui_functions import ui_classifiers
+            return ui_classifiers(name, class_gen_method)
+
         db_generate_classes.click(
             _js="db_start_classes",
-            fn=wrap_gpu_call(ui_classifiers),
+            fn=wrap_gpu_call(ui_ui_classifiers),
             inputs=[db_model_name, db_class_gen_method],
             outputs=[db_gallery, db_status],
         )
 
+        def ui_status_interrupt():
+            from dreambooth.shared import status
+            status.interrupt()
+
         db_cancel.click(
-            fn=lambda: status.interrupt(),
+            fn=ui_status_interrupt,
             inputs=[],
             outputs=[],
         )
 
-    return ((dreambooth_interface, "Dreambooth", "dreambooth_interface"),)
-
-
-def build_concept_panel(concept: int):
-    with gr.Column():
-        gr.HTML(value="Directories")
-        instance_data_dir = gr.Textbox(
-            label="Dataset Directory",
-            placeholder="Path to directory with input images",
-            elem_id=f"idd{concept}",
-        )
-        class_data_dir = gr.Textbox(
-            label="Classification Dataset Directory",
-            placeholder="(Optional) Path to directory with "
-            "classification/regularization images",
-            elem_id=f"cdd{concept}",
-        )
-    with gr.Column():
-        gr.HTML(value="Filewords")
-        instance_token = gr.Textbox(
-            label="Instance Token",
-            placeholder="When using [filewords], this is the subject to use when building prompts.",
-        )
-        class_token = gr.Textbox(
-            label="Class Token",
-            placeholder="When using [filewords], this is the class to use when building prompts.",
-        )
-
-    with gr.Column():
-        gr.HTML(value="Training Prompts")
-        instance_prompt = gr.Textbox(
-            label="Instance Prompt",
-            placeholder="Optionally use [filewords] to read image "
-            "captions from files.",
-        )
-        class_prompt = gr.Textbox(
-            label="Class Prompt",
-            placeholder="Optionally use [filewords] to read image "
-            "captions from files.",
-        )
-        class_negative_prompt = gr.Textbox(
-            label="Classification Image Negative Prompt"
-        )
-    with gr.Column():
-        gr.HTML(value="Sample Prompts")
-        save_sample_prompt = gr.Textbox(
-            label="Sample Image Prompt",
-            placeholder="Leave blank to use instance prompt. "
-                        "Optionally use [filewords] to base "
-                        "sample captions on instance images.",
-        )
-        save_sample_negative_prompt = gr.Textbox(
-            label="Sample Negative Prompt"
-        )
-        sample_template = gr.Textbox(
-            label="Sample Prompt Template File",
-            placeholder="Enter the path to a txt file containing sample prompts.",
-        )
-
-    with gr.Column():
-        gr.HTML("Class Image Generation")
-        num_class_images_per = gr.Slider(
-            label="Class Images Per Instance Image", value=0, precision=0
-        )
-        class_guidance_scale = gr.Slider(
-            label="Classification CFG Scale", value=7.5, maximum=12, minimum=1, step=0.1
-        )
-        class_infer_steps = gr.Slider(
-            label="Classification Steps", value=40, minimum=10, maximum=200, step=1
-        )
-
-    with gr.Column():
-        gr.HTML("Sample Image Generation")
-        n_save_sample = gr.Slider(
-            label="Number of Samples to Generate", value=1, maximum=100, step=1
-        )
-        sample_seed = gr.Number(label="Sample Seed", value=-1, precision=0)
-        save_guidance_scale = gr.Slider(
-            label="Sample CFG Scale", value=7.5, maximum=12, minimum=1, step=0.1
-        )
-        save_infer_steps = gr.Slider(
-            label="Sample Steps", value=20, minimum=10, maximum=200, step=1
-        )
-    return [
-        instance_data_dir,
-        class_data_dir,
-        instance_prompt,
-        class_prompt,
-        save_sample_prompt,
-        sample_template,
-        instance_token,
-        class_token,
-        num_class_images_per,
-        class_negative_prompt,
-        class_guidance_scale,
-        class_infer_steps,
-        save_sample_negative_prompt,
-        n_save_sample,
-        sample_seed,
-        save_guidance_scale,
-        save_infer_steps,
-    ]
-
+    return [(dreambooth_interface, "Dreambooth", "dreambooth_interface")]
 
 script_callbacks.on_ui_tabs(on_ui_tabs)

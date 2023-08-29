@@ -358,3 +358,13 @@ optimizations.
 [Bmalthais](https://github.com/bmaltais/kohya_ss) - Optimizations, Features
 
 [Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) - Base app
+
+
+# Thanks
+
+To everybody in the community for their support, our amazing team of freelance testers and developers for their awesome contributions. 
+
+And last, but not least, the awesome guys at [app.rundiffusion.com](https://app.rundiffusion.com) for their support via a MAX server to help test development.
+Without them, testing and refining SDXL training woujld not have been possible.
+
+If you want to train SDXL with all the hot nasty speed and don't want to spend the $$ on a 48GB GPU, check them out.
