@@ -9,6 +9,7 @@ from matplotlib import axes
 from pandas import DataFrame
 from pandas.plotting._matplotlib.style import get_standard_colors
 
+from dreambooth.shared import status
 
 
 @dataclass
@@ -183,8 +184,6 @@ class LogParser:
         matplotlib.use("Agg")
         if for_ui:
             print("Generating graphs?")
-            from dreambooth.shared import status
-
             status.textinfo = "Generating graphs"
 
         def convert_tfevent(filepath) -> Tuple[DataFrame, DataFrame, DataFrame, bool]:

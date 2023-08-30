@@ -29,8 +29,6 @@ def preload(parser: argparse.ArgumentParser):
                         help="Set this to enable memory profiling while training. For science only.")
     parser.add_argument("--debug-db", action='store_true',
                         help="Set this to enable memory logging. For science only.")
-    parser.add_argument("--no-db-api", action='store_true',
-                        help="Set this to disable the DB API. For science only.")
     # parser.add_argument("--torch2", action='store_true',
     #                     help="Enable this flag to use torch V2.")
     #

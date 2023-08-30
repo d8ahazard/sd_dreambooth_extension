@@ -43,6 +43,7 @@ def load_auto_settings():
         lowvram = ws.cmd_opts.lowvram
         config = ws.cmd_opts.config
         device = ws.device
+        sd_model = ws.sd_model
         in_progress = False
         in_progress_epoch = 0
         in_progress_step = 0

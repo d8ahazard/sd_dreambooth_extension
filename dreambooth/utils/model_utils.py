@@ -10,15 +10,18 @@ import torch
 from diffusers.utils import is_xformers_available
 from transformers import PretrainedConfig
 
+from dreambooth import shared  # noqa
 from dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
 from dreambooth.utils.utils import cleanup  # noqa
-from modules import hashes, modelloader
+from modules import hashes
 from modules.safe import unsafe_torch_load, load
 
 checkpoints_list = {}
 checkpoint_alisases = {}
 checkpoints_loaded = collections.OrderedDict()
 
+model_dir = "Stable-diffusion"
+model_path = os.path.abspath(os.path.join(shared.models_path, model_dir))
 
 LORA_SHARED_SRC_CREATE = " <create new>"
 
@@ -39,11 +42,6 @@ def model_hash(filename):
 
 class CheckpointInfo:
     def __init__(self, filename):
-        from dreambooth import shared
-
-        model_dir = "Stable-diffusion"
-        model_path = os.path.abspath(os.path.join(shared.models_path, model_dir))
-
         self.filename = filename
         abspath = os.path.abspath(filename)
 
@@ -93,11 +91,6 @@ class CheckpointInfo:
 
 
 def list_models():
-    from dreambooth import shared
-
-    model_dir = "Stable-diffusion"
-    model_path = os.path.abspath(os.path.join(shared.models_path, model_dir))
-
     checkpoints_list.clear()
     checkpoint_alisases.clear()
     model_list = modelloader.load_models(model_path=model_path, command_path=shared.cmd_opts.ckpt_dir,
@@ -123,7 +116,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 def get_db_models():
     output = [""]
-    from dreambooth import shared
     out_dir = shared.dreambooth_models_path
     if os.path.exists(out_dir):
         for item in os.listdir(out_dir):
@@ -133,7 +125,6 @@ def get_db_models():
 
 
 def get_shared_models():
-    from dreambooth import shared
     output = ["", LORA_SHARED_SRC_CREATE]
     out_dir = os.path.join(shared.models_path, "diffusers")
     if os.path.exists(out_dir):
@@ -144,7 +135,6 @@ def get_shared_models():
 
 
 def get_lora_models(config: DreamboothConfig = None):
-    from dreambooth import shared
     output = [""]
     if config is None:
         config = shared.db_model_config
@@ -174,8 +164,6 @@ def get_sorted_lora_models(config: DreamboothConfig = None):
 
 
 def get_model_snapshots(config: DreamboothConfig = None):
-    from dreambooth import shared
-
     snaps = [""]
     if config is None:
         config = shared.db_model_config
@@ -207,7 +195,6 @@ def unload_system_models():
 
 def reload_system_models():
     try:
-        from dreambooth import shared
         import modules.shared
         if modules.shared.sd_model is not None:
             modules.shared.sd_model.to(shared.device)

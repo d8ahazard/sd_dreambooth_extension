@@ -10,7 +10,6 @@ import traceback
 from typing import Optional
 
 import importlib_metadata
-from diffusers.schedulers import KarrasDiffusionSchedulers
 from packaging import version
 
 from dreambooth import shared
@@ -20,14 +19,11 @@ import torch
 from huggingface_hub import HfFolder, whoami
 
 from helpers.mytqdm import mytqdm
-
-def get_scheduler_names():
-    return [scheduler.name.replace('Scheduler', '') for scheduler in KarrasDiffusionSchedulers]
+from dreambooth.shared import status
 
 
 def printi(msg, params=None, log=True):
     if log:
-        from dreambooth.shared import status
         status.textinfo = msg
         if status.job_count > status.job_no:
             status.job_no += 1
@@ -204,7 +200,6 @@ def list_schedulers():
 def wrap_gpu_call(func, extra_outputs=None):
     def f(*args, extra_outputs_array=extra_outputs, **kwargs):
         try:
-            from dreambooth.shared import status
             status.begin()
             res = func(*args, **kwargs)
             status.end()

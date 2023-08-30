@@ -16,7 +16,7 @@ from dreambooth.dataclasses.db_config import DreamboothConfig
 from dreambooth.dataclasses.prompt_data import PromptData
 from dreambooth.shared import disable_safe_unpickle
 from dreambooth.utils import image_utils
-from dreambooth.utils.image_utils import get_scheduler_class
+from dreambooth.utils.image_utils import process_txt2img, get_scheduler_class
 from dreambooth.utils.model_utils import get_checkpoint_match, \
     reload_system_models, \
     enable_safe_unpickle, disable_safe_unpickle, unload_system_models
@@ -196,29 +196,60 @@ class ImageBuilder:
             seed = prompt.seed
             width, height = prompt.resolution
 
-        with self.accelerator.autocast(), torch.inference_mode():
-            if seed is None or seed == '' or seed == -1:
-                seed = int(random.randrange(0, 21474836147))
-
-            generator = torch.manual_seed(seed)
+        if self.use_txt2img:
             try:
-                output = self.image_pipe(
-                    positive_prompts,
-                    num_inference_steps=steps,
-                    guidance_scale=scale,
-                    height=height,
+                from modules.processing import StableDiffusionProcessingTxt2Img
+                from modules import shared as auto_shared
+
+                p = StableDiffusionProcessingTxt2Img(
+                    sampler_name='Euler a',
+                    sd_model=auto_shared.sd_model,
+                    prompt=positive_prompts,
+                    negative_prompt=negative_prompts,
+                    batch_size=self.batch_size,
+                    steps=steps,
+                    cfg_scale=scale,
                     width=width,
-                    generator=generator,
-                    negative_prompt=negative_prompts).images
-                self.exception_count = 0
-            except Exception as e:
-                print(f"Exception generating images: {e}")
-                traceback.print_exc()
-                self.exception_count += 1
-                if self.exception_count > 10:
-                    raise
-                output = []
-                pass
+                    height=height,
+                    do_not_save_grid=True,
+                    do_not_save_samples=True,
+                    do_not_reload_embeddings=True
+                )
+
+                auto_tqdm = auto_shared.total_tqdm
+                shared.total_tqdm = pbar
+                pbar.reset(steps)
+                processed = process_txt2img(p)
+                p.close()
+                auto_shared.total_tqdm = auto_tqdm
+                output = processed
+            except:
+                print("No txt2img.")
+                self.use_txt2img = False
+        else:
+            with self.accelerator.autocast(), torch.inference_mode():
+                if seed is None or seed == '' or seed == -1:
+                    seed = int(random.randrange(0, 21474836147))
+
+                generator = torch.manual_seed(seed)
+                try:
+                    output = self.image_pipe(
+                        positive_prompts,
+                        num_inference_steps=steps,
+                        guidance_scale=scale,
+                        height=height,
+                        width=width,
+                        generator=generator,
+                        negative_prompt=negative_prompts).images
+                    self.exception_count = 0
+                except Exception as e:
+                    print(f"Exception generating images: {e}")
+                    traceback.print_exc()
+                    self.exception_count += 1
+                    if self.exception_count > 10:
+                        raise
+                    output = []
+                    pass
 
         return output
 

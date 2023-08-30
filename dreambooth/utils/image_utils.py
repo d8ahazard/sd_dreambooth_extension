@@ -22,6 +22,8 @@ import torch
 from dreambooth.dataclasses.db_concept import Concept
 from dreambooth.dataclasses.prompt_data import PromptData
 from helpers.mytqdm import mytqdm
+from dreambooth import shared
+from dreambooth.shared import status
 
 
 def get_dim(filename, max_res):
@@ -160,15 +162,11 @@ class FilenameTextGetter:
     re_numbers_at_start = re.compile(r"^[-\d]+\s*")
 
     def __init__(self, shuffle_tags=False):
-        from dreambooth import shared
-
         self.re_word = re.compile(shared.dataset_filename_word_regex) if len(
             shared.dataset_filename_word_regex) > 0 else None
         self.shuffle_tags = shuffle_tags
 
     def read_text(self, img_path):
-        from dreambooth import shared
-
         text_filename = os.path.splitext(img_path)[0] + ".txt"
         filename = os.path.basename(img_path)
 
@@ -250,6 +248,8 @@ def shuffle_tags(caption: str):
     return output
 
 
+def get_scheduler_names():
+    return [scheduler.name.replace('Scheduler', '') for scheduler in KarrasDiffusionSchedulers]
 
 
 def get_scheduler_class(scheduler_name):
@@ -303,7 +303,6 @@ try:
 
     def process_txt2img(p: StableDiffusionProcessing) -> [Image]:
         """this is the main loop that both txt2img and img2img use; it calls func_init once inside all the scopes and func_sample once per batch"""
-        from dreambooth.shared import status
 
         if type(p.prompt) == list:
             assert (len(p.prompt) > 0)
@@ -343,7 +342,6 @@ try:
             return create_infotext(p, p.all_prompts, p.all_seeds, p.all_subseeds, comments, iteration,
                                    position_in_batch)
 
-        from modules import shared
         with open(os.path.join(shared.script_path, "params.txt"), "w", encoding="utf8") as file:
             processed = Processed(p, [], p.seed, "")
             file.write(processed.infotext(p, 0))

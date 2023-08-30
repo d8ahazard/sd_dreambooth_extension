@@ -6,15 +6,16 @@ from typing import List
 from accelerate import Accelerator
 from transformers import AutoTokenizer
 
-
 try:
     from core.handlers.status import StatusHandler
 except:
     pass
+from dreambooth import shared
 from dreambooth.dataclasses.db_config import DreamboothConfig, from_file
 from dreambooth.dataclasses.prompt_data import PromptData
 from dreambooth.dataset.class_dataset import ClassDataset
 from dreambooth.dataset.db_dataset import DbDataset
+from dreambooth.shared import status
 from dreambooth.utils.image_utils import db_save_image
 from dreambooth.utils.utils import cleanup
 from helpers.image_builder import ImageBuilder
@@ -118,7 +119,6 @@ def generate_classifiers(
     instance_prompts = []
     class_prompts = []
     try:
-        from dreambooth.shared import status
         status.textinfo = "Preparing dataset..."
         prompt_dataset = ClassDataset(
             args.concepts(), args.model_dir, args.resolution, False, args.disable_class_matching, pbar=pbar
@@ -156,8 +156,6 @@ def generate_classifiers(
                 pass
 
         pbar.set_description(f"Generating class images 0/{set_len}:")
-    from dreambooth import shared
-
     shared.status.job_count = set_len
     shared.status.job_no = 0
     if status_handler is not None:
