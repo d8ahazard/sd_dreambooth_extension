@@ -114,18 +114,22 @@ def check_bitsandbytes():
     Check for "different" B&B Files and copy only if necessary
     """
     if os.name == "nt":
-        try:
-            bnb_src = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bitsandbytes_windows")
-            bnb_dest = os.path.join(sysconfig.get_paths()["purelib"], "bitsandbytes")
-            filecmp.clear_cache()
-            for file in os.listdir(bnb_src):
-                src_file = os.path.join(bnb_src, file)
-                if file == "main.py" or file == "paths.py":
-                    dest = os.path.join(bnb_dest, "cuda_setup")
-                else:
-                    dest = bnb_dest
-                shutil.copy2(src_file, dest)
-        except:
+        bitsandbytes_version = importlib_metadata.version("bitsandbytes")
+        if bitsandbytes_version is not "0.41.1":
+            try:
+                bnb_src = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bitsandbytes_windows")
+                bnb_dest = os.path.join(sysconfig.get_paths()["purelib"], "bitsandbytes")
+                filecmp.clear_cache()
+                for file in os.listdir(bnb_src):
+                    src_file = os.path.join(bnb_src, file)
+                    if file == "main.py" or file == "paths.py":
+                        dest = os.path.join(bnb_dest, "cuda_setup")
+                    else:
+                        dest = bnb_dest
+                    shutil.copy2(src_file, dest)
+            except:
+                pass
+        else:
             pass
 
 
@@ -142,14 +146,15 @@ def check_versions():
     from sys import platform as sys_platform
     is_mac = sys_platform == 'darwin' and platform.machine() == 'arm64'
 
+    #Probably a bad idea but update ALL the dependencies
     dependencies = [
-        Dependency(module="xformers", version="0.0.17.dev", required=False),
-        Dependency(module="torch", version="1.13.1" if is_mac else "1.13.1+cu116"),
-        Dependency(module="torchvision", version="0.14.1" if is_mac else "0.14.1+cu116"),
-        Dependency(module="accelerate", version="0.17.1"),
-        Dependency(module="diffusers", version="0.14.0"),
+        Dependency(module="xformers", version="0.0.21", required=False),
+        Dependency(module="torch", version="1.13.1" if is_mac else "2.0.1+cu118"),
+        Dependency(module="torchvision", version="0.14.1" if is_mac else "0.15.4+cu118"),
+        Dependency(module="accelerate", version="0.22.0"),
+        Dependency(module="diffusers", version="0.20.1"),
         Dependency(module="transformers", version="4.25.1"),
-        Dependency(module="bitsandbytes",  version="0.35.4", version_comparison="exact"),
+        Dependency(module="bitsandbytes",  version="0.41.1"),
     ]
 
     launch_errors = []

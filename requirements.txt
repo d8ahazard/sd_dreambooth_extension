@@ -1,7 +1,7 @@
-accelerate~=0.21.0
-bitsandbytes==0.35.4
+accelerate~=0.22.0
+bitsandbytes~=0.41.1
 dadaptation==3.1
-diffusers~=0.19.3
+diffusers~=0.20.1
 discord-webhook~=1.1.0
 fastapi~=0.94.1
 gitpython~=3.1.31
@@ -9,8 +9,12 @@ pytorch_optimizer==2.11.1
 Pillow==9.5.0
 tqdm==4.65.0
 tomesd~=0.1.2
-transformers~=4.30.1  # > 4.26.x causes issues (db extension #1110)
-
+transformers~=4.32.1;  # > 4.26.x causes issues (db extension #1110)
+# Get prebuilt Windows wheels from jllllll
+bitsandbytes~=0.41.1; sys_platform == 'win32' and platform_machine == 'AMD64' \
+--extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui --prefer-binary
+# Get Linux and MacOS wheels from PyPi
+bitsandbytes~=0.41.1; sys_platform != 'win32' or platform_machine != 'AMD64' --prefer-binary
 # Tensor
 tensorboard==2.13.0; sys_platform != 'darwin' or platform_machine != 'arm64'
 # Tensor MacOS

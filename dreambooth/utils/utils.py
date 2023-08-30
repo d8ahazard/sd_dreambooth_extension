@@ -101,7 +101,7 @@ def xformers_check():
         _xformers_version = importlib_metadata.version("xformers")
         if _torch_available:
             import torch
-            if version.Version(torch.__version__) < version.Version("1.12"):
+            if version.Version(torch.__version__) < version.Version("2.01"):
                 raise ValueError("PyTorch version must be >= 1.12")
             if version.Version(_xformers_version) < version.Version("0.0.21"):
                 raise ValueError("Xformers version must be >= 0.0.21")

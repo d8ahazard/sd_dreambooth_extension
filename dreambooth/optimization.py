@@ -49,7 +49,11 @@ class SchedulerType(Enum):
     CONSTANT_WITH_WARMUP = "constant_with_warmup"
 
 
+<<<<<<< Updated upstream
 def get_rex_scheduler(optimizer: Optimizer, total_training_steps):
+=======
+def get_rex_scheduler(optimizer: Optimizer, total_training_steps: int):
+>>>>>>> Stashed changes
     """
     Returns a learning rate scheduler based on the REx (Relative Exploration) algorithm.
 
