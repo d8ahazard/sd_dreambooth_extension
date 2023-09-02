@@ -4,6 +4,7 @@ import collections
 import os
 import re
 import sys
+from typing import Dict
 
 import torch
 from diffusers.utils import is_xformers_available
@@ -138,12 +139,12 @@ def get_lora_models(config: DreamboothConfig = None):
     if config is None:
         config = shared.db_model_config
     if config is not None:
-        lora_dir = os.path.join(config.model_dir, "loras")
+        lora_dir = os.path.join(shared.models_path, "Lora")
         if os.path.exists(lora_dir):
             files = os.listdir(lora_dir)
             for file in files:
                 if os.path.isfile(os.path.join(lora_dir, file)):
-                    if ".pt" in file and "_txt.pt" not in file:
+                    if ".safetensors" in file or ".pt" in file or ".ckpt" in file:
                         output.append(file)
     return output
 
@@ -156,7 +157,10 @@ def get_sorted_lora_models(config: DreamboothConfig = None):
         match = regex.search(name)
         return int(match.group(1)) if match else 0
 
-    return sorted(models, key=lambda x: get_iteration(x))
+    sorted_models = sorted(models, key=lambda x: get_iteration(x))
+    # Insert empty string at the beginning
+    sorted_models.insert(0, "")
+    return sorted_models
 
 
 def get_model_snapshots(config: DreamboothConfig = None):
@@ -199,10 +203,10 @@ def reload_system_models():
         pass
 
 
-def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision):
+def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision, subfolder: str = "text_encoder"):
     text_encoder_config = PretrainedConfig.from_pretrained(
         pretrained_model_name_or_path,
-        subfolder="text_encoder",
+        subfolder=subfolder,
         revision=revision,
     )
     model_class = text_encoder_config.architectures[0]
@@ -211,6 +215,9 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
         from transformers import CLIPTextModel
 
         return CLIPTextModel
+    elif model_class == "CLIPTextModelWithProjection":
+        from transformers import CLIPTextModelWithProjection
+        return CLIPTextModelWithProjection
     elif model_class == "RobertaSeriesModelWithTransformation":
         from diffusers.pipelines.alt_diffusion.modeling_roberta_series import RobertaSeriesModelWithTransformation
 
@@ -219,7 +226,22 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
         raise ValueError(f"{model_class} is not supported.")
 
 
-# from modules.sd_models import CheckpointInfo
+def unet_attn_processors_state_dict(unet) -> Dict[str, torch.tensor]:
+    """
+    Returns:
+        a state dict containing just the attention processor parameters.
+    """
+    attn_processors = unet.attn_processors
+
+    attn_processors_state_dict = {}
+
+    for attn_processor_key, attn_processor in attn_processors.items():
+        for parameter_key, parameter in attn_processor.state_dict().items():
+            attn_processors_state_dict[f"{attn_processor_key}.{parameter_key}"] = parameter
+
+    return attn_processors_state_dict
+
+
 
 def get_checkpoint_match(search_string):
     try:

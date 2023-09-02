@@ -6,6 +6,7 @@ import gradio as gr
 
 from dreambooth.dataclasses.db_config import from_file, save_config
 from dreambooth.diff_to_sd import compile_checkpoint
+from dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_sdxl
 from dreambooth.secret import (
     get_secret,
     create_secret,
@@ -229,7 +230,10 @@ def ui_gen_ckpt(model_name: str):
     printm("Config loaded")
     lora_path = config.lora_model_name
     print(f"Lora path: {lora_path}")
-    res = compile_checkpoint(model_name, lora_path, True, True, config.snapshot)
+    if config.model_type == "SDXL":
+        res = compile_checkpoint_sdxl(model_name, lora_path, True, False, config.snapshot)
+    else:
+        res = compile_checkpoint(model_name, lora_path, True, True, config.snapshot)
     return res
 
 
