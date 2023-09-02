@@ -22,7 +22,7 @@ else:
 def actual_install():
     if os.environ.get("PUBLIC_KEY", None):
         print("Docker, returning.")
-        shared.launch_error = None
+        shared.launch_errors = None
         return
 
     base_dir = os.path.dirname(os.path.realpath(__file__))
@@ -93,7 +93,7 @@ def check_xformers():
     """
     try:
         xformers_version = importlib_metadata.version("xformers")
-        xformers_outdated = Version(xformers_version) < Version("0.0.17.dev")
+        xformers_outdated = Version(xformers_version) < Version("0.0.20")
         if xformers_outdated:
             try:
                 torch_version = importlib_metadata.version("torch")
@@ -117,16 +117,19 @@ def check_bitsandbytes():
         bitsandbytes_version = importlib_metadata.version("bitsandbytes")
         if bitsandbytes_version is not "0.41.1":
             try:
-                bnb_src = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bitsandbytes_windows")
-                bnb_dest = os.path.join(sysconfig.get_paths()["purelib"], "bitsandbytes")
-                filecmp.clear_cache()
-                for file in os.listdir(bnb_src):
-                    src_file = os.path.join(bnb_src, file)
-                    if file == "main.py" or file == "paths.py":
-                        dest = os.path.join(bnb_dest, "cuda_setup")
-                    else:
-                        dest = bnb_dest
-                    shutil.copy2(src_file, dest)
+                pip_install("--force-install","--extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui", "--prefer-binary"",bitsandbytes==0.41.1")
+                #bnb_src = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bitsandbytes_windows")
+                #bnb_dest = os.path.join(sysconfig.get_paths()["purelib"], "bitsandbytes")
+                #filecmp.clear_cache()
+                #for file in os.listdir(bnb_src):
+                #    src_file = os.path.join(bnb_src, file)
+                #    if file == "main.py" or file == "paths.py":
+                #        dest = os.path.join(bnb_dest, "cuda_setup")
+                #for file in os.listdir(bnb_dest):
+                    
+                #    else:
+                #        dest = bnb_dest
+                #    shutil.copy2(src_file, dest)
             except:
                 pass
         else:
@@ -150,7 +153,7 @@ def check_versions():
     dependencies = [
         Dependency(module="xformers", version="0.0.21", required=False),
         Dependency(module="torch", version="1.13.1" if is_mac else "2.0.1+cu118"),
-        Dependency(module="torchvision", version="0.14.1" if is_mac else "0.15.4+cu118"),
+        Dependency(module="torchvision", version="0.14.1" if is_mac else "0.15.+cu118"),
         Dependency(module="accelerate", version="0.22.0"),
         Dependency(module="diffusers", version="0.20.1"),
         Dependency(module="transformers", version="4.25.1"),
