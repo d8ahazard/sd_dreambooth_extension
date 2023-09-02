@@ -118,13 +118,13 @@ def list_optimizer():
 
     try:
         if shared.device.type != "mps":
-            from bitsandbytes.optim.adamw import AdamW8bit
+            from bitsandbytes.optim import AdamW8bit
             optimizer_list.append("8bit AdamW")
     except:
         pass
 
     try:
-        from pytorch_optimizer.optimizer import lion
+        from pytorch_optimizer import Lion
         optimizer_list.append("Lion")
     except:
         pass
@@ -142,7 +142,20 @@ def list_optimizer():
         pass
     
     try:
-        from dadaptation.experimental import dadapt_adan_ip
+        from pytorch_optimizer import Apollo
+        optimizer_list.append("Apollo")
+    except:
+        pass
+    
+    try:
+        from pytorch_optimizer import SophiaH
+        optimizer_list.append("SophiaH")
+    except:
+        pass
+    
+    
+    try:
+        from dadaptation.experimental import DAdaptAdanIP
         optimizer_list.append("AdanIP Dadaptation")
     except:
         pass
@@ -166,25 +179,25 @@ def list_optimizer():
         pass
         
     try:
-        from pytorch_optimizer.optimizer import prodigy
+        from pytorch_optimizer import Prodigy
         optimizer_list.append("Prodigy")
     except:
         pass
     
     try:
-        from pytorch_optimizer.optimizer import tiger
+        from pytorch_optimizer import Tiger
         optimizer_list.append("Tiger")
     except:
         pass
     
     try:
-        from bitsandbytes.optim.lion import Lion8bit
+        from bitsandbytes.optim import Lion8bit
         optimizer_list.append("8bit Lion")
     except:
         pass
     
     try:
-        from pytorch_optimizer.optimizer import came
+        from pytorch_optimizer import CAME
         optimizer_list.append("CAME")
     except:
         pass
