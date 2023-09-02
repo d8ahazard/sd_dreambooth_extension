@@ -87,6 +87,7 @@ class DreamboothConfig(BaseModel):
     revision: int = 0
     sample_batch_size: int = 1
     sanity_prompt: str = ""
+    sanity_negative_prompt: str = ""
     sanity_seed: int = 420420
     save_ckpt_after: bool = True
     save_ckpt_cancel: bool = False
@@ -108,6 +109,7 @@ class DreamboothConfig(BaseModel):
     snapshot: str = ""
     split_loss: bool = True
     src: str = ""
+    stop_at_steps: bool = False
     stop_text_encoder: float = 1.0
     strict_tokens: bool = False
     dynamic_img_norm: bool = False

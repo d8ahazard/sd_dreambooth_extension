@@ -712,9 +712,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         logger.debug(f"  Batch Size Per Device = {train_batch_size}")
         logger.debug(f"  Gradient Accumulation steps = {gradient_accumulation_steps}")
         logger.debug(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
-        logger.debug(f"  Text Encoder Epochs: {text_encoder_epochs}")
+        logger.debug(f"  Text Encoder Epochs = {text_encoder_epochs}")
         logger.debug(f"  Total optimization steps = {sched_train_steps}")
         logger.debug(f"  Total training steps = {max_train_steps}")
+        logger.debug(f"  Train until max steps: {args.stop_at_steps}")
         logger.debug(f"  Resuming from checkpoint: {resume_from_checkpoint}")
         logger.debug(f"  First resume epoch: {first_epoch}")
         logger.debug(f"  First resume step: {resume_step}")
@@ -736,7 +737,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             nonlocal last_image_save
             save_model_interval = args.save_embedding_every
             save_image_interval = args.save_preview_every
-            save_completed = session_epoch >= max_train_epochs
+            save_completed = global_step >= max_train_steps if args.stop_at_steps else session_epoch >= max_train_epochs
             save_canceled = status.interrupted
             save_image = False
             save_model = False
@@ -1506,7 +1507,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             check_save(True)
 
             if args.num_train_epochs > 1:
-                training_complete = session_epoch >= max_train_epochs
+                training_complete = global_step >= max_train_steps if args.stop_at_steps else session_epoch >= max_train_epochs
 
             if training_complete or status.interrupted:
                 logger.debug("  Training complete (step check).")
