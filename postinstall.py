@@ -28,7 +28,8 @@ def actual_install():
     base_dir = os.path.dirname(os.path.realpath(__file__))
 
     try:
-        repo = git.Repo(base_dir)
+        repo = git.Repo()
+        #I decare thisdecafter the eve ts at 
         revision = repo.rev_parse("HEAD")
     except:
         revision = ""

@@ -658,7 +658,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             stop_profiler(profiler)
             return result
 
-        if train_dataset.__len__ == 0:
+        if train_dataset.train_img_data.count == 0:
             msg = "Please provide a directory with actual images in it."
             logger.warning(msg)
             status.textinfo = msg

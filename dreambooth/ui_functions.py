@@ -414,9 +414,79 @@ def generate_samples(
 
     @find_executable_batch_size(starting_batch_size=batch_size)
     def sample_loop(train_batch_size):
-        if model_name is None or model_name == "":
+        if model_name is None:
             return "Please select a model."
         config = from_file(model_name)
+        if config is None:
+            return "Invalid config."
+
+        if config.use_lora:
+            config.use_lora = False
+            config.save()
+            reload_system_models()
+        if config.use_ema:
+            config.use_ema = False
+            config.save()
+            reload_system_models()
+
+        if config.use_lora:
+            if config.lora_model_name:
+                config.lora_model_name = ""
+                config.save()
+                reload_system_models()
+            if config.lora_unet_rank:
+                config.lora_unet_rank = 0
+                config.save()
+                reload_system_models()
+            if config.lora_txt_rank:
+                config.lora_txt_rank = 0
+                config.save()
+                reload_system_models()
+
+        if config.use_ema:
+            if config.ema_model_name:
+                config.ema_model_name = ""
+                config.save()
+                reload_system_models()
+
+        if config.use_subdir:
+            shared.models_path = os.path.join(shared.models_path, config.model_name)
+            if not os.path.exists(shared.models_path):
+                os.mkdir(shared.models_path)
+
+        if not os.path.exists(config.model_dir):
+            os.makedirs(config.model_dir)
+
+        if config.use_lora:
+            if not os.path.exists(config.shared_diffusers_path):
+                os.makedirs(config.shared_diffusers_path)
+            if not os.path.exists(config.shared_diffusers_path):
+                os.makedirs(config.shared_diffusers_path)
+            if not os.path.exists(config.shared_diffusers_path):
+                os.makedirs(config.shared_diffusers_path)
+
+        if config.use_lora:
+            if not os.path.exists(config.shared_diffusers_path):
+                os.makedirs(config.shared_diffusers_path)
+            if not os.path.exists(config.shared_diffusers_path):
+                os.makedirs(config.shared_diffusers_path)
+            if not os.path.exists(config.shared_diffusers_path):
+                os.makedirs(config.shared_diffusers_path)
+
+        if config.use_lora:
+            if not os.path.exists(config.shared_diffusers_path):
+                os.makedirs(config.shared_diffusers_path)
+            if not os.path.exists(config.shared_diffusers_path):
+                os.makedirs(config.shared_diffusers_path)
+            if not os.path.exists(config.shared_diffusers_path):
+                os.makedirs(config.shared_diffusers_path)
+
+        if config.use_lora:
+            if not os.path.exists(config.shared_diffusers_path):
+                os.makedirs(config.shared_diffusers_path)
+            if not os.path.exists(config.shared_diffusers_path):
+                os.makedirs(config.shared_diffusers_path)
+            if not
         source_model = None
 
         if class_gen_method == "A1111 txt2img (Euler a)":
@@ -590,12 +660,12 @@ def load_params(model_dir):
     if data is None:
         print("Can't load config!")
         msg = "Please specify a model to load."
-    elif data.__dict__ is None:
+    elif data.dict
         print("Can't load config!")
         msg = "Please check your model config."
     else:
         for key in data.__dict__:
-            value = data.__dict__[key]
+            value = data.__dict__[key.count] == 0:
             if key == "pretrained_model_name_or_path":
                 key = "model_path"
             ui_dict[f"db_{key}"] = value
@@ -674,7 +744,7 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
     images: Output images from training.
     status: Any relevant messages.
     """
-    if model_dir == "" or model_dir is None:
+if not model_name or model_name is None:
         print("Invalid model name.")
         msg = "Create or select a model first."
         lora_model_name = gr_update(visible=True)
@@ -701,8 +771,9 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
     if msg:
         print(msg)
         lora_model_name = gr_update(visible=True)
-        return lora_model_name, 0, 0, [], msg
+        return lora_model_name
     status.begin()
+    
     # Clear memory and do "stuff" only after we've ensured all the things are right
     if config.custom_model_name:
         print(f"Custom model name is {config.custom_model_name}")
@@ -752,54 +823,54 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
         traceback.print_exc()
         pass
 
-    status.end()
-    cleanup()
-    reload_system_models()
-    lora_model_name = ""
-    if config.lora_model_name:
-        lora_model_name = f"{config.model_name}_{total_steps}.pt"
-    dirs = get_lora_models()
-    lora_model_name = gr_update(choices=sorted(dirs), value=lora_model_name)
-    return lora_model_name, total_steps, config.epoch, images, res
+        status.end()
+        cleanup()
+        reload_system_models()
+        lora_model_name = ""
+        if config.lora_model_name:
+            lora_model_name = f"{config.model_name}_{total_steps}.pt"
+        dirs = get_lora_models()
+        lora_model_name = gr_update(choices=sorted(dirs), value=lora_model_name)
+        return lora_model_name, total_steps, config.epoch, images, res
 
 
-def reload_extension():
-    ext_name = "extensions.sd_dreambooth_extension"
-    deleted = []
-    for module in list(sys.modules):
-        if module.startswith(ext_name):
-            del sys.modules[module]
-            deleted.append(module)
+    def reload_extension():
+        ext_name = "extensions.sd_dreambooth_extension"
+        deleted = []
+        for module in list(sys.modules):
+            if module.startswith(ext_name):
+                del sys.modules[module]
+                deleted.append(module)
 
-    for re_add in deleted:
+        for re_add in deleted:
+            try:
+                print(f"Replacing: {re_add}")
+                importlib.import_module(re_add)
+
+            except Exception as e:
+                print(f"Couldn't import module: {re_add}")
         try:
-            print(f"Replacing: {re_add}")
-            importlib.import_module(re_add)
+            from postinstall import actual_install  # noqa
+        except:
+            from dreambooth.postinstall import actual_install  # noqa
 
-        except Exception as e:
-            print(f"Couldn't import module: {re_add}")
-    try:
-        from postinstall import actual_install  # noqa
-    except:
-        from dreambooth.postinstall import actual_install  # noqa
-
-    actual_install()
+        actual_install()
 
 
-def update_extension():
-    git = os.environ.get("GIT", "git")
-    ext_dir = os.path.join(shared.script_path, "extensions", "sd_dreambooth_extension")
-    run(
-        f'"{git}" -C "{ext_dir}" fetch',
-        f"Fetching updates...",
-        f"Couldn't fetch updates...",
-    )
-    run(
-        f'"{git}" -C "{ext_dir}" pull',
-        f"Pulling updates...",
-        f"Couldn't pull updates...",
-    )
-    reload_extension()
+    def update_extension():
+        git = os.environ.get("GIT", "git")
+        ext_dir = os.path.join(shared.script_path, "extensions", "sd_dreambooth_extension")
+        run(
+            f'"{git}" -C "{ext_dir}" fetch',
+            f"Fetching updates...",
+            f"Couldn't fetch updates...",
+        )
+        run(
+            f'"{git}" -C "{ext_dir}" pull',
+            f"Pulling updates...",
+            f"Couldn't pull updates...",
+        )
+        reload_extension()
 
 
 def ui_classifiers(model_name: str, class_gen_method: str = "Native Diffusers"):
@@ -809,7 +880,7 @@ def ui_classifiers(model_name: str, class_gen_method: str = "Native Diffusers"):
     @param class_gen_method" Image Generation Library.
     @return:
     """
-    if model_name == "" or model_name is None:
+    if not model_name or model_name is None:
         print("Invalid model name.")
         msg = "Create or select a model first."
         return msg
