@@ -22,6 +22,8 @@ import traceback
 from enum import Enum
 from typing import Optional, Union, List
 
+from inflection import camelize
+
 from diffusers import DEISMultistepScheduler, UniPCMultistepScheduler, DDPMScheduler
 from diffusers.utils import logging
 from torch.optim import Optimizer
@@ -568,147 +570,215 @@ def log_dadapt(disable: bool = True):
 def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, params_to_optimize):
     try:
         if optimizer == "8bit AdamW":
-            from bitsandbytes.optim.adamw import AdamW8bit
-            return AdamW8bit(
-                params_to_optimize,
+            from bitsandbytes.optim import AdamW8bit
+            adamw8bit = AdamW8bit(
+                params=params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
+                percentile_clipping=100,
+                min_8bit_size=4096,
+                block_wise=True,
+                amsgrad=False,
+                is_paged=False,
             )
+            return adamw8bit
             
         elif optimizer == "Adafactor":
             from transformers.optimization import Adafactor
-            return Adafactor(
-                params_to_optimize,
+            adafactor = Adafactor(
+                params=params_to_optimize,
                 lr=learning_rate,
-                eps=(1e-30, 1e-3),
                 clip_threshold=1.0,
                 decay_rate=-0.8,
-                beta1=None,
-                weight_decay=0.0,
-                relative_step=False,
-                scale_parameter=False,
+                weight_decay=weight_decay,
+                relative_step=True,
+                scale_parameter=True,
                 warmup_init=False,
             )
+            return adafactor
         
         elif optimizer == "Lion":
-            from pytorch_optimizer.optimizer import lion
-            return lion(
-                params_to_optimize,
+            from pytorch_optimizer import Lion
+            lion = Lion(
+                params=params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
+                weight_decouple=True,
+                fixed_decay=False,
+                use_gc=False,
+                adanorm=False
             )
+            return lion
 
         elif optimizer == "AdamW Dadaptation":
             from dadaptation import DAdaptAdam
-            return DAdaptAdam(
-                params_to_optimize,
+            dadaptadam = DAdaptAdam(
+                params=params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
                 decouple=True,
                 use_bias_correction=True,
-                log_every=log_dadapt(True)
+                log_every=log_dadapt(True),
+                fsdp_in_use=False,
             )
+            return dadaptadam
 
         elif optimizer == "Lion Dadaptation":
             from dadaptation import DAdaptLion
-            return DAdaptLion(
-                params_to_optimize,
+            dadaptlion = DAdaptLion(
+                params=params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
-                log_every=log_dadapt(True)
+                log_every=log_dadapt(True),
+                fsdp_in_use=False,
+                d0=0.000001,
             )
+            return dadaptlion
 
         elif optimizer == "Adan Dadaptation":
             from dadaptation import DAdaptAdan
-            return DAdaptAdan(
-                params_to_optimize,
+            dadaptadan = DAdaptAdan(
+                params=params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
                 log_every=log_dadapt(True),
+                no_prox=False,
+                d0=0.000001
             )
+            return dadaptadan
         
         elif optimizer == "AdanIP Dadaptation":
             from dadaptation.experimental import DAdaptAdanIP
-            return DAdaptAdanIP(
-                params_to_optimize,
+            dadaptadanip = DAdaptAdanIP(
+                params=params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
                 log_every=log_dadapt(True),
+                no_prox=False,
+                d0=0.000001
             )
+            return dadaptadanip
+        
+        elif optimizer == "Apollo":
+            from pytorch_optimizer import Apollo
+            apollo = Apollo(
+                params=params_to_optimize,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                eight_decay_type='l2',
+                init_lr=None,
+                rebound='constant',
+            )
+            return apollo
 
+        elif optimizer == "Sophia":
+            from pytorch_optimizer import SophiaH
+            sophia = SophiaH(
+                params=params_to_optimize,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                weight_decouple=True,
+                fixed_decay=False,
+                hessian_distribution="gaussian",
+                p=0.01,
+            )
+            return sophia
+        
         elif optimizer == "SGD Dadaptation":
             from dadaptation import DAdaptSGD
             return DAdaptSGD(
-                params_to_optimize,
+                params=params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
                 log_every=log_dadapt(True),
+                momentum=0.0,
+                fsdp_in_use=False,
+                d0=0.000001,
             )
             
         elif optimizer == "Prodigy":
-            from pytorch_optimizer.optimizer import prodigy
-            return prodigy(
-                    params_to_optimize,
+            from pytorch_optimizer import Prodigy
+            prodigy = Prodigy(
+                    params=params_to_optimize,
                     lr=learning_rate,
                     weight_decay=weight_decay,
-                    decouple=True,
-                    use_bias_correction=True,
                     safeguard_warmup=False,
                     d0=1e-6,
                     d_coef=1.0,
+                    bias_correction=False,
+                    fixed_decay=False,
+                    weight_decouple=True,
                 )
+            return prodigy
             
         elif optimizer == "Tiger":
-            from pytorch_optimizer.optimizer import tiger
-            return tiger(
-                params_to_optimize,
+            from pytorch_optimizer import Tiger
+            tiger = Tiger(
+                params=params_to_optimize,
                 lr=learning_rate,
                 beta = 0.965,
                 weight_decay=0.01,
                 weight_decouple=True,
                 fixed_decay=False,
             )
+            return tiger
             
         elif optimizer == "CAME":
-            from pytorch_optimizer.optimizer import came
-            return came(
-                params_to_optimize,
+            from pytorch_optimizer import CAME
+            came = CAME(
+            
+                params = params_to_optimize,
                 lr=learning_rate,
-                weight_decay=0.0,
+                weight_decay=weight_decay,
                 weight_decouple=True,
                 fixed_decay=False,
                 clip_threshold=1.0,
-                eps1=1e-30,
-                eps2=1e-16,
+                ams_bound=False,
                 )
+            return came
         
         elif optimizer == "Lion8bit":
-            from bitsandbytes.optim.lion import Lion8bit
-            return Lion8bit(
-                params_to_optimize,
+            from bitsandbytes.optim import Lion8bit
+            lion8bit = Lion8bit(
+                params = params_to_optimize,
                 lr=learning_rate,
                 betas=(0.9, 0.99), 
-                weight_decay=0
+                weight_decay=weight_decay,
+                is_paged=False,
+                percentile_clipping=100,
+                block_wise=True,
+                min_8bit_size=4096,
             )
+            return lion8bit
                 
         elif optimizer == "PagedLion8bit":
-            from bitsandbytes.optim.lion import PagedLion8bit
-            return PagedLion8bit(
+            from bitsandbytes.optim import PagedLion8bit
+            pagedLion8bit = PagedLion8bit(
                 params_to_optimize,
                 lr=learning_rate,
                 betas=(0.9, 0.99),
                 weight_decay=0,
+                percentile_clipping=100,
+                block_wise=True,
+                is_paged=True,
+                min_8bit_size=4096,
             )
+            return pagedLion8bit
         
         elif optimizer == "PagedAdamW8bit":   
-            from bitsandbytes.optim.adamw import PagedAdamW8bit
-            return PagedAdamW8bit(
+            from bitsandbytes.optim import PagedAdamW8bit
+            pagedadamw8bit = PagedAdamW8bit(
                 params_to_optimize,
                 lr=learning_rate,
                 betas=(0.9, 0.999),
                 eps=1e-8,
-                weight_decay=1e-2,
+                weight_decay=weight_decay,
+                percentile_clipping=100,
+                block_wise=True,
+                amsgrad=False,
+                paged=True,
             )
+            return pagedadamw8bit
             
     except Exception as e:
         logger.warning(f"Exception importing {optimizer}: {e}")
