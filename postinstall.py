@@ -22,14 +22,13 @@ else:
 def actual_install():
     if os.environ.get("PUBLIC_KEY", None):
         print("Docker, returning.")
-        shared.launch_errors = None
+        shared.launch_error = None
         return
 
     base_dir = os.path.dirname(os.path.realpath(__file__))
 
     try:
-        repo = git.Repo
-        #I decare thisdecafter the eve ts at 
+        repo = git.Repo(base_dir)
         revision = repo.rev_parse("HEAD")
     except:
         revision = ""
@@ -114,27 +113,29 @@ def check_bitsandbytes():
     """
     Check for "different" B&B Files and copy only if necessary
     """
+    bitsandbytes_version = importlib_metadata.version("bitsandbytes")
     if os.name == "nt":
-        bitsandbytes_version = importlib_metadata.version("bitsandbytes")
         if bitsandbytes_version != "0.41.1":
             try:
-                pip_install("--force-install","--extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui", "--prefer-binary"",bitsandbytes==0.41.1")
-                #bnb_src = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bitsandbytes_windows")
-                #bnb_dest = os.path.join(sysconfig.get_paths()["purelib"], "bitsandbytes")
-                #filecmp.clear_cache()
-                #for file in os.listdir(bnb_src):
-                #    src_file = os.path.join(bnb_src, file)
-                #    if file == "main.py" or file == "paths.py":
-                #        dest = os.path.join(bnb_dest, "cuda_setup")
-                #for file in os.listdir(bnb_dest):
-                    
-                #    else:
-                #        dest = bnb_dest
-                #    shutil.copy2(src_file, dest)
+                print("Installing bitsandbytes")
+                pip_install("--force-install","==prefer-binary","--extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui","bitsandbytes==0.41.1")
             except:
+                print("Bitsandbytes 0.41.1 installation failed.")
+                print("Some features such as 8bit optimizers will be unavailable")
+                print("Please install manually with")
+                print("'python -m pip install bitsandbytes==0.41.1 --extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui --prefer-binary --force-install'")
                 pass
-        else:
-            pass
+    else:
+        if bitsandbytes_version != "0.41.1":
+            try:
+                print("Installing bitsandbytes")
+                pip_install("--force-install","--prefer-binary","bitsandbytes==0.41.1")
+            except:
+                print("Bitsandbytes 0.41.1 installation failed")
+                print("Some features such as 8bit optimizers will be unavailable")
+                print("Install manually with")
+                print("'python -m pip install bitsandbytes==0.41.1  --prefer-binary --force-install'")
+                pass
 
 
 @dataclass

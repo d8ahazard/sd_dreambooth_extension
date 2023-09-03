@@ -569,21 +569,7 @@ def log_dadapt(disable: bool = True):
 
 def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, params_to_optimize):
     try:
-        if optimizer == "8bit AdamW":
-            from bitsandbytes.optim import AdamW8bit
-            adamw8bit = AdamW8bit(
-                params=params_to_optimize,
-                lr=learning_rate,
-                weight_decay=weight_decay,
-                percentile_clipping=100,
-                min_8bit_size=4096,
-                block_wise=True,
-                amsgrad=False,
-                is_paged=False,
-            )
-            return adamw8bit
-            
-        elif optimizer == "Adafactor":
+        if optimizer == "Adafactor":
             from transformers.optimization import Adafactor
             adafactor = Adafactor(
                 params=params_to_optimize,
@@ -597,6 +583,60 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
             )
             return adafactor
         
+        elif optimizer == "CAME":
+            from pytorch_optimizer import CAME
+            came = CAME(
+                params=params_to_optimize,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                weight_decouple=True,
+                fixed_decay=False,
+                clip_threshold=1.0,
+                ams_bound=False,
+                )
+            return came
+
+        elif optimizer == "8bit AdamW":
+            from bitsandbytes.optim import AdamW8bit
+            adamw8bit = AdamW8bit(
+                params=params_to_optimize,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                percentile_clipping=100,
+                min_8bit_size=4096,
+                block_wise=True,
+                amsgrad=False,
+                is_paged=False,
+            )
+            return adamw8bit
+        
+        elif optimizer == "Paged 8bit AdamW":   
+            from bitsandbytes.optim import PagedAdamW8bit
+            pagedadamw8bit = PagedAdamW8bit(
+                params=params_to_optimize,
+                lr=learning_rate,
+                betas=(0.9, 0.999),
+                eps=1e-8,
+                weight_decay=weight_decay,
+                percentile_clipping=100,
+                block_wise=True,
+                amsgrad=False,
+                paged=True,
+            )
+            return pagedadamw8bit
+
+        elif optimizer == "Apollo":
+            from pytorch_optimizer import Apollo
+            apollo = Apollo(
+                params=params_to_optimize,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                eight_decay_type='l2',
+                init_lr=None,
+                rebound='constant',
+            )
+            return apollo
+
         elif optimizer == "Lion":
             from pytorch_optimizer import Lion
             lion = Lion(
@@ -609,6 +649,34 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 adanorm=False
             )
             return lion
+        
+        elif optimizer == "8bit Lion":
+            from bitsandbytes.optim import Lion8bit
+            lion8bit = Lion8bit(
+                params=params_to_optimize,
+                lr=learning_rate,
+                betas=(0.9, 0.99), 
+                weight_decay=weight_decay,
+                is_paged=False,
+                percentile_clipping=100,
+                block_wise=True,
+                min_8bit_size=4096,
+            )
+            return lion8bit
+                
+        elif optimizer == "Paged 8bit Lion":
+            from bitsandbytes.optim import PagedLion8bit
+            pagedLion8bit = PagedLion8bit(
+                params=params_to_optimize,
+                lr=learning_rate,
+                betas=(0.9, 0.99),
+                weight_decay=0,
+                percentile_clipping=100,
+                block_wise=True,
+                is_paged=True,
+                min_8bit_size=4096,
+            )
+            return pagedLion8bit
 
         elif optimizer == "AdamW Dadaptation":
             from dadaptation import DAdaptAdam
@@ -659,31 +727,6 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
             )
             return dadaptadanip
         
-        elif optimizer == "Apollo":
-            from pytorch_optimizer import Apollo
-            apollo = Apollo(
-                params=params_to_optimize,
-                lr=learning_rate,
-                weight_decay=weight_decay,
-                eight_decay_type='l2',
-                init_lr=None,
-                rebound='constant',
-            )
-            return apollo
-
-        elif optimizer == "Sophia":
-            from pytorch_optimizer import SophiaH
-            sophia = SophiaH(
-                params=params_to_optimize,
-                lr=learning_rate,
-                weight_decay=weight_decay,
-                weight_decouple=True,
-                fixed_decay=False,
-                hessian_distribution="gaussian",
-                p=0.01,
-            )
-            return sophia
-        
         elif optimizer == "SGD Dadaptation":
             from dadaptation import DAdaptSGD
             dadaptsgd = DAdaptSGD(
@@ -695,7 +738,7 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 fsdp_in_use=False,
                 d0=0.000001,
             )
-            return dadptsgd
+            return dadaptsgd
             
         elif optimizer == "Prodigy":
             from pytorch_optimizer import Prodigy
@@ -711,6 +754,20 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                     weight_decouple=True,
                 )
             return prodigy
+
+        
+        elif optimizer == "Sophia":
+            from pytorch_optimizer import SophiaH
+            sophia = SophiaH(
+                params=params_to_optimize,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                weight_decouple=True,
+                fixed_decay=False,
+                hessian_distribution="gaussian",
+                p=0.01,
+            )
+            return sophia
             
         elif optimizer == "Tiger":
             from pytorch_optimizer import Tiger
@@ -723,63 +780,6 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 fixed_decay=False,
             )
             return tiger
-            
-        elif optimizer == "CAME":
-            from pytorch_optimizer import CAME
-            came = CAME(
-            
-                params=params_to_optimize,
-                lr=learning_rate,
-                weight_decay=weight_decay,
-                weight_decouple=True,
-                fixed_decay=False,
-                clip_threshold=1.0,
-                ams_bound=False,
-                )
-            return came
-        
-        elif optimizer == "Lion8bit":
-            from bitsandbytes.optim import Lion8bit
-            lion8bit = Lion8bit(
-                params=params_to_optimize,
-                lr=learning_rate,
-                betas=(0.9, 0.99), 
-                weight_decay=weight_decay,
-                is_paged=False,
-                percentile_clipping=100,
-                block_wise=True,
-                min_8bit_size=4096,
-            )
-            return lion8bit
-                
-        elif optimizer == "PagedLion8bit":
-            from bitsandbytes.optim import PagedLion8bit
-            pagedLion8bit = PagedLion8bit(
-                params=params_to_optimize,
-                lr=learning_rate,
-                betas=(0.9, 0.99),
-                weight_decay=0,
-                percentile_clipping=100,
-                block_wise=True,
-                is_paged=True,
-                min_8bit_size=4096,
-            )
-            return pagedLion8bit
-        
-        elif optimizer == "PagedAdamW8bit":   
-            from bitsandbytes.optim import PagedAdamW8bit
-            pagedadamw8bit = PagedAdamW8bit(
-                params=params_to_optimize,
-                lr=learning_rate,
-                betas=(0.9, 0.999),
-                eps=1e-8,
-                weight_decay=weight_decay,
-                percentile_clipping=100,
-                block_wise=True,
-                amsgrad=False,
-                paged=True,
-            )
-            return pagedadamw8bit
             
     except Exception as e:
         logger.warning(f"Exception importing {optimizer}: {e}")

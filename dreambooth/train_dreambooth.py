@@ -13,13 +13,14 @@ import traceback
 from contextlib import ExitStack
 from decimal import Decimal
 from pathlib import Path
+from numpy import dtype
 
 import tomesd
 import torch
 import torch.backends.cuda
 import torch.backends.cudnn
 import torch.nn.functional as F
-from accelerate import Accelerator
+from accelerate import Accelerator, cpu_offload
 from accelerate.utils.random import set_seed as set_seed2
 from diffusers import (
     AutoencoderKL,
@@ -336,7 +337,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         text_encoder_cls = import_model_class_from_model_name_or_path(
             args.get_pretrained_model_name_or_path(), args.revision
         )
-
         pbar2.set_description("Loading text encoder...")
         pbar2.update()
         # Load models and create wrapper for stable diffusion
@@ -352,7 +352,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             text_encoder_cls_two = import_model_class_from_model_name_or_path(
                 args.get_pretrained_model_name_or_path(), args.revision, subfolder="text_encoder_2"
             )
-
             pbar2.set_description("Loading text encoder 2...")
             pbar2.update()
             # Load models and create wrapper for stable diffusion
@@ -360,8 +359,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 args.get_pretrained_model_name_or_path(),
                 subfolder="text_encoder_2",
                 revision=args.revision,
-                torch_dtype=torch.float32,
-            )
+                torch_dtype=torch.float32,            )
 
         printm("Created tenc")
         pbar2.set_description("Loading VAE...")
@@ -375,7 +373,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             args.get_pretrained_model_name_or_path(),
             subfolder="unet",
             revision=args.revision,
-            torch_dtype=torch.float32,
+            torch_dtype=torch.bfloat16 if args.mixed_precision == "bf16" else torch.float16 if args.mixed_precision == "fp16" else torch.float32,
         )
 
         if args.attention == "xformers" and not shared.force_cpu:
@@ -439,7 +437,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     args.get_pretrained_model_name_or_path(),
                     subfolder="ema_unet",
                     revision=args.revision,
-                    torch_dtype=torch.float32,
+                    torch_dtype=torch.bfloat16 if args.mixed_precision == "bf16" else torch.float16 if args.mixed_precision == "fp16" else torch.float32,
                 )
                 if args.attention == "xformers" and not shared.force_cpu:
                     xformerify(ema_unet)

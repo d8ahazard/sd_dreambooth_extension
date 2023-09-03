@@ -101,7 +101,7 @@ def xformers_check():
         _xformers_version = importlib_metadata.version("xformers")
         if _torch_available:
             import torch
-            if version.Version(torch.__version__) < version.Version("2.01"):
+            if version.Version(torch.__version__) < version.Version("1.12"):
                 raise ValueError("PyTorch version must be >= 1.12")
             if version.Version(_xformers_version) < version.Version("0.0.21"):
                 raise ValueError("Xformers version must be >= 0.0.21")
@@ -128,6 +128,18 @@ def list_optimizer():
         optimizer_list.append("Lion")
     except:
         pass
+
+    try:
+        from bitsandbytes.optim import Lion8bit
+        optimizer_list.append("8bit Lion")
+    except:
+        pass
+    
+    try:
+        from bitsandbytes.optim import PagedLion8bit
+        optimizer_list.append("Paged 8bit Lion")
+    except:
+        pass
     
     try:
         from transformers.optimization import Adafactor
@@ -149,7 +161,7 @@ def list_optimizer():
     
     try:
         from pytorch_optimizer import SophiaH
-        optimizer_list.append("SophiaH")
+        optimizer_list.append("Sophia")
     except:
         pass
     
@@ -189,13 +201,7 @@ def list_optimizer():
         optimizer_list.append("Tiger")
     except:
         pass
-    
-    try:
-        from bitsandbytes.optim import Lion8bit
-        optimizer_list.append("8bit Lion")
-    except:
-        pass
-    
+
     try:
         from pytorch_optimizer import CAME
         optimizer_list.append("CAME")
