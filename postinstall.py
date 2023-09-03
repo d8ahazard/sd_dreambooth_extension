@@ -28,7 +28,7 @@ def actual_install():
     base_dir = os.path.dirname(os.path.realpath(__file__))
 
     try:
-        repo = git.Repo()
+        repo = git.Repo
         #I decare thisdecafter the eve ts at 
         revision = repo.rev_parse("HEAD")
     except:
@@ -116,7 +116,7 @@ def check_bitsandbytes():
     """
     if os.name == "nt":
         bitsandbytes_version = importlib_metadata.version("bitsandbytes")
-        if bitsandbytes_version is not "0.41.1":
+        if bitsandbytes_version != "0.41.1":
             try:
                 pip_install("--force-install","--extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui", "--prefer-binary"",bitsandbytes==0.41.1")
                 #bnb_src = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bitsandbytes_windows")

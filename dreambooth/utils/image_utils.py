@@ -13,12 +13,10 @@ from diffusers.schedulers import KarrasDiffusionSchedulers
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from PIL import features, PngImagePlugin, Image, ExifTags
 
-import os
 from typing import List, Tuple, Dict, Union
 
 import numpy as np
 import torch
-
 from dreambooth.dataclasses.db_concept import Concept
 from dreambooth.dataclasses.prompt_data import PromptData
 from helpers.mytqdm import mytqdm
@@ -447,8 +445,19 @@ def load_image_directory(db_dir, concept: Concept, is_class: bool = True) -> Lis
     return list(zip(img_paths, captions))
 
 
+
+
+def open_image(image_path: str, return_pil: bool = False) -> Union[np.ndarray, Image.Image]:
+    if return_pil:
+        return Image.open(image_path)
+    else:
+        return np.array(Image.open(image_path))
+
+def trim_image(image: Union[np.ndarray, Image], reso: Tuple[int, int]) -> Union[np.ndarray, Image]:
+    return image[:reso[0], :reso[1]]
+
 def open_and_trim(image_path: str, reso: Tuple[int, int], return_pil: bool = False) -> Union[np.ndarray, Image]:
-    # Open image with PIL
+    return trim_image(open_image(image_path, return_pil), reso)    # Open image with PIL
     image = Image.open(image_path)
     image = rotate_image_straight(image)
 

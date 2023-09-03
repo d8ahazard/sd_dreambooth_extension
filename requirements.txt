@@ -11,7 +11,7 @@ tqdm==4.65.0
 tomesd~=0.1.2
 transformers~=4.32.1;  # > 4.26.x causes issues (db extension #1110)
 # Get prebuilt Windows wheels from jllllll
-bitsandbytes~=0.41.1; sys_platform == 'win32' and platform_machine == 'AMD64' \
+bitsandbytes~=0.41.1; sys_platform == 'win32' or  platform_machine == 'AMD64' \
 --extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui --prefer-binary
 # Get Linux and MacOS wheels from PyPi
 bitsandbytes~=0.41.1; sys_platform != 'win32' or platform_machine != 'AMD64' --prefer-binary

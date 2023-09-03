@@ -643,7 +643,7 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 weight_decay=weight_decay,
                 log_every=log_dadapt(True),
                 no_prox=False,
-                d0=0.000001
+                d0=0.000001,
             )
             return dadaptadan
         
@@ -686,7 +686,7 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
         
         elif optimizer == "SGD Dadaptation":
             from dadaptation import DAdaptSGD
-            return DAdaptSGD(
+            dadaptsgd = DAdaptSGD(
                 params=params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
@@ -695,6 +695,7 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 fsdp_in_use=False,
                 d0=0.000001,
             )
+            return dadptsgd
             
         elif optimizer == "Prodigy":
             from pytorch_optimizer import Prodigy
@@ -727,7 +728,7 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
             from pytorch_optimizer import CAME
             came = CAME(
             
-                params = params_to_optimize,
+                params=params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
                 weight_decouple=True,
@@ -740,7 +741,7 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
         elif optimizer == "Lion8bit":
             from bitsandbytes.optim import Lion8bit
             lion8bit = Lion8bit(
-                params = params_to_optimize,
+                params=params_to_optimize,
                 lr=learning_rate,
                 betas=(0.9, 0.99), 
                 weight_decay=weight_decay,
@@ -754,7 +755,7 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
         elif optimizer == "PagedLion8bit":
             from bitsandbytes.optim import PagedLion8bit
             pagedLion8bit = PagedLion8bit(
-                params_to_optimize,
+                params=params_to_optimize,
                 lr=learning_rate,
                 betas=(0.9, 0.99),
                 weight_decay=0,
@@ -768,7 +769,7 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
         elif optimizer == "PagedAdamW8bit":   
             from bitsandbytes.optim import PagedAdamW8bit
             pagedadamw8bit = PagedAdamW8bit(
-                params_to_optimize,
+                params=params_to_optimize,
                 lr=learning_rate,
                 betas=(0.9, 0.999),
                 eps=1e-8,
@@ -793,6 +794,7 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
         lr=learning_rate,
         weight_decay=weight_decay,
     )
+
 
 
 def get_noise_scheduler(args):

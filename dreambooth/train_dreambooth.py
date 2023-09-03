@@ -381,18 +381,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         if args.attention == "xformers" and not shared.force_cpu:
             if is_xformers_available():
                 import xformers
+                xformerify(unet, False)
+                xformerify(vae, False)
+                
 
-                xformers_version = version.parse(xformers.__version__)
-                if xformers_version == version.parse("0.0.16"):
-                    logger.warning(
-                        "xFormers 0.0.16 cannot be used for training in some GPUs. If you observe problems during training, please update xFormers to at least 0.0.21. See https://huggingface.co/docs/diffusers/main/en/optimization/xformers for more details."
-                    )
-            else:
-                raise ValueError(
-                    "xformers is not available. Make sure it is installed correctly"
-                )
-            xformerify(unet, False)
-            xformerify(vae, False)
 
         unet = torch2ify(unet)
 
@@ -658,7 +650,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             stop_profiler(profiler)
             return result
 
-        if train_dataset.train_img_data.count == 0:
+        if train_dataset.__len__ == 0:
             msg = "Please provide a directory with actual images in it."
             logger.warning(msg)
             status.textinfo = msg
@@ -1131,8 +1123,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                     elif save_diffusers:
                         # We are saving weights, we need to ensure revision is saved
-                        if "_tmp" not in weights_dir:
-                            args.save()
+                        args.save()
                         try:
                             out_file = None
                             status.textinfo = (
@@ -1140,7 +1131,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             )
                             update_status({"status": status.textinfo})
                             pbar2.reset(1)
-                            
                             pbar2.set_description("Saving diffusion model")
                             s_pipeline.save_pretrained(
                                 weights_dir,
