@@ -13,6 +13,7 @@ import traceback
 from contextlib import ExitStack
 from decimal import Decimal
 from pathlib import Path
+from accelerate.utils.megatron_lm import prepare_scheduler
 from numpy import dtype
 
 import tomesd
@@ -59,7 +60,9 @@ from dreambooth.utils.model_utils import (
     torch2ify, unet_attn_processors_state_dict,
 )
 from dreambooth.utils.text_utils import encode_hidden_state
-from dreambooth.utils.utils import cleanup, printm, verify_locon_installed, patch_accelerator_for_fp16_training, apply_snr_weight
+from dreambooth.utils.utils import (cleanup, printm, verify_locon_installed, 
+                                    patch_accelerator_for_fp16_training, apply_snr_weight,
+                                    prepare_scheduler_for_custom_training)
 from dreambooth.webhook import send_training_update
 from dreambooth.xattention import optim_to
 from helpers.ema_model import EMAModel
@@ -385,9 +388,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
         unet = torch2ify(unet)
 
-        args.full_mixed_precision = True
-        if full_mixed_precision:
-            if mixed_precision == "fp16":
+        if args.full_mixed_precision:
+            if args.mixed_precision == "fp16":
                 patch_accelerator_for_fp16_training(accelerator)
             unet.to(accelerator.device, dtype=weight_dtype)
         else:
@@ -1677,11 +1679,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         if not args.split_loss and not with_prior_preservation:
                             loss = instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(),
                                                                                     reduction="mean")
-                            if args.min_snr_gamma != 0.0:
-                                loss = apply_snr_weight(loss, timesteps, noise_scheduler, min_snr_gamma)
-                                loss *=batch['loss_avg']
-                            else:
-                                loss *= batch["loss_avg"]
+                            loss *= batch["loss_avg"]
                         else:
                             # Predict the noise residual
                             if model_pred.shape[1] == 6:
@@ -1694,17 +1692,13 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                                 # Compute instance loss
                                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-                                if args.min_snr_gamma != 0.0:
-                                    loss = apply_snr_weight(loss, timesteps, noise_scheduler, min_snr_gamma)
-
+                                
                                 # Compute prior loss
                                 prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
                                                         reduction="mean")
                             else:
                                 # Compute loss
                                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-                                if args.min_snr_gamma != 0.0:
-                                    loss = apply_snr_weight(loss, timesteps, noise_scheduler, min_snr_gamma)
                     else:
                         if with_prior_preservation:
                             # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
@@ -1713,9 +1707,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                             # Compute instance loss
                             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-                            if args.min_snr_gamma != 0.0:
-                                    loss = apply_snr_weight(loss, timesteps, noise_scheduler, min_snr_gamma)
-
+                            
                             # Compute prior loss
                             prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
 
@@ -1723,8 +1715,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             loss = loss + args.prior_loss_weight * prior_loss
                         else:
                             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-                            if args.min_snr_gamma != 0.0:
-                                    loss = apply_snr_weight(loss, timesteps, noise_scheduler, min_snr_gamma)
 
                     accelerator.backward(loss)
 
