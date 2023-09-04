@@ -40,6 +40,7 @@ class DreamboothConfig(BaseModel):
     epoch_pause_frequency: int = 0
     epoch_pause_time: int = 0
     freeze_clip_normalization: bool = False
+    full_mixed_precision: bool = True
     gradient_accumulation_steps: int = 1
     gradient_checkpointing: bool = True
     gradient_set_to_none: bool = True
@@ -67,6 +68,7 @@ class DreamboothConfig(BaseModel):
     lr_scheduler: str = "constant_with_warmup"
     lr_warmup_steps: int = 0
     max_token_length: int = 75
+    min_snr_gamma: float = 0.0
     mixed_precision: str = "fp16"
     model_dir: str = ""
     model_name: str = ""

@@ -115,35 +115,22 @@ def xformers_check():
 
 def list_optimizer():
     optimizer_list = ["Torch AdamW"]
-
-    try:
-        if shared.device.type != "mps":
-            from bitsandbytes.optim import AdamW8bit
-            optimizer_list.append("8bit AdamW")
-    except:
-        pass
-
-    try:
-        from pytorch_optimizer import Lion
-        optimizer_list.append("Lion")
-    except:
-        pass
-
-    try:
-        from bitsandbytes.optim import Lion8bit
-        optimizer_list.append("8bit Lion")
-    except:
-        pass
-    
-    try:
-        from bitsandbytes.optim import PagedLion8bit
-        optimizer_list.append("Paged 8bit Lion")
-    except:
-        pass
     
     try:
         from transformers.optimization import Adafactor
         optimizer_list.append("Adafactor")
+    except:
+        pass
+    try:
+        if shared.device.type != "mps":
+            from bitsandbytes.optim.adamw import AdamW8bit
+            optimizer_list.append("8bit AdamW")
+    except:
+        pass
+    
+    try:
+            from bitsandbytes.optim.adamw import PagedAdamW8bit
+            optimizer_list.append("Paged 8bit AdamW")
     except:
         pass
     
@@ -154,17 +141,10 @@ def list_optimizer():
         pass
     
     try:
-        from pytorch_optimizer import Apollo
-        optimizer_list.append("Apollo")
+        from dadaptation import DAdaptAdan
+        optimizer_list.append("Adan Dadaptation")
     except:
         pass
-    
-    try:
-        from pytorch_optimizer import SophiaH
-        optimizer_list.append("Sophia")
-    except:
-        pass
-    
     
     try:
         from dadaptation.experimental import DAdaptAdanIP
@@ -173,26 +153,60 @@ def list_optimizer():
         pass
     
     try:
-        from dadaptation import DAdaptLion
-        optimizer_list.append("Lion Dadaptation")
+        from pytorch_optimizer import Apollo
+        optimizer_list.append("Apollo")
+    except:
+        pass
+    
+    try:
+        from pytorch_optimizer import CAME
+        optimizer_list.append("CAME")
+    except:
+        pass
+    
+    try:
+        from pytorch_optimizer import Lion
+        optimizer_list.append("Lion")
     except:
         pass
 
     try:
-        from dadaptation import DAdaptAdan
-        optimizer_list.append("Adan Dadaptation")
+        from bitsandbytes.optim.lion import Lion8bit
+        optimizer_list.append("8bit Lion")
     except:
         pass
+    
+    try:
+        from bitsandbytes.optim.lion import PagedLion8bit
+        optimizer_list.append("Paged 8bit Lion")
+    except:
+        pass
+    
+    try:
+        from dadaptation import DAdaptLion
+        optimizer_list.append("Lion Dadaptation")
+    except:
+        pass
+    
+    try:
+        from pytorch_optimizer import Prodigy
+        optimizer_list.append("Prodigy")
+    except:
+        pass
+    
 
+    
     try:
         from dadaptation import DAdaptSGD
         optimizer_list.append("SGD Dadaptation")
     except:
         pass
-        
+    
+
+    
     try:
-        from pytorch_optimizer import Prodigy
-        optimizer_list.append("Prodigy")
+        from pytorch_optimizer import SophiaH
+        optimizer_list.append("Sophia")
     except:
         pass
     
@@ -202,11 +216,7 @@ def list_optimizer():
     except:
         pass
 
-    try:
-        from pytorch_optimizer import CAME
-        optimizer_list.append("CAME")
-    except:
-        pass
+ 
         
     return optimizer_list
 
@@ -311,3 +321,18 @@ def verify_locon_installed(args):
             r"extra net for extended lora. Please install "
             r"https://github.com/KohakuBlueleaf/a1111-sd-webui-locon"
         )
+        
+def apply_snr_weight(loss, timesteps, noise_scheduler, gamma):
+    snr = torch.stack([noise_scheduler.all_snr[t] for t in timesteps])
+    gamma_over_snr = torch.div(torch.ones_like(snr) * gamma, snr)
+    snr_weight = torch.minimum(gamma_over_snr, torch.ones_like(gamma_over_snr)).float()  # from paper
+    loss = loss * snr_weight
+    return loss
+
+def patch_accelerator_for_fp16_training(accelerator):
+    org_unscale_grads = accelerator.scaler._unscale_grads_
+
+    def _unscale_grads_replacer(optimizer, inv_scale, found_inf, allow_fp16):
+        return org_unscale_grads(optimizer, inv_scale, found_inf, True)
+
+    accelerator.scaler._unscale_grads_ = _unscale_grads_replacer
