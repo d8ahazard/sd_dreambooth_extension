@@ -14,7 +14,8 @@ from contextlib import ExitStack
 from decimal import Decimal
 from pathlib import Path
 from accelerate.utils.megatron_lm import prepare_scheduler
-from numpy import dtype
+from numpy import dtype, float32
+from pandas import Float32Dtype
 
 import tomesd
 import torch
@@ -234,7 +235,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             accelerator = Accelerator(
                 gradient_accumulation_steps=gradient_accumulation_steps,
                 mixed_precision=precision,
-                log_with="tensorboard",
+                log_with="all",
                 project_dir=logging_dir,
                 cpu=shared.force_cpu,
             )
@@ -382,11 +383,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         )
 
         if args.attention == "xformers" and not shared.force_cpu:
-                xformerify(unet, args.use_lora)
-                xformerify(vae, args.use_lora)
-        else:
-                xformerify(unet, args.use_lora)
-                xformerify(vae, args.use_lora)
+            xformerify(unet, use_lora=args.use_lora)
+            xformerify(vae, use_lora=args.use_lora)
 
         unet = torch2ify(unet)
 
@@ -455,10 +453,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     args.get_pretrained_model_name_or_path(),
                     subfolder="ema_unet",
                     revision=args.revision,
-                    torch_dtype=torch.bfloat16 if args.mixed_precision == "bf16" else torch.float16 if args.mixed_precision == "fp16" else torch.float32,
+                    torch_dtype=weight_dtype,
                 )
                 if args.attention == "xformers" and not shared.force_cpu:
-                    xformerify(ema_unet, args.use_lora)
+                    xformerify(ema_unet, use_lora=args.use_lora)
 
                 ema_model = EMAModel(
                     ema_unet, device=accelerator.device, dtype=weight_dtype
@@ -898,8 +896,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         logger.debug(f"  LR{' (Lora)' if args.use_lora else ''}: {learning_rate}")
         if stop_text_percentage > 0:
             logger.debug(f"  Tenc LR{' (Lora)' if args.use_lora else ''}: {txt_learning_rate}")
-        logger.debug(f"  LoRA Extended: {args.use_lora_extended}")
-        logger.debug(f"  V2: {args.v2}")
+            logger.debug(f"  LoRA Extended: {args.use_lora_extended}")
+            logger.debug(f"  V2: {args.v2}")
 
         os.environ.__setattr__("CUDA_LAUNCH_BLOCKING", 1)
 
@@ -1026,9 +1024,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         vae=vae.to(accelerator.device),
                         torch_dtype=weight_dtype,
                         revision=args.revision,
-                        safety_checker=None,
-                        requires_safety_checker=None,
                     )
+                    xformerify(s_pipeline.unet,use_lora=args.use_lora)
                 else:
                     s_pipeline = DiffusionPipeline.from_pretrained(
                         args.get_pretrained_model_name_or_path(),
@@ -1039,9 +1036,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         vae=vae,
                         torch_dtype=weight_dtype,
                         revision=args.revision,
-                        safety_checker=None,
-                        requires_safety_checker=None,
                     )
+                    xformerify(s_pipeline.unet,use_lora=args.use_lora)
+                    xformerify(s_pipeline.vae,use_lora=args.use_lora)
 
                 weights_dir = args.get_pretrained_model_name_or_path()
 
