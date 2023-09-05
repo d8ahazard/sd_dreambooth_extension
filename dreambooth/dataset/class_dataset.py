@@ -127,7 +127,6 @@ class ClassDataset(Dataset):
                     else:
                         self.new_prompts[res] = new_prompts_datas
             pbar.update()
-        pbar.close()
         if self.required_prompts > 0:
             print(f"We need a total of {self.required_prompts} class images.")
 

@@ -1,4 +1,5 @@
-import copy
+import json
+import logging
 import logging
 import os.path
 import random
@@ -7,7 +8,6 @@ from typing import List, Tuple, Union
 
 import safetensors.torch
 import torch.utils.data
-from PIL.Image import Image
 from torchvision.transforms import transforms
 from transformers import CLIPTokenizer
 
@@ -57,11 +57,7 @@ class DbDataset(torch.utils.data.Dataset):
             os.makedirs(self.cache_dir)
         print("Init dataset!")
         # A dictionary of string/latent pairs matching image paths
-        self.latents_cache = {}
-        # A dictionary of string/input_ids(s) pairs matching image paths
-        self.caption_cache = {}
-        # An optional dictionary of string/(input_id, addtl_kwargs) for SDXL
-        self.sdxl_cache = {}
+        self.data_cache = {"captions": {}, "latents": {}, "sdxl": {}}
         # A dictionary of (int, int) / List[(string, string)] of resolutions and the corresponding image paths/captions
         self.train_dict = {}
         # A dictionary of (int, int) / List[(string, string)] of resolutions and the corresponding image paths/captions
@@ -106,6 +102,85 @@ class DbDataset(torch.utils.data.Dataset):
         self.cache_latents = False
         flip_p = 0.5 if hflip else 0.0
         self.image_transforms = self.build_compose(hflip, flip_p)
+
+    def load_cache_file(self):
+        cache_file = os.path.join(self.cache_dir, f"cache_{self.resolution}.safetensors")
+        latents_cache = {}
+        if os.path.exists(cache_file):
+            print("Loading latent cache...")
+            latents_cache = safetensors.torch.load_file(cache_file)
+
+        data_cache = {}
+        for key, value in latents_cache.items():
+            subkeys = key.split("||")
+            parent_key = subkeys[0]
+            element_key = subkeys[1]
+
+            if parent_key not in data_cache:
+                data_cache[parent_key] = {}
+
+            if parent_key == "sdxl":
+                if len(subkeys) != 3:
+                    logger.warning(f"Skipping invalid key: {key}")
+                    continue
+                main_key = element_key
+                subkey_type = subkeys[2]
+                if main_key not in data_cache[parent_key]:
+                    data_cache[parent_key][main_key] = [None, {"text_embeds": None, "time_ids": None}]
+
+                if subkey_type == "prompt_embeds":
+                    data_cache[parent_key][main_key][0] = value
+                elif subkey_type == "text_embeds":
+                    data_cache[parent_key][main_key][1]["text_embeds"] = value
+                elif subkey_type == "time_ids":
+                    data_cache[parent_key][main_key][1]["time_ids"] = value
+            else:
+                data_cache[parent_key][element_key] = value
+
+        for key_name in ["latents", "sdxl", "captions"]:
+            if key_name not in data_cache:
+                data_cache[key_name] = {}
+
+        return data_cache
+
+    def save_cache_file(self, data_cache):
+        cache_file = os.path.join(self.cache_dir, f"cache_{self.resolution}.safetensors")
+
+        try:
+            keys_to_check = ["latents", "sdxl", "captions"]
+            do_save = False
+            for key_check in keys_to_check:
+                if key_check not in self.data_cache:
+                    self.data_cache[key_check] = {}
+                if key_check not in data_cache:
+                    data_cache[key_check] = {}
+                if set(key for key, value in self.data_cache[key_check].items()) != set(
+                        key for key, value in data_cache[key_check].items()):
+                    do_save = True
+                    break
+
+            if do_save:
+                print("Saving cache!")
+                if os.path.exists(cache_file):
+                    os.remove(cache_file)
+                full_dict = {}
+                for key in keys_to_check:
+                    if key in self.data_cache:
+                        for key2, value in self.data_cache[key].items():
+                            if key == "sdxl":
+                                embeds, extras = value
+                                full_dict[f"{key}||{key2}||prompt_embeds"] = embeds
+                                full_dict[f"{key}||{key2}||text_embeds"] = extras["text_embeds"]
+                                full_dict[f"{key}||{key2}||time_ids"] = extras["time_ids"]
+                            else:
+                                combined_key = f"{key}||{key2}"
+                                full_dict[combined_key] = value
+
+                safetensors.torch.save_file(full_dict, cache_file)
+        except:
+            logger.error("Error saving cache!")
+            traceback.print_exc()
+
 
     def build_compose(self, hflip, flip_p):
         img_augmentation = [transforms.ToPILImage(), transforms.RandomHorizontalFlip(flip_p)]
@@ -154,16 +229,6 @@ class DbDataset(torch.utils.data.Dataset):
             text_input_ids = text_inputs.input_ids.view(-1,
                                                         tokenizer.model_max_length)  # reshape to handle different token lengths
 
-            untruncated_ids = tokenizer(prompt, padding="longest", return_tensors="pt").input_ids
-
-            if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not torch.equal(text_input_ids,
-                                                                                         untruncated_ids):
-                removed_text = tokenizer.batch_decode(untruncated_ids[:, tokenizer.model_max_length - 1: -1])
-                # logger.warning(
-                #     "The following part of your input was truncated because the model can only handle sequences up to"
-                #     f" {tokenizer.model_max_length} tokens: {removed_text}"
-                # )
-
             enc_out = text_encoder(
                 text_input_ids.to(text_encoder.device),
                 output_hidden_states=True,
@@ -200,53 +265,6 @@ class DbDataset(torch.utils.data.Dataset):
         pooled_prompt_embeds = pooled_prompt_embeds.view(bs_embed, -1)
         return prompt_embeds, pooled_prompt_embeds
 
-    def encode_prompt_og(self, prompt):
-        prompt_embeds_list = []
-        pooled_prompt_embeds = None  # default declaration
-        bs_embed = None  # default declaration
-
-        auto_add_special_tokens = False if self.strict_tokens else True
-        if self.shuffle_tags:
-            prompt = shuffle_tags(prompt)
-        for tokenizer, text_encoder in zip(self.tokenizers, self.text_encoders):
-            if self.strict_tokens:
-                prompt = build_strict_tokens(prompt, tokenizer.bos_token, tokenizer.eos_token)
-
-            text_inputs = tokenizer(
-                prompt,
-                padding="max_length",
-                max_length=tokenizer.model_max_length,
-                truncation=True,
-                add_special_tokens=auto_add_special_tokens,
-                return_tensors="pt",
-            )
-            text_input_ids = text_inputs.input_ids
-            untruncated_ids = tokenizer(prompt, padding="longest", return_tensors="pt").input_ids
-
-            if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not torch.equal(text_input_ids,
-                                                                                         untruncated_ids):
-                removed_text = tokenizer.batch_decode(untruncated_ids[:, tokenizer.model_max_length - 1: -1])
-                logger.warning(
-                    "The following part of your input was truncated because CLIP can only handle sequences up to"
-                    f" {tokenizer.model_max_length} tokens: {removed_text}"
-                )
-
-            prompt_embeds = text_encoder(
-                text_input_ids.to(text_encoder.device),
-                output_hidden_states=True,
-            )
-
-            # We are only ALWAYS interested in the pooled output of the final text encoder
-            pooled_prompt_embeds = prompt_embeds[0]
-            prompt_embeds = prompt_embeds.hidden_states[-2]
-            bs_embed, seq_len, _ = prompt_embeds.shape
-            prompt_embeds = prompt_embeds.view(bs_embed, seq_len, -1)
-            prompt_embeds_list.append(prompt_embeds)
-
-        prompt_embeds = torch.concat(prompt_embeds_list, dim=-1)
-        pooled_prompt_embeds = pooled_prompt_embeds.view(bs_embed, -1)
-        return prompt_embeds, pooled_prompt_embeds
-
     def compute_embeddings(self, reso, prompt):
         original_size = reso
         target_size = reso
@@ -272,14 +290,14 @@ class DbDataset(torch.utils.data.Dataset):
             input_ids = caption
         else:
             if self.cache_latents:
-                image = self.latents_cache[image_path]
+                image = self.data_cache["latents"][image_path]
             else:
                 img = open_and_trim(image_path, res, False)
                 image = self.image_transform(img)
             if self.shuffle_tags:
                 caption, input_ids = self.cache_caption(image_path, caption)
             else:
-                input_ids = self.caption_cache[image_path]
+                input_ids = self.data_cache["captions"][image_path]
         return image, input_ids
 
     def cache_latent(self, image_path, res):
@@ -288,12 +306,12 @@ class DbDataset(torch.utils.data.Dataset):
             img_tensor = self.image_transform(image)
             img_tensor = img_tensor.unsqueeze(0).to(device=self.vae.device, dtype=self.vae.dtype)
             latents = self.vae.encode(img_tensor).latent_dist.sample().squeeze(0).to("cpu")
-            self.latents_cache[image_path] = latents
+            self.data_cache["latents"][image_path] = latents
 
     def cache_caption(self, image_path, caption):
         input_ids = None
         auto_add_special_tokens = False if self.strict_tokens else True
-        if len(self.tokenizers) > 0 and (image_path not in self.caption_cache or self.debug_dataset):
+        if len(self.tokenizers) > 0 and (image_path not in self.data_cache["captions"] or self.debug_dataset):
             if self.shuffle_tags:
                 caption = shuffle_tags(caption)
             if self.strict_tokens:
@@ -307,9 +325,11 @@ class DbDataset(torch.utils.data.Dataset):
                                                add_special_tokens=auto_add_special_tokens,
                                                return_tensors='pt').input_ids
             if not self.shuffle_tags:
-                self.caption_cache[image_path] = input_ids
+                self.data_cache["captions"][image_path] = input_ids
 
         return caption, input_ids
+
+
 
     def make_buckets_with_caching(self, vae):
         self.vae = vae
@@ -337,39 +357,6 @@ class DbDataset(torch.utils.data.Dataset):
 
         sort_images(self.train_img_data, bucket_resos, self.train_dict, False)
         sort_images(self.class_img_data, bucket_resos, self.class_dict, True)
-
-        def cache_images(images, reso, p_bar: mytqdm):
-            for img_path, cap, is_prior in images:
-                try:
-                    # If the image is not in the "precache",cache it
-                    if img_path not in latents_cache:
-                        if self.cache_latents and not self.debug_dataset:
-                            self.cache_latent(img_path, reso)
-
-                    if len(self.tokenizers) == 2 and img_path not in self.sdxl_cache:
-                        foo1, foo2 = self.compute_embeddings(reso, cap)
-                        self.sdxl_cache[img_path] = (foo1, foo2)
-                    # Otherwise, load it from existing cache
-                    else:
-                        self.latents_cache[img_path] = latents_cache[img_path]
-                    if not self.shuffle_tags:
-                        self.cache_caption(img_path, cap)
-                    self.sample_indices.append(img_path)
-                    self.sample_cache.append((img_path, cap, is_prior))
-                    p_bar.update()
-                except Exception as e:
-                    traceback.print_exc()
-                    print(f"Exception caching: {img_path}: {e}")
-                    if img_path in self.caption_cache:
-                        del self.caption_cache[img_path]
-                    if (img_path, cap, is_prior) in self.sample_cache:
-                        del self.sample_cache[(img_path, cap, is_prior)]
-                    if img_path in self.sample_indices:
-                        del self.sample_indices[img_path]
-                    if img_path in self.latents_cache:
-                        del self.latents_cache[img_path]
-            self.latents_cache.update(latents_cache)
-
         bucket_idx = 0
         total_len = 0
         bucket_len = {}
@@ -389,11 +376,48 @@ class DbDataset(torch.utils.data.Dataset):
             self.pbar.reset(total=p_len)
             self.pbar.set_description("Caching latents..." if self.cache_latents else "Processing images...")
         self.pbar.status_index = 1
-        image_cache_file = os.path.join(self.cache_dir, f"image_cache_{self.resolution}.safetensors")
-        latents_cache = {}
-        if os.path.exists(image_cache_file):
-            print("Loading cached latents...")
-            latents_cache = safetensors.torch.load_file(image_cache_file)
+        data_cache = self.load_cache_file()
+        def cache_images(images, reso, p_bar: mytqdm):
+            for img_path, cap, is_prior in images:
+                try:
+                    # If the image is not in the "precache",cache it
+                    if self.cache_latents:
+                        if img_path not in data_cache["latents"] and not self.debug_dataset:
+                                self.cache_latent(img_path, reso)
+                        else:
+                            self.data_cache["latents"][img_path] = data_cache["latents"][img_path]
+
+                    if not self.shuffle_tags:
+                        if img_path not in data_cache["captions"] and not self.debug_dataset:
+                            self.cache_caption(img_path, cap)
+                        else:
+                            self.data_cache["captions"][img_path] = data_cache["captions"][img_path]
+
+                    # This likely needs to happen regardless of cache_latents?
+                    if len(self.tokenizers) == 2:
+                        if img_path not in self.data_cache["sdxl"]:
+                            embeds, extras = self.compute_embeddings(reso, cap)
+                            self.data_cache["sdxl"][img_path] = (embeds, extras)
+                        else:
+                            self.data_cache["sdxl"][img_path] = data_cache["sdxl"][img_path]
+
+                    self.sample_indices.append(img_path)
+                    self.sample_cache.append((img_path, cap, is_prior))
+                    p_bar.update()
+                except Exception as e:
+                    traceback.print_exc()
+                    print(f"Exception caching: {img_path}: {e}")
+                    if img_path in self.data_cache["captions"]:
+                        del self.data_cache["captions"][img_path]
+                    if img_path in self.data_cache["latents"]:
+                        del self.data_cache["latents"][img_path]
+                    if img_path in self.data_cache["sdxl"]:
+                        del self.data_cache["sdxl"][img_path]
+                    if (img_path, cap, is_prior) in self.sample_cache:
+                        del self.sample_cache[(img_path, cap, is_prior)]
+                    if img_path in self.sample_indices:
+                        del self.sample_indices[img_path]
+
         for dict_idx, train_images in self.train_dict.items():
             if not train_images:
                 continue
@@ -425,15 +449,9 @@ class DbDataset(torch.utils.data.Dataset):
             self.pbar.write(
                 f"Bucket {bucket_str} {dict_idx} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {ex_str}")
             bucket_idx += 1
-        try:
-            if set(self.latents_cache.keys()) != set(latents_cache.keys()):
-                print("Saving cache!")
-                del latents_cache
-                if os.path.exists(image_cache_file):
-                    os.remove(image_cache_file)
-                safetensors.torch.save_file(copy.deepcopy(self.latents_cache), image_cache_file)
-        except:
-            pass
+
+        self.save_cache_file(data_cache)
+        del data_cache
         bucket_str = str(bucket_idx).rjust(max_idx_chars, " ")
         inst_str = str(total_instances).rjust(len(str(ni)), " ")
         class_str = str(total_classes).rjust(len(str(nc)), " ")
@@ -507,7 +525,11 @@ class DbDataset(torch.utils.data.Dataset):
         if not self.debug_dataset:
             image_data, input_ids, = self.load_image(image_path, caption, self.active_resolution)
             if len(self.tokenizers) > 1:
-                input_ids, added_conditions = self.sdxl_cache[image_path]
+                if image_path in self.data_cache["sdxl"]:
+                    input_ids, added_conditions = self.data_cache["sdxl"][image_path]
+                else:
+                    input_ids, added_conditions = self.compute_embeddings(self.active_resolution, caption)
+                    self.data_cache["sdxl"][image_path] = (input_ids, added_conditions)
                 example["instance_added_cond_kwargs"] = added_conditions
         else:
             image_data = image_path

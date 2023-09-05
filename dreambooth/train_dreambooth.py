@@ -64,11 +64,7 @@ from dreambooth.xattention import optim_to
 from helpers.ema_model import EMAModel
 from helpers.log_parser import LogParser
 from helpers.mytqdm import mytqdm
-from lora_diffusion.extra_networks import save_extra_networks
 from lora_diffusion.lora import (
-    save_lora_weight,
-    TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
-    get_target_module,
     set_lora_requires_grad,
 )
 
@@ -277,10 +273,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             stop_text_percentage = 0
         pretrained_path = args.get_pretrained_model_name_or_path()
         logger.debug(f"Pretrained path: {pretrained_path}")
-        pbar2.reset()
         count, instance_prompts, class_prompts = generate_classifiers(
             args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False, pbar=pbar2
         )
+
         if status.interrupted:
             result.msg = "Training interrupted."
             stop_profiler(profiler)
@@ -291,7 +287,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             num_components = 7
         pbar2.reset(num_components)
         pbar2.set_description("Loading model components...")
-
+        
+        pbar2.set_postfix(refresh=True)
         if class_gen_method == "Native Diffusers" and count > 0:
             unload_system_models()
 
@@ -316,6 +313,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         # Load the tokenizer
         pbar2.set_description("Loading tokenizer...")
         pbar2.update()
+        pbar2.set_postfix(refresh=True)
         tokenizer = AutoTokenizer.from_pretrained(
             os.path.join(pretrained_path, "tokenizer"),
             revision=args.revision,
@@ -326,6 +324,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         if args.model_type == "SDXL":
             pbar2.set_description("Loading tokenizer 2...")
             pbar2.update()
+            pbar2.set_postfix(refresh=True)
             tokenizer_two = AutoTokenizer.from_pretrained(
                 os.path.join(pretrained_path, "tokenizer_2"),
                 revision=args.revision,
@@ -339,6 +338,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
         pbar2.set_description("Loading text encoder...")
         pbar2.update()
+        pbar2.set_postfix(refresh=True)
         # Load models and create wrapper for stable diffusion
         text_encoder = text_encoder_cls.from_pretrained(
             args.get_pretrained_model_name_or_path(),
@@ -355,6 +355,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
             pbar2.set_description("Loading text encoder 2...")
             pbar2.update()
+            pbar2.set_postfix(refresh=True)
             # Load models and create wrapper for stable diffusion
             text_encoder_two = text_encoder_cls_two.from_pretrained(
                 args.get_pretrained_model_name_or_path(),
@@ -901,7 +902,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         logger.debug(f"  LR{' (Lora)' if args.use_lora else ''}: {learning_rate}")
         if stop_text_percentage > 0:
             logger.debug(f"  Tenc LR{' (Lora)' if args.use_lora else ''}: {txt_learning_rate}")
-        logger.debug(f"  LoRA Extended: {args.use_lora_extended}")
         logger.debug(f"  V2: {args.v2}")
 
         os.environ.__setattr__("CUDA_LAUNCH_BLOCKING", 1)
@@ -1140,7 +1140,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             )
                             update_status({"status": status.textinfo})
                             pbar2.reset(1)
-                            
+
                             pbar2.set_description("Saving diffusion model")
                             s_pipeline.save_pretrained(
                                 weights_dir,
@@ -1309,7 +1309,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     if "generator" in locals():
                         del generator
 
-                    if not args.disable_logging:
+                    if not args.disable_logging and args.model_type != "SDXL":
                         try:
                             printm("Parse logs.")
                             log_images, log_names = log_parser.parse_logs(
@@ -1349,7 +1349,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                 status.current_image = last_samples
                 update_status({"images": last_samples})
-
                 cleanup()
                 printm("Cleanup.")
 
