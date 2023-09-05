@@ -641,7 +641,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             with_prior_preservation = True
         pbar2.reset()
         printm("Dataset loaded.")
-
+        tokenizer_max_length = tokenizer.model_max_length
         if args.cache_latents:
             printm("Unloading vae.")
             del vae
@@ -1516,7 +1516,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             pad_tokens,
                             b_size,
                             args.max_token_length,
-                            tokenizer.model_max_length,
+                            tokenizer_max_length,
                             args.clip_skip,
                         )
 
