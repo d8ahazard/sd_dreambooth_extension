@@ -43,8 +43,7 @@ def load_auto_settings():
         lowvram = ws.cmd_opts.lowvram
         config = ws.cmd_opts.config
         device = ws.device
-        current_epoch = 0
-        current_step = 0
+
 
         def set_model(new_model):
             global sd_model
@@ -162,8 +161,7 @@ class DreamState:
     time_left_force_display = False
     active = False
     new_ui = False
-    current_epoch = 0
-    current_step = 0
+
 
     def interrupt(self):
         if self.status_handler:
@@ -195,8 +193,6 @@ class DreamState:
             "last_status": self.textinfo,
             "sample_prompts": self.sample_prompts,
             "active": self.active,
-            "current_epoch": self.current_epoch,
-            "current_step": self.current_step,
         }
 
         return obj
@@ -311,7 +307,7 @@ def load_vars(root_path = None):
     data_path, show_progress_every_n_steps, parallel_processing_allowed, dataset_filename_word_regex, dataset_filename_join_string, \
     device_id, state, disable_safe_unpickle, ckptfix, medvram, lowvram, debug, profile_db, sub_quad_q_chunk_size, sub_quad_kv_chunk_size, \
     sub_quad_chunk_threshold, CLIP_stop_at_last_layers, sd_model, config, force_cpu, paths, is_auto, device, orig_tensor_to, orig_layer_norm, \
-    orig_tensor_numpy, extension_path, orig_cumsum, orig_Tensor_cumsum, status, state, current_epoch, current_step
+    orig_tensor_numpy, extension_path, orig_cumsum, orig_Tensor_cumsum, status, state
 
     script_path = os.sep.join(__file__.split(os.sep)[0:-4]) if root_path is None else root_path
     models_path = os.path.join(script_path, "models")
@@ -332,8 +328,7 @@ def load_vars(root_path = None):
     medvram = False
     lowvram = False
     debug = False
-    current_epoch = 0
-    current_step = 0
+
     profile_db = False
     sub_quad_q_chunk_size = 1024
     sub_quad_kv_chunk_size = None
@@ -405,8 +400,7 @@ ckptfix = False
 medvram = False
 lowvram = False
 debug = False
-current_epoch = 0
-current_step = 0
+
 profile_db = False
 sub_quad_q_chunk_size = 1024
 sub_quad_kv_chunk_size = None

@@ -13,16 +13,13 @@ import traceback
 from contextlib import ExitStack
 from decimal import Decimal
 from pathlib import Path
-from accelerate.utils.megatron_lm import prepare_scheduler
-from numpy import dtype, float32
-from pandas import Float32Dtype
 
 import tomesd
 import torch
 import torch.backends.cuda
 import torch.backends.cudnn
 import torch.nn.functional as F
-from accelerate import Accelerator, cpu_offload
+from accelerate import Accelerator
 from accelerate.utils.random import set_seed as set_seed2
 from diffusers import (
     AutoencoderKL,
@@ -59,10 +56,9 @@ from dreambooth.utils.model_utils import (
     enable_safe_unpickle,
     xformerify,
     torch2ify, unet_attn_processors_state_dict,
-
 )
 from dreambooth.utils.text_utils import encode_hidden_state
-from dreambooth.utils.utils import (cleanup, printm, verify_locon_installed, 
+from dreambooth.utils.utils import (cleanup, printm, verify_locon_installed,
                                     patch_accelerator_for_fp16_training)
 from dreambooth.webhook import send_training_update
 from dreambooth.xattention import optim_to
@@ -345,12 +341,20 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         pbar2.update()
         pbar2.set_postfix(refresh=True)
         # Load models and create wrapper for stable diffusion
-        text_encoder = text_encoder_cls.from_pretrained(
-            args.get_pretrained_model_name_or_path(),
-            subfolder="text_encoder",
-            revision=args.revision,
-            torch_dtype=torch.float32,
-        )
+        if args.full_mixed_precision:
+            text_encoder = text_encoder_cls.from_pretrained(
+                args.get_pretrained_model_name_or_path(),
+                subfolder="text_encoder",
+                revision=args.revision,
+                torch_dtype=weight_dtype,
+            )
+        else:
+            text_encoder = text_encoder_cls.from_pretrained(
+                args.get_pretrained_model_name_or_path(),
+                subfolder="text_encoder",
+                revision=args.revision,
+                torch_dtype=torch.float32,
+            )
 
         if args.model_type == "SDXL":
             # import correct text encoder class
@@ -362,11 +366,20 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             pbar2.update()
             pbar2.set_postfix(refresh=True)
             # Load models and create wrapper for stable diffusion
-            text_encoder_two = text_encoder_cls_two.from_pretrained(
-                args.get_pretrained_model_name_or_path(),
-                subfolder="text_encoder_2",
-                revision=args.revision,
-                torch_dtype=torch.float32,            )
+            if args.full_mixed_precision:
+                text_encoder_two = text_encoder_cls_two.from_pretrained(
+                    args.get_pretrained_model_name_or_path(),
+                    subfolder="text_encoder_2",
+                    revision=args.revision,
+                    torch_dtype=weight_dtype,
+                )
+            else:
+                text_encoder_two = text_encoder_cls_two.from_pretrained(
+                    args.get_pretrained_model_name_or_path(),
+                    subfolder="text_encoder_2",
+                    revision=args.revision,
+                    torch_dtype=torch.float32,
+                )
 
         printm("Created tenc")
         pbar2.set_description("Loading VAE...")
@@ -376,12 +389,20 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
         pbar2.set_description("Loading unet...")
         pbar2.update()
-        unet = UNet2DConditionModel.from_pretrained(
-            args.get_pretrained_model_name_or_path(),
-            subfolder="unet",
-            revision=args.revision,
-            torch_dtype=torch.float32,
-        )
+        if args.full_mixed_precision:
+            unet = UNet2DConditionModel.from_pretrained(
+                args.get_pretrained_model_name_or_path(),
+                subfolder="unet",
+                revision=args.revision,
+                torch_dtype=weight_dtype,
+            )
+        else:
+            unet = UNet2DConditionModel.from_pretrained(
+                args.get_pretrained_model_name_or_path(),
+                subfolder="unet",
+                revision=args.revision,
+                torch_dtype=torch.float32,
+            )
 
         if args.attention == "xformers" and not shared.force_cpu:
             xformerify(unet, use_lora=args.use_lora)
@@ -469,6 +490,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 )
 
         # Create shared unet/tenc learning rate variables
+
         learning_rate = args.learning_rate
         txt_learning_rate = args.txt_learning_rate
         if args.use_lora:
@@ -871,8 +893,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 modules.shared.cmd_opts.disable_safe_unpickle = no_safe
                 global_step = resume_step = args.revision
                 resume_from_checkpoint = True
-                first_epoch = args.lifetime_epoch
-                global_epoch = args.lifetime_epoch
+                first_epoch = args.epoch
+                global_epoch = first_epoch
             except Exception as lex:
                 logger.warning(f"Exception loading checkpoint: {lex}")
         logger.debug("  ***** Running training *****")
@@ -891,13 +913,12 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         logger.debug(f"  First resume step: {resume_step}")
         logger.debug(f"  Lora: {args.use_lora}, Optimizer: {args.optimizer}, Prec: {precision}")
         logger.debug(f"  Gradient Checkpointing: {args.gradient_checkpointing}")
-        logger.debug(f"  Min SNR Gamma: {args.min_snr_gamma}")
         logger.debug(f"  EMA: {args.use_ema}")
         logger.debug(f"  UNET: {args.train_unet}")
         logger.debug(f"  Freeze CLIP Normalization Layers: {args.freeze_clip_normalization}")
-        logger.debug(f"  Unet LR{' (Lora)' if args.use_lora else ''}: {learning_rate}")
-        logger.debug(f"  Tenc LR{' (Lora)' if args.use_lora and stop_text_percentage != 0 else ''}: {tenc_learning_rate}")
-        logger.debug(f"  Full Mixed Precision: {args.full_mixed_precision}")
+        logger.debug(f"  LR{' (Lora)' if args.use_lora else ''}: {learning_rate}")
+        if stop_text_percentage > 0:
+            logger.debug(f"  Tenc LR{' (Lora)' if args.use_lora else ''}: {txt_learning_rate}")
         logger.debug(f"  V2: {args.v2}")
 
         os.environ.__setattr__("CUDA_LAUNCH_BLOCKING", 1)
@@ -911,10 +932,14 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             save_canceled = status.interrupted
             save_image = False
             save_model = False
+            save_lora = False
+
             if not save_canceled and not save_completed:
                 # Check to see if the number of epochs since last save is gt the interval
                 if 0 < save_model_interval <= session_epoch - last_model_save:
                     save_model = True
+                    if args.use_lora:
+                        save_lora = True
                     last_model_save = session_epoch
 
                 # Repeat for sample images
@@ -927,9 +952,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 if global_step > 0:
                     save_image = True
                     save_model = True
+                    save_lora = True
 
             save_snapshot = False
-            save_lora = args.use_lora
 
             if is_epoch_check:
                 if shared.status.do_save_samples:
@@ -937,6 +962,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     shared.status.do_save_samples = False
 
                 if shared.status.do_save_model:
+                    if args.use_lora:
+                        save_lora = True
                     save_model = True
                     shared.status.do_save_model = False
 
@@ -1012,7 +1039,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                 printm("Creating pipeline.")
                 if args.model_type == "SDXL":
-                    
                     s_pipeline = StableDiffusionXLPipeline.from_pretrained(
                         args.get_pretrained_model_name_or_path(),
                         unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=True),
@@ -1025,6 +1051,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         vae=vae.to(accelerator.device),
                         torch_dtype=weight_dtype,
                         revision=args.revision,
+                        safety_checker=None,
+                        requires_safety_checker=None,
                     )
                     xformerify(s_pipeline.unet,use_lora=args.use_lora)
                 else:
@@ -1037,6 +1065,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         vae=vae,
                         torch_dtype=weight_dtype,
                         revision=args.revision,
+                        safety_checker=None,
+                        requires_safety_checker=None,
                     )
                     xformerify(s_pipeline.unet,use_lora=args.use_lora)
                     xformerify(s_pipeline.vae,use_lora=args.use_lora)
@@ -1124,10 +1154,12 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             s_pipeline.scheduler = get_scheduler_class("UniPCMultistep").from_config(
                                 s_pipeline.scheduler.config)
                         s_pipeline.scheduler.config.solver_type = "bh2"
+                        save_lora = False
 
                     elif save_diffusers:
                         # We are saving weights, we need to ensure revision is saved
-                        args.save()
+                        if "_tmp" not in weights_dir:
+                            args.save()
                         try:
                             out_file = None
                             status.textinfo = (
@@ -1527,7 +1559,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     if noise_scheduler.config.prediction_type == "epsilon":
                         target = noise
                     elif noise_scheduler.config.prediction_type == "v_prediction":
-                        target = noise_scheduler.s(latents, noise, timesteps)
+                        target = noise_scheduler.get_velocity(latents, noise, timesteps)
                     else:
                         raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
@@ -1544,9 +1576,17 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     if args.model_type != "SDXL":
                         # TODO: set a prior preservation flag and use that to ensure this ony happens in dreambooth
                         if not args.split_loss and not with_prior_preservation:
-                            loss = instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(),
-                                                                                    reduction="mean")
-                            loss *= batch["loss_avg"]
+                            if args.min_snr_gamma == 0.0:
+                                loss = instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                            else:
+                                snr = compute_snr(timesteps)
+                                mse_loss_weights = (
+                                    torch.stack([snr, args.min_snr_gamma * torch.ones_like(timesteps)], dim=1).min(dim=1)[0] / snr
+                                )
+                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
+                                loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
+                                loss = loss.mean()
+                                loss *= batch["loss_avg"]
                         else:
                             # Predict the noise residual
                             if model_pred.shape[1] == 6:
@@ -1556,7 +1596,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
                                 model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
                                 target, target_prior = torch.chunk(target, 2, dim=0)
-                                
+
                                 # Compute instance loss
                                 if args.min_snr_gamma == 0.0:
                                     # Compute instance loss
@@ -1570,13 +1610,24 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                     loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
                                     loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
                                     loss = loss.mean()
-
                                 # Compute prior loss
                                 prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
                                                         reduction="mean")
+                                # Add the prior loss to the instance loss.
+                                loss = loss + args.prior_loss_weight * prior_loss
                             else:
-                                # Compute loss
-                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                                if args.min_snr_gamma == 0.0:
+                                    # Compute loss
+                                    loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                                else:
+                                    # Calculate loss with min snr
+                                    snr = compute_snr(timesteps)
+                                    mse_loss_weights = (
+                                        torch.stack([snr, args.min_snr_gamma * torch.ones_like(timesteps)], dim=1).min(dim=1)[0] / snr
+                                    )
+                                    loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
+                                    loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
+                                    loss = loss.mean()
                     else:
                         if with_prior_preservation:
                             # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
@@ -1598,27 +1649,19 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             
                             # Compute prior loss
                             prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
-
                             # Add the prior loss to the instance loss.
                             loss = loss + args.prior_loss_weight * prior_loss
                         else:
                             if args.min_snr_gamma == 0.0: 
                                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
                             else:
-                                 # Compute loss-weights as per Section 3.4 of https://arxiv.org/abs/2303.09556.
-                                # Since we predict the noise instead of x_0, the original formulation is slightly changed.
-                                # This is discussed in Section 4.2 of the same paper.
                                 snr = compute_snr(timesteps)
                                 mse_loss_weights = (
                                     torch.stack([snr, args.min_snr_gamma * torch.ones_like(timesteps)], dim=1).min(dim=1)[0] / snr
                                 )
-                                # We first calculate the original loss. Then we mean over the non-batch dimensions and
-                                # rebalance the sample-wise losses with their respective loss weights.
-                                # Finally, we take the mean of the rebalanced loss.
                                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
                                 loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
                                 loss = loss.mean()
-                          
                     accelerator.backward(loss)
 
                     if accelerator.sync_gradients and not args.use_lora:

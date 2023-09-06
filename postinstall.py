@@ -33,7 +33,9 @@ def actual_install():
     except:
         revision = ""
 
-    print("If submitting an issue on github, please provide the full startup log for debugging purposes.")
+    print(
+        "If submitting an issue on github, please provide the full startup log for debugging purposes."
+    )
     print("")
     print("Initializing Dreambooth")
     print(f"Dreambooth revision: {revision}")
@@ -53,7 +55,7 @@ def pip_install(*args):
     output = subprocess.check_output(
         [sys.executable, "-m", "pip", "install"] + list(args),
         stderr=subprocess.STDOUT,
-        )
+    )
     for line in output.decode().split("\n"):
         if "Successfully installed" in line:
             print(line)
@@ -61,7 +63,9 @@ def pip_install(*args):
 
 def install_requirements():
     dreambooth_skip_install = os.environ.get("DREAMBOOTH_SKIP_INSTALL", False)
-    req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
+    req_file = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "requirements.txt"
+    )
     req_file_startup_arg = os.environ.get("REQS_FILE", "requirements_versions.txt")
 
     if dreambooth_skip_install or req_file == req_file_startup_arg:
@@ -74,12 +78,20 @@ def install_requirements():
     try:
         pip_install("-r", req_file)
 
-        if has_diffusers and has_tqdm and Version(transformers_version) < Version("4.26.1"):
+        if (
+            has_diffusers
+            and has_tqdm
+            and Version(transformers_version) < Version("4.26.1")
+        ):
             print()
             print("Does your project take forever to startup?")
             print("Repetitive dependency installation may be the reason.")
-            print("Automatic1111's base project sets strict requirements on outdated dependencies.")
-            print("If an extension is using a newer version, the dependency is uninstalled and reinstalled twice every startup.")
+            print(
+                "Automatic1111's base project sets strict requirements on outdated dependencies."
+            )
+            print(
+                "If an extension is using a newer version, the dependency is uninstalled and reinstalled twice every startup."
+            )
             print()
     except subprocess.CalledProcessError as grepexc:
         error_msg = grepexc.stdout.decode()
@@ -118,23 +130,34 @@ def check_bitsandbytes():
         if bitsandbytes_version != "0.41.1":
             try:
                 print("Installing bitsandbytes")
-                pip_install("--force-install","==prefer-binary","--extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui","bitsandbytes==0.41.1")
+                pip_install(
+                    "--force-install",
+                    "==prefer-binary",
+                    "--extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui",
+                    "bitsandbytes==0.41.1",
+                )
             except:
                 print("Bitsandbytes 0.41.1 installation failed.")
                 print("Some features such as 8bit optimizers will be unavailable")
                 print("Please install manually with")
-                print("'python -m pip install bitsandbytes==0.41.1 --extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui --prefer-binary --force-install'")
+                print(
+                    "'python -m pip install bitsandbytes==0.41.1 --extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui --prefer-binary --force-install'"
+                )
                 pass
     else:
         if bitsandbytes_version != "0.41.1":
             try:
                 print("Installing bitsandbytes")
-                pip_install("--force-install","--prefer-binary","bitsandbytes==0.41.1")
+                pip_install(
+                    "--force-install", "--prefer-binary", "bitsandbytes==0.41.1"
+                )
             except:
                 print("Bitsandbytes 0.41.1 installation failed")
                 print("Some features such as 8bit optimizers will be unavailable")
                 print("Install manually with")
-                print("'python -m pip install bitsandbytes==0.41.1  --prefer-binary --force-install'")
+                print(
+                    "'python -m pip install bitsandbytes==0.41.1  --prefer-binary --force-install'"
+                )
                 pass
 
 
@@ -149,9 +172,10 @@ class Dependency:
 def check_versions():
     import platform
     from sys import platform as sys_platform
-    is_mac = sys_platform == 'darwin' and platform.machine() == 'arm64'
 
-    #Probably a bad idea but update ALL the dependencies
+    is_mac = sys_platform == "darwin" and platform.machine() == "arm64"
+
+    # Probably a bad idea but update ALL the dependencies
     dependencies = [
         Dependency(module="xformers", version="0.0.21", required=False),
         Dependency(module="torch", version="1.13.1" if is_mac else "2.0.1+cu118"),
@@ -159,7 +183,7 @@ def check_versions():
         Dependency(module="accelerate", version="0.22.0"),
         Dependency(module="diffusers", version="0.20.1"),
         Dependency(module="transformers", version="4.25.1"),
-        Dependency(module="bitsandbytes",  version="0.41.1"),
+        Dependency(module="bitsandbytes", version="0.41.1"),
     ]
 
     launch_errors = []
@@ -180,13 +204,21 @@ def check_versions():
         required_version = dependency.version
         required_comparison = dependency.version_comparison
 
-        if required_comparison == "min" and Version(installed_ver) < Version(required_version):
+        if required_comparison == "min" and Version(installed_ver) < Version(
+            required_version
+        ):
             if dependency.required:
-                launch_errors.append(f"{module} is below the required {required_version} version.")
+                launch_errors.append(
+                    f"{module} is below the required {required_version} version."
+                )
             print(f"[!] {module} version {installed_ver} installed.")
 
-        elif required_comparison == "exact" and Version(installed_ver) != Version(required_version):
-            launch_errors.append(f"{module} is not the required {required_version} version.")
+        elif required_comparison == "exact" and Version(installed_ver) != Version(
+            required_version
+        ):
+            launch_errors.append(
+                f"{module} is not the required {required_version} version."
+            )
             print(f"[!] {module} version {installed_ver} installed.")
 
         else:
@@ -204,7 +236,7 @@ def check_versions():
 
 def print_requirement_installation_error(err):
     print("# Requirement installation exception:")
-    for line in err.split('\n'):
+    for line in err.split("\n"):
         line = line.strip()
         if line:
             print(line)
@@ -213,27 +245,45 @@ def print_requirement_installation_error(err):
 def print_xformers_installation_error(err):
     torch_ver = importlib_metadata.version("torch")
     print()
-    print("#######################################################################################################")
-    print("#                                       XFORMERS ISSUE DETECTED                                       #")
-    print("#######################################################################################################")
+    print(
+        "#######################################################################################################"
+    )
+    print(
+        "#                                       XFORMERS ISSUE DETECTED                                       #"
+    )
+    print(
+        "#######################################################################################################"
+    )
     print("#")
-    print(f"# Dreambooth could not find a compatible version of xformers (>= 0.0.21 built with torch {torch_ver})")
-    print("# xformers will not be available for Dreambooth. Consider upgrading to Torch 2.")
+    print(
+        f"# Dreambooth could not find a compatible version of xformers (>= 0.0.21 built with torch {torch_ver})"
+    )
+    print(
+        "# xformers will not be available for Dreambooth. Consider upgrading to Torch 2."
+    )
     print("#")
     print("# Xformers installation exception:")
-    for line in err.split('\n'):
+    for line in err.split("\n"):
         line = line.strip()
         if line:
             print(line)
     print("#")
-    print("#######################################################################################################")
+    print(
+        "#######################################################################################################"
+    )
 
 
 def print_launch_errors(launch_errors):
     print()
-    print("#######################################################################################################")
-    print("#                                       LIBRARY ISSUE DETECTED                                        #")
-    print("#######################################################################################################")
+    print(
+        "#######################################################################################################"
+    )
+    print(
+        "#                                       LIBRARY ISSUE DETECTED                                        #"
+    )
+    print(
+        "#######################################################################################################"
+    )
     print("#")
     print("# " + "\n# ".join(launch_errors))
     print("#")
@@ -242,20 +292,26 @@ def print_launch_errors(launch_errors):
     print("# TROUBLESHOOTING")
     print("# 1. Fully restart your project (not just the webpage)")
     print("# 2. Update your A1111 project and extensions")
-    print("# 3. Dreambooth requirements should have installed automatically, but you can manually install them")
+    print(
+        "# 3. Dreambooth requirements should have installed automatically, but you can manually install them"
+    )
     print("#    by running the following 4 commands from the A1111 project root:")
     print("cd venv/Scripts")
     print("activate")
     print("cd ../..")
     print("pip install -r ./extensions/sd_dreambooth_extension/requirements.txt")
-    print("#######################################################################################################")
+    print(
+        "#######################################################################################################"
+    )
 
 
 def check_torch_unsafe_load():
     try:
         from modules import safe
+
         safe.load = safe.unsafe_torch_load
         import torch
+
         torch.load = safe.unsafe_torch_load
     except:
         pass

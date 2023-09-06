@@ -123,13 +123,13 @@ def list_optimizer():
         pass
     try:
         if shared.device.type != "mps":
-            from bitsandbytes.optim.adamw import AdamW8bit
+            from bitsandbytes.optim import AdamW8bit
             optimizer_list.append("8bit AdamW")
     except:
         pass
     
     try:
-            from bitsandbytes.optim.adamw import PagedAdamW8bit
+            from bitsandbytes.optim import PagedAdamW8bit
             optimizer_list.append("Paged 8bit AdamW")
     except:
         pass
@@ -171,13 +171,13 @@ def list_optimizer():
         pass
 
     try:
-        from bitsandbytes.optim.lion import Lion8bit
+        from bitsandbytes.optim import Lion8bit
         optimizer_list.append("8bit Lion")
     except:
         pass
     
     try:
-        from bitsandbytes.optim.lion import PagedLion8bit
+        from bitsandbytes.optim import PagedLion8bit
         optimizer_list.append("Paged 8bit Lion")
     except:
         pass

@@ -521,7 +521,7 @@ def on_ui_tabs():
                                 label="Max Resolution",
                                 step=64,
                                 minimum=128,
-                                value=512,
+                                value=1024,
                                 maximum=2048,
                                 elem_id="max_res",
                             )
@@ -570,7 +570,7 @@ def on_ui_tabs():
                                 label="Offset Noise",
                                 minimum=-1,
                                 maximum=1,
-                                step=0.01,
+                                step=0.00001,
                                 value=0,
                             )
                             db_freeze_clip_normalization = gr.Checkbox(
@@ -612,8 +612,8 @@ def on_ui_tabs():
                             db_min_snr_gamma = gr.Slider(
                                 label="Min SNR Gamma",
                                 minimum=0,
-                                maximum=10,
-                                step=0.1,
+                                maximum=20,
+                                step=0.01,
                                 visible=True,
                             )
                             db_pad_tokens = gr.Checkbox(
