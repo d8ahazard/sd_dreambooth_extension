@@ -80,7 +80,7 @@ def generate_dataset(
         accelerator=accelerator,
         resolution=args.resolution,
         hflip=args.hflip,
-        shuffle_tags=args.shuffle_tags,
+        do_shuffle_tags=args.shuffle_tags,
         strict_tokens=args.strict_tokens,
         dynamic_img_norm=args.dynamic_img_norm,
         not_pad_tokens=not args.pad_tokens,

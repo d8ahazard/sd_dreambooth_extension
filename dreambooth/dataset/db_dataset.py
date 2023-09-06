@@ -1,5 +1,4 @@
 import logging
-import logging
 import os.path
 import random
 import traceback
@@ -37,7 +36,7 @@ class DbDataset(torch.utils.data.Dataset):
             accelerator,
             resolution: int,
             hflip: bool,
-            shuffle_tags: bool,
+            do_shuffle_tags: bool,
             strict_tokens: bool,
             dynamic_img_norm: bool,
             not_pad_tokens: bool,
@@ -67,7 +66,7 @@ class DbDataset(torch.utils.data.Dataset):
         self.sample_cache = []
         # This is just a list of the sample names that we can use to find where in the cache an image is
         self.sample_indices = []
-        # All of the available bucket resolutions
+        # All the available bucket resolutions
         self.resolutions = []
         # Currently active resolution
         self.active_resolution = (0, 0)
@@ -91,7 +90,7 @@ class DbDataset(torch.utils.data.Dataset):
         self.accelerator = accelerator
         self.resolution = resolution
         self.debug_dataset = debug_dataset
-        self.shuffle_tags = shuffle_tags
+        self.shuffle_tags = do_shuffle_tags
         self.not_pad_tokens = not_pad_tokens
         self.strict_tokens = strict_tokens
         self.dynamic_img_norm = dynamic_img_norm
@@ -111,19 +110,19 @@ class DbDataset(torch.utils.data.Dataset):
 
         data_cache = {}
         for key, value in latents_cache.items():
-            subkeys = key.split("||")
-            parent_key = subkeys[0]
-            element_key = subkeys[1]
+            sub_keys = key.split("||")
+            parent_key = sub_keys[0]
+            element_key = sub_keys[1]
 
             if parent_key not in data_cache:
                 data_cache[parent_key] = {}
 
             if parent_key == "sdxl":
-                if len(subkeys) != 3:
+                if len(sub_keys) != 3:
                     logger.warning(f"Skipping invalid key: {key}")
                     continue
                 main_key = element_key
-                subkey_type = subkeys[2]
+                subkey_type = sub_keys[2]
                 if main_key not in data_cache[parent_key]:
                     data_cache[parent_key][main_key] = [None, {"text_embeds": None, "time_ids": None}]
 
@@ -236,7 +235,7 @@ class DbDataset(torch.utils.data.Dataset):
             )
 
             # get hidden states and handle reshaping
-            prompt_embeds = enc_out["hidden_states"][-2]  # penuultimate layer
+            prompt_embeds = enc_out["hidden_states"][-2]  # penultimate layer
             prompt_embeds = prompt_embeds.reshape(
                 (b_size, -1, prompt_embeds.shape[-1]))  # reshape to handle different token lengths
 
@@ -284,7 +283,6 @@ class DbDataset(torch.utils.data.Dataset):
         return prompt_embeds, unet_added_cond_kwargs
 
     def load_image(self, image_path, caption, res):
-        input_ids_2 = None
         if self.debug_dataset:
             image = os.path.splitext(image_path)
             input_ids = caption
@@ -341,22 +339,22 @@ class DbDataset(torch.utils.data.Dataset):
         status.textinfo = state
 
         # Create a list of resolutions
-        bucket_resos = make_bucket_resolutions(self.resolution)
+        bucket_resolutions = make_bucket_resolutions(self.resolution)
         self.train_dict = {}
 
-        def sort_images(img_data: List[PromptData], resos, target_dict, is_class_img):
+        def sort_images(img_data: List[PromptData], resolutions, target_dict, is_class_img):
             for prompt_data in img_data:
                 path = prompt_data.src_image
                 image_width, image_height = prompt_data.resolution
                 cap = prompt_data.prompt
-                reso = closest_resolution(image_width, image_height, resos)
+                reso = closest_resolution(image_width, image_height, resolutions)
                 concept_idx = prompt_data.concept_index
                 # Append the concept index to the resolution, and boom, we got ourselves split concepts.
                 di = (*reso, concept_idx)
                 target_dict.setdefault(di, []).append((path, cap, is_class_img))
 
-        sort_images(self.train_img_data, bucket_resos, self.train_dict, False)
-        sort_images(self.class_img_data, bucket_resos, self.class_dict, True)
+        sort_images(self.train_img_data, bucket_resolutions, self.train_dict, False)
+        sort_images(self.class_img_data, bucket_resolutions, self.class_dict, True)
         bucket_idx = 0
         total_len = 0
         bucket_len = {}
