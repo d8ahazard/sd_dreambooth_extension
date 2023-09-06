@@ -22,8 +22,6 @@ import traceback
 from enum import Enum
 from typing import Optional, Union, List
 
-from inflection import camelize
-
 from diffusers import DEISMultistepScheduler, UniPCMultistepScheduler, DDPMScheduler
 from diffusers.utils import logging
 from torch.optim import Optimizer

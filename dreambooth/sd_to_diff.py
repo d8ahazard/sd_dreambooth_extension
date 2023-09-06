@@ -15,7 +15,6 @@
 """ Conversion script for the LDM checkpoints. """
 
 import importlib
-import json
 import logging
 import os
 import shutil

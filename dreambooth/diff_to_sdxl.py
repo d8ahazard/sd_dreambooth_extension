@@ -2,7 +2,6 @@
 # *Only* converts the UNet, VAE, and Text Encoder.
 # Does not convert optimizer state or any other thing.
 
-import argparse
 import os
 import os.path as osp
 import re

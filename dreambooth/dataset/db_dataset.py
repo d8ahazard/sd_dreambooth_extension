@@ -1,4 +1,3 @@
-import json
 import logging
 import logging
 import os.path
@@ -182,7 +181,8 @@ class DbDataset(torch.utils.data.Dataset):
             traceback.print_exc()
 
 
-    def build_compose(self, hflip, flip_p):
+    @staticmethod
+    def build_compose(hflip, flip_p):
         img_augmentation = [transforms.ToPILImage(), transforms.RandomHorizontalFlip(flip_p)]
         to_tensor = [transforms.ToTensor()]
 
@@ -369,14 +369,21 @@ class DbDataset(torch.utils.data.Dataset):
         shared.status.job_no = 0
         total_instances = 0
         total_classes = 0
+        data_cache = self.load_cache_file() if self.cache_latents else {}
+        has_cache = len(data_cache) > 0
+        if self.cache_latents:
+            if has_cache:
+                bar_description = "Loading cached latents..."
+            else:
+                bar_description = "Caching latents..."
+        else:
+            bar_description = "Processing images..."
         if self.pbar is None:
-            self.pbar = mytqdm(range(p_len),
-                               desc="Caching latents..." if self.cache_latents else "Processing images...", position=0)
+            self.pbar = mytqdm(range(p_len), desc=bar_description, position=0)
         else:
             self.pbar.reset(total=p_len)
-            self.pbar.set_description("Caching latents..." if self.cache_latents else "Processing images...")
+            self.pbar.set_description(bar_description)
         self.pbar.status_index = 1
-        data_cache = self.load_cache_file()
         def cache_images(images, reso, p_bar: mytqdm):
             for img_path, cap, is_prior in images:
                 try:

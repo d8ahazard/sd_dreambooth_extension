@@ -7,8 +7,7 @@ import sys
 from typing import Dict
 
 import torch
-from diffusers.utils import is_xformers_available
-from diffusers.models.attention_processor import AttnProcessor2_0, LoRAAttnProcessor2_0, LoRAXFormersAttnProcessor, XFormersAttnProcessor
+from diffusers.models.attention_processor import AttnProcessor2_0
 from transformers import PretrainedConfig
 
 from dreambooth import shared  # noqa
@@ -293,4 +292,4 @@ def torch2ify(unet):
     return unet
 
 def is_xformers_available():
-    import xformers
+    pass
