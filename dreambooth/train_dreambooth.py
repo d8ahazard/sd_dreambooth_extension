@@ -30,8 +30,7 @@ from diffusers import (
 )
 from diffusers.loaders import LoraLoaderMixin, text_encoder_lora_state_dict
 from diffusers.models.attention_processor import LoRAAttnProcessor2_0, LoRAAttnProcessor
-from diffusers.utils import logging as dl, is_xformers_available, randn_tensor
-from packaging import version
+from diffusers.utils import logging as dl, randn_tensor
 from torch.cuda.profiler import profile
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
@@ -41,7 +40,7 @@ from dreambooth.dataclasses.prompt_data import PromptData
 from dreambooth.dataclasses.train_result import TrainResult
 from dreambooth.dataset.bucket_sampler import BucketSampler
 from dreambooth.dataset.sample_dataset import SampleDataset
-from dreambooth.deis_velocity import get_velocity
+from dreambooth.deis_velocity import get_velocity, compute_snr
 from dreambooth.diff_to_sd import compile_checkpoint, copy_diffusion_model
 from dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_xl
 from dreambooth.memory import find_executable_batch_size
@@ -58,7 +57,8 @@ from dreambooth.utils.model_utils import (
     torch2ify, unet_attn_processors_state_dict,
 )
 from dreambooth.utils.text_utils import encode_hidden_state
-from dreambooth.utils.utils import cleanup, printm, verify_locon_installed
+from dreambooth.utils.utils import (cleanup, printm, verify_locon_installed,
+                                    patch_accelerator_for_fp16_training)
 from dreambooth.webhook import send_training_update
 from dreambooth.xattention import optim_to
 from helpers.ema_model import EMAModel
@@ -226,7 +226,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             accelerator = Accelerator(
                 gradient_accumulation_steps=gradient_accumulation_steps,
                 mixed_precision=precision,
-                log_with="tensorboard",
+                log_with="all",
                 project_dir=logging_dir,
                 cpu=shared.force_cpu,
             )
@@ -380,42 +380,44 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         )
 
         if args.attention == "xformers" and not shared.force_cpu:
-            if is_xformers_available():
-                import xformers
-
-                xformers_version = version.parse(xformers.__version__)
-                if xformers_version == version.parse("0.0.16"):
-                    logger.warning(
-                        "xFormers 0.0.16 cannot be used for training in some GPUs. If you observe problems during training, please update xFormers to at least 0.0.21. See https://huggingface.co/docs/diffusers/main/en/optimization/xformers for more details."
-                    )
-            else:
-                raise ValueError(
-                    "xformers is not available. Make sure it is installed correctly"
-                )
-            xformerify(unet, False)
-            xformerify(vae, False)
+            xformerify(unet, use_lora=args.use_lora)
+            xformerify(vae, use_lora=args.use_lora)
 
         unet = torch2ify(unet)
 
-        # Check that all trainable models are in full precision
-        low_precision_error_string = (
-            "Please make sure to always have all model weights in full float32 precision when starting training - "
-            "even if doing mixed precision training. copy of the weights should still be float32."
-        )
-
-        if accelerator.unwrap_model(unet).dtype != torch.float32:
-            logger.warning(
-                f"Unet loaded as datatype {accelerator.unwrap_model(unet).dtype}. {low_precision_error_string}"
+        if args.full_mixed_precision:
+            if args.mixed_precision == "fp16":
+                patch_accelerator_for_fp16_training(accelerator)
+            unet.to(accelerator.device, dtype=weight_dtype)
+        else:
+            # Check that all trainable models are in full precision
+            low_precision_error_string = (
+                "Please make sure to always have all model weights in full float32 precision when starting training - "
+                "even if doing mixed precision training. copy of the weights should still be float32."
             )
 
-        if (
-                args.stop_text_encoder != 0
-                and accelerator.unwrap_model(text_encoder).dtype != torch.float32
-        ):
-            logger.warning(
-                f"Text encoder loaded as datatype {accelerator.unwrap_model(text_encoder).dtype}."
-                f" {low_precision_error_string}"
-            )
+            if accelerator.unwrap_model(unet).dtype != torch.float32:
+                logger.warning(
+                    f"Unet loaded as datatype {accelerator.unwrap_model(unet).dtype}. {low_precision_error_string}"
+                )
+
+            if (
+                    args.stop_text_encoder != 0
+                    and accelerator.unwrap_model(text_encoder).dtype != torch.float32
+            ):
+                logger.warning(
+                    f"Text encoder loaded as datatype {accelerator.unwrap_model(text_encoder).dtype}."
+                    f" {low_precision_error_string}"
+                )
+                
+            if (
+                    args.stop_text_encoder != 0
+                    and accelerator.unwrap_model(text_encoder_two).dtype != torch.float32
+            ):
+                logger.warning(
+                    f"Text encoder loaded as datatype {accelerator.unwrap_model(text_encoder_two).dtype}."
+                    f" {low_precision_error_string}"
+                )
 
         if args.gradient_checkpointing:
             if args.train_unet:
@@ -448,10 +450,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     args.get_pretrained_model_name_or_path(),
                     subfolder="ema_unet",
                     revision=args.revision,
-                    torch_dtype=torch.float32,
+                    torch_dtype=weight_dtype,
                 )
                 if args.attention == "xformers" and not shared.force_cpu:
-                    xformerify(ema_unet)
+                    xformerify(ema_unet, use_lora=args.use_lora)
 
                 ema_model = EMAModel(
                     ema_unet, device=accelerator.device, dtype=weight_dtype
@@ -866,20 +868,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 modules.shared.cmd_opts.disable_safe_unpickle = no_safe
                 global_step = resume_step = args.revision
                 resume_from_checkpoint = True
-                first_epoch = args.epoch
-                global_epoch = first_epoch
+                first_epoch = args.lifetime_epoch
+                global_epoch = args.lifetime_epoch
             except Exception as lex:
                 logger.warning(f"Exception loading checkpoint: {lex}")
-
-        # if shared.in_progress:
-        #    logger.debug("  ***** OOM detected. Resuming from last step *****")
-        #    max_train_steps = max_train_steps - shared.in_progress_step
-        #    max_train_epochs = max_train_epochs - shared.in_progress_epoch
-        #    session_epoch = shared.in_progress_epoch
-        #    text_encoder_epochs = (shared.in_progress_epoch/max_train_epochs)*text_encoder_epochs
-        # else:
-        #    shared.in_progress = True
-
         logger.debug("  ***** Running training *****")
         if shared.force_cpu:
             logger.debug(f"  TRAINING WITH CPU ONLY")
@@ -1028,9 +1020,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         vae=vae.to(accelerator.device),
                         torch_dtype=weight_dtype,
                         revision=args.revision,
-                        safety_checker=None,
-                        requires_safety_checker=None,
                     )
+                    xformerify(s_pipeline.unet,use_lora=args.use_lora)
                 else:
                     s_pipeline = DiffusionPipeline.from_pretrained(
                         args.get_pretrained_model_name_or_path(),
@@ -1041,9 +1032,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         vae=vae,
                         torch_dtype=weight_dtype,
                         revision=args.revision,
-                        safety_checker=None,
-                        requires_safety_checker=None,
                     )
+                    xformerify(s_pipeline.unet,use_lora=args.use_lora)
+                    xformerify(s_pipeline.vae,use_lora=args.use_lora)
 
                 weights_dir = args.get_pretrained_model_name_or_path()
 
@@ -1140,7 +1131,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             )
                             update_status({"status": status.textinfo})
                             pbar2.reset(1)
-
                             pbar2.set_description("Saving diffusion model")
                             s_pipeline.save_pretrained(
                                 weights_dir,
@@ -1309,7 +1299,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     if "generator" in locals():
                         del generator
 
-                    if not args.disable_logging and args.model_type != "SDXL":
+                    if not args.disable_logging:
                         try:
                             printm("Parse logs.")
                             log_images, log_names = log_parser.parse_logs(
@@ -1532,7 +1522,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     if noise_scheduler.config.prediction_type == "epsilon":
                         target = noise
                     elif noise_scheduler.config.prediction_type == "v_prediction":
-                        target = noise_scheduler.get_velocity(latents, noise, timesteps)
+                        target = noise_scheduler.s(latents, noise, timesteps)
                     else:
                         raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
@@ -1563,7 +1553,18 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 target, target_prior = torch.chunk(target, 2, dim=0)
 
                                 # Compute instance loss
-                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                                if args.min_snr_gamma == 0.0:
+                                    # Compute instance loss
+                                    loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                                else:
+                                    # Calculate loss with min snr
+                                    snr = compute_snr(timesteps)
+                                    mse_loss_weights = (
+                                        torch.stack([snr, args.min_snr_gamma * torch.ones_like(timesteps)], dim=1).min(dim=1)[0] / snr
+                                    )
+                                    loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
+                                    loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
+                                    loss = loss.mean()
 
                                 # Compute prior loss
                                 prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
@@ -1578,16 +1579,41 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             target, target_prior = torch.chunk(target, 2, dim=0)
 
                             # Compute instance loss
-                            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-
+                            if args.min_snr_gamma == 0.0:
+                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                            else:
+                                # Calculate loss with min snr
+                                snr = compute_snr(timesteps)
+                                mse_loss_weights = (
+                                    torch.stack([snr, args.min_snr_gamma * torch.ones_like(timesteps)], dim=1).min(dim=1)[0] / snr
+                                )
+                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
+                                loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
+                                loss = loss.mean()
+                            
                             # Compute prior loss
                             prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
 
                             # Add the prior loss to the instance loss.
                             loss = loss + args.prior_loss_weight * prior_loss
                         else:
-                            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-
+                            if args.min_snr_gamma == 0.0: 
+                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                            else:
+                                 # Compute loss-weights as per Section 3.4 of https://arxiv.org/abs/2303.09556.
+                                # Since we predict the noise instead of x_0, the original formulation is slightly changed.
+                                # This is discussed in Section 4.2 of the same paper.
+                                snr = compute_snr(timesteps)
+                                mse_loss_weights = (
+                                    torch.stack([snr, args.min_snr_gamma * torch.ones_like(timesteps)], dim=1).min(dim=1)[0] / snr
+                                )
+                                # We first calculate the original loss. Then we mean over the non-batch dimensions and
+                                # rebalance the sample-wise losses with their respective loss weights.
+                                # Finally, we take the mean of the rebalanced loss.
+                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
+                                loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
+                                loss = loss.mean()
+                          
                     accelerator.backward(loss)
 
                     if accelerator.sync_gradients and not args.use_lora:
@@ -1773,9 +1799,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         if status.interrupted:
                             training_complete = True
                             logger.debug("Training complete, interrupted.")
-                            shared.in_progress = False
-                            shared.in_progress_step = 0
-                            shared.in_progress_epoch = 0
                             if status_handler:
                                 status_handler.end("Training interrrupted.")
                             break

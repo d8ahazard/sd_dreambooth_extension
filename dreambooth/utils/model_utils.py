@@ -8,6 +8,7 @@ from typing import Dict
 
 import torch
 from diffusers.utils import is_xformers_available
+from diffusers.models.attention_processor import AttnProcessor2_0, LoRAAttnProcessor2_0, LoRAXFormersAttnProcessor, XFormersAttnProcessor
 from transformers import PretrainedConfig
 
 from dreambooth import shared  # noqa
@@ -272,23 +273,15 @@ def enable_safe_unpickle():
         pass
 
 
-def xformerify(obj, try_sdp=True):
-    if try_sdp:
-        try:
-            from diffusers.models.attention_processor import AttnProcessor2_0
-            print("Enabling SDP")
-            obj.set_attn_processor(AttnProcessor2_0())
-            return
-        except:
-            pass
-
-    if is_xformers_available():
-        try:
-            print("Enabling xformers memory efficient attention for unet")
-            obj.enable_xformers_memory_efficient_attention()
-        except ModuleNotFoundError:
-            print("xformers not found, using default attention")
-
+def xformerify(obj, use_lora):
+    try:
+        import xformers
+        print("Enable xformers")
+        obj.enable_xformers_memory_efficient_attention
+        
+    except ImportError:
+        print("Enable SDPA")
+        obj.set_attn_processor(AttnProcessor2_0())
 
 def torch2ify(unet):
     if hasattr(torch, 'compile'):
@@ -298,3 +291,6 @@ def torch2ify(unet):
         except:
             pass
     return unet
+
+def is_xformers_available():
+    import xformers

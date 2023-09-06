@@ -609,6 +609,13 @@ def on_ui_tabs():
                                 value=0,
                                 visible=True,
                             )
+                            db_min_snr_gamma = gr.Slider(
+                                label="Min SNR Gamma",
+                                minimum=0,
+                                maximum=10,
+                                step=0.1,
+                                visible=True,
+                            )
                             db_pad_tokens = gr.Checkbox(
                                 label="Pad Tokens", value=True
                             )
@@ -993,6 +1000,9 @@ def on_ui_tabs():
                         )
                 with gr.Tab("Testing", elem_id="TabDebug"):
                     gr.HTML(value="Experimental Settings")
+                    db_full_mixed_precision = gr.Checkbox(
+                        label="Full Mixed Precision", value=False
+                    )
                     db_tomesd = gr.Slider(
                         value=0,
                         label="Token Merging (ToMe)",
@@ -1255,6 +1265,7 @@ def on_ui_tabs():
             db_epoch_pause_time,
             db_epochs,
             db_freeze_clip_normalization,
+            db_full_mixed_precision,
             db_gradient_accumulation_steps,
             db_gradient_checkpointing,
             db_gradient_set_to_none,
@@ -1279,6 +1290,7 @@ def on_ui_tabs():
             db_lr_scheduler,
             db_lr_warmup_steps,
             db_max_token_length,
+            db_min_snr_gamma,
             db_mixed_precision,
             db_model_name,
             db_model_path,

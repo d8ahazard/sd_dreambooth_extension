@@ -22,6 +22,8 @@ import traceback
 from enum import Enum
 from typing import Optional, Union, List
 
+from inflection import camelize
+
 from diffusers import DEISMultistepScheduler, UniPCMultistepScheduler, DDPMScheduler
 from diffusers.utils import logging
 from torch.optim import Optimizer
@@ -37,7 +39,7 @@ logger = logging.get_logger(__name__)
 
 
 class SchedulerType(Enum):
-    DADAPT_WITH_WARMUP = "dadapt_with_warmup"
+    REX = "rex"
     LINEAR = "linear"
     LINEAR_WITH_WARMUP = "linear_with_warmup"
     COSINE = "cosine"
@@ -48,37 +50,32 @@ class SchedulerType(Enum):
     CONSTANT = "constant"
     CONSTANT_WITH_WARMUP = "constant_with_warmup"
 
-
-def get_dadapt_with_warmup(optimizer, num_warmup_steps: int = 0, unet_lr: float = 1.0, tenc_lr: float = 1.0):
+def get_rex_scheduler(optimizer: Optimizer, total_training_steps):
     """
-    Adjust LR from initial rate to the minimum specified LR over the maximum number of steps.
-    See <a href='https://miro.medium.com/max/828/1*Bk4xhtvg_Su42GmiVtvigg.webp'> for an example.
+    Returns a learning rate scheduler based on the REx (Relative Exploration) algorithm.
+
     Args:
-        optimizer ([`~torch.optim.Optimizer`]):
-            The optimizer for which to schedule the learning rate.
-        num_warmup_steps (`int`, *optional*, defaults to 0):
-            The number of steps for the warmup phase.
-        unet_lr (`float`, *optional*, defaults to 1.0):
-            The learning rate used to control d-dadaption for the UNET
-        tenc_lr (`float`, *optional*, defaults to 1.0):
-            The learning rate used to control d-dadaption for the TENC
+        optimizer (Optimizer): The optimizer to use for training.
+        total_training_steps (int): The total number of training steps.
 
-    Return:
-        `torch.optim.lr_scheduler.LambdaLR` with the appropriate LR schedules for TENC and UNET.
+    Returns:
+        A tuple containing the original optimizer object and a lambda function that can be used to create a PyTorch learning rate scheduler.
     """
-    def unet_lambda(current_step: int):
-        if current_step < num_warmup_steps:
-            return float(current_step) / float(max(unet_lr, num_warmup_steps))
-        else:
-            return unet_lr
+    def lr_lambda(current_step: int):
+        # https://arxiv.org/abs/2107.04197
+        max_lr = 1
+        min_lr = 0
+        d = 0.9
 
-    def tenc_lambda(current_step: int):
-        if current_step < num_warmup_steps:
-            return (float(current_step) / float(max(tenc_lr, num_warmup_steps)))
+        if current_step < total_training_steps:
+            progress = (current_step / total_training_steps)
+            div = (1 - d) + (d * (1 - progress))
+            return min_lr + (max_lr - min_lr) * ((1 - progress) / div)
         else:
-            return tenc_lr
+            return min_lr
 
-    return LambdaLR(optimizer, [unet_lambda, tenc_lambda], last_epoch=-1, verbose=False)
+    return LambdaLR(optimizer, lr_lambda)
+
 
 
 
@@ -492,15 +489,12 @@ def get_scheduler(
             num_cycles=num_cycles,
         )
 
-    if name == SchedulerType.DADAPT_WITH_WARMUP:
-        return get_dadapt_with_warmup(
-            optimizer,
-            num_warmup_steps=num_warmup_steps,
-            unet_lr=unet_lr,
-            tenc_lr=tenc_lr,
+    if name == SchedulerType.REX:
+        return get_rex_scheduler(
+            optimizer, 
+            total_training_steps=total_training_steps
         )
-
-
+        
 class UniversalScheduler:
     def __init__(
             self,
@@ -575,73 +569,218 @@ def log_dadapt(disable: bool = True):
 
 def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, params_to_optimize):
     try:
-        if optimizer == "8bit AdamW":
-            from bitsandbytes.optim import AdamW8bit
-            return AdamW8bit(
-                params_to_optimize,
+        if optimizer == "Adafactor":
+            from transformers.optimization import Adafactor
+            adafactor = Adafactor(
+                params=params_to_optimize,
                 lr=learning_rate,
-                weight_decay=weight_decay,
-            )
-        elif optimizer == "Adafactor":
-            from transformers import Adafactor
-            return Adafactor(
-                params_to_optimize,
-                lr=learning_rate,
-                eps=(1e-30, 1e-3),
                 clip_threshold=1.0,
                 decay_rate=-0.8,
-                beta1=None,
-                weight_decay=0.0,
-                relative_step=False,
-                scale_parameter=False,
+                weight_decay=weight_decay,
+                relative_step=True,
+                scale_parameter=True,
                 warmup_init=False,
             )
-        elif optimizer == "Lion":
-            from lion_pytorch import Lion
-            return Lion(
-                params_to_optimize,
+            return adafactor
+        
+        elif optimizer == "CAME":
+            from pytorch_optimizer import CAME
+            came = CAME(
+                params=params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
+                weight_decouple=True,
+                fixed_decay=False,
+                clip_threshold=1.0,
+                ams_bound=False,
+                )
+            return came
+
+        elif optimizer == "8bit AdamW":
+            from bitsandbytes.optim import AdamW8bit
+            adamw8bit = AdamW8bit(
+                params=params_to_optimize,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                percentile_clipping=100,
+                min_8bit_size=4096,
+                block_wise=True,
+                amsgrad=False,
+                is_paged=False,
             )
+            return adamw8bit
+        
+        elif optimizer == "Paged 8bit AdamW":   
+            from bitsandbytes.optim import PagedAdamW8bit
+            pagedadamw8bit = PagedAdamW8bit(
+                params=params_to_optimize,
+                lr=learning_rate,
+                betas=(0.9, 0.999),
+                eps=1e-8,
+                weight_decay=weight_decay,
+                percentile_clipping=100,
+                block_wise=True,
+                amsgrad=False,
+                paged=True,
+            )
+            return pagedadamw8bit
+
+        elif optimizer == "Apollo":
+            from pytorch_optimizer import Apollo
+            apollo = Apollo(
+                params=params_to_optimize,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                eight_decay_type='l2',
+                init_lr=None,
+                rebound='constant',
+            )
+            return apollo
+
+        elif optimizer == "Lion":
+            from pytorch_optimizer import Lion
+            lion = Lion(
+                params=params_to_optimize,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                weight_decouple=True,
+                fixed_decay=False,
+                use_gc=False,
+                adanorm=False
+            )
+            return lion
+        
+        elif optimizer == "8bit Lion":
+            from bitsandbytes.optim import Lion8bit
+            lion8bit = Lion8bit(
+                params=params_to_optimize,
+                lr=learning_rate,
+                betas=(0.9, 0.99), 
+                weight_decay=weight_decay,
+                is_paged=False,
+                percentile_clipping=100,
+                block_wise=True,
+                min_8bit_size=4096,
+            )
+            return lion8bit
+                
+        elif optimizer == "Paged 8bit Lion":
+            from bitsandbytes.optim import PagedLion8bit
+            pagedLion8bit = PagedLion8bit(
+                params=params_to_optimize,
+                lr=learning_rate,
+                betas=(0.9, 0.99),
+                weight_decay=0,
+                percentile_clipping=100,
+                block_wise=True,
+                is_paged=True,
+                min_8bit_size=4096,
+            )
+            return pagedLion8bit
 
         elif optimizer == "AdamW Dadaptation":
             from dadaptation import DAdaptAdam
-            return DAdaptAdam(
-                params_to_optimize,
+            dadaptadam = DAdaptAdam(
+                params=params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
                 decouple=True,
                 use_bias_correction=True,
-                log_every=log_dadapt(True)
+                log_every=log_dadapt(True),
+                fsdp_in_use=False,
             )
+            return dadaptadam
 
         elif optimizer == "Lion Dadaptation":
             from dadaptation import DAdaptLion
-            return DAdaptLion(
-                params_to_optimize,
+            dadaptlion = DAdaptLion(
+                params=params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
-                log_every=log_dadapt(True)
+                log_every=log_dadapt(True),
+                fsdp_in_use=False,
+                d0=0.000001,
             )
+            return dadaptlion
 
         elif optimizer == "Adan Dadaptation":
             from dadaptation import DAdaptAdan
-            return DAdaptAdan(
-                params_to_optimize,
+            dadaptadan = DAdaptAdan(
+                params=params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
                 log_every=log_dadapt(True),
+                no_prox=False,
+                d0=0.000001,
             )
-
+            return dadaptadan
+        
+        elif optimizer == "AdanIP Dadaptation":
+            from dadaptation.experimental import DAdaptAdanIP
+            dadaptadanip = DAdaptAdanIP(
+                params=params_to_optimize,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                log_every=log_dadapt(True),
+                no_prox=False,
+                d0=0.000001
+            )
+            return dadaptadanip
+        
         elif optimizer == "SGD Dadaptation":
             from dadaptation import DAdaptSGD
-            return DAdaptSGD(
-                params_to_optimize,
+            dadaptsgd = DAdaptSGD(
+                params=params_to_optimize,
                 lr=learning_rate,
                 weight_decay=weight_decay,
                 log_every=log_dadapt(True),
+                momentum=0.0,
+                fsdp_in_use=False,
+                d0=0.000001,
             )
+            return dadaptsgd
+            
+        elif optimizer == "Prodigy":
+            from pytorch_optimizer import Prodigy
+            prodigy = Prodigy(
+                    params=params_to_optimize,
+                    lr=learning_rate,
+                    weight_decay=weight_decay,
+                    safeguard_warmup=False,
+                    d0=1e-6,
+                    d_coef=1.0,
+                    bias_correction=False,
+                    fixed_decay=False,
+                    weight_decouple=True,
+                )
+            return prodigy
 
+        
+        elif optimizer == "Sophia":
+            from pytorch_optimizer import SophiaH
+            sophia = SophiaH(
+                params=params_to_optimize,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                weight_decouple=True,
+                fixed_decay=False,
+                hessian_distribution="gaussian",
+                p=0.01,
+            )
+            return sophia
+            
+        elif optimizer == "Tiger":
+            from pytorch_optimizer import Tiger
+            tiger = Tiger(
+                params=params_to_optimize,
+                lr=learning_rate,
+                beta = 0.965,
+                weight_decay=0.01,
+                weight_decouple=True,
+                fixed_decay=False,
+            )
+            return tiger
+            
     except Exception as e:
         logger.warning(f"Exception importing {optimizer}: {e}")
         traceback.print_exc()
@@ -655,6 +794,7 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
         lr=learning_rate,
         weight_decay=weight_decay,
     )
+
 
 
 def get_noise_scheduler(args):
