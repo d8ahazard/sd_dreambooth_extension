@@ -50,6 +50,7 @@ class DreamboothConfig(BaseModel):
     hflip: bool = False
     infer_ema: bool = False
     initial_revision: int = 0
+    input_pertubation: bool = True
     learning_rate: float = 5e-6
     learning_rate_min: float = 1e-6
     lifetime_revision: int = 0

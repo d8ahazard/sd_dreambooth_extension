@@ -907,10 +907,14 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             save_canceled = status.interrupted
             save_image = False
             save_model = False
+            save_lora = False
+
             if not save_canceled and not save_completed:
                 # Check to see if the number of epochs since last save is gt the interval
                 if 0 < save_model_interval <= session_epoch - last_model_save:
                     save_model = True
+                    if args.use_lora:
+                        save_lora = True
                     last_model_save = session_epoch
 
                 # Repeat for sample images
@@ -923,9 +927,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 if global_step > 0:
                     save_image = True
                     save_model = True
+                    save_lora = True
 
             save_snapshot = False
-            save_lora = args.use_lora
 
             if is_epoch_check:
                 if shared.status.do_save_samples:
@@ -933,6 +937,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     shared.status.do_save_samples = False
 
                 if shared.status.do_save_model:
+                    if args.use_lora:
+                        save_lora = True
                     save_model = True
                     shared.status.do_save_model = False
 
@@ -1106,8 +1112,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                                 scheduler_args["variance_type"] = variance_type
 
-                            s_pipeline.scheduler = UniPCMultistepScheduler.from_config(s_pipeline.scheduler.config,
-                                                                                         **scheduler_args)
+                            s_pipeline.scheduler = UniPCMultistepScheduler.from_config(s_pipeline.scheduler.config, **scheduler_args)
+                            save_lora = False
+                            save_model = False
                         else:
                             StableDiffusionPipeline.save_lora_weights(
                                 loras_dir,
@@ -1119,6 +1126,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             s_pipeline.scheduler = get_scheduler_class("UniPCMultistep").from_config(
                                 s_pipeline.scheduler.config)
                         s_pipeline.scheduler.config.solver_type = "bh2"
+                        save_lora = False
+                        save_model = False
 
                     elif save_diffusers:
                         # We are saving weights, we need to ensure revision is saved
@@ -1131,6 +1140,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             )
                             update_status({"status": status.textinfo})
                             pbar2.reset(1)
+
                             pbar2.set_description("Saving diffusion model")
                             s_pipeline.save_pretrained(
                                 weights_dir,
@@ -1302,9 +1312,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     if not args.disable_logging:
                         try:
                             printm("Parse logs.")
-                            log_images, log_names = log_parser.parse_logs(
-                                model_name=args.model_name
-                            )
+                            log_images, log_names = log_parser.parse_logs(model_name=args.model_name)
                             pbar2.update()
                             for log_image in log_images:
                                 last_samples.append(log_image)
@@ -1522,7 +1530,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     if noise_scheduler.config.prediction_type == "epsilon":
                         target = noise
                     elif noise_scheduler.config.prediction_type == "v_prediction":
-                        target = noise_scheduler.s(latents, noise, timesteps)
+                        target = noise_scheduler.get_velocity(latents, noise, timesteps)
                     else:
                         raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
@@ -1539,8 +1547,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     if args.model_type != "SDXL":
                         # TODO: set a prior preservation flag and use that to ensure this ony happens in dreambooth
                         if not args.split_loss and not with_prior_preservation:
-                            loss = instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(),
-                                                                                reduction="mean")
+                            loss = instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
                             loss *= batch["loss_avg"]
                         else:
                             # Predict the noise residual
@@ -1553,18 +1560,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 target, target_prior = torch.chunk(target, 2, dim=0)
 
                                 # Compute instance loss
-                                if args.min_snr_gamma == 0.0:
-                                    # Compute instance loss
-                                    loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-                                else:
-                                    # Calculate loss with min snr
-                                    snr = compute_snr(timesteps)
-                                    mse_loss_weights = (
-                                        torch.stack([snr, args.min_snr_gamma * torch.ones_like(timesteps)], dim=1).min(dim=1)[0] / snr
-                                    )
-                                    loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
-                                    loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
-                                    loss = loss.mean()
+                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
                                 # Compute prior loss
                                 prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
@@ -1579,41 +1575,16 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             target, target_prior = torch.chunk(target, 2, dim=0)
 
                             # Compute instance loss
-                            if args.min_snr_gamma == 0.0:
-                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-                            else:
-                                # Calculate loss with min snr
-                                snr = compute_snr(timesteps)
-                                mse_loss_weights = (
-                                    torch.stack([snr, args.min_snr_gamma * torch.ones_like(timesteps)], dim=1).min(dim=1)[0] / snr
-                                )
-                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
-                                loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
-                                loss = loss.mean()
-                            
+                            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
                             # Compute prior loss
                             prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
 
                             # Add the prior loss to the instance loss.
                             loss = loss + args.prior_loss_weight * prior_loss
                         else:
-                            if args.min_snr_gamma == 0.0: 
-                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-                            else:
-                                 # Compute loss-weights as per Section 3.4 of https://arxiv.org/abs/2303.09556.
-                                # Since we predict the noise instead of x_0, the original formulation is slightly changed.
-                                # This is discussed in Section 4.2 of the same paper.
-                                snr = compute_snr(timesteps)
-                                mse_loss_weights = (
-                                    torch.stack([snr, args.min_snr_gamma * torch.ones_like(timesteps)], dim=1).min(dim=1)[0] / snr
-                                )
-                                # We first calculate the original loss. Then we mean over the non-batch dimensions and
-                                # rebalance the sample-wise losses with their respective loss weights.
-                                # Finally, we take the mean of the rebalanced loss.
-                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
-                                loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
-                                loss = loss.mean()
-                          
+                            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
                     accelerator.backward(loss)
 
                     if accelerator.sync_gradients and not args.use_lora:

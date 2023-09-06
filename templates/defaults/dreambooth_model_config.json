@@ -20,6 +20,7 @@
     "half_model": false,
     "hflip": false,
     "infer_ema": false,
+    "input_pertubation": false,
     "learning_rate": 2e-06,
     "learning_rate_min": 1e-06,
     "lora_learning_rate": 0.0001,

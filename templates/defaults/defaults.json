@@ -125,6 +125,9 @@
     "max": 1,
     "step": 0.001
   },
+  "input_pertubation":{
+    "value": false
+  },
   "offset_noise": {
     "value": 0,
     "min": -1,
