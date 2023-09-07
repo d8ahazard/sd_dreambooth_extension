@@ -695,15 +695,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             except Exception as lex:
                 logger.warning(f"Exception loading checkpoint: {lex}")
 
-        # if shared.in_progress:
-        #    logger.debug("  ***** OOM detected. Resuming from last step *****")
-        #    max_train_steps = max_train_steps - shared.in_progress_step
-        #    max_train_epochs = max_train_epochs - shared.in_progress_epoch
-        #    session_epoch = shared.in_progress_epoch
-        #    text_encoder_epochs = (shared.in_progress_epoch/max_train_epochs)*text_encoder_epochs
-        # else:
-        #    shared.in_progress = True
-
         logger.debug("  ***** Running training *****")
         if shared.force_cpu:
             logger.debug(f"  TRAINING WITH CPU ONLY")
@@ -1365,10 +1356,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                     optimizer.zero_grad(set_to_none=args.gradient_set_to_none)
 
-                    # Track current step and epoch for OOM resume
-                    # shared.in_progress_epoch = global_epoch
-                    # shared.in_progress_steps = global_step
-
                 allocated = round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)
                 cached = round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)
                 lr_data = lr_scheduler.get_last_lr()
@@ -1474,9 +1461,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                 # Log completion message
                 if training_complete or status.interrupted:
-                    shared.in_progress = False
-                    shared.in_progress_step = 0
-                    shared.in_progress_epoch = 0
                     logger.debug("  Training complete (step check).")
                     if status.interrupted:
                         state = "canceled"
@@ -1533,9 +1517,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         if status.interrupted:
                             training_complete = True
                             logger.debug("Training complete, interrupted.")
-                            shared.in_progress = False
-                            shared.in_progress_step = 0
-                            shared.in_progress_epoch = 0
                             if status_handler:
                                 status_handler.end("Training interrrupted.")
                             break
