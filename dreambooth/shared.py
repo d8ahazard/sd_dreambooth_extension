@@ -44,9 +44,6 @@ def load_auto_settings():
         config = ws.cmd_opts.config
         device = ws.device
         sd_model = ws.sd_model
-        in_progress = False
-        in_progress_epoch = 0
-        in_progress_step = 0
 
         def set_model(new_model):
             global sd_model
@@ -164,23 +161,17 @@ class DreamState:
     time_left_force_display = False
     active = False
     new_ui = False
-    in_progress = False
-    in_progress_epoch = 0
-    in_progress_step = 0
 
     def interrupt(self):
         if self.status_handler:
             self.status_handler.end(desc="Interrupted")
         self.interrupted = True
-        self.in_progress = False
 
     def interrupt_after_save(self):
         self.interrupted_after_save = True
-        self.in_progress = False
 
     def interrupt_after_epoch(self):
         self.interrupted_after_epoch = True
-        self.in_progress = False
 
     def save_samples(self):
         self.do_save_samples = True
@@ -201,9 +192,6 @@ class DreamState:
             "last_status": self.textinfo,
             "sample_prompts": self.sample_prompts,
             "active": self.active,
-            "in_progress": self.in_progress,
-            "in_progress_epoch": self.in_progress_epoch,
-            "in_progress_step": self.in_progress_step,
         }
 
         return obj
@@ -234,7 +222,6 @@ class DreamState:
         self.job_count = 0
         self.job_no = 0
         self.active = False
-        self.in_progress = False
         torch_gc()
         if self.status_handler:
             self.status_handler.end()
@@ -319,7 +306,7 @@ def load_vars(root_path = None):
     data_path, show_progress_every_n_steps, parallel_processing_allowed, dataset_filename_word_regex, dataset_filename_join_string, \
     device_id, state, disable_safe_unpickle, ckptfix, medvram, lowvram, debug, profile_db, sub_quad_q_chunk_size, sub_quad_kv_chunk_size, \
     sub_quad_chunk_threshold, CLIP_stop_at_last_layers, sd_model, config, force_cpu, paths, is_auto, device, orig_tensor_to, orig_layer_norm, \
-    orig_tensor_numpy, extension_path, orig_cumsum, orig_Tensor_cumsum, status, state, in_progress, in_progress_epoch, in_progress_step
+    orig_tensor_numpy, extension_path, orig_cumsum, orig_Tensor_cumsum, status, state
 
     script_path = os.sep.join(__file__.split(os.sep)[0:-4]) if root_path is None else root_path
     models_path = os.path.join(script_path, "models")
@@ -340,9 +327,6 @@ def load_vars(root_path = None):
     medvram = False
     lowvram = False
     debug = False
-    in_progress = False
-    in_progress_epoch = 0
-    in_progress_step = 0
     profile_db = False
     sub_quad_q_chunk_size = 1024
     sub_quad_kv_chunk_size = None
@@ -414,9 +398,6 @@ ckptfix = False
 medvram = False
 lowvram = False
 debug = False
-in_progress = False
-in_progress_epoch = 0
-in_progress_step = 0
 profile_db = False
 sub_quad_q_chunk_size = 1024
 sub_quad_kv_chunk_size = None
