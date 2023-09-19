@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import logging
 import os
 import re
 import sys
@@ -16,6 +17,7 @@ from dreambooth.utils.utils import cleanup  # noqa
 from modules import hashes
 from modules.safe import unsafe_torch_load, load
 
+logger = logging.getLogger(__name__)
 checkpoints_list = {}
 checkpoint_alisases = {}
 checkpoints_loaded = collections.OrderedDict()
@@ -103,7 +105,7 @@ def list_models():
 
         shared.opts.data['sd_model_checkpoint'] = checkpoint_info.title
     elif cmd_ckpt is not None and cmd_ckpt != shared.default_sd_model_file:
-        print(f"Checkpoint in --ckpt argument not found (Possible it was moved to {model_path}: {cmd_ckpt}",
+        logger.debug(f"Checkpoint in --ckpt argument not found (Possible it was moved to {model_path}: {cmd_ckpt}",
               file=sys.stderr)
 
     for filename in model_list:
@@ -198,7 +200,7 @@ def reload_system_models():
         import modules.shared
         if modules.shared.sd_model is not None:
             modules.shared.sd_model.to(shared.device)
-        print("Restored system models.")
+        logger.debug("Restored system models.")
     except:
         pass
 
@@ -275,18 +277,18 @@ def enable_safe_unpickle():
 def xformerify(obj, use_lora):
     try:
         import xformers
-        print("Enable xformers")
         obj.enable_xformers_memory_efficient_attention
+        logger.debug("Enabled XFormers for " + obj.__class__.__name__)
         
     except ImportError:
-        print("Enable SDPA")
         obj.set_attn_processor(AttnProcessor2_0())
+        logger.debug("Enabled AttnProcessor2_0 for " + obj.__class__.__name__)
 
 def torch2ify(unet):
     if hasattr(torch, 'compile'):
         try:
             unet = torch.compile(unet, mode="max-autotune", fullgraph=False)
-            print("Compiled unet")
+            logger.debug("Enabled Torch2 compilation for unet.")
         except:
             pass
     return unet
