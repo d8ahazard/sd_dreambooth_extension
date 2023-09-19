@@ -41,6 +41,7 @@ from dreambooth.dataclasses.train_result import TrainResult
 from dreambooth.dataset.bucket_sampler import BucketSampler
 from dreambooth.dataset.sample_dataset import SampleDataset
 from dreambooth.deis_velocity import get_velocity, compute_snr
+from dreambooth.diff_lora_to_sd_lora import convert_diffusers_to_kohya_lora
 from dreambooth.diff_to_sd import compile_checkpoint, copy_diffusion_model
 from dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_xl
 from dreambooth.memory import find_executable_batch_size
@@ -1101,6 +1102,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 text_encoder_2_lora_layers=text_encoder_two_lora_layers_to_save,
                                 weight_name=lora_save_file,
                                 safe_serialization=True,
+                                save_function=convert_diffusers_to_kohya_lora
                             )
                             scheduler_args = {}
 
@@ -1121,7 +1123,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 unet_lora_layers=unet_lora_layers_to_save,
                                 text_encoder_lora_layers=text_encoder_one_lora_layers_to_save,
                                 weight_name=lora_save_file,
-                                safe_serialization=True
+                                safe_serialization=True,
+                                save_function=convert_diffusers_to_kohya_lora
                             )
                             s_pipeline.scheduler = get_scheduler_class("UniPCMultistep").from_config(
                                 s_pipeline.scheduler.config)
