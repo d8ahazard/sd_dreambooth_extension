@@ -1,48 +1,34 @@
+
 from pyexpat import model
-from anyio import get_all_backends
-from httpx import get
-from numpy import save
 import torch
 import torch.backends.cuda
 import torch.backends.cudnn
+
 from dreambooth import shared
 from dreambooth.dataclasses.db_config import DreamboothConfig
-from dreambooth.shared import DreamState
-from dreambooth.shared import db_model_config
-from dreambooth.utils.model_utils import (
-    disable_safe_unpickle,
-    enable_safe_unpickle,
-    xformerify,
-    torch2ify,
-)
-from dreambooth.utils.text_utils import encode_hidden_state
-from dreambooth.utils.utils import (cleanup, printm,)
-from dreambooth.webhook import send_training_update
-import accelerate
-import torch
-from diffusers.loaders import LoraLoaderMixin, text_encoder_lora_state_dict
-from diffusers.models.attention_processor import LoRAAttnProcessor2_0, LoRAAttnProcessor
-from diffusers.utils import logging as dl, randn_tensor
-from torch.cuda.profiler import profile
-from torch.utils.data import Dataset
-from transformers import AutoTokenizer
-import os
+from dreambooth.utils.model_utils import xformerify
+
 
 class TrainUtils:
     def __init__(self, pipeline, accelerator):
         self.pipeline = pipeline
         self.accelerator = accelerator
-        self.model_config = DreamboothConfig()
+        self.model_config = DreamboothConfig
         self.model_type = self.model_config.model_type
         self.model_path = self.model_config.model_path
         self.precision = self.model_config.mixed_precision
-        self.save_lora =self.model_config.save_lora_during
+        self.save_lora = self.model_config.save_lora_during
         self.save_checkpoint = self.model_config.save_ckpt_during
         self.save_difusers = self.model_config.save_state_during
         model_dtypes = self.get_model_dtypes()
         self.tenc_dtype = model_dtypes["tenc_dtype"]
         self.weight_dtype = model_dtypes["weight_dtype"]
         self.vae_dtype = model_dtypes["vae_dtype"]
+        self.max_train_epochs = self.model_config.num_train_epochs
+        self.stop_text_percentage = self.model_config.stop_text_encoder 
+        self.text_encoder_epochs = round(self.max_train_epochs * self.stop_text_percentage)
+        self.train_unet = self.model_config.train_unet
+        self.optimizer = accelerator.optimizer
 
     def get_model_dtypes(self, precision=None, model_type=None):
         precision = self.precision if precision is None else precision
@@ -71,7 +57,22 @@ class TrainUtils:
         self.vae_dtype = vae_dtype
 
         return model_dtypes
-
+    
+    
+    """ TODO Use this to pass the params in
+    def prepare_accelerator():
+        return
+    def prepare_optimizer():
+        return
+    def prepare_scheduler():
+        return
+    
+    def get_accelerator():
+        return self.accelerator
+    
+    def get_optimizer():
+        return self.accelerator.optimizer
+     """
     def prepare_pipeline_for_inference(self, pipeline=None):
         accelerator = self.accelerator
         pipeline = self.pipeline if pipeline is None else pipeline
@@ -79,7 +80,7 @@ class TrainUtils:
         weight_dtype = self.weight_dtype
         tenc_dtype = self.tenc_dtype
         vae_dtype = self.vae_dtype
-        
+
         # Send all the models to the same device with correct dtypes
         pipeline.unet.to(accelerator.device, weight_dtype)
         pipeline.text_encoder.to(accelerator.device, tenc_dtype)
@@ -95,7 +96,7 @@ class TrainUtils:
         pipeline.vae.eval()
 
         return pipeline
-    
+
     def prepare_pipeline_for_training(self, pipeline=None):
         accelerator = self.accelerator
         pipeline = self.pipeline if pipeline is None else pipeline
@@ -112,24 +113,39 @@ class TrainUtils:
         if model_type == "SDXL":
             pipeline.text_encoder_two.to(accelerator.device, dtype=tenc_dtype)
 
+
+        #xformerify the unet and vae in the pipeline for some sweet crossattention
+        xformerify(pipeline.unet, self.model_config.use_lora)
+        xformerify(pipeline.vae, self.model_config.use_lora)
+                   
+
         # Get the models ready for training
         # TODO: Add logic to restore correct state according to model type
-        # and tenc_training state
-        pipeline.unet.train()
-        pipeline.text_encoder.train()
-        if model_type == "SDXL":
-            pipeline.text_encoder_two.train()
-        pipeline.vae.train()
+        if self.model_config.cache_latents:
+            pipeline.vae.requires_grad_(False)
+            pipeline.vae.eval()
+        if self.model_config.freeze_clip_normalization:
+                pipeline.text_encoder.eval()
+                if self.model_config.model_type == "SDXL":
+                    pipeline.text_encoder_two.eval()
+        else:
+            # and tenc_training state
+            pipeline.unet.train()
+            pipeline.text_encoder.train()
+            if model_type == "SDXL":
+                pipeline.text_encoder_two.train()
+
 
         return pipeline
-        
 
     def save_pipeline(self, pipeline=None):
         """
         Save the currrent pipeline state to lora and/or checkpoint
         """
-        #pipeline = self.prepare_pipeline_for_inference(self.pipeline) \
-        #    if pipeline is None or self.prepare_pipeline_for_inference(pipeline)
+        if pipeline is None:
+            pipeline = self.prepare_pipeline_for_inference(self.pipeline)
+        else:
+            pipeline = self.prepare_pipeline_for_inference(pipeline)
 
         model_type = self.model_type
         save_lora = self.save_lora
@@ -143,36 +159,41 @@ class TrainUtils:
                 # Do lora stuff
                 if model_type == "SDXL":
                     # Do SDXL Stuff for lora
+                    pass
             except:
                 print("Error saving lora")
                 success = False
-        
+                pass
+
         if save_checkpoint:
             try:
                 # Do checkpoint stuff
                 if model_type == "SDXL":
-                # Do SDXL Stuff for checkpoints
+                    # Do SDXL Stuff for checkpoints
+                    pass
             except:
                 print("Error saving checkpoints")
                 success = False
+                pass
 
         if save_diffusers:
             try:
                 # Do difuser stuff
                 if model_type == "SDXL":
-                # Do SDXL Stuff for difusers
+                    # Do SDXL Stuff for difusers
+                    pass
             except:
                 print("Error saving difusers")
                 # Keep track of error and continue
-                success
-                
+                success = False
+                pass
+
         # We done saving
         # Get the pipeline ready to resume training
         self.pipeline = self.prepare_pipeline_for_training(pipeline)
         # return false if anything went wrong so we can handle it externally
         return success
-        
-    
+
     def save_samples(self, pipeline):
         """
         Save sample images using current pipeline
@@ -180,11 +201,12 @@ class TrainUtils:
         pipeline = self.pipeline or pipeline
         # Get the pipeline ready for inference
         pipeline = self.prepare_pipeline_for_inference(pipeline)
-        
+
         success = True
         try:
             # Image inference stuff goes here
             images = pipeline.save_image()
+            pass
         except:
             print("Error saving image")
             success = False
@@ -193,39 +215,42 @@ class TrainUtils:
         self.pipeline = self.prepare_pipeline_for_training(pipeline)
         return images or success
 
-    def save_training_state(self, accelerator=None, pipeline=None, model_path=None, model_config=None):
+"""     def save_training_state(self, accelerator=None, pipeline=None, model_path=None, model_config=None):
         accelerator = self.accelerator if accelerator is None else accelerator
         model_path = self.model_path
         pipeline = self.pipeline if pipeline is None else pipeline
         model_config = self.model_config if model_config is None else model_config
-        
+
         # Save the optimizer and scheduler states to model_path
-        accelerator.save(self.pipeline.unet.optimizer.state_dict(), f"{model_path}/optimizer.pt")
-        accelerator.save(self.pipeline.unet.scheduler.state_dict(), f"{model_path}/scheduler.pt")
+        accelerator.save(self.pipeline.unet.optimizer.state_dict(),
+                         f"{model_path}/optimizer.pt")
+        accelerator.save(self.pipeline.unet.scheduler.state_dict(),
+                         f"{model_path}/scheduler.pt")
         # Save the accelerator state to model_path
-        accelerator.save(accelerator.state_dict(), f"{model_path}/accelerator.pt")
+        accelerator.save(accelerator.state_dict(),
+                         f"{model_path}/accelerator.pt")
         # Save the pipeline state to model_path
-        accelerator.save(self.pipeline.state_dict(), f"{model_path}/pipeline.pt")
+        accelerator.save(self.pipeline.state_dict(),
+                         f"{model_path}/pipeline.pt")
         # Save the model config to model_path
         accelerator.save(shared.model_config, f"{model_path}/model_config.pt")
-        return True
+        return True """
 
-    def load_training_state(self, accelerator=None, pipeline=None, model_path=None, model_config=None):
+"""     def load_training_state(self, accelerator=None, pipeline=None, model_path=None, model_config=None):
         accelerator = self.accelerator if accelerator is None else accelerator
         model_path = self.model_path if model_path is None else model_path
         pipeline = self.pipeline if pipeline is None else pipeline
         model_config = self.model_config if model_config is None else model_config
 
         # Load all the .pt files located in model_path back into their relevant objects
-        accelerator.
-        optimizer.load_state_dict(accelerator.load(f"{model_path}/optimizer.pt"))
-        pipeline.unet.scheduler.load_state_dict(accelerator.load(f"{model_path}/scheduler.pt"))
-        accelerator.load_state_dict(accelerator.load(f"{model_path}/accelerator.pt"))
+
+        optimizer.load_state_dict(
+            accelerator.load(f"{model_path}/optimizer.pt"))
+        pipeline.unet.scheduler.load_state_dict(
+            accelerator.load(f"{model_path}/scheduler.pt"))
+        accelerator.load_state_dict(
+            accelerator.load(f"{model_path}/accelerator.pt"))
         pipeline.load_state_dict(accelerator.load(f"{model_path}/pipeline.pt"))
         model_config = accelerator.load(f"{model_path}/model_config.pt")
 
-        return True
-
-       
-
-
+        return True """
