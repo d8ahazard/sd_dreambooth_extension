@@ -763,6 +763,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         lr_scale_pos = args.lr_scale_pos
         if class_prompts:
             lr_scale_pos *= 2
+            sched_train_steps *= 2
 
         lr_scheduler = UniversalScheduler(
             name=args.lr_scheduler,
