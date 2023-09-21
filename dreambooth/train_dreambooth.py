@@ -14,6 +14,7 @@ from contextlib import ExitStack
 from decimal import Decimal
 from pathlib import Path
 
+import safetensors.torch
 import tomesd
 import torch
 import torch.backends.cuda
@@ -40,7 +41,7 @@ from dreambooth.dataclasses.prompt_data import PromptData
 from dreambooth.dataclasses.train_result import TrainResult
 from dreambooth.dataset.bucket_sampler import BucketSampler
 from dreambooth.dataset.sample_dataset import SampleDataset
-from dreambooth.deis_velocity import get_velocity, compute_snr
+from dreambooth.deis_velocity import get_velocity
 from dreambooth.diff_lora_to_sd_lora import convert_diffusers_to_kohya_lora
 from dreambooth.diff_to_sd import compile_checkpoint, copy_diffusion_model
 from dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_xl
@@ -55,9 +56,9 @@ from dreambooth.utils.model_utils import (
     disable_safe_unpickle,
     enable_safe_unpickle,
     xformerify,
-    torch2ify, unet_attn_processors_state_dict,
+    torch2ify, unet_attn_processors_state_dict
 )
-from dreambooth.utils.text_utils import encode_hidden_state
+from dreambooth.utils.text_utils import encode_hidden_state, save_token_counts
 from dreambooth.utils.utils import (cleanup, printm, verify_locon_installed,
                                     patch_accelerator_for_fp16_training)
 from dreambooth.webhook import send_training_update
@@ -277,6 +278,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         count, instance_prompts, class_prompts = generate_classifiers(
             args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False, pbar=pbar2
         )
+
+        save_token_counts(args, instance_prompts, 10)
 
         if status.interrupted:
             result.msg = "Training interrupted."
@@ -1050,7 +1053,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 else:
                     model_dir = shared.models_path
                     loras_dir = os.path.join(model_dir, "Lora")
-
+                delete_tmp_lora = False
                 # Update the temp path if we just need to save an image
                 if save_image:
                     logger.debug("Save image is set.")
@@ -1058,9 +1061,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         if not save_lora:
                             logger.debug("Saving lora weights instead of checkpoint, using temp dir.")
                             save_lora = True
+                            delete_tmp_lora = True
                             save_checkpoint = False
                             save_diffusers = False
-                            loras_dir = f"{loras_dir}_temp"
                             os.makedirs(loras_dir, exist_ok=True)
                     elif not save_diffusers:
                         logger.debug("Saving checkpoint, using temp dir.")
@@ -1081,6 +1084,12 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 lora_save_file = os.path.join(loras_dir, f"{lora_model_name}_{args.revision}.safetensors")
 
                 with accelerator.autocast(), torch.inference_mode():
+
+                    def lora_save_function(weights, filename):
+                        metadata = args.export_ss_metadata()
+                        logger.debug(f"Saving lora to {filename}")
+                        safetensors.torch.save_file(weights, filename, metadata=metadata)
+
                     if save_lora:
                         # TODO: Add a version for the lora model?
                         pbar2.reset(1)
@@ -1102,7 +1111,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 text_encoder_2_lora_layers=text_encoder_two_lora_layers_to_save,
                                 weight_name=lora_save_file,
                                 safe_serialization=True,
-                                save_function=convert_diffusers_to_kohya_lora
+                                save_function=lora_save_function
                             )
                             scheduler_args = {}
 
@@ -1123,8 +1132,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 unet_lora_layers=unet_lora_layers_to_save,
                                 text_encoder_lora_layers=text_encoder_one_lora_layers_to_save,
                                 weight_name=lora_save_file,
-                                safe_serialization=True,
-                                save_function=convert_diffusers_to_kohya_lora
+                                safe_serialization=True
                             )
                             s_pipeline.scheduler = get_scheduler_class("UniPCMultistep").from_config(
                                 s_pipeline.scheduler.config)
@@ -1221,6 +1229,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             tomesd.apply_patch(s_pipeline, ratio=args.tomesd, use_rand=False)
                     if args.use_lora:
                         s_pipeline.load_lora_weights(lora_save_file)
+
                     try:
                         s_pipeline.enable_vae_tiling()
                         s_pipeline.enable_vae_slicing()
@@ -1342,6 +1351,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     update_status({"images": last_samples, "prompts": last_prompts})
                     pbar2.update()
 
+
                 if args.cache_latents:
                     printm("Unloading vae.")
                     del vae
@@ -1362,6 +1372,15 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     torch.cuda.set_rng_state(cuda_gpu_rng_state, device="cuda")
 
                 cleanup()
+
+                # Save the lora weights if we are saving the model
+                if os.path.isfile(lora_save_file) and not delete_tmp_lora:
+                    meta = args.export_ss_metadata()
+                    convert_diffusers_to_kohya_lora(lora_save_file, meta, args.lora_weight)
+                else:
+                    if os.path.isfile(lora_save_file):
+                        os.remove(lora_save_file)
+
                 printm("Completed saving weights.")
                 pbar2.reset()
 

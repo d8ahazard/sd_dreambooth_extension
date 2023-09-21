@@ -950,7 +950,7 @@ def create_model(
         res = 512
     elif model_type == "v2x":
         res = 768
-    elif model_type == "sdxl":
+    elif model_type == "SDXL":
         res = 1024
     sh = None
     try:

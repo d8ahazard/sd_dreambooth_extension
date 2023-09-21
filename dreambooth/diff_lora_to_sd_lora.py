@@ -1,3 +1,6 @@
+import json
+import os
+
 import safetensors.torch
 import torch
 
@@ -86,7 +89,8 @@ secondary_keys = [
 ]
 
 
-def convert_diffusers_to_kohya_lora(model_dict, path):
+def convert_diffusers_to_kohya_lora(path, metadata, alpha=0.8):
+    model_dict = safetensors.torch.load_file(path)
     new_model_dict = {}
     alpha_keys = []
     # Replace the things
@@ -109,6 +113,9 @@ def convert_diffusers_to_kohya_lora(model_dict, path):
     # Add missing alpha keys
     for k in alpha_keys:
         if k not in new_model_dict:
-            print(f"Adding missing alpha key {k}")
-            new_model_dict[k] = torch.tensor(0.8)
-    safetensors.torch.save_file(new_model_dict, path)
+            new_model_dict[k] = torch.tensor(alpha)
+    conv_path = path.replace(".safetensors", "_auto.safetensors")
+    safetensors.torch.save_file(new_model_dict, conv_path, metadata=metadata)
+    # Delete the file at path, move the new file to path
+    os.remove(path)
+    os.rename(conv_path, path)

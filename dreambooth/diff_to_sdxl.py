@@ -375,7 +375,8 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
 
         printi(f"Saving checkpoint to {checkpoint_path}...", log=log)
         if save_safetensors:
-            save_file(state_dict, checkpoint_path)
+            meta = config.export_ss_metadata()
+            save_file(state_dict, checkpoint_path, meta)
         else:
             state_dict = {"state_dict": state_dict}
             torch.save(state_dict, checkpoint_path)

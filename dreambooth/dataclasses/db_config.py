@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import os
@@ -9,8 +10,9 @@ from pydantic import BaseModel
 
 from dreambooth import shared  # noqa
 from dreambooth.dataclasses.db_concept import Concept  # noqa
+from dreambooth.dataclasses.ss_model_spec import build_metadata
 from dreambooth.utils.image_utils import get_scheduler_names  # noqa
-from dreambooth.utils.utils import list_attention
+from dreambooth.utils.utils import list_attention, select_precision, select_attention
 
 # Keys to save, replacing our dumb __init__ method
 save_keys = []
@@ -51,23 +53,22 @@ class DreamboothConfig(BaseModel):
     infer_ema: bool = False
     initial_revision: int = 0
     input_pertubation: bool = True
-    learning_rate: float = 5e-6
+    learning_rate: float = 2e-6
     learning_rate_min: float = 1e-6
     lifetime_revision: int = 0
     lora_learning_rate: float = 1e-4
     lora_model_name: str = ""
     lora_txt_learning_rate: float = 5e-5
     lora_txt_rank: int = 4
-    lora_txt_weight: float = 1.0
     lora_unet_rank: int = 4
-    lora_weight: float = 1.0
+    lora_weight: float = 0.8
     lora_use_buggy_requires_grad: bool = False
     lr_cycles: int = 1
     lr_factor: float = 0.5
     lr_power: float = 1.0
     lr_scale_pos: float = 0.5
     lr_scheduler: str = "constant_with_warmup"
-    lr_warmup_steps: int = 0
+    lr_warmup_steps: int = 500
     max_token_length: int = 75
     min_snr_gamma: float = 0.0
     mixed_precision: str = "fp16"
@@ -143,6 +144,12 @@ class DreamboothConfig(BaseModel):
         super().__init__(**kwargs)
 
         model_name = sanitize_name(model_name)
+        if "attention" not in kwargs:
+            self.attention = select_attention()
+
+        if "mixed_precision" not in kwargs:
+            self.mixed_precision = select_precision()
+
         if "models_path" in kwargs:
             models_path = kwargs["models_path"]
             print(f"Using models path: {models_path}")
@@ -157,7 +164,6 @@ class DreamboothConfig(BaseModel):
 
         if not self.use_lora:
             self.lora_model_name = ""
-
         model_dir = os.path.join(models_path, model_name)
         # print(f"Model dir set to: {model_dir}")
         working_dir = os.path.join(model_dir, "working")
@@ -324,6 +330,85 @@ class DreamboothConfig(BaseModel):
         if not self.pretrained_model_name_or_path or self.pretrained_model_name_or_path == "":
             return os.path.join(self.model_dir, "working")
         return self.pretrained_model_name_or_path
+
+    def export_ss_metadata(self, state_dict=None):
+        params = {}
+        token_counts_path = os.path.join(self.model_dir, "token_counts.json")
+        tags = None
+        if os.path.exists(token_counts_path):
+            with open(token_counts_path, "r") as f:
+                tags = json.load(f)
+        base_meta = build_metadata(
+            state_dict=state_dict,
+            v2 = "v2x" in self.model_type,
+            v_parameterization = self.model_type == "v2x",
+            sdxl = self.model_type == "SDXL",
+            lora=self.use_lora,
+            textual_inversion=False,
+            timestamp=datetime.datetime.now().timestamp(),
+            reso=(self.resolution, self.resolution),
+            tags=tags,
+            clip_skip=self.clip_skip
+        )
+        mappings =  {
+            'cache_latents': 'ss_cache_latents',
+            'clip_skip': 'ss_clip_skip',
+            'epoch': 'ss_epoch',
+            'gradient_accumulation_steps': 'ss_gradient_accumulation_steps',
+            'gradient_checkpointing': 'ss_gradient_checkpointing',
+            'learning_rate': 'ss_learning_rate',
+            'lr_scheduler': 'ss_lr_scheduler',
+            'lr_warmup_steps': 'ss_lr_warmup_steps',
+            'max_token_length': 'ss_max_token_length',
+            'min_snr_gamma': 'ss_min_snr_gamma',
+            'mixed_precision': 'ss_mixed_precision',
+            'optimizer': 'ss_optimizer',
+            'prior_loss_weight': 'ss_prior_loss_weight',
+            'resolution': 'ss_resolution',
+            'src': 'ss_sd_model_name',
+            'shuffle_tags': 'ss_shuffle_captions'
+        }
+        for key, value in mappings.items():
+            if hasattr(self, key):
+                if value == "ss_resolution":
+                    res = getattr(self, key)
+                    params[value] = f"({res}, {res})"
+                    params["modelspec.resolution"] = f"{res}x{res}"
+                elif value == "ss_sd_model_name":
+                    model_name = getattr(self, key)
+                    # Ensure model_name is only the model name, not the full path
+                    model_name = os.path.basename(model_name)
+                    params[value] = model_name
+                params[value] = getattr(self, key)
+
+            # Enumerate all params convert each one to a string
+        for key, value in params.items():
+            # If the value is not a string, convert it to one
+            if not isinstance(value, str):
+                value = str(value)
+            if key not in base_meta:
+                base_meta[key] = value
+        for key, value in base_meta.items():
+            if isinstance(value, Dict):
+                base_meta[key] = json.dumps(value)
+            elif not isinstance(value, str):
+                base_meta[key] = str(value)
+        ss_sd_model_name = base_meta.get("ss_sd_model_name", "")
+        if ss_sd_model_name != "":
+            # Make SURE we don't have a full path here
+            ss_sd_model_name = os.path.basename(ss_sd_model_name)
+            if "/" in ss_sd_model_name:
+                ss_sd_model_name = ss_sd_model_name.split("/")[-1]
+            if "\\" in ss_sd_model_name:
+                ss_sd_model_name = ss_sd_model_name.split("\\")[-1]
+            base_meta["ss_sd_model_name"] = ss_sd_model_name
+        if self.model_type == "SDXL":
+            base_meta["sd_version"] = "SDXL"
+        if "v2x" in self.model_type:
+            base_meta["sd_version"] = "V2"
+        if "v1x" in self.model_type:
+            base_meta["sd_version"] = "V1"
+        return base_meta
 
 
 def concepts_from_file(concepts_path: str):

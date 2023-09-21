@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import json
 import logging
 import os
 import re
@@ -295,3 +296,41 @@ def torch2ify(unet):
 
 def is_xformers_available():
     pass
+
+def read_metadata_from_safetensors(filename):
+
+    with open(filename, mode="rb") as file:
+        # Read metadata length
+        metadata_len = int.from_bytes(file.read(8), "little")
+
+        # Read the metadata based on its length
+        json_data = file.read(metadata_len).decode('utf-8')
+
+        res = {}
+
+        # Check if it's a valid JSON string
+        try:
+            json_obj = json.loads(json_data)
+        except json.JSONDecodeError:
+            return res
+
+        # Extract metadata
+        metadata = json_obj.get("__metadata__", {})
+        if not isinstance(metadata, dict):
+            return res
+
+        # Process the metadata to handle nested JSON strings
+        for k, v in metadata.items():
+            # if not isinstance(v, str):
+            #     raise ValueError("All values in __metadata__ must be strings")
+
+            # If the string value looks like a JSON string, attempt to parse it
+            if v.startswith('{'):
+                try:
+                    res[k] = json.loads(v)
+                except Exception:
+                    res[k] = v
+            else:
+                res[k] = v
+
+        return res
