@@ -1,8 +1,12 @@
+import json
+import os
 import re
 from typing import List
 
 import torch
 from transformers import CLIPTextModel
+
+from dreambooth.dataclasses.prompt_data import PromptData
 
 
 # Implementation from https://github.com/bmaltais/kohya_ss
@@ -37,11 +41,14 @@ def prompt_to_tags(src_prompt: str, instance_token: str = None, class_token: str
     src_tags = src_prompt.split(',')
     if class_token:
         conjunctions = ['a ', 'an ', 'the ']
-        src_tags = [tag.replace(conjunction + class_token, '') for tag in src_tags for conjunction in conjunctions]
+        src_tags = [tag.replace(conjunction + class_token, class_token) for tag in src_tags for conjunction in conjunctions]
     if class_token and instance_token:
-        src_tags = [tag.replace(instance_token, '').replace(class_token, '') for tag in src_tags]
+        src_tags = [tag.replace(class_token, instance_token) for tag in src_tags]
     src_tags = [' '.join(tag.split()) for tag in src_tags]
     src_tags = [tag.strip() for tag in src_tags if tag]
+    if instance_token and instance_token not in src_tags:
+        # Prepend instance token to prompt
+        src_tags = [instance_token] + src_tags
     return src_tags
 
 
@@ -66,3 +73,27 @@ def build_strict_tokens(
     special_caption = ', '.join(caption_list)
 
     return special_caption
+
+def save_token_counts(model_info, instance_prompts: List[PromptData], min_tokens: int):
+    token_counts = {}
+    for prompt_data in instance_prompts:
+        prompt = prompt_data.prompt
+        instance_token = prompt_data.instance_token
+        class_token = prompt_data.class_token
+        prompt_tokens = prompt_to_tags(prompt, instance_token, class_token)
+        for token in prompt_tokens:
+            token = token.strip()
+            if token not in token_counts:
+                token_counts[token] = 0
+            token_counts[token] += 1
+    token_counts = {k: v for k, v in sorted(token_counts.items(), key=lambda item: item[1], reverse=True)}
+    counts_to_save = {}
+    for token, count in token_counts.items():
+        if count < min_tokens:
+            continue
+        counts_to_save[token] = count
+
+    token_counts_path = os.path.join(model_info.model_dir, "token_counts.json")
+    token_data = {model_info.model_name: counts_to_save}
+    with open(token_counts_path, "w") as f:
+        json.dump(token_data, f, indent=2)
