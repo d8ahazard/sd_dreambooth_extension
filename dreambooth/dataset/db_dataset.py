@@ -400,7 +400,7 @@ class DbDataset(torch.utils.data.Dataset):
 
                     # This likely needs to happen regardless of cache_latents?
                     if len(self.tokenizers) == 2:
-                        if img_path not in self.data_cache["sdxl"]:
+                        if img_path not in data_cache["sdxl"]:
                             embeds, extras = self.compute_embeddings(reso, cap)
                             self.data_cache["sdxl"][img_path] = (embeds, extras)
                         else:
@@ -419,7 +419,7 @@ class DbDataset(torch.utils.data.Dataset):
                     if img_path in self.data_cache["sdxl"]:
                         del self.data_cache["sdxl"][img_path]
                     if (img_path, cap, is_prior) in self.sample_cache:
-                        del self.sample_cache[(img_path, cap, is_prior)]
+                        self.sample_cache.remove((img_path, cap, is_prior))
                     if img_path in self.sample_indices:
                         del self.sample_indices[img_path]
 
