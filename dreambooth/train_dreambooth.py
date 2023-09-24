@@ -31,7 +31,8 @@ from diffusers import (
 )
 from diffusers.loaders import LoraLoaderMixin, text_encoder_lora_state_dict
 from diffusers.models.attention_processor import LoRAAttnProcessor2_0, LoRAAttnProcessor
-from diffusers.utils import logging as dl, randn_tensor
+from diffusers.utils import logging as dl
+from diffusers.utils.torch_utils import randn_tensor
 from torch.cuda.profiler import profile
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
