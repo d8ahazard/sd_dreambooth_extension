@@ -20,10 +20,8 @@ import os
 import shutil
 import traceback
 from typing import Union
-
 import torch
-from diffusers import StableDiffusionXLPipeline
-from diffusers.pipelines.stable_diffusion.convert_from_ckpt import download_from_original_stable_diffusion_ckpt
+from diffusers import StableDiffusionXLPipeline, StableDiffusionPipeline
 
 from dreambooth import shared
 from dreambooth.dataclasses.db_config import DreamboothConfig
@@ -42,7 +40,6 @@ def copy_config_file(original_config_file, dest_dir, model_name):
         if os.path.exists(new_name):
             os.remove(new_name)
         os.rename(new_ex_path, new_name)
-
 
 def get_config_path(
         model_version: str = "v1",
@@ -92,7 +89,7 @@ def extract_checkpoint(
     checkpoint_file: str,
     extract_ema: bool = False,
     train_unfrozen: bool = False,
-    is_512: bool = True,
+    #is_512: bool = True,
     model_type="v1x",
     original_config_file: str = None,
     num_in_channels: int = None,
@@ -164,31 +161,60 @@ def extract_checkpoint(
     db_config.model_type = model_type
     db_config.resolution = image_size
     db_config.save()
-    if model_type == "SDXL":
-        pipeline_class = StableDiffusionXLPipeline
     try:
-        pipe = download_from_original_stable_diffusion_ckpt(
-            checkpoint_path=checkpoint_file,
-            original_config_file=original_config_file,
-            image_size=image_size,
-            prediction_type=prediction_type,
-            model_type=pipeline_type,
-            extract_ema=extract_ema,
-            scheduler_type=scheduler_type,
-            num_in_channels=num_in_channels,
-            upcast_attention=upcast_attention,
-            from_safetensors=from_safetensors,
-            device=device,
-            stable_unclip=stable_unclip,
-            stable_unclip_prior=stable_unclip_prior,
-            clip_stats_path=clip_stats_path,
-            controlnet=controlnet,
-            vae_path=vae_path,
-            pipeline_class=pipeline_class,
-        )
-
-        if half:
-            pipe.to(torch_dtype=torch.float16)
+        if from_safetensors:
+            if model_type == "SDXL":
+                pipe = StableDiffusionXLPipeline.from_single_file(
+                    pretrained_model_link_or_path=checkpoint_file,
+                )
+            else:
+                pipe = StableDiffusionPipeline.from_single_file(
+                    pretrained_model_link_or_path=checkpoint_file,
+                )
+        elif model_type == "SDXL":
+            pipe = StableDiffusionXLPipeline.from_pretrained(
+                checkpoint_path_or_dict=checkpoint_file,
+                original_config_file=original_config_file,
+                image_size=image_size,
+                prediction_type=prediction_type,
+                model_type=pipeline_type,
+                extract_ema=extract_ema,
+                scheduler_type=scheduler_type,
+                num_in_channels=num_in_channels,
+                upcast_attention=upcast_attention,
+                from_safetensors=from_safetensors,
+                device=device,
+                pretrained_model_name_or_path=checkpoint_file,
+                stable_unclip=stable_unclip,
+                stable_unclip_prior=stable_unclip_prior,
+                clip_stats_path=clip_stats_path,
+                controlnet=controlnet,
+                vae_path=vae_path,
+                pipeline_class=pipeline_class,
+                half=half
+            )
+        else:
+            pipe = StableDiffusionPipeline.from_pretrained(
+                checkpoint_path_or_dict=checkpoint_file,
+                original_config_file=original_config_file,
+                image_size=image_size,
+                prediction_type=prediction_type,
+                model_type=pipeline_type,
+                extract_ema=extract_ema,
+                scheduler_type=scheduler_type,
+                num_in_channels=num_in_channels,
+                upcast_attention=upcast_attention,
+                from_safetensors=from_safetensors,
+                device=device,
+                pretrained_model_name_or_path=checkpoint_file,
+                stable_unclip=stable_unclip,
+                stable_unclip_prior=stable_unclip_prior,
+                clip_stats_path=clip_stats_path,
+                controlnet=controlnet,
+                vae_path=vae_path,
+                pipeline_class=pipeline_class,
+                half=half
+            )
 
         dump_path = db_config.get_pretrained_model_name_or_path()
         if controlnet:
