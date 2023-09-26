@@ -95,18 +95,21 @@ def build_metadata(
 
     metadata = {}
     metadata.update(BASE_METADATA)
-
+    model_str = ""
     if sdxl:
         arch = ARCH_SD_XL_V1_BASE
+        model_str = "sdxl_base_v1-0"
     elif v2:
+        model_str = "ss_v2"
         if v_parameterization:
             arch = ARCH_SD_V2_768_V
         else:
             arch = ARCH_SD_V2_512
     else:
+        model_str = "ss_v1"
         arch = ARCH_SD_V1
 
-    metadata["ss_base_model_version"] = arch
+    metadata["ss_base_model_version"] = model_str
     if lora:
         arch += f"/{ADAPTER_LORA}"
     elif textual_inversion:
