@@ -573,7 +573,7 @@ def get_optimizer(optimizer: str, learning_rate: float, weight_decay: float, par
                 clip_threshold=1.0,
                 decay_rate=-0.8,
                 weight_decay=weight_decay,
-                relative_step=True,
+                relative_step=False,
                 scale_parameter=True,
                 warmup_init=False,
             )
