@@ -724,10 +724,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             # We do this to avoid doing two forward passes.
             if with_prior_preservation:
                 input_ids += [example["input_ids"] for example in examples if example["is_class"]]
-                pixel_values += [example["images"] for example in examples if example["is_class"]]
-                add_text_embeds += [example["class_added_cond_kwargs"]["text_embeds"] for example in examples if
+                pixel_values += [example["image"] for example in examples if example["is_class"]]
+                add_text_embeds += [example["instance_added_cond_kwargs"]["text_embeds"] for example in examples if
                                     example["is_class"]]
-                add_time_ids += [example["class_added_cond_kwargs"]["time_ids"] for example in examples if
+                add_time_ids += [example["instance_added_cond_kwargs"]["time_ids"] for example in examples if
                                  example["is_class"]]
 
             pixel_values = torch.stack(pixel_values)
@@ -1679,7 +1679,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 stats["unet_lr"] = '{:.2E}'.format(Decimal(last_lr))
                 stats["tenc_lr"] = '{:.2E}'.format(Decimal(last_tenc_lr))
 
-                if args.split_loss and with_prior_preservation:
+                if args.split_loss and with_prior_preservation and args.model_type != "SDXL":
                     logs["inst_loss"] = float(instance_loss.detach().item())
                     logs["prior_loss"] = float(prior_loss.detach().item())
                     stats["instance_loss"] = logs["inst_loss"]
