@@ -334,10 +334,16 @@ class DreamboothConfig(BaseModel):
     def export_ss_metadata(self, state_dict=None):
         params = {}
         token_counts_path = os.path.join(self.model_dir, "token_counts.json")
+        bucket_json_file = os.path.join(self.model_dir, "bucket_counts.json")
+        bucket_counts = {}
         tags = None
         if os.path.exists(token_counts_path):
             with open(token_counts_path, "r") as f:
                 tags = json.load(f)
+        if os.path.exists(bucket_json_file):
+            with open(bucket_json_file, "r") as f:
+                bucket_counts = json.load(f)
+
         base_meta = build_metadata(
             state_dict=state_dict,
             v2 = "v2x" in self.model_type,
@@ -348,6 +354,7 @@ class DreamboothConfig(BaseModel):
             timestamp=datetime.datetime.now().timestamp(),
             reso=(self.resolution, self.resolution),
             tags=tags,
+            buckets=bucket_counts,
             clip_skip=self.clip_skip
         )
         mappings =  {

@@ -1,3 +1,4 @@
+import json
 import logging
 import os.path
 import random
@@ -50,6 +51,7 @@ class DbDataset(torch.utils.data.Dataset):
         self.batch_samples = []
         self.class_count = 0
         self.max_token_length = max_token_length
+        self.model_dir = model_dir
         self.cache_dir = os.path.join(model_dir, "cache")
         if not os.path.exists(self.cache_dir):
             os.makedirs(self.cache_dir)
@@ -423,6 +425,8 @@ class DbDataset(torch.utils.data.Dataset):
                     if img_path in self.sample_indices:
                         del self.sample_indices[img_path]
 
+        bucket_dict = {}
+
         for dict_idx, train_images in self.train_dict.items():
             if not train_images:
                 continue
@@ -446,6 +450,10 @@ class DbDataset(torch.utils.data.Dataset):
             # Use index here, not res
             bucket_len[dict_idx] = example_len
             total_len += example_len
+            bucket_dict[f"{dict_idx}"] = {
+                "resolution": [dict_idx[0], dict_idx[1]],
+                "count": inst_count + class_count
+            }
             bucket_str = str(bucket_idx).rjust(max_idx_chars, " ")
             inst_str = str(len(train_images)).rjust(len(str(ni)), " ")
             class_str = str(class_count).rjust(len(str(nc)), " ")
@@ -454,7 +462,10 @@ class DbDataset(torch.utils.data.Dataset):
             self.pbar.write(
                 f"Bucket {bucket_str} {dict_idx} - Instance Images: {inst_str} | Class Images: {class_str} | Max Examples/batch: {ex_str}")
             bucket_idx += 1
-
+        bucket_array = {"buckets": bucket_dict}
+        bucket_json_file = os.path.join(self.model_dir, "bucket_counts.json")
+        with open(bucket_json_file, "w") as f:
+            f.write(json.dumps(bucket_array, indent=4))
         self.save_cache_file(data_cache)
         del data_cache
         bucket_str = str(bucket_idx).rjust(max_idx_chars, " ")

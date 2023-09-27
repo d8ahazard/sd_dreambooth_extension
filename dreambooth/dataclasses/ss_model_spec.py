@@ -87,6 +87,7 @@ def build_metadata(
         description: Optional[str] = None,
         license: Optional[str] = None,
         tags: Optional[str] = None,
+        buckets: Optional[dict] = None,
         merged_from: Optional[str] = None,
         timesteps: Optional[Tuple[int, int]] = None,
         clip_skip: Optional[int] = None,
@@ -164,6 +165,9 @@ def build_metadata(
         metadata["ss_tag_frequency"] = tags
     else:
         del metadata["modelspec.tags"]
+
+    if buckets is not None:
+        metadata["ss_bucket_info"] = buckets
 
     # remove microsecond from time
     int_ts = int(timestamp)
