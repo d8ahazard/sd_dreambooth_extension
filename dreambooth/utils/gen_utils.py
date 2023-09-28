@@ -21,11 +21,23 @@ from dreambooth.utils.utils import cleanup
 from helpers.image_builder import ImageBuilder
 from helpers.mytqdm import mytqdm
 
+logger = logging.getLogger(__name__)
 
-def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None, class_prompts: List[PromptData] = None,
-                     batch_size=None, tokenizer=None, vae=None, debug=True, model_dir="", pbar = None):
+def generate_dataset(
+        model_name: str,
+        instance_prompts: List[PromptData] = None,
+        class_prompts: List[PromptData] = None,
+        batch_size=None,
+        tokenizer=None,
+        text_encoder=None,
+        accelerator=None,
+        vae=None,
+        debug=True,
+        model_dir="",
+        max_token_length=77,
+        pbar=None):
     if debug:
-        print("Generating dataset.")
+        logger.debug("Generating dataset.")
     from dreambooth.ui_functions import gr_update
 
     db_gallery = gr_update(value=None)
@@ -38,11 +50,11 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
         batch_size = args.train_batch_size
 
     if args is None:
-        print("No CONFIG!")
+        logger.debug("No CONFIG!")
         return db_gallery, db_prompt_list, db_status
 
     if debug and tokenizer is None:
-        print("Definitely made a tokenizer.")
+        logger.debug("Definitely made a tokenizer.")
         tokenizer = AutoTokenizer.from_pretrained(
             os.path.join(args.pretrained_model_name_or_path, "tokenizer"),
             revision=args.revision,
@@ -51,12 +63,12 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
 
     tokens = []
 
-    print(f"Found {len(class_prompts)} reg images.")
+    logger.debug(f"Found {len(class_prompts)} reg images.")
 
-    print("Preparing dataset...")
+    logger.debug("Preparing dataset...")
 
     if args.strict_tokens:
-        print("Building prompts with strict tokens enabled.")
+        logger.debug("Building prompts with strict tokens enabled.")
 
     train_dataset = DbDataset(
         batch_size=batch_size,
@@ -64,12 +76,15 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
         class_prompts=class_prompts,
         tokens=tokens,
         tokenizer=tokenizer,
+        text_encoder=text_encoder,
+        accelerator=accelerator,
         resolution=args.resolution,
         hflip=args.hflip,
-        shuffle_tags=args.shuffle_tags,
+        do_shuffle_tags=args.shuffle_tags,
         strict_tokens=args.strict_tokens,
         dynamic_img_norm=args.dynamic_img_norm,
         not_pad_tokens=not args.pad_tokens,
+        max_token_length=max_token_length,
         debug_dataset=debug,
         model_dir=model_dir,
         pbar=pbar
@@ -77,7 +92,7 @@ def generate_dataset(model_name: str, instance_prompts: List[PromptData] = None,
     train_dataset.make_buckets_with_caching(vae)
 
     # train_dataset = train_dataset.pin_memory()
-    print(f"Total dataset length (steps): {len(train_dataset)}")
+    logger.debug(f"Total dataset length (steps): {len(train_dataset)}")
     return train_dataset
 
 
@@ -112,7 +127,7 @@ def generate_classifiers(
         instance_prompts = prompt_dataset.instance_prompts
         class_prompts = prompt_dataset.class_prompts
     except Exception as p:
-        print(f"Exception generating dataset: {str(p)}")
+        logger.debug(f"Exception generating dataset: {str(p)}")
         traceback.print_exc()
         if ui:
             return 0, []
@@ -121,13 +136,13 @@ def generate_classifiers(
 
     set_len = prompt_dataset.__len__()
     if set_len == 0:
-        print("Nothing to generate.")
+        logger.info("Nothing to generate.")
         if ui:
             return 0, []
         else:
             return 0, instance_prompts, class_prompts
 
-    print(f"Generating {set_len} class images for training...")
+    logger.debug(f"Generating {set_len} class images for training...")
     status_handler = None
     if pbar is None:
         logging.getLogger(__name__).info("Creating new progress bar")
@@ -238,7 +253,7 @@ def generate_classifiers(
                     preview_images.append(image_filename)
                     preview_prompts.append(pd.prompt)
             except Exception as e:
-                print(f"Exception generating images: {e}")
+                logger.debug(f"Exception generating images: {e}")
                 traceback.print_exc()
 
         status.current_image = preview_images
@@ -252,7 +267,7 @@ def generate_classifiers(
     builder.unload(ui)
     del prompt_dataset
     cleanup()
-    print(f"Generated {generated} new class images.")
+    logger.debug(f"Generated {generated} new class images.")
     if ui:
         return generated, out_images
     else:

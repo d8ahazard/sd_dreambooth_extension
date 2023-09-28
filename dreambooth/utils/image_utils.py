@@ -12,13 +12,9 @@ from diffusers.schedulers import KarrasDiffusionSchedulers
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from PIL import features, PngImagePlugin, Image, ExifTags
-
-import os
 from typing import List, Tuple, Dict, Union
-
 import numpy as np
 import torch
-
 from dreambooth.dataclasses.db_concept import Concept
 from dreambooth.dataclasses.prompt_data import PromptData
 from helpers.mytqdm import mytqdm
@@ -253,9 +249,11 @@ def get_scheduler_names():
 
 
 def get_scheduler_class(scheduler_name):
+    if "Scheduler" not in scheduler_name:
+        scheduler_name += 'Scheduler'
     try:
         # Get the class type by name from the KarrasDiffusionSchedulers enum
-        scheduler_class = getattr(sys.modules["diffusers"], scheduler_name + 'Scheduler')
+        scheduler_class = getattr(sys.modules["diffusers"], scheduler_name)
     except AttributeError:
         raise ValueError(f"No scheduler named {scheduler_name} found")
 
@@ -445,8 +443,18 @@ def load_image_directory(db_dir, concept: Concept, is_class: bool = True) -> Lis
     return list(zip(img_paths, captions))
 
 
-def open_and_trim(image_path: str, reso: Tuple[int, int], return_pil: bool = False) -> Union[np.ndarray, Image]:
-    # Open image with PIL
+
+
+def open_image(image_path: str, return_pil: bool = False) -> Union[np.ndarray, Image.Image]:
+    if return_pil:
+        return Image.open(image_path)
+    else:
+        return np.array(Image.open(image_path))
+
+def trim_image(image: Union[np.ndarray, Image.Image], reso: Tuple[int, int]) -> Union[np.ndarray, Image.Image]:
+    return image[:reso[0], :reso[1]]
+
+def open_and_trim(image_path: str, reso: Tuple[int, int], return_pil: bool = False) -> Union[np.ndarray, Image.Image]:
     image = Image.open(image_path)
     image = rotate_image_straight(image)
 

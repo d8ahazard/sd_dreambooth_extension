@@ -15,19 +15,18 @@
 """ Conversion script for the LDM checkpoints. """
 
 import importlib
-import json
 import logging
 import os
 import shutil
 import traceback
 from typing import Union
-
 import torch
-from diffusers.pipelines.stable_diffusion.convert_from_ckpt import download_from_original_stable_diffusion_ckpt
+from diffusers import StableDiffusionXLPipeline, StableDiffusionPipeline
 
 from dreambooth import shared
 from dreambooth.dataclasses.db_config import DreamboothConfig
-from dreambooth.utils.model_utils import enable_safe_unpickle, disable_safe_unpickle
+from dreambooth.utils.model_utils import enable_safe_unpickle, disable_safe_unpickle, unload_system_models, \
+    reload_system_models
 
 
 def copy_config_file(original_config_file, dest_dir, model_name):
@@ -42,14 +41,14 @@ def copy_config_file(original_config_file, dest_dir, model_name):
             os.remove(new_name)
         os.rename(new_ex_path, new_name)
 
-
 def get_config_path(
         model_version: str = "v1",
         train_type: str = "default",
         config_base_name: str = "training",
-        prediction_type: str = "epsilon"
+        prediction_type: str = ""
 ):
-    train_type = f"{train_type}" if not prediction_type == "v_prediction" else f"{train_type}-v"
+    if prediction_type != "":
+        train_type = f"{train_type}-{prediction_type}"
 
     return os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
@@ -59,24 +58,29 @@ def get_config_path(
     )
 
 
-def get_config_file(train_unfrozen=False, v2=False, prediction_type="epsilon"):
+def get_config_file(train_unfrozen=False, model_type: str="v1x"):
     config_base_name = "training"
 
     model_versions = {
-        "v1": "v1",
-        "v2": "v2"
+        "v1x": "v1",
+        "v2x-512": "v2",
+        "v2x": "v2",
+        "SDXL": "sdxl",
+    }
+    model_pred_string = {
+        "v1x": "",
+        "v2x-512": "",
+        "v2x": "v",
+        "SDXL": "",
     }
     train_types = {
         "default": "default",
         "unfrozen": "unfrozen",
     }
 
-    model_train_type = train_types["default"]
-    model_version_name = f"{model_versions['v1'] if not v2 else model_versions['v2']}"
-
-    if train_unfrozen:
-        model_train_type = train_types["unfrozen"]
-
+    model_train_type = train_types["default"] if not train_unfrozen else train_types["unfrozen"]
+    model_version_name = model_versions[model_type]
+    prediction_type = model_pred_string[model_type]
     return get_config_path(model_version_name, model_train_type, config_base_name, prediction_type)
 
 
@@ -85,7 +89,7 @@ def extract_checkpoint(
     checkpoint_file: str,
     extract_ema: bool = False,
     train_unfrozen: bool = False,
-    is_512: bool = True,
+    #is_512: bool = True,
     model_type="v1x",
     original_config_file: str = None,
     num_in_channels: int = None,
@@ -129,9 +133,13 @@ def extract_checkpoint(
     #         modules.shared.status.update(status)
     disable_safe_unpickle()
     if image_size is None:
-        image_size = 512 if is_512 else 768
-
-    to_safetensors = True
+        image_size = 512
+        if model_type == "v2x":
+            image_size = 768
+        if model_type == "SDXL":
+            image_size = 1024
+    unload_system_models()
+    to_safetensors = False
     if pipeline_class_name is not None:
         library = importlib.import_module("diffusers")
         class_obj = getattr(library, pipeline_class_name)
@@ -140,7 +148,7 @@ def extract_checkpoint(
         pipeline_class = None
 
     if original_config_file is None:
-        original_config_file = get_config_file(train_unfrozen, v2=is_512 == False, prediction_type=prediction_type)
+        original_config_file = get_config_file(train_unfrozen, model_type)
     print(f"Extracting config from {original_config_file}")
     checkpoint_file = os.path.join(shared.models_path, checkpoint_file)
     print(f"Extracting checkpoint from {checkpoint_file}")
@@ -154,37 +162,69 @@ def extract_checkpoint(
     db_config.resolution = image_size
     db_config.save()
     try:
-        pipe = download_from_original_stable_diffusion_ckpt(
-            checkpoint_path=checkpoint_file,
-            original_config_file=original_config_file,
-            image_size=image_size,
-            prediction_type=prediction_type,
-            model_type=pipeline_type,
-            extract_ema=extract_ema,
-            scheduler_type=scheduler_type,
-            num_in_channels=num_in_channels,
-            upcast_attention=upcast_attention,
-            from_safetensors=from_safetensors,
-            device=device,
-            stable_unclip=stable_unclip,
-            stable_unclip_prior=stable_unclip_prior,
-            clip_stats_path=clip_stats_path,
-            controlnet=controlnet,
-            vae_path=vae_path,
-            pipeline_class=pipeline_class,
-        )
-
-        if half:
-            pipe.to(torch_dtype=torch.float16)
+        if from_safetensors:
+            if model_type == "SDXL":
+                pipe = StableDiffusionXLPipeline.from_single_file(
+                    pretrained_model_link_or_path=checkpoint_file,
+                )
+            else:
+                pipe = StableDiffusionPipeline.from_single_file(
+                    pretrained_model_link_or_path=checkpoint_file,
+                )
+        elif model_type == "SDXL":
+            pipe = StableDiffusionXLPipeline.from_pretrained(
+                checkpoint_path_or_dict=checkpoint_file,
+                original_config_file=original_config_file,
+                image_size=image_size,
+                prediction_type=prediction_type,
+                model_type=pipeline_type,
+                extract_ema=extract_ema,
+                scheduler_type=scheduler_type,
+                num_in_channels=num_in_channels,
+                upcast_attention=upcast_attention,
+                from_safetensors=from_safetensors,
+                device=device,
+                pretrained_model_name_or_path=checkpoint_file,
+                stable_unclip=stable_unclip,
+                stable_unclip_prior=stable_unclip_prior,
+                clip_stats_path=clip_stats_path,
+                controlnet=controlnet,
+                vae_path=vae_path,
+                pipeline_class=pipeline_class,
+                half=half
+            )
+        else:
+            pipe = StableDiffusionPipeline.from_pretrained(
+                checkpoint_path_or_dict=checkpoint_file,
+                original_config_file=original_config_file,
+                image_size=image_size,
+                prediction_type=prediction_type,
+                model_type=pipeline_type,
+                extract_ema=extract_ema,
+                scheduler_type=scheduler_type,
+                num_in_channels=num_in_channels,
+                upcast_attention=upcast_attention,
+                from_safetensors=from_safetensors,
+                device=device,
+                pretrained_model_name_or_path=checkpoint_file,
+                stable_unclip=stable_unclip,
+                stable_unclip_prior=stable_unclip_prior,
+                clip_stats_path=clip_stats_path,
+                controlnet=controlnet,
+                vae_path=vae_path,
+                pipeline_class=pipeline_class,
+                half=half
+            )
 
         dump_path = db_config.get_pretrained_model_name_or_path()
         if controlnet:
+            print("Saving controlnet model")
             # only save the controlnet model
             pipe.controlnet.save_pretrained(dump_path, safe_serialization=to_safetensors)
         else:
             try:
                 tmp_path = f"{dump_path}_tmp"
-                pipe.save_pretrained(dump_path, safe_serialization=True)
+                pipe.save_pretrained(dump_path, safe_serialization=False)
             except:
                 print("Couldn't save the pipe")
                 traceback.print_exc()
@@ -207,6 +247,7 @@ def extract_checkpoint(
             break
     remove_dirs = ["logging", "samples"]
     enable_safe_unpickle()
+    reload_system_models()
     if success:
         for rd in remove_dirs:
             rem_dir = os.path.join(db_config.model_dir, rd)

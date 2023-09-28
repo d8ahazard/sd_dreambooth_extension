@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import collections
+import json
+import logging
 import os
 import re
 import sys
+from typing import Dict
 
 import torch
-from diffusers.utils import is_xformers_available
+from diffusers.models.attention_processor import AttnProcessor2_0
 from transformers import PretrainedConfig
 
 from dreambooth import shared  # noqa
@@ -15,6 +18,7 @@ from dreambooth.utils.utils import cleanup  # noqa
 from modules import hashes
 from modules.safe import unsafe_torch_load, load
 
+logger = logging.getLogger(__name__)
 checkpoints_list = {}
 checkpoint_alisases = {}
 checkpoints_loaded = collections.OrderedDict()
@@ -102,7 +106,7 @@ def list_models():
 
         shared.opts.data['sd_model_checkpoint'] = checkpoint_info.title
     elif cmd_ckpt is not None and cmd_ckpt != shared.default_sd_model_file:
-        print(f"Checkpoint in --ckpt argument not found (Possible it was moved to {model_path}: {cmd_ckpt}",
+        logger.debug(f"Checkpoint in --ckpt argument not found (Possible it was moved to {model_path}: {cmd_ckpt}",
               file=sys.stderr)
 
     for filename in model_list:
@@ -138,12 +142,12 @@ def get_lora_models(config: DreamboothConfig = None):
     if config is None:
         config = shared.db_model_config
     if config is not None:
-        lora_dir = os.path.join(config.model_dir, "loras")
+        lora_dir = os.path.join(shared.models_path, "Lora")
         if os.path.exists(lora_dir):
             files = os.listdir(lora_dir)
             for file in files:
                 if os.path.isfile(os.path.join(lora_dir, file)):
-                    if ".pt" in file and "_txt.pt" not in file:
+                    if ".safetensors" in file or ".pt" in file or ".ckpt" in file:
                         output.append(file)
     return output
 
@@ -156,7 +160,10 @@ def get_sorted_lora_models(config: DreamboothConfig = None):
         match = regex.search(name)
         return int(match.group(1)) if match else 0
 
-    return sorted(models, key=lambda x: get_iteration(x))
+    sorted_models = sorted(models, key=lambda x: get_iteration(x))
+    # Insert empty string at the beginning
+    sorted_models.insert(0, "")
+    return sorted_models
 
 
 def get_model_snapshots(config: DreamboothConfig = None):
@@ -194,15 +201,15 @@ def reload_system_models():
         import modules.shared
         if modules.shared.sd_model is not None:
             modules.shared.sd_model.to(shared.device)
-        print("Restored system models.")
+        logger.debug("Restored system models.")
     except:
         pass
 
 
-def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision):
+def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision, subfolder: str = "text_encoder"):
     text_encoder_config = PretrainedConfig.from_pretrained(
         pretrained_model_name_or_path,
-        subfolder="text_encoder",
+        subfolder=subfolder,
         revision=revision,
     )
     model_class = text_encoder_config.architectures[0]
@@ -211,6 +218,9 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
         from transformers import CLIPTextModel
 
         return CLIPTextModel
+    elif model_class == "CLIPTextModelWithProjection":
+        from transformers import CLIPTextModelWithProjection
+        return CLIPTextModelWithProjection
     elif model_class == "RobertaSeriesModelWithTransformation":
         from diffusers.pipelines.alt_diffusion.modeling_roberta_series import RobertaSeriesModelWithTransformation
 
@@ -219,7 +229,22 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
         raise ValueError(f"{model_class} is not supported.")
 
 
-# from modules.sd_models import CheckpointInfo
+def unet_attn_processors_state_dict(unet) -> Dict[str, torch.tensor]:
+    """
+    Returns:
+        a state dict containing just the attention processor parameters.
+    """
+    attn_processors = unet.attn_processors
+
+    attn_processors_state_dict = {}
+
+    for attn_processor_key, attn_processor in attn_processors.items():
+        for parameter_key, parameter in attn_processor.state_dict().items():
+            attn_processors_state_dict[f"{attn_processor_key}.{parameter_key}"] = parameter
+
+    return attn_processors_state_dict
+
+
 
 def get_checkpoint_match(search_string):
     try:
@@ -250,29 +275,62 @@ def enable_safe_unpickle():
         pass
 
 
-def xformerify(obj, try_sdp=True):
-    if try_sdp:
-        try:
-            from diffusers.models.attention_processor import AttnProcessor2_0
-            print("Enabling SDP")
-            obj.set_attn_processor(AttnProcessor2_0())
-            return
-        except:
-            pass
-
-    if is_xformers_available():
-        try:
-            print("Enabling xformers memory efficient attention for unet")
-            obj.enable_xformers_memory_efficient_attention()
-        except ModuleNotFoundError:
-            print("xformers not found, using default attention")
-
+def xformerify(obj, use_lora):
+    try:
+        import xformers
+        obj.enable_xformers_memory_efficient_attention
+        logger.debug("Enabled XFormers for " + obj.__class__.__name__)
+        
+    except ImportError:
+        obj.set_attn_processor(AttnProcessor2_0())
+        logger.debug("Enabled AttnProcessor2_0 for " + obj.__class__.__name__)
 
 def torch2ify(unet):
     if hasattr(torch, 'compile'):
         try:
             unet = torch.compile(unet, mode="max-autotune", fullgraph=False)
-            print("Compiled unet")
+            logger.debug("Enabled Torch2 compilation for unet.")
         except:
             pass
     return unet
+
+def is_xformers_available():
+    pass
+
+def read_metadata_from_safetensors(filename):
+
+    with open(filename, mode="rb") as file:
+        # Read metadata length
+        metadata_len = int.from_bytes(file.read(8), "little")
+
+        # Read the metadata based on its length
+        json_data = file.read(metadata_len).decode('utf-8')
+
+        res = {}
+
+        # Check if it's a valid JSON string
+        try:
+            json_obj = json.loads(json_data)
+        except json.JSONDecodeError:
+            return res
+
+        # Extract metadata
+        metadata = json_obj.get("__metadata__", {})
+        if not isinstance(metadata, dict):
+            return res
+
+        # Process the metadata to handle nested JSON strings
+        for k, v in metadata.items():
+            # if not isinstance(v, str):
+            #     raise ValueError("All values in __metadata__ must be strings")
+
+            # If the string value looks like a JSON string, attempt to parse it
+            if v.startswith('{'):
+                try:
+                    res[k] = json.loads(v)
+                except Exception:
+                    res[k] = v
+            else:
+                res[k] = v
+
+        return res

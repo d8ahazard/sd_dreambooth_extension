@@ -299,13 +299,30 @@ class LogParser:
                 has_all_lr = False
 
         loss_columns = columns_order
+
+        def truncate_frames(df):
+            df = df.sort_values("Wall_time")
+            df = df.reset_index(drop=True)
+
+            # Find the points where the Step value decreases compared to the previous row
+            reset_points = df[df["Step"].diff() < 0].index.tolist()
+
+            if reset_points:
+                # Get the last reset point
+                last_reset_point = reset_points[-1]
+
+                # Slice the dataframe from that index onward:
+                df = df.loc[last_reset_point:]
+
+            return df
+
         if has_all_lr:
             loss_columns = ['Wall_time', 'Name', 'Step', 'Loss', "LR", "Instance_Loss", "Prior_Loss"]
-        # Concatenate (and sort) all partial individual dataframes
+
         all_df_loss = pd.concat(out_loss)[loss_columns]
+        # Concatenate (and sort) all partial individual dataframes
         all_df_loss = all_df_loss.fillna(method="ffill")
-        all_df_loss = all_df_loss.sort_values("Wall_time")
-        all_df_loss = all_df_loss.reset_index(drop=True)
+        all_df_loss = truncate_frames(all_df_loss)
         sw = int(self.smoothing_window if self.smoothing_window < len(all_df_loss) / 3 else len(all_df_loss) / 3)
         all_df_loss = all_df_loss.rolling(sw).mean(numeric_only=True)
 
@@ -332,8 +349,7 @@ class LogParser:
             plotted_loss = all_df_loss.plot(x="Step", y="Value", title="Loss Averages")
             loss_name = "Loss Averages"
             all_df_lr = pd.concat(out_lr)[columns_order]
-            all_df_lr = all_df_lr.sort_values("Wall_time")
-            all_df_lr = all_df_lr.reset_index(drop=True)
+            all_df_lr = truncate_frames(all_df_lr)
             all_df_lr = all_df_lr.rolling(self.smoothing_window).mean(numeric_only=True)
             plotted_lr = all_df_lr.plot(x="Step", y="Value", title="Learning Rate")
             lr_img = os.path.join(model_config.model_dir, "logging", f"lr_plot_{model_config.revision}.png")
@@ -354,8 +370,7 @@ class LogParser:
         out_names.append(loss_name)
         try:
             all_df_ram = pd.concat(out_ram)[columns_order]
-            all_df_ram = all_df_ram.sort_values("Wall_time")
-            all_df_ram = all_df_ram.reset_index(drop=True)
+            all_df_ram = truncate_frames(all_df_ram)
             all_df_ram = all_df_ram.rolling(self.smoothing_window).mean(numeric_only=True)
             plotted_ram = all_df_ram.plot(x="Step", y="Value", title="VRAM Usage")
 

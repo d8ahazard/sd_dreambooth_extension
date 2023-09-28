@@ -1,4 +1,5 @@
 import importlib
+import json
 import time
 from typing import List
 
@@ -6,6 +7,7 @@ import gradio as gr
 
 from dreambooth.dataclasses.db_config import from_file, save_config
 from dreambooth.diff_to_sd import compile_checkpoint
+from dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_sdxl
 from dreambooth.secret import (
     get_secret,
     create_secret,
@@ -44,7 +46,7 @@ from dreambooth.utils.utils import (
     wrap_gpu_call,
     printm,
     list_optimizer,
-    list_schedulers,
+    list_schedulers, select_precision, select_attention,
 )
 from dreambooth.webhook import save_and_test_webhook
 from helpers.log_parser import LogParser
@@ -58,6 +60,45 @@ refresh_symbol = "\U0001f504"  # 🔄
 delete_symbol = "\U0001F5D1"  # 🗑️
 update_symbol = "\U0001F51D"  # 🠝
 log_parser = LogParser()
+
+def read_metadata_from_safetensors(filename):
+
+    with open(filename, mode="rb") as file:
+        # Read metadata length
+        metadata_len = int.from_bytes(file.read(8), "little")
+
+        # Read the metadata based on its length
+        json_data = file.read(metadata_len).decode('utf-8')
+
+        res = {}
+
+        # Check if it's a valid JSON string
+        try:
+            json_obj = json.loads(json_data)
+        except json.JSONDecodeError:
+            return res
+
+        # Extract metadata
+        metadata = json_obj.get("__metadata__", {})
+        if not isinstance(metadata, dict):
+            return res
+
+        # Process the metadata to handle nested JSON strings
+        for k, v in metadata.items():
+            # if not isinstance(v, str):
+            #     raise ValueError("All values in __metadata__ must be strings")
+
+            # If the string value looks like a JSON string, attempt to parse it
+            if v.startswith('{'):
+                try:
+                    res[k] = json.loads(v)
+                except Exception:
+                    res[k] = v
+            else:
+                res[k] = v
+
+        return res
+
 
 
 def get_sd_models():
@@ -229,7 +270,10 @@ def ui_gen_ckpt(model_name: str):
     printm("Config loaded")
     lora_path = config.lora_model_name
     print(f"Lora path: {lora_path}")
-    res = compile_checkpoint(model_name, lora_path, True, True, config.snapshot)
+    if config.model_type == "SDXL":
+        res = compile_checkpoint_sdxl(model_name, lora_path, True, False, config.snapshot)
+    else:
+        res = compile_checkpoint(model_name, lora_path, True, True, config.snapshot)
     return res
 
 
@@ -350,7 +394,8 @@ def on_ui_tabs():
                                 db_new_model_shared_src = gr.Dropdown(
                                     label="EXPERIMENTAL: LoRA Shared Diffusers Source",
                                     choices=sorted(get_shared_models()),
-                                    value=""
+                                    value="",
+                                    visible=False
                                 )
                                 create_refresh_button(
                                     db_new_model_shared_src,
@@ -384,7 +429,7 @@ def on_ui_tabs():
                                 value=False,
                                 visible=False,
                             )
-                            db_train_imagic = gr.Checkbox(label="Train Imagic Only", value=False)
+                            db_train_imagic = gr.Checkbox(label="Train Imagic Only", value=False, visible=False)
                             db_train_inpainting = gr.Checkbox(
                                 label="Train Inpainting Model",
                                 value=False,
@@ -467,7 +512,7 @@ def on_ui_tabs():
                                     label="Learning Rate", value=2e-6
                                 )
                                 db_txt_learning_rate = gr.Number(
-                                    label="Text Encoder Learning Rate", value=2e-6
+                                    label="Text Encoder Learning Rate", value=1e-6
                                 )
 
                             db_lr_scheduler = gr.Dropdown(
@@ -506,9 +551,33 @@ def on_ui_tabs():
                             )
                             db_lr_warmup_steps = gr.Slider(
                                 label="Learning Rate Warmup Steps",
-                                value=0,
+                                value=500,
                                 step=5,
                                 maximum=1000,
+                            )
+
+                        with gr.Column(visible=False) as lora_rank_col:
+                            gr.HTML("Lora")
+                            db_lora_unet_rank = gr.Slider(
+                                label="Lora UNET Rank",
+                                value=4,
+                                minimum=2,
+                                maximum=128,
+                                step=2,
+                            )
+                            db_lora_txt_rank = gr.Slider(
+                                label="Lora Text Encoder Rank",
+                                value=4,
+                                minimum=2,
+                                maximum=128,
+                                step=2,
+                            )
+                            db_lora_weight = gr.Slider(
+                                label="Lora Weight (Alpha)",
+                                value=0.8,
+                                minimum=0.1,
+                                maximum=1,
+                                step=0.1,
                             )
 
                         with gr.Column():
@@ -540,12 +609,15 @@ def on_ui_tabs():
                             )
                             db_mixed_precision = gr.Dropdown(
                                 label="Mixed Precision",
-                                value="no",
+                                value=select_precision(),
                                 choices=list_precisions(),
+                            )
+                            db_full_mixed_precision = gr.Checkbox(
+                                label="Full Mixed Precision", value=True
                             )
                             db_attention = gr.Dropdown(
                                 label="Memory Attention",
-                                value="default",
+                                value=select_attention(),
                                 choices=list_attention(),
                             )
                             db_cache_latents = gr.Checkbox(
@@ -559,7 +631,7 @@ def on_ui_tabs():
                                 minimum=0,
                                 maximum=1,
                                 step=0.05,
-                                value=0,
+                                value=1.0,
                                 visible=True,
                             )
                             db_offset_noise = gr.Slider(
@@ -576,7 +648,7 @@ def on_ui_tabs():
                             )
                             db_clip_skip = gr.Slider(
                                 label="Clip Skip",
-                                value=1,
+                                value=2,
                                 minimum=1,
                                 maximum=12,
                                 step=1,
@@ -603,6 +675,13 @@ def on_ui_tabs():
                                 maximum=128,
                                 step=0.25,
                                 value=0,
+                                visible=True,
+                            )
+                            db_min_snr_gamma = gr.Slider(
+                                label="Min SNR Gamma",
+                                minimum=0,
+                                maximum=10,
+                                step=0.1,
                                 visible=True,
                             )
                             db_pad_tokens = gr.Checkbox(
@@ -832,35 +911,6 @@ def on_ui_tabs():
                             label="Generate a .ckpt file when training is canceled."
                         )
                     with gr.Column(visible=False) as lora_save_col:
-                        gr.HTML("Lora")
-                        db_lora_unet_rank = gr.Slider(
-                            label="Lora UNET Rank",
-                            value=4,
-                            minimum=2,
-                            maximum=128,
-                            step=2,
-                        )
-                        db_lora_txt_rank = gr.Slider(
-                            label="Lora Text Encoder Rank",
-                            value=4,
-                            minimum=2,
-                            maximum=768,
-                            step=2,
-                        )
-                        db_lora_weight = gr.Slider(
-                            label="Lora Weight",
-                            value=1,
-                            minimum=0.1,
-                            maximum=1,
-                            step=0.1,
-                        )
-                        db_lora_txt_weight = gr.Slider(
-                            label="Lora Text Weight",
-                            value=1,
-                            minimum=0.1,
-                            maximum=1,
-                            step=0.1,
-                        )
                         db_save_lora_during = gr.Checkbox(
                             label="Generate lora weights when saving during training."
                         )
@@ -1045,8 +1095,8 @@ def on_ui_tabs():
                 db_status = gr.HTML(elem_id="db_status", value="")
                 db_progressbar = gr.HTML(elem_id="db_progressbar")
                 db_gallery = gr.Gallery(
-                    label="Output", show_label=False, elem_id="db_gallery"
-                ).style(grid=4)
+                    label="Output", show_label=False, elem_id="db_gallery", columns=4
+                )
                 db_preview = gr.Image(elem_id="db_preview", visible=False)
                 db_prompt_list = gr.HTML(
                     elem_id="db_prompt_list", value="", visible=False
@@ -1070,9 +1120,13 @@ def on_ui_tabs():
                         show_ema,
                         use_lora_extended,
                         lora_save,
+                        lora_rank,
                         lora_lr,
                         standard_lr,
                         lora_model,
+                        _,
+                        _,
+                        _
                      ) = disable_lora(use_lora)
                     (
                         lr_power,
@@ -1089,6 +1143,7 @@ def on_ui_tabs():
                         show_ema,
                         use_lora_extended,
                         lora_save,
+                        lora_rank,
                         lora_lr,
                         lora_model,
                         scheduler,
@@ -1130,6 +1185,7 @@ def on_ui_tabs():
                         db_use_ema,
                         db_use_lora_extended,
                         lora_save_col,
+                        lora_rank_col,
                         lora_lr_row,
                         lora_model_row,
                         db_scheduler,
@@ -1168,6 +1224,30 @@ def on_ui_tabs():
                     fn=update_stop_tenc,
                     inputs=[db_train_unet],
                     outputs=[db_stop_text_encoder],
+                )
+
+                def toggle_full_mixed_precision(full_mixed_precision):
+                    if full_mixed_precision != "fp16":
+                        return gr.update(visible=False)
+                    else:
+                        return gr.update(visible=True)
+
+                db_mixed_precision.change(
+                    fn=toggle_full_mixed_precision,
+                    inputs=[db_mixed_precision],
+                    outputs=[db_full_mixed_precision],
+                )
+
+                def update_model_options(model_type):
+                    if model_type == "SDXL":
+                        return gr.update(value=1024)
+                    else:
+                        return gr.update(value=512)
+
+                db_model_type_select.change(
+                    fn=update_model_options,
+                    inputs=[db_model_type_select],
+                    outputs=[db_resolution]
                 )
 
                 db_clear_secret.click(fn=clear_secret, inputs=[], outputs=[db_secret])
@@ -1251,6 +1331,7 @@ def on_ui_tabs():
             db_epoch_pause_time,
             db_epochs,
             db_freeze_clip_normalization,
+            db_full_mixed_precision,
             db_gradient_accumulation_steps,
             db_gradient_checkpointing,
             db_gradient_set_to_none,
@@ -1264,7 +1345,6 @@ def on_ui_tabs():
             db_lora_model_name,
             db_lora_txt_learning_rate,
             db_lora_txt_rank,
-            db_lora_txt_weight,
             db_lora_unet_rank,
             db_lora_use_buggy_requires_grad,
             db_lora_weight,
@@ -1275,6 +1355,7 @@ def on_ui_tabs():
             db_lr_scheduler,
             db_lr_warmup_steps,
             db_max_token_length,
+            db_min_snr_gamma,
             db_mixed_precision,
             db_model_name,
             db_model_path,
@@ -1468,18 +1549,31 @@ def on_ui_tabs():
 
         def disable_lora(x):
             use_ema = gr.update(interactive=not x)
-            use_lora_extended = gr.update(visible=x)
+            use_lora_extended = gr.update(visible=False)
             lora_save = gr.update(visible=x)
+            lora_rank = gr.update(visible=x)
             lora_lr = gr.update(visible=x)
             standard_lr = gr.update(visible=not x)
             lora_model = gr.update(visible=x)
+            if x:
+                save_during =gr.update(label="Save LORA during training")
+                save_after = gr.update(label="Save LORA after training")
+                save_cancel = gr.update(label="Save LORA on cancel")
+            else:
+                save_during = gr.update(label="Save .safetensors during training")
+                save_after = gr.update(label="Save .safetensors after training")
+                save_cancel = gr.update(label="Save .safetensors on cancel")
             return (
                 use_ema,
                 use_lora_extended,
                 lora_save,
+                lora_rank,
                 lora_lr,
                 standard_lr,
                 lora_model,
+                save_during,
+                save_after,
+                save_cancel
             )
 
         def lr_scheduler_changed(sched):
@@ -1529,9 +1623,13 @@ def on_ui_tabs():
                 db_use_ema,
                 db_use_lora_extended,
                 lora_save_col,
+                lora_rank_col,
                 lora_lr_row,
                 standard_lr_row,
                 lora_model_row,
+                db_save_ckpt_during,
+                db_save_ckpt_after,
+                db_save_ckpt_cancel
             ],
         )
 
@@ -1726,6 +1824,7 @@ def on_ui_tabs():
             inputs=[db_model_name, db_class_gen_method],
             outputs=[db_gallery, db_status],
         )
+
 
         db_cancel.click(
             fn=lambda: status.interrupt(),
