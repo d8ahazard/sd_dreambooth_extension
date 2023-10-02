@@ -25,7 +25,7 @@ from diffusers import StableDiffusionXLPipeline, StableDiffusionPipeline
 
 from dreambooth import shared
 from dreambooth.dataclasses.db_config import DreamboothConfig
-from dreambooth.utils.model_utils import enable_safe_unpickle, disable_safe_unpickle, unload_system_models, \
+from dreambooth.utils.model_utils import safe_unpickle_disabled, unload_system_models, \
     reload_system_models
 
 
@@ -131,7 +131,6 @@ def extract_checkpoint(
     #         sh.update_status(status)
     #     else:
     #         modules.shared.status.update(status)
-    disable_safe_unpickle()
     if image_size is None:
         image_size = 512
         if model_type == "v2x":
@@ -162,59 +161,60 @@ def extract_checkpoint(
     db_config.resolution = image_size
     db_config.save()
     try:
-        if from_safetensors:
-            if model_type == "SDXL":
-                pipe = StableDiffusionXLPipeline.from_single_file(
-                    pretrained_model_link_or_path=checkpoint_file,
+        with safe_unpickle_disabled():
+            if from_safetensors:
+                if model_type == "SDXL":
+                    pipe = StableDiffusionXLPipeline.from_single_file(
+                        pretrained_model_link_or_path=checkpoint_file,
+                    )
+                else:
+                    pipe = StableDiffusionPipeline.from_single_file(
+                        pretrained_model_link_or_path=checkpoint_file,
+                    )
+            elif model_type == "SDXL":
+                pipe = StableDiffusionXLPipeline.from_pretrained(
+                    checkpoint_path_or_dict=checkpoint_file,
+                    original_config_file=original_config_file,
+                    image_size=image_size,
+                    prediction_type=prediction_type,
+                    model_type=pipeline_type,
+                    extract_ema=extract_ema,
+                    scheduler_type=scheduler_type,
+                    num_in_channels=num_in_channels,
+                    upcast_attention=upcast_attention,
+                    from_safetensors=from_safetensors,
+                    device=device,
+                    pretrained_model_name_or_path=checkpoint_file,
+                    stable_unclip=stable_unclip,
+                    stable_unclip_prior=stable_unclip_prior,
+                    clip_stats_path=clip_stats_path,
+                    controlnet=controlnet,
+                    vae_path=vae_path,
+                    pipeline_class=pipeline_class,
+                    half=half
                 )
             else:
-                pipe = StableDiffusionPipeline.from_single_file(
-                    pretrained_model_link_or_path=checkpoint_file,
+                pipe = StableDiffusionPipeline.from_pretrained(
+                    checkpoint_path_or_dict=checkpoint_file,
+                    original_config_file=original_config_file,
+                    image_size=image_size,
+                    prediction_type=prediction_type,
+                    model_type=pipeline_type,
+                    extract_ema=extract_ema,
+                    scheduler_type=scheduler_type,
+                    num_in_channels=num_in_channels,
+                    upcast_attention=upcast_attention,
+                    from_safetensors=from_safetensors,
+                    device=device,
+                    pretrained_model_name_or_path=checkpoint_file,
+                    stable_unclip=stable_unclip,
+                    stable_unclip_prior=stable_unclip_prior,
+                    clip_stats_path=clip_stats_path,
+                    controlnet=controlnet,
+                    vae_path=vae_path,
+                    pipeline_class=pipeline_class,
+                    half=half
                 )
-        elif model_type == "SDXL":
-            pipe = StableDiffusionXLPipeline.from_pretrained(
-                checkpoint_path_or_dict=checkpoint_file,
-                original_config_file=original_config_file,
-                image_size=image_size,
-                prediction_type=prediction_type,
-                model_type=pipeline_type,
-                extract_ema=extract_ema,
-                scheduler_type=scheduler_type,
-                num_in_channels=num_in_channels,
-                upcast_attention=upcast_attention,
-                from_safetensors=from_safetensors,
-                device=device,
-                pretrained_model_name_or_path=checkpoint_file,
-                stable_unclip=stable_unclip,
-                stable_unclip_prior=stable_unclip_prior,
-                clip_stats_path=clip_stats_path,
-                controlnet=controlnet,
-                vae_path=vae_path,
-                pipeline_class=pipeline_class,
-                half=half
-            )
-        else:
-            pipe = StableDiffusionPipeline.from_pretrained(
-                checkpoint_path_or_dict=checkpoint_file,
-                original_config_file=original_config_file,
-                image_size=image_size,
-                prediction_type=prediction_type,
-                model_type=pipeline_type,
-                extract_ema=extract_ema,
-                scheduler_type=scheduler_type,
-                num_in_channels=num_in_channels,
-                upcast_attention=upcast_attention,
-                from_safetensors=from_safetensors,
-                device=device,
-                pretrained_model_name_or_path=checkpoint_file,
-                stable_unclip=stable_unclip,
-                stable_unclip_prior=stable_unclip_prior,
-                clip_stats_path=clip_stats_path,
-                controlnet=controlnet,
-                vae_path=vae_path,
-                pipeline_class=pipeline_class,
-                half=half
-            )
 
         dump_path = db_config.get_pretrained_model_name_or_path()
         if controlnet:
@@ -246,7 +246,7 @@ def extract_checkpoint(
             print(f"Couldn't find {full_path}")
             break
     remove_dirs = ["logging", "samples"]
-    enable_safe_unpickle()
+
     reload_system_models()
     if success:
         for rd in remove_dirs:

@@ -19,7 +19,7 @@ from dreambooth.utils import image_utils
 from dreambooth.utils.image_utils import process_txt2img, get_scheduler_class
 from dreambooth.utils.model_utils import get_checkpoint_match, \
     reload_system_models, \
-    enable_safe_unpickle, disable_safe_unpickle, unload_system_models
+    safe_unpickle_disabled, unload_system_models
 from helpers.mytqdm import mytqdm
 from lora_diffusion.lora import _text_lora_path_ui, patch_pipe, tune_lora_scale, \
     get_target_module
@@ -128,9 +128,8 @@ class ImageBuilder:
             new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
             if os.path.exists(new_hotness):
                 accelerator.print(f"Resuming from checkpoint {new_hotness}")
-                disable_safe_unpickle()
-                accelerator.load_state(new_hotness)
-                enable_safe_unpickle()
+                with safe_unpickle_disabled():
+                    accelerator.load_state(new_hotness)
 
             if config.use_lora and lora_model:
                 lora_model_path = shared.ui_lora_models_path
