@@ -83,70 +83,70 @@ class ImageBuilder:
                         msg = f"Exception initializing accelerator: {e}"
                     print(msg)
             torch_dtype = torch.float16 if shared.device.type == "cuda" else torch.float32
-            disable_safe_unpickle()
+            with safe_unpickle_disabled():
 
-            self.image_pipe = DiffusionPipeline.from_pretrained(config.get_pretrained_model_name_or_path(), torch_dtype=torch.float16)
+                self.image_pipe = DiffusionPipeline.from_pretrained(config.get_pretrained_model_name_or_path(), torch_dtype=torch.float16)
 
-            if config.pretrained_vae_name_or_path:
-                logging.getLogger(__name__).info("Using pretrained VAE.")
-                self.image_pipe.vae = AutoencoderKL.from_pretrained(
-                    config.pretrained_vae_name_or_path or config.get_pretrained_model_name_or_path(),
-                    subfolder=None if config.pretrained_vae_name_or_path else "vae",
-                    revision=config.revision,
-                    torch_dtype=torch_dtype
-                )
-
-            if config.infer_ema:
-                logging.getLogger(__name__).info("Using EMA model for inference.")
-                ema_path = os.path.join(config.get_pretrained_model_name_or_path(), "ema_unet",
-                                        "diffusion_pytorch_model.safetensors")
-                if os.path.isfile(ema_path):
-                    self.image_pipe.unet = UNet2DConditionModel.from_pretrained(ema_path, torch_dtype=torch.float16),
-
-            self.image_pipe.enable_model_cpu_offload()
-            self.image_pipe.unet.set_attn_processor(AttnProcessor2_0())
-            if os.name != "nt":
-                self.image_pipe.unet = torch.compile(self.image_pipe.unet)
-            self.image_pipe.enable_xformers_memory_efficient_attention()
-            self.image_pipe.vae.enable_slicing()
-            tomesd.apply_patch(self.image_pipe, ratio=0.5)
-            self.image_pipe.scheduler.config["solver_type"] = "bh2"
-            self.image_pipe.progress_bar = self.progress_bar
-
-            if scheduler is None:
-                scheduler = config.scheduler
-
-            print(f"Using scheduler: {scheduler}")
-            scheduler_class = get_scheduler_class(scheduler)
-
-            self.image_pipe.scheduler = scheduler_class.from_config(self.image_pipe.scheduler.config)
-
-            if "UniPC" in scheduler:
-                self.image_pipe.scheduler.config.solver_type = "bh2"
-
-            self.image_pipe.to(accelerator.device)
-            new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
-            if os.path.exists(new_hotness):
-                accelerator.print(f"Resuming from checkpoint {new_hotness}")
-                with safe_unpickle_disabled():
-                    accelerator.load_state(new_hotness)
-
-            if config.use_lora and lora_model:
-                lora_model_path = shared.ui_lora_models_path
-                if os.path.exists(lora_model_path):
-                    patch_pipe(
-                        pipe=self.image_pipe,
-                        maybe_unet_path=lora_model_path,
-                        unet_target_replace_module=get_target_module("module", config.use_lora_extended),
-                        token=None,
-                        r=lora_unet_rank,
-                        r_txt=lora_txt_rank
+                if config.pretrained_vae_name_or_path:
+                    logging.getLogger(__name__).info("Using pretrained VAE.")
+                    self.image_pipe.vae = AutoencoderKL.from_pretrained(
+                        config.pretrained_vae_name_or_path or config.get_pretrained_model_name_or_path(),
+                        subfolder=None if config.pretrained_vae_name_or_path else "vae",
+                        revision=config.revision,
+                        torch_dtype=torch_dtype
                     )
-                    tune_lora_scale(self.image_pipe.unet, config.lora_weight)
 
-                    lora_txt_path = _text_lora_path_ui(lora_model_path)
-                    if os.path.exists(lora_txt_path):
-                        tune_lora_scale(self.image_pipe.text_encoder, config.lora_txt_weight)
+                if config.infer_ema:
+                    logging.getLogger(__name__).info("Using EMA model for inference.")
+                    ema_path = os.path.join(config.get_pretrained_model_name_or_path(), "ema_unet",
+                                            "diffusion_pytorch_model.safetensors")
+                    if os.path.isfile(ema_path):
+                        self.image_pipe.unet = UNet2DConditionModel.from_pretrained(ema_path, torch_dtype=torch.float16),
+
+                self.image_pipe.enable_model_cpu_offload()
+                self.image_pipe.unet.set_attn_processor(AttnProcessor2_0())
+                if os.name != "nt":
+                    self.image_pipe.unet = torch.compile(self.image_pipe.unet)
+                self.image_pipe.enable_xformers_memory_efficient_attention()
+                self.image_pipe.vae.enable_slicing()
+                tomesd.apply_patch(self.image_pipe, ratio=0.5)
+                self.image_pipe.scheduler.config["solver_type"] = "bh2"
+                self.image_pipe.progress_bar = self.progress_bar
+
+                if scheduler is None:
+                    scheduler = config.scheduler
+
+                print(f"Using scheduler: {scheduler}")
+                scheduler_class = get_scheduler_class(scheduler)
+
+                self.image_pipe.scheduler = scheduler_class.from_config(self.image_pipe.scheduler.config)
+
+                if "UniPC" in scheduler:
+                    self.image_pipe.scheduler.config.solver_type = "bh2"
+
+                self.image_pipe.to(accelerator.device)
+                new_hotness = os.path.join(config.model_dir, "checkpoints", f"checkpoint-{config.revision}")
+                if os.path.exists(new_hotness):
+                    accelerator.print(f"Resuming from checkpoint {new_hotness}")
+                    with safe_unpickle_disabled():
+                        accelerator.load_state(new_hotness)
+
+                if config.use_lora and lora_model:
+                    lora_model_path = shared.ui_lora_models_path
+                    if os.path.exists(lora_model_path):
+                        patch_pipe(
+                            pipe=self.image_pipe,
+                            maybe_unet_path=lora_model_path,
+                            unet_target_replace_module=get_target_module("module", config.use_lora_extended),
+                            token=None,
+                            r=lora_unet_rank,
+                            r_txt=lora_txt_rank
+                        )
+                        tune_lora_scale(self.image_pipe.unet, config.lora_weight)
+
+                        lora_txt_path = _text_lora_path_ui(lora_model_path)
+                        if os.path.exists(lora_txt_path):
+                            tune_lora_scale(self.image_pipe.text_encoder, config.lora_txt_weight)
 
         else:
             try:
