@@ -1475,6 +1475,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             current_prior_loss_weight = current_prior_loss(
                 args, current_epoch=global_epoch
             )
+            
+            instance_loss = None
+            prior_loss = None
+
             for step, batch in enumerate(train_dataloader):
                 # Skip steps until we reach the resumed step
                 if (
@@ -1577,20 +1581,22 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             if model_pred.shape[1] == 6:
                                 model_pred, _ = torch.chunk(model_pred, 2, dim=1)
 
-                            if with_prior_preservation:
-                                # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
-                                model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
-                                target, target_prior = torch.chunk(target, 2, dim=0)
+                            if model_pred.shape[0] > 1 and with_prior_preservation:
+                                    # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
+                                    print("model shape:")
+                                    print(model_pred.shape)
+                                    model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
+                                    target, target_prior = torch.chunk(target, 2, dim=0)
 
-                                # Compute instance loss
-                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                                    # Compute instance loss
+                                    loss = instance_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-                                # Compute prior loss
-                                prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
-                                                        reduction="mean")
+                                    # Compute prior loss
+                                    prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
+                                                            reduction="mean")
                             else:
                                 # Compute loss
-                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                                loss = instance_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
                     else:
                         if with_prior_preservation:
                             # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
@@ -1682,7 +1688,11 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                 if args.split_loss and with_prior_preservation and args.model_type != "SDXL":
                     logs["inst_loss"] = float(instance_loss.detach().item())
-                    logs["prior_loss"] = float(prior_loss.detach().item())
+                    
+                    if prior_loss is not None:
+                        logs["prior_loss"] = float(prior_loss.detach().item())
+                    else:
+                        logs["prior_loss"] = None  # or some other default value
                     stats["instance_loss"] = logs["inst_loss"]
                     stats["prior_loss"] = logs["prior_loss"]
 
