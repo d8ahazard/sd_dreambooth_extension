@@ -298,7 +298,7 @@ def on_ui_tabs():
             db_cancel = gr.Button(value="Cancel", elem_id="db_cancel")
         with gr.Row():
             gr.HTML(value="Select or create a model to begin.", elem_id="hint_row")
-        with gr.Row().style(equal_height=False):
+        with gr.Row(equal_height=False):
             with gr.Column(variant="panel", elem_id="ModelPanel"):
                 with gr.Column():
                     gr.HTML(value="<span class='hh'>Model</span>")
@@ -1532,8 +1532,8 @@ def on_ui_tabs():
             outputs=[hub_row, local_row],
         )
 
-        def toggle_shared_row(shared_row):
-            return gr.update(visible=shared_row),  gr.update(value="")
+        def toggle_shared_row(row):
+            return gr.update(visible=row),  gr.update(value="")
 
         db_use_shared_src.change(
             fn=toggle_shared_row,
