@@ -31,6 +31,7 @@ from diffusers import (
 )
 from diffusers.loaders import LoraLoaderMixin, text_encoder_lora_state_dict
 from diffusers.models.attention_processor import LoRAAttnProcessor2_0, LoRAAttnProcessor
+from diffusers.training_utils import unet_lora_state_dict
 from diffusers.utils import logging as dl
 from diffusers.utils.torch_utils import randn_tensor
 from torch.cuda.profiler import profile
@@ -57,7 +58,7 @@ from dreambooth.utils.model_utils import (
     disable_safe_unpickle,
     enable_safe_unpickle,
     xformerify,
-    torch2ify, unet_attn_processors_state_dict
+    torch2ify
 )
 from dreambooth.utils.text_utils import encode_hidden_state, save_token_counts
 from dreambooth.utils.utils import (cleanup, printm, verify_locon_installed,
@@ -1097,7 +1098,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         pbar2.set_description("Saving Lora Weights...")
                         # setup directory
                         logger.debug(f"Saving lora to {lora_save_file}")
-                        unet_lora_layers_to_save = unet_attn_processors_state_dict(unet)
+                        unet_lora_layers_to_save = unet_lora_state_dict(unet)
                         text_encoder_one_lora_layers_to_save = None
                         text_encoder_two_lora_layers_to_save = None
                         if args.stop_text_encoder != 0:
