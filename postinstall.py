@@ -229,7 +229,7 @@ def check_versions():
         Dependency(module="torchvision", version="0.14.1" if is_mac else "0.15.2+cu118"),
         Dependency(module="accelerate", version="0.21.0"),
         Dependency(module="diffusers", version="0.22.1"),
-        Dependency(module="transformers", version="4.35.0"),
+        Dependency(module="transformers", version="4.30.2"),
         Dependency(module="bitsandbytes",  version="0.41.1"),
     ]
 
