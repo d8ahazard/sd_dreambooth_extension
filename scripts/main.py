@@ -365,7 +365,7 @@ def on_ui_tabs():
                             db_create_from_hub = gr.Checkbox(
                                 label="Create From Hub", value=False
                             )
-                            db_model_type_select=gr.Dropdown(label="Model Type", choices=["v1x", "v2x-512", "v2x", "SDXL", "ControlNet"])
+                            db_model_type_select=gr.Dropdown(label="Model Type", choices=["v1x", "v2x-512", "v2x", "SDXL", "ControlNet"], value="v1x")
                             db_use_shared_src = gr.Checkbox(
                                 label="Experimental Shared Src", value=False, visible=False
                             )

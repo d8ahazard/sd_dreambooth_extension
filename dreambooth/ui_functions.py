@@ -941,11 +941,13 @@ def create_model(
         new_model_token="",
         extract_ema=False,
         train_unfrozen=False,
-        model_type="v1"
+        model_type="v1x"
 ):
+    if not model_type:
+        model_type = "v1x"
     printm("Extracting model.")
     res = 512
-    is_512 = model_type == "v1"
+    is_512 = model_type == "v1x"
     if model_type == "v1x" or model_type=="v2x-512":
         res = 512
     elif model_type == "v2x":
