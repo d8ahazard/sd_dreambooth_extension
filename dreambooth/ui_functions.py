@@ -11,6 +11,7 @@ import sys
 import traceback
 from collections import OrderedDict
 
+import gradio
 import torch
 import torch.utils.data.dataloader
 from accelerate import find_executable_batch_size
@@ -639,7 +640,7 @@ def load_model_params(model_name):
     if config is None:
         print("Can't load config!")
         msg = f"Error loading model params: '{model_name}'."
-        return "", "", "", "", "", db_model_snapshots, msg
+        return gradio.update(visible=False), "", "", "", "", "", db_model_snapshots, msg
     else:
         snaps = get_model_snapshots(config)
         snap_selection = config.revision if str(config.revision) in snaps else ""
@@ -649,6 +650,7 @@ def load_model_params(model_name):
         db_lora_models = gr_update(choices=loras)
         msg = f"Selected model: '{model_name}'."
         return (
+            gradio.update(visible=True),
             config.model_dir,
             config.revision,
             config.epoch,

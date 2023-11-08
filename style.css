@@ -7,6 +7,10 @@
     max-height: 20px;
 }
 
+#modelDetailRow {
+    text-align: center;
+}
+
 button:disabled, input:disabled {
     background: #4444 !important;
     color: #6666 !important;
@@ -39,6 +43,10 @@ button:disabled, input:disabled {
 
 .commitDiv {
     border: 1px grey solid;
+}
+
+.singleCheckbox {
+    margin-top: 29px !important;
 }
 
 #change_modal.active {

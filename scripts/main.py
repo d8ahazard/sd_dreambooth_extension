@@ -53,7 +53,9 @@ from helpers.log_parser import LogParser
 from helpers.version_helper import check_updates
 from modules import script_callbacks, sd_models
 from modules.ui import gr_show, create_refresh_button
+from preprocess.preprocess_utils import check_preprocess_path, load_image_caption
 
+preprocess_params = []
 params_to_save = []
 params_to_load = []
 refresh_symbol = "\U0001f504"  # 🔄
@@ -298,494 +300,171 @@ def on_ui_tabs():
             db_cancel = gr.Button(value="Cancel", elem_id="db_cancel")
         with gr.Row():
             gr.HTML(value="Select or create a model to begin.", elem_id="hint_row")
-        with gr.Row(equal_height=False):
-            with gr.Column(variant="panel", elem_id="ModelPanel"):
-                with gr.Column():
-                    gr.HTML(value="<span class='hh'>Model</span>")
-                    with gr.Tab("Select"):
-                        with gr.Row():
-                            db_model_name = gr.Dropdown(
-                                label="Model", choices=sorted(get_db_models())
-                            )
-                            create_refresh_button(
-                                db_model_name,
-                                get_db_models,
-                                lambda: {"choices": sorted(get_db_models())},
-                                "refresh_db_models",
-                            )
-                        with gr.Row():
-                            db_snapshot = gr.Dropdown(
-                                label="Snapshot to Resume",
-                                choices=sorted(get_model_snapshots()),
-                            )
-                            create_refresh_button(
-                                db_snapshot,
-                                get_model_snapshots,
-                                lambda: {"choices": sorted(get_model_snapshots())},
-                                "refresh_db_snapshots",
-                            )
-                        with gr.Row(visible=False) as lora_model_row:
-                            db_lora_model_name = gr.Dropdown(
-                                label="Lora Model", choices=get_sorted_lora_models()
-                            )
-                            create_refresh_button(
-                                db_lora_model_name,
-                                get_sorted_lora_models,
-                                lambda: {"choices": get_sorted_lora_models()},
-                                "refresh_lora_models",
-                            )
-                        with gr.Row():
+        with gr.Row(elem_id="ModelDetailRow", visible=False, variant="compact") as db_model_info:
+            with gr.Column():
+                with gr.Row(variant="compact"):
+                    with gr.Column():
+                        with gr.Row(variant="compact"):
                             gr.HTML(value="Loaded Model:")
                             db_model_path = gr.HTML()
-                        with gr.Row():
-                            gr.HTML(value="Model Revision:")
-                            db_revision = gr.HTML(elem_id="db_revision")
-                        with gr.Row():
-                            gr.HTML(value="Model Epoch:")
-                            db_epochs = gr.HTML(elem_id="db_epochs")
-                        with gr.Row():
-                            gr.HTML(value="Model type:")
-                            db_model_type = gr.HTML(elem_id="db_model_type")
-                        with gr.Row():
-                            gr.HTML(value="Has EMA:")
-                            db_has_ema = gr.HTML(elem_id="db_has_ema")
-                        with gr.Row():
+                        with gr.Row(variant="compact"):
                             gr.HTML(value="Source Checkpoint:")
                             db_src = gr.HTML()
-                        with gr.Row(visible=False):
-                            gr.HTML(value="Experimental Shared Source:")
-                            db_shared_diffusers_path = gr.HTML()
-                    with gr.Tab("Create"):
-                        with gr.Column():
-                            db_create_model = gr.Button(
-                                value="Create Model", variant="primary"
-                            )
-                        db_new_model_name = gr.Textbox(label="Name")
-                        with gr.Row():
-                            db_create_from_hub = gr.Checkbox(
-                                label="Create From Hub", value=False
-                            )
-                            db_model_type_select=gr.Dropdown(label="Model Type", choices=["v1x", "v2x-512", "v2x", "SDXL", "ControlNet"], value="v1x")
-                            db_use_shared_src = gr.Checkbox(
-                                label="Experimental Shared Src", value=False, visible=False
-                            )
-                        with gr.Column(visible=False) as hub_row:
-                            db_new_model_url = gr.Textbox(
-                                label="Model Path",
-                                placeholder="runwayml/stable-diffusion-v1-5",
-                            )
-                            db_new_model_token = gr.Textbox(
-                                label="HuggingFace Token", value=""
-                            )
-                        with gr.Column(visible=True) as local_row:
-                            with gr.Row():
-                                db_new_model_src = gr.Dropdown(
-                                    label="Source Checkpoint",
-                                    choices=sorted(get_sd_models()),
-                                )
-                                create_refresh_button(
-                                    db_new_model_src,
-                                    get_sd_models,
-                                    lambda: {"choices": sorted(get_sd_models())},
-                                    "refresh_sd_models",
-                                )
-                        with gr.Column(visible=False) as shared_row:
-                            with gr.Row():
-                                db_new_model_shared_src = gr.Dropdown(
-                                    label="EXPERIMENTAL: LoRA Shared Diffusers Source",
-                                    choices=sorted(get_shared_models()),
-                                    value="",
-                                    visible=False
-                                )
-                                create_refresh_button(
-                                    db_new_model_shared_src,
-                                    get_shared_models,
-                                    lambda: {"choices": sorted(get_shared_models())},
-                                    "refresh_shared_models",
-                                )
-                        db_new_model_extract_ema = gr.Checkbox(
-                            label="Extract EMA Weights", value=False
-                        )
-                        db_train_unfrozen = gr.Checkbox(label="Unfreeze Model", value=False)
-                with gr.Column():
-                    with gr.Accordion(open=False, label="Resources"):
-                        with gr.Column():
-                            gr.HTML(
-                                value="<a class=\"hyperlink\" href=\"https://github.com/d8ahazard/sd_dreambooth_extension/wiki/ELI5-Training\">Beginners guide</a>",
-                            )
-                            gr.HTML(
-                                value="<a class=\"hyperlink\" href=\"https://github.com/d8ahazard/sd_dreambooth_extension/releases/latest\">Release notes</a>",
-                            )
+                    with gr.Column():
+                        with gr.Row(variant="compact"):
+                            gr.HTML(value="Model Epoch:")
+                            db_epochs = gr.HTML(elem_id="db_epochs")
+                        with gr.Row(variant="compact"):
+                            gr.HTML(value="Model Revision:")
+                            db_revision = gr.HTML(elem_id="db_revision")
+                    with gr.Column():
+                            with gr.Row(variant="compact"):
+                                gr.HTML(value="Model type:")
+                                db_model_type = gr.HTML(elem_id="db_model_type")
+                            with gr.Row(variant="compact"):
+                                gr.HTML(value="Has EMA:")
+                                db_has_ema = gr.HTML(elem_id="db_has_ema")
+                    with gr.Row(variant="compact", visible=False):
+                        gr.HTML(value="Experimental Shared Source:")
+                        db_shared_diffusers_path = gr.HTML()
+        with gr.Row(equal_height=False):
             with gr.Column(variant="panel", elem_id="SettingsPanel"):
-                gr.HTML(value="<span class='hh'>Input</span>")
-                with gr.Tab("Settings", elem_id="TabSettings"):
-                    db_performance_wizard = gr.Button(value="Performance Wizard (WIP)")
-                    with gr.Accordion(open=True, label="Basic"):
-                        with gr.Column():
-                            gr.HTML(value="General")
-                            db_use_lora = gr.Checkbox(label="Use LORA", value=False)
-                            db_use_lora_extended = gr.Checkbox(
-                                label="Use Lora Extended",
-                                value=False,
-                                visible=False,
-                            )
-                            db_train_imagic = gr.Checkbox(label="Train Imagic Only", value=False, visible=False)
-                            db_train_inpainting = gr.Checkbox(
-                                label="Train Inpainting Model",
-                                value=False,
-                                visible=False,
-                            )
-                        with gr.Column():
-                            gr.HTML(value="Intervals")
-                            db_num_train_epochs = gr.Slider(
-                                label="Training Steps Per Image (Epochs)",
-                                value=100,
-                                maximum=1000,
-                                step=1,
-                            )
-                            db_epoch_pause_frequency = gr.Slider(
-                                label="Pause After N Epochs",
-                                value=0,
-                                maximum=100,
-                                step=1,
-                            )
-                            db_epoch_pause_time = gr.Slider(
-                                label="Amount of time to pause between Epochs (s)",
-                                value=0,
-                                maximum=3600,
-                                step=1,
-                            )
-                            db_save_embedding_every = gr.Slider(
-                                label="Save Model Frequency (Epochs)",
-                                value=25,
-                                maximum=1000,
-                                step=1,
-                            )
-                            db_save_preview_every = gr.Slider(
-                                label="Save Preview(s) Frequency (Epochs)",
-                                value=5,
-                                maximum=1000,
-                                step=1,
-                            )
-
-                        with gr.Column():
-                            gr.HTML(value="Batching")
-                            db_train_batch_size = gr.Slider(
-                                label="Batch Size",
-                                value=1,
-                                minimum=1,
-                                maximum=100,
-                                step=1,
-                            )
-                            db_gradient_accumulation_steps = gr.Slider(
-                                label="Gradient Accumulation Steps",
-                                value=1,
-                                minimum=1,
-                                maximum=100,
-                                step=1,
-                            )
-                            db_sample_batch_size = gr.Slider(
-                                label="Class Batch Size",
-                                minimum=1,
-                                maximum=100,
-                                value=1,
-                                step=1,
-                            )
-                            db_gradient_set_to_none = gr.Checkbox(
-                                label="Set Gradients to None When Zeroing", value=True
-                            )
-                            db_gradient_checkpointing = gr.Checkbox(
-                                label="Gradient Checkpointing", value=True
-                            )
-
-                        with gr.Column():
-                            gr.HTML(value="Learning Rate")
-                            with gr.Row(visible=False) as lora_lr_row:
-                                db_lora_learning_rate = gr.Number(
-                                    label="Lora UNET Learning Rate", value=1e-4
+                gr.HTML(value="<span class='hh'>Settings</span>")
+                with gr.Tab("Model", elem_id="ModelPanel"):
+                    with gr.Column():
+                        with gr.Tab("Select"):
+                            with gr.Row():
+                                db_model_name = gr.Dropdown(
+                                    label="Model", choices=sorted(get_db_models())
                                 )
-                                db_lora_txt_learning_rate = gr.Number(
-                                    label="Lora Text Encoder Learning Rate", value=5e-5
+                                create_refresh_button(
+                                    db_model_name,
+                                    get_db_models,
+                                    lambda: {"choices": sorted(get_db_models())},
+                                    "refresh_db_models",
                                 )
-                            with gr.Row() as standard_lr_row:
-                                db_learning_rate = gr.Number(
-                                    label="Learning Rate", value=2e-6
+                            with gr.Row():
+                                db_snapshot = gr.Dropdown(
+                                    label="Snapshot to Resume",
+                                    choices=sorted(get_model_snapshots()),
                                 )
-                                db_txt_learning_rate = gr.Number(
-                                    label="Text Encoder Learning Rate", value=1e-6
+                                create_refresh_button(
+                                    db_snapshot,
+                                    get_model_snapshots,
+                                    lambda: {"choices": sorted(get_model_snapshots())},
+                                    "refresh_db_snapshots",
                                 )
-
-                            db_lr_scheduler = gr.Dropdown(
-                                label="Learning Rate Scheduler",
-                                value="constant_with_warmup",
-                                choices=list_schedulers(),
-                            )
-                            db_learning_rate_min = gr.Number(
-                                label="Min Learning Rate", value=1e-6, visible=False
-                            )
-                            db_lr_cycles = gr.Number(
-                                label="Number of Hard Resets",
-                                value=1,
-                                precision=0,
-                                visible=False,
-                            )
-                            db_lr_factor = gr.Number(
-                                label="Constant/Linear Starting Factor",
-                                value=0.5,
-                                precision=2,
-                                visible=False,
-                            )
-                            db_lr_power = gr.Number(
-                                label="Polynomial Power",
-                                value=1.0,
-                                precision=1,
-                                visible=False,
-                            )
-                            db_lr_scale_pos = gr.Slider(
-                                label="Scale Position",
-                                value=0.5,
-                                minimum=0,
-                                maximum=1,
-                                step=0.05,
-                                visible=False,
-                            )
-                            db_lr_warmup_steps = gr.Slider(
-                                label="Learning Rate Warmup Steps",
-                                value=500,
-                                step=5,
-                                maximum=1000,
-                            )
-
-                        with gr.Column(visible=False) as lora_rank_col:
-                            gr.HTML("Lora")
-                            db_lora_unet_rank = gr.Slider(
-                                label="Lora UNET Rank",
-                                value=4,
-                                minimum=2,
-                                maximum=128,
-                                step=2,
-                            )
-                            db_lora_txt_rank = gr.Slider(
-                                label="Lora Text Encoder Rank",
-                                value=4,
-                                minimum=2,
-                                maximum=128,
-                                step=2,
-                            )
-                            db_lora_weight = gr.Slider(
-                                label="Lora Weight (Alpha)",
-                                value=0.8,
-                                minimum=0.1,
-                                maximum=1,
-                                step=0.1,
-                            )
-
-                        with gr.Column():
-                            gr.HTML(value="Image Processing")
-                            db_resolution = gr.Slider(
-                                label="Max Resolution",
-                                step=64,
-                                minimum=128,
-                                value=512,
-                                maximum=2048,
-                                elem_id="max_res",
-                            )
-                            db_hflip = gr.Checkbox(
-                                label="Apply Horizontal Flip", value=False
-                            )
-                            db_dynamic_img_norm = gr.Checkbox(
-                                label="Dynamic Image Normalization", value=False
-                            )
-
-                        with gr.Column():
-                            gr.HTML(value="Tuning")
-                            db_use_ema = gr.Checkbox(
-                                label="Use EMA", value=False
-                            )
-                            db_optimizer = gr.Dropdown(
-                                label="Optimizer",
-                                value="8bit AdamW",
-                                choices=list_optimizer(),
-                            )
-                            db_mixed_precision = gr.Dropdown(
-                                label="Mixed Precision",
-                                value=select_precision(),
-                                choices=list_precisions(),
-                            )
-                            db_full_mixed_precision = gr.Checkbox(
-                                label="Full Mixed Precision", value=True
-                            )
-                            db_attention = gr.Dropdown(
-                                label="Memory Attention",
-                                value=select_attention(),
-                                choices=list_attention(),
-                            )
-                            db_cache_latents = gr.Checkbox(
-                                label="Cache Latents", value=True
-                            )
-                            db_train_unet = gr.Checkbox(
-                                label="Train UNET", value=True
-                            )
-                            db_stop_text_encoder = gr.Slider(
-                                label="Step Ratio of Text Encoder Training",
-                                minimum=0,
-                                maximum=1,
-                                step=0.05,
-                                value=1.0,
-                                visible=True,
-                            )
-                            db_offset_noise = gr.Slider(
-                                label="Offset Noise",
-                                minimum=-1,
-                                maximum=1,
-                                step=0.01,
-                                value=0,
-                            )
-                            db_freeze_clip_normalization = gr.Checkbox(
-                                label="Freeze CLIP Normalization Layers",
-                                visible=True,
-                                value=False,
-                            )
-                            db_clip_skip = gr.Slider(
-                                label="Clip Skip",
-                                value=2,
-                                minimum=1,
-                                maximum=12,
-                                step=1,
-                            )
-                            db_weight_decay = gr.Slider(
-                                label="Weight Decay",
-                                minimum=0,
-                                maximum=1,
-                                step=0.001,
-                                value=0.01,
-                                visible=True,
-                            )
-                            db_tenc_weight_decay = gr.Slider(
-                                label="TENC Weight Decay",
-                                minimum=0,
-                                maximum=1,
-                                step=0.001,
-                                value=0.01,
-                                visible=True,
-                            )
-                            db_tenc_grad_clip_norm = gr.Slider(
-                                label="TENC Gradient Clip Norm",
-                                minimum=0,
-                                maximum=128,
-                                step=0.25,
-                                value=0,
-                                visible=True,
-                            )
-                            db_min_snr_gamma = gr.Slider(
-                                label="Min SNR Gamma",
-                                minimum=0,
-                                maximum=10,
-                                step=0.1,
-                                visible=True,
-                            )
-                            db_pad_tokens = gr.Checkbox(
-                                label="Pad Tokens", value=True
-                            )
-                            db_strict_tokens = gr.Checkbox(
-                                label="Strict Tokens", value=False
-                            )
-                            db_shuffle_tags = gr.Checkbox(
-                                label="Shuffle Tags", value=True
-                            )
-                            db_max_token_length = gr.Slider(
-                                label="Max Token Length",
-                                minimum=75,
-                                maximum=300,
-                                step=75,
-                            )
-                        with gr.Column():
-                            gr.HTML(value="Prior Loss")
-                            db_prior_loss_scale = gr.Checkbox(
-                                label="Scale Prior Loss", value=False
-                            )
-                            db_prior_loss_weight = gr.Slider(
-                                label="Prior Loss Weight",
-                                minimum=0.01,
-                                maximum=1,
-                                step=0.01,
-                                value=0.75,
-                            )
-                            db_prior_loss_target = gr.Number(
-                                label="Prior Loss Target",
-                                value=100,
-                                visible=False,
-                            )
-                            db_prior_loss_weight_min = gr.Slider(
-                                label="Minimum Prior Loss Weight",
-                                minimum=0.01,
-                                maximum=1,
-                                step=0.01,
-                                value=0.1,
-                                visible=False,
-                            )
-
-                    with gr.Accordion(open=False, label="Advanced"):
-                        with gr.Row():
+                            with gr.Row(visible=False) as lora_model_row:
+                                db_lora_model_name = gr.Dropdown(
+                                    label="Lora Model", choices=get_sorted_lora_models()
+                                )
+                                create_refresh_button(
+                                    db_lora_model_name,
+                                    get_sorted_lora_models,
+                                    lambda: {"choices": get_sorted_lora_models()},
+                                    "refresh_lora_models",
+                                )
+                        with gr.Tab("Create"):
                             with gr.Column():
-                                gr.HTML(value="Sanity Samples")
-                                db_sanity_prompt = gr.Textbox(
-                                    label="Sanity Sample Prompt",
-                                    placeholder="A generic prompt used to generate a sample image "
-                                                "to verify model fidelity.",
+                                db_create_model = gr.Button(
+                                    value="Create Model", variant="primary"
                                 )
-                                db_sanity_negative_prompt = gr.Textbox(
-                                    label="Sanity Sample Negative Prompt",
-                                    placeholder="A negative prompt for the generic sample image.",
+                            db_new_model_name = gr.Textbox(label="Name")
+                            with gr.Row():
+                                db_create_from_hub = gr.Checkbox(
+                                    label="Create From Hub", value=False
                                 )
-                                db_sanity_seed = gr.Number(
-                                    label="Sanity Sample Seed", value=420420
+                                db_model_type_select = gr.Dropdown(label="Model Type",
+                                                                   choices=["v1x", "v2x-512", "v2x", "SDXL",
+                                                                            "ControlNet"], value="v1x")
+                                db_use_shared_src = gr.Checkbox(
+                                    label="Experimental Shared Src", value=False, visible=False
                                 )
-
-                            with gr.Column():
-                                gr.HTML(value="Miscellaneous")
-                                db_pretrained_vae_name_or_path = gr.Textbox(
-                                    label="Pretrained VAE Name or Path",
-                                    placeholder="Leave blank to use base model VAE.",
-                                    value="",
+                            with gr.Column(visible=False) as hub_row:
+                                db_new_model_url = gr.Textbox(
+                                    label="Model Path",
+                                    placeholder="runwayml/stable-diffusion-v1-5",
                                 )
-                                db_use_concepts = gr.Checkbox(
-                                    label="Use Concepts List", value=False
+                                db_new_model_token = gr.Textbox(
+                                    label="HuggingFace Token", value=""
                                 )
-                                db_concepts_path = gr.Textbox(
-                                    label="Concepts List",
-                                    placeholder="Path to JSON file with concepts to train.",
-                                )
+                            with gr.Column(visible=True) as local_row:
                                 with gr.Row():
-                                    db_secret = gr.Textbox(
-                                        label="API Key", value=get_secret, interactive=False
+                                    db_new_model_src = gr.Dropdown(
+                                        label="Source Checkpoint",
+                                        choices=sorted(get_sd_models()),
                                     )
-                                    db_refresh_button = gr.Button(
-                                        value=refresh_symbol, elem_id="refresh_secret"
+                                    create_refresh_button(
+                                        db_new_model_src,
+                                        get_sd_models,
+                                        lambda: {"choices": sorted(get_sd_models())},
+                                        "refresh_sd_models",
                                     )
-                                    db_clear_secret = gr.Button(
-                                        value=delete_symbol, elem_id="clear_secret"
+                            with gr.Column(visible=False) as shared_row:
+                                with gr.Row():
+                                    db_new_model_shared_src = gr.Dropdown(
+                                        label="EXPERIMENTAL: LoRA Shared Diffusers Source",
+                                        choices=sorted(get_shared_models()),
+                                        value="",
+                                        visible=False
                                     )
-
+                                    create_refresh_button(
+                                        db_new_model_shared_src,
+                                        get_shared_models,
+                                        lambda: {"choices": sorted(get_shared_models())},
+                                        "refresh_shared_models",
+                                    )
+                            db_new_model_extract_ema = gr.Checkbox(
+                                label="Extract EMA Weights", value=False
+                            )
+                            db_train_unfrozen = gr.Checkbox(label="Unfreeze Model", value=False)
+                    with gr.Column():
+                        with gr.Accordion(open=False, label="Resources"):
                             with gr.Column():
-                                # In the future change this to something more generic and list the supported types
-                                # from DreamboothWebhookTarget enum; for now, Discord is what I use ;)
-                                # Add options to include notifications on training complete and exceptions that halt training
-                                db_notification_webhook_url = gr.Textbox(
-                                    label="Discord Webhook",
-                                    placeholder="https://discord.com/api/webhooks/XXX/XXXX",
-                                    value="",
+                                gr.HTML(
+                                    value="<a class=\"hyperlink\" href=\"https://github.com/d8ahazard/sd_dreambooth_extension/wiki/ELI5-Training\">Beginners guide</a>",
                                 )
-                                notification_webhook_test_btn = gr.Button(
-                                    value="Save and Test Webhook"
+                                gr.HTML(
+                                    value="<a class=\"hyperlink\" href=\"https://github.com/d8ahazard/sd_dreambooth_extension/releases/latest\">Release notes</a>",
                                 )
-
+                with gr.Tab("Preprocess", elem_id="PreprocessPanel", visible=False):
                     with gr.Row():
-                        with gr.Column(scale=2):
-                            gr.HTML(value="")
+                        with gr.Column(scale=2, variant="compact"):
+                            db_preprocess_path = gr.Textbox(
+                                label="Image Path", value="", placeholder="Enter the path to your images"
+                            )
+                        with gr.Column(variant="compact"):
+                            db_preprocess_recursive = gr.Checkbox(
+                                label="Recursive", value=False, container=True, elem_classes=["singleCheckbox"]
+                            )
+                    with gr.Row():
+                        with gr.Tab("Auto-Caption"):
+                            with gr.Row():
+                                gr.HTML(value="Auto-Caption")
+                        with gr.Tab("Edit Captions"):
+                            with gr.Row():
+                                db_preprocess_autosave = gr.Checkbox(
+                                    label="Autosave", value=False
+                                )
+                            with gr.Row():
+                                gr.HTML(value="Edit Captions")
+                        with gr.Tab("Edit Images"):
+                            with gr.Row():
+                                gr.HTML(value="Edit Images")
+                    with gr.Row():
+                        db_preprocess = gr.Button(
+                            value="Preprocess", variant="primary"
+                        )
+                        db_preprocess_all = gr.Button(
+                            value="Preprocess All", variant="primary"
+                        )
+                    with gr.Row():
+                        db_preprocess_all = gr.Button(
+                            value="Preprocess All", variant="primary"
+                        )
                 with gr.Tab("Concepts", elem_id="TabConcepts") as concept_tab:
                     with gr.Column(variant="panel"):
-                        with gr.Row():
+                        with gr.Row(visible=False):
                             db_train_wizard_person = gr.Button(
                                 value="Training Wizard (Person)"
                             )
@@ -875,6 +554,352 @@ def on_ui_tabs():
                                 c4_save_guidance_scale,
                                 c4_save_infer_steps,
                             ) = build_concept_panel(4)
+                with gr.Tab("Parameters", elem_id="TabSettings"):
+                    db_performance_wizard = gr.Button(value="Performance Wizard (WIP)", visible=False)
+                    with gr.Accordion(open=False, label="Performance"):
+                        db_use_ema = gr.Checkbox(
+                            label="Use EMA", value=False
+                        )
+                        db_optimizer = gr.Dropdown(
+                            label="Optimizer",
+                            value="8bit AdamW",
+                            choices=list_optimizer(),
+                        )
+                        db_mixed_precision = gr.Dropdown(
+                            label="Mixed Precision",
+                            value=select_precision(),
+                            choices=list_precisions(),
+                        )
+                        db_full_mixed_precision = gr.Checkbox(
+                            label="Full Mixed Precision", value=True
+                        )
+                        db_attention = gr.Dropdown(
+                            label="Memory Attention",
+                            value=select_attention(),
+                            choices=list_attention(),
+                        )
+                        db_cache_latents = gr.Checkbox(
+                            label="Cache Latents", value=True
+                        )
+                        db_train_unet = gr.Checkbox(
+                            label="Train UNET", value=True
+                        )
+                        db_stop_text_encoder = gr.Slider(
+                            label="Step Ratio of Text Encoder Training",
+                            minimum=0,
+                            maximum=1,
+                            step=0.05,
+                            value=1.0,
+                            visible=True,
+                        )
+                        db_offset_noise = gr.Slider(
+                            label="Offset Noise",
+                            minimum=-1,
+                            maximum=1,
+                            step=0.01,
+                            value=0,
+                        )
+                        db_freeze_clip_normalization = gr.Checkbox(
+                            label="Freeze CLIP Normalization Layers",
+                            visible=True,
+                            value=False,
+                        )
+                        db_clip_skip = gr.Slider(
+                            label="Clip Skip",
+                            value=2,
+                            minimum=1,
+                            maximum=12,
+                            step=1,
+                        )
+                        db_weight_decay = gr.Slider(
+                            label="Weight Decay",
+                            minimum=0,
+                            maximum=1,
+                            step=0.001,
+                            value=0.01,
+                            visible=True,
+                        )
+                        db_tenc_weight_decay = gr.Slider(
+                            label="TENC Weight Decay",
+                            minimum=0,
+                            maximum=1,
+                            step=0.001,
+                            value=0.01,
+                            visible=True,
+                        )
+                        db_tenc_grad_clip_norm = gr.Slider(
+                            label="TENC Gradient Clip Norm",
+                            minimum=0,
+                            maximum=128,
+                            step=0.25,
+                            value=0,
+                            visible=True,
+                        )
+                        db_min_snr_gamma = gr.Slider(
+                            label="Min SNR Gamma",
+                            minimum=0,
+                            maximum=10,
+                            step=0.1,
+                            visible=True,
+                        )
+                        db_pad_tokens = gr.Checkbox(
+                            label="Pad Tokens", value=True
+                        )
+                        db_strict_tokens = gr.Checkbox(
+                            label="Strict Tokens", value=False
+                        )
+                        db_shuffle_tags = gr.Checkbox(
+                            label="Shuffle Tags", value=True
+                        )
+                        db_max_token_length = gr.Slider(
+                            label="Max Token Length",
+                            minimum=75,
+                            maximum=300,
+                            step=75,
+                        )
+                    with gr.Accordion(open=False, label="Intervals"):
+                        db_num_train_epochs = gr.Slider(
+                            label="Training Steps Per Image (Epochs)",
+                            value=100,
+                            maximum=1000,
+                            step=1,
+                        )
+                        db_epoch_pause_frequency = gr.Slider(
+                            label="Pause After N Epochs",
+                            value=0,
+                            maximum=100,
+                            step=1,
+                        )
+                        db_epoch_pause_time = gr.Slider(
+                            label="Amount of time to pause between Epochs (s)",
+                            value=0,
+                            maximum=3600,
+                            step=1,
+                        )
+                        db_save_embedding_every = gr.Slider(
+                            label="Save Model Frequency (Epochs)",
+                            value=25,
+                            maximum=1000,
+                            step=1,
+                        )
+                        db_save_preview_every = gr.Slider(
+                            label="Save Preview(s) Frequency (Epochs)",
+                            value=5,
+                            maximum=1000,
+                            step=1,
+                        )
+                    with gr.Accordion(open=False, label="Batch Sizes"):
+                        db_train_batch_size = gr.Slider(
+                            label="Batch Size",
+                            value=1,
+                            minimum=1,
+                            maximum=100,
+                            step=1,
+                        )
+                        db_gradient_accumulation_steps = gr.Slider(
+                            label="Gradient Accumulation Steps",
+                            value=1,
+                            minimum=1,
+                            maximum=100,
+                            step=1,
+                        )
+                        db_sample_batch_size = gr.Slider(
+                            label="Class Batch Size",
+                            minimum=1,
+                            maximum=100,
+                            value=1,
+                            step=1,
+                        )
+                        db_gradient_set_to_none = gr.Checkbox(
+                            label="Set Gradients to None When Zeroing", value=True
+                        )
+                        db_gradient_checkpointing = gr.Checkbox(
+                            label="Gradient Checkpointing", value=True
+                        )
+                    with gr.Accordion(open=False, label="Learning Rate"):
+                        with gr.Row(visible=False) as lora_lr_row:
+                            db_lora_learning_rate = gr.Number(
+                                label="Lora UNET Learning Rate", value=1e-4
+                            )
+                            db_lora_txt_learning_rate = gr.Number(
+                                label="Lora Text Encoder Learning Rate", value=5e-5
+                            )
+                        with gr.Row() as standard_lr_row:
+                            db_learning_rate = gr.Number(
+                                label="Learning Rate", value=2e-6
+                            )
+                            db_txt_learning_rate = gr.Number(
+                                label="Text Encoder Learning Rate", value=1e-6
+                            )
+
+                        db_lr_scheduler = gr.Dropdown(
+                            label="Learning Rate Scheduler",
+                            value="constant_with_warmup",
+                            choices=list_schedulers(),
+                        )
+                        db_learning_rate_min = gr.Number(
+                            label="Min Learning Rate", value=1e-6, visible=False
+                        )
+                        db_lr_cycles = gr.Number(
+                            label="Number of Hard Resets",
+                            value=1,
+                            precision=0,
+                            visible=False,
+                        )
+                        db_lr_factor = gr.Number(
+                            label="Constant/Linear Starting Factor",
+                            value=0.5,
+                            precision=2,
+                            visible=False,
+                        )
+                        db_lr_power = gr.Number(
+                            label="Polynomial Power",
+                            value=1.0,
+                            precision=1,
+                            visible=False,
+                        )
+                        db_lr_scale_pos = gr.Slider(
+                            label="Scale Position",
+                            value=0.5,
+                            minimum=0,
+                            maximum=1,
+                            step=0.05,
+                            visible=False,
+                        )
+                        db_lr_warmup_steps = gr.Slider(
+                            label="Learning Rate Warmup Steps",
+                            value=500,
+                            step=5,
+                            maximum=1000,
+                        )
+                    with gr.Accordion(open=False, label="Lora"):
+                        db_use_lora = gr.Checkbox(label="Use LORA", value=False)
+                        db_use_lora_extended = gr.Checkbox(
+                            label="Use Lora Extended",
+                            value=False,
+                            visible=False,
+                        )
+                        db_train_imagic = gr.Checkbox(label="Train Imagic Only", value=False, visible=False)
+                        db_train_inpainting = gr.Checkbox(
+                            label="Train Inpainting Model",
+                            value=False,
+                            visible=False,
+                        )
+                        with gr.Column(visible=False) as lora_rank_col:
+                            db_lora_unet_rank = gr.Slider(
+                                label="Lora UNET Rank",
+                                value=4,
+                                minimum=2,
+                                maximum=128,
+                                step=2,
+                            )
+                            db_lora_txt_rank = gr.Slider(
+                                label="Lora Text Encoder Rank",
+                                value=4,
+                                minimum=2,
+                                maximum=128,
+                                step=2,
+                            )
+                            db_lora_weight = gr.Slider(
+                                label="Lora Weight (Alpha)",
+                                value=0.8,
+                                minimum=0.1,
+                                maximum=1,
+                                step=0.1,
+                            )
+                    with gr.Accordion(open=False, label="Image Processing"):
+                        db_resolution = gr.Slider(
+                            label="Max Resolution",
+                            step=64,
+                            minimum=128,
+                            value=512,
+                            maximum=2048,
+                            elem_id="max_res",
+                        )
+                        db_hflip = gr.Checkbox(
+                            label="Apply Horizontal Flip", value=False
+                        )
+                        db_dynamic_img_norm = gr.Checkbox(
+                            label="Dynamic Image Normalization", value=False
+                        )
+                    with gr.Accordion(open=False, label="Prior Loss"):
+                        db_prior_loss_scale = gr.Checkbox(
+                            label="Scale Prior Loss", value=False
+                        )
+                        db_prior_loss_weight = gr.Slider(
+                            label="Prior Loss Weight",
+                            minimum=0.01,
+                            maximum=1,
+                            step=0.01,
+                            value=0.75,
+                        )
+                        db_prior_loss_target = gr.Number(
+                            label="Prior Loss Target",
+                            value=100,
+                            visible=False,
+                        )
+                        db_prior_loss_weight_min = gr.Slider(
+                            label="Minimum Prior Loss Weight",
+                            minimum=0.01,
+                            maximum=1,
+                            step=0.01,
+                            value=0.1,
+                            visible=False,
+                        )
+                    with gr.Accordion(open=False, label="Extras"):
+                            with gr.Column():
+                                gr.HTML(value="Sanity Samples")
+                                db_sanity_prompt = gr.Textbox(
+                                    label="Sanity Sample Prompt",
+                                    placeholder="A generic prompt used to generate a sample image "
+                                                "to verify model fidelity.",
+                                )
+                                db_sanity_negative_prompt = gr.Textbox(
+                                    label="Sanity Sample Negative Prompt",
+                                    placeholder="A negative prompt for the generic sample image.",
+                                )
+                                db_sanity_seed = gr.Number(
+                                    label="Sanity Sample Seed", value=420420
+                                )
+
+                            with gr.Column():
+                                gr.HTML(value="Miscellaneous")
+                                db_pretrained_vae_name_or_path = gr.Textbox(
+                                    label="Pretrained VAE Name or Path",
+                                    placeholder="Leave blank to use base model VAE.",
+                                    value="",
+                                )
+                                db_use_concepts = gr.Checkbox(
+                                    label="Use Concepts List", value=False
+                                )
+                                db_concepts_path = gr.Textbox(
+                                    label="Concepts List",
+                                    placeholder="Path to JSON file with concepts to train.",
+                                )
+                                with gr.Row():
+                                    db_secret = gr.Textbox(
+                                        label="API Key", value=get_secret, interactive=False
+                                    )
+                                    db_refresh_button = gr.Button(
+                                        value=refresh_symbol, elem_id="refresh_secret"
+                                    )
+                                    db_clear_secret = gr.Button(
+                                        value=delete_symbol, elem_id="clear_secret"
+                                    )
+
+                            with gr.Column():
+                                gr.HTML(value="Webhooks")
+                                # In the future change this to something more generic and list the supported types
+                                # from DreamboothWebhookTarget enum; for now, Discord is what I use ;)
+                                # Add options to include notifications on training complete and exceptions that halt training
+                                db_notification_webhook_url = gr.Textbox(
+                                    label="Discord Webhook",
+                                    placeholder="https://discord.com/api/webhooks/XXX/XXXX",
+                                    value="",
+                                )
+                                notification_webhook_test_btn = gr.Button(
+                                    value="Save and Test Webhook"
+                                )
                 with gr.Tab("Saving", elme_id="TabSave"):
                     with gr.Column():
                         gr.HTML("General")
@@ -1310,6 +1335,22 @@ def on_ui_tabs():
                 with gr.Column():
                     change_log = gr.HTML(format_updates(), elem_id="change_log")
 
+
+        global preprocess_params
+
+        preprocess_params = [
+            db_preprocess_path,
+            db_preprocess_recursive
+        ]
+
+        db_preprocess_path.change(
+            fn=check_preprocess_path,
+            inputs=[db_preprocess_path, db_preprocess_recursive],
+            outputs=[db_status, db_gallery]
+        )
+
+        db_gallery.select(load_image_caption, None, db_status)
+
         global params_to_save
         global params_to_load
 
@@ -1657,6 +1698,7 @@ def on_ui_tabs():
             fn=load_model_params,
             inputs=[db_model_name],
             outputs=[
+                db_model_info,
                 db_model_path,
                 db_revision,
                 db_epochs,
