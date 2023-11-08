@@ -147,7 +147,7 @@ def check_xformers():
     """
     try:
         xformers_version = importlib_metadata.version("xformers")
-        xformers_outdated = Version(xformers_version) < Version("0.0.21")
+        xformers_outdated = Version(xformers_version) < Version("0.0.20")
         if xformers_outdated:
             try:
                 torch_version = importlib_metadata.version("torch")
@@ -156,14 +156,14 @@ def check_xformers():
                 if is_torch_1:
                     print_xformers_torch1_instructions(xformers_version)
                 # Torch 2.0.1 is not available on PyPI for xformers version 22
-                elif is_torch_2_1 is False:
+                elif is_torch_2_1:
                     os_string = "win_amd64" if os.name == "nt" else "manylinux2014_x86_64"
                     # Get the version of python
                     py_string = f"cp{sys.version_info.major}{sys.version_info.minor}-cp{sys.version_info.major}{sys.version_info.minor}"
                     wheel_url = f"https://download.pytorch.org/whl/cu118/xformers-0.0.22.post7%2Bcu118-{py_string}-{os_string}.whl"
                     pip_install(wheel_url, "--upgrade", "--no-deps")
                 else:
-                    pip_install("xformers==0.0.22", "--upgrade")
+                    pip_install("xformers==0.0.21", "--index-url https://download.pytorch.org/whl/cu118")
             except subprocess.CalledProcessError as grepexc:
                 error_msg = grepexc.stdout.decode()
                 if "WARNING: Ignoring invalid distribution" not in error_msg:
