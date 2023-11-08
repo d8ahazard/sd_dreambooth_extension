@@ -62,6 +62,7 @@ refresh_symbol = "\U0001f504"  # 🔄
 delete_symbol = "\U0001F5D1"  # 🗑️
 update_symbol = "\U0001F51D"  # 🠝
 log_parser = LogParser()
+show_advanced = False
 
 def read_metadata_from_safetensors(filename):
 
@@ -329,7 +330,12 @@ def on_ui_tabs():
                         db_shared_diffusers_path = gr.HTML()
         with gr.Row(equal_height=False):
             with gr.Column(variant="panel", elem_id="SettingsPanel"):
-                gr.HTML(value="<span class='hh'>Settings</span>")
+                with gr.Row():
+                    with gr.Column(scale=1, min_width=100, elem_classes="halfElement"):
+                        gr.HTML(value="<span class='hh'>Settings</span>")
+                    with gr.Column(scale=1, min_width=100, elem_classes="halfElement"):
+                        db_show_advanced = gr.Button(value="Show Advanced", size="sm", elem_classes="advBtn", visible=False)
+                        db_hide_advanced = gr.Button(value="Hide Advanced", variant="primary", size="sm",  elem_id="db_hide_advanced", elem_classes="advBtn")
                 with gr.Tab("Model", elem_id="ModelPanel"):
                     with gr.Column():
                         with gr.Tab("Select"):
@@ -343,7 +349,7 @@ def on_ui_tabs():
                                     lambda: {"choices": sorted(get_db_models())},
                                     "refresh_db_models",
                                 )
-                            with gr.Row():
+                            with gr.Row() as db_snapshot_row:
                                 db_snapshot = gr.Dropdown(
                                     label="Snapshot to Resume",
                                     choices=sorted(get_model_snapshots()),
@@ -417,7 +423,7 @@ def on_ui_tabs():
                             db_new_model_extract_ema = gr.Checkbox(
                                 label="Extract EMA Weights", value=False
                             )
-                            db_train_unfrozen = gr.Checkbox(label="Unfreeze Model", value=False)
+                            db_train_unfrozen = gr.Checkbox(label="Unfreeze Model", value=True)
                     with gr.Column():
                         with gr.Accordion(open=False, label="Resources"):
                             with gr.Column():
@@ -427,51 +433,44 @@ def on_ui_tabs():
                                 gr.HTML(
                                     value="<a class=\"hyperlink\" href=\"https://github.com/d8ahazard/sd_dreambooth_extension/releases/latest\">Release notes</a>",
                                 )
-                with gr.Tab("Preprocess", elem_id="PreprocessPanel", visible=False):
-                    with gr.Row():
-                        with gr.Column(scale=2, variant="compact"):
-                            db_preprocess_path = gr.Textbox(
-                                label="Image Path", value="", placeholder="Enter the path to your images"
-                            )
-                        with gr.Column(variant="compact"):
-                            db_preprocess_recursive = gr.Checkbox(
-                                label="Recursive", value=False, container=True, elem_classes=["singleCheckbox"]
-                            )
-                    with gr.Row():
-                        with gr.Tab("Auto-Caption"):
-                            with gr.Row():
-                                gr.HTML(value="Auto-Caption")
-                        with gr.Tab("Edit Captions"):
-                            with gr.Row():
-                                db_preprocess_autosave = gr.Checkbox(
-                                    label="Autosave", value=False
-                                )
-                            with gr.Row():
-                                gr.HTML(value="Edit Captions")
-                        with gr.Tab("Edit Images"):
-                            with gr.Row():
-                                gr.HTML(value="Edit Images")
-                    with gr.Row():
-                        db_preprocess = gr.Button(
-                            value="Preprocess", variant="primary"
-                        )
-                        db_preprocess_all = gr.Button(
-                            value="Preprocess All", variant="primary"
-                        )
-                    with gr.Row():
-                        db_preprocess_all = gr.Button(
-                            value="Preprocess All", variant="primary"
-                        )
+                # with gr.Tab("Preprocess", elem_id="PreprocessPanel", visible=False):
+                #     with gr.Row():
+                #         with gr.Column(scale=2, variant="compact"):
+                #             db_preprocess_path = gr.Textbox(
+                #                 label="Image Path", value="", placeholder="Enter the path to your images"
+                #             )
+                #         with gr.Column(variant="compact"):
+                #             db_preprocess_recursive = gr.Checkbox(
+                #                 label="Recursive", value=False, container=True, elem_classes=["singleCheckbox"]
+                #             )
+                #     with gr.Row():
+                #         with gr.Tab("Auto-Caption"):
+                #             with gr.Row():
+                #                 gr.HTML(value="Auto-Caption")
+                #         with gr.Tab("Edit Captions"):
+                #             with gr.Row():
+                #                 db_preprocess_autosave = gr.Checkbox(
+                #                     label="Autosave", value=False
+                #                 )
+                #             with gr.Row():
+                #                 gr.HTML(value="Edit Captions")
+                #         with gr.Tab("Edit Images"):
+                #             with gr.Row():
+                #                 gr.HTML(value="Edit Images")
+                #     with gr.Row():
+                #         db_preprocess = gr.Button(
+                #             value="Preprocess", variant="primary"
+                #         )
+                #         db_preprocess_all = gr.Button(
+                #             value="Preprocess All", variant="primary"
+                #         )
+                #     with gr.Row():
+                #         db_preprocess_all = gr.Button(
+                #             value="Preprocess All", variant="primary"
+                #         )
                 with gr.Tab("Concepts", elem_id="TabConcepts") as concept_tab:
                     with gr.Column(variant="panel"):
-                        with gr.Row(visible=False):
-                            db_train_wizard_person = gr.Button(
-                                value="Training Wizard (Person)"
-                            )
-                            db_train_wizard_object = gr.Button(
-                                value="Training Wizard (Object/Style)"
-                            )
-                        with gr.Tab("Concept 1"):
+                        with gr.Accordion(open=False, label="Concept 1"):
                             (
                                 c1_instance_data_dir,
                                 c1_class_data_dir,
@@ -492,7 +491,7 @@ def on_ui_tabs():
                                 c1_save_infer_steps,
                             ) = build_concept_panel(1)
 
-                        with gr.Tab("Concept 2"):
+                        with gr.Accordion(open=False, label="Concept 2"):
                             (
                                 c2_instance_data_dir,
                                 c2_class_data_dir,
@@ -513,7 +512,7 @@ def on_ui_tabs():
                                 c2_save_infer_steps,
                             ) = build_concept_panel(2)
 
-                        with gr.Tab("Concept 3"):
+                        with gr.Accordion(open=False, label="Concept 3"):
                             (
                                 c3_instance_data_dir,
                                 c3_class_data_dir,
@@ -534,7 +533,7 @@ def on_ui_tabs():
                                 c3_save_infer_steps,
                             ) = build_concept_panel(3)
 
-                        with gr.Tab("Concept 4"):
+                        with gr.Accordion(open=False, label="Concept 4"):
                             (
                                 c4_instance_data_dir,
                                 c4_class_data_dir,
@@ -688,7 +687,7 @@ def on_ui_tabs():
                             maximum=1000,
                             step=1,
                         )
-                    with gr.Accordion(open=False, label="Batch Sizes"):
+                    with gr.Accordion(open=False, label="Batch Sizes") as db_batch_size_view:
                         db_train_batch_size = gr.Slider(
                             label="Batch Size",
                             value=1,
@@ -822,7 +821,7 @@ def on_ui_tabs():
                         db_dynamic_img_norm = gr.Checkbox(
                             label="Dynamic Image Normalization", value=False
                         )
-                    with gr.Accordion(open=False, label="Prior Loss"):
+                    with gr.Accordion(open=False, label="Prior Loss") as db_prior_loss_view:
                         db_prior_loss_scale = gr.Checkbox(
                             label="Scale Prior Loss", value=False
                         )
@@ -846,6 +845,168 @@ def on_ui_tabs():
                             value=0.1,
                             visible=False,
                         )
+                    with gr.Accordion(open=False, label="Saving", elme_id="TabSave") as db_save_tab:
+                        with gr.Column():
+                            gr.HTML("General")
+                            db_custom_model_name = gr.Textbox(
+                                label="Custom Model Name",
+                                value="",
+                                placeholder="Enter a model name for saving checkpoints and lora models.",
+                            )
+                            db_save_safetensors = gr.Checkbox(
+                                label="Save in .safetensors format",
+                                value=True,
+                                visible=False,
+                            )
+                            db_save_ema = gr.Checkbox(
+                                label="Save EMA Weights to Generated Models", value=True
+                            )
+                            db_infer_ema = gr.Checkbox(
+                                label="Use EMA Weights for Inference", value=False
+                            )
+                        with gr.Column():
+                            gr.HTML("Checkpoints")
+                            db_half_model = gr.Checkbox(label="Half Model", value=False)
+                            db_use_subdir = gr.Checkbox(
+                                label="Save Checkpoint to Subdirectory", value=True
+                            )
+                            db_save_ckpt_during = gr.Checkbox(
+                                label="Generate a .ckpt file when saving during training."
+                            )
+                            db_save_ckpt_after = gr.Checkbox(
+                                label="Generate a .ckpt file when training completes.",
+                                value=True,
+                            )
+                            db_save_ckpt_cancel = gr.Checkbox(
+                                label="Generate a .ckpt file when training is canceled."
+                            )
+                        with gr.Column(visible=False) as lora_save_col:
+                            db_save_lora_during = gr.Checkbox(
+                                label="Generate lora weights when saving during training."
+                            )
+                            db_save_lora_after = gr.Checkbox(
+                                label="Generate lora weights when training completes.",
+                                value=True,
+                            )
+                            db_save_lora_cancel = gr.Checkbox(
+                                label="Generate lora weights when training is canceled."
+                            )
+                            db_save_lora_for_extra_net = gr.Checkbox(
+                                label="Generate lora weights for extra networks."
+                            )
+                        with gr.Column():
+                            gr.HTML("Diffusion Weights (training snapshots)")
+                            db_save_state_during = gr.Checkbox(
+                                label="Save separate diffusers snapshots when saving during training."
+                            )
+                            db_save_state_after = gr.Checkbox(
+                                label="Save separate diffusers snapshots when training completes."
+                            )
+                            db_save_state_cancel = gr.Checkbox(
+                                label="Save separate diffusers snapshots when training is canceled."
+                            )
+                    with gr.Accordion(open=False, label="Image Generation", elem_id="TabGenerate") as db_generate_tab:
+                        gr.HTML(value="Class Generation Schedulers")
+                        db_class_gen_method = gr.Dropdown(
+                            label="Image Generation Library",
+                            value="Native Diffusers",
+                            choices=[
+                                "A1111 txt2img (Euler a)",
+                                "Native Diffusers",
+                            ]
+                        )
+                        db_scheduler = gr.Dropdown(
+                            label="Image Generation Scheduler",
+                            value="DEISMultistep",
+                            choices=get_scheduler_names(),
+                        )
+                        gr.HTML(value="Manual Class Generation")
+                        with gr.Column():
+                            db_generate_classes = gr.Button(value="Generate Class Images")
+                            db_generate_graph = gr.Button(value="Generate Graph")
+                            db_graph_smoothing = gr.Slider(
+                                value=50,
+                                label="Graph Smoothing Steps",
+                                minimum=10,
+                                maximum=500,
+                            )
+                            db_debug_buckets = gr.Button(value="Debug Buckets")
+                            db_bucket_epochs = gr.Slider(
+                                value=10,
+                                step=1,
+                                minimum=1,
+                                maximum=1000,
+                                label="Epochs to Simulate",
+                            )
+                            db_bucket_batch = gr.Slider(
+                                value=1,
+                                step=1,
+                                minimum=1,
+                                maximum=500,
+                                label="Batch Size to Simulate",
+                            )
+                            db_generate_sample = gr.Button(value="Generate Sample Images")
+                            db_sample_prompt = gr.Textbox(label="Sample Prompt")
+                            db_sample_negative = gr.Textbox(label="Sample Negative Prompt")
+                            db_sample_prompt_file = gr.Textbox(label="Sample Prompt File")
+                            db_sample_width = gr.Slider(
+                                label="Sample Width",
+                                value=512,
+                                step=64,
+                                minimum=128,
+                                maximum=2048,
+                            )
+                            db_sample_height = gr.Slider(
+                                label="Sample Height",
+                                value=512,
+                                step=64,
+                                minimum=128,
+                                maximum=2048,
+                            )
+                            db_sample_seed = gr.Number(
+                                label="Sample Seed", value=-1, precision=0
+                            )
+                            db_num_samples = gr.Slider(
+                                label="Number of Samples to Generate",
+                                value=1,
+                                minimum=1,
+                                maximum=1000,
+                                step=1,
+                            )
+                            db_gen_sample_batch_size = gr.Slider(
+                                label="Sample Batch Size",
+                                value=1,
+                                step=1,
+                                minimum=1,
+                                maximum=100,
+                                interactive=True,
+                            )
+                            db_sample_steps = gr.Slider(
+                                label="Sample Steps",
+                                value=20,
+                                minimum=1,
+                                maximum=500,
+                                step=1,
+                            )
+                            db_sample_scale = gr.Slider(
+                                label="Sample CFG Scale",
+                                value=7.5,
+                                step=0.1,
+                                minimum=1,
+                                maximum=20,
+                            )
+                            with gr.Column(variant="panel", visible=has_face_swap()):
+                                db_swap_faces = gr.Checkbox(label="Swap Sample Faces")
+                                db_swap_prompt = gr.Textbox(label="Swap Prompt")
+                                db_swap_negative = gr.Textbox(label="Swap Negative Prompt")
+                                db_swap_steps = gr.Slider(label="Swap Steps", value=40)
+                                db_swap_batch = gr.Slider(label="Swap Batch", value=40)
+
+                            db_sample_txt2img = gr.Checkbox(
+                                label="Use txt2img",
+                                value=False,
+                                visible=False  # db_sample_txt2img not implemented yet
+                            )
                     with gr.Accordion(open=False, label="Extras"):
                             with gr.Column():
                                 gr.HTML(value="Sanity Samples")
@@ -861,8 +1022,7 @@ def on_ui_tabs():
                                 db_sanity_seed = gr.Number(
                                     label="Sanity Sample Seed", value=420420
                                 )
-
-                            with gr.Column():
+                            with gr.Column() as db_misc_view:
                                 gr.HTML(value="Miscellaneous")
                                 db_pretrained_vae_name_or_path = gr.Textbox(
                                     label="Pretrained VAE Name or Path",
@@ -886,8 +1046,7 @@ def on_ui_tabs():
                                     db_clear_secret = gr.Button(
                                         value=delete_symbol, elem_id="clear_secret"
                                     )
-
-                            with gr.Column():
+                            with gr.Column() as db_hook_view:
                                 gr.HTML(value="Webhooks")
                                 # In the future change this to something more generic and list the supported types
                                 # from DreamboothWebhookTarget enum; for now, Discord is what I use ;)
@@ -900,223 +1059,64 @@ def on_ui_tabs():
                                 notification_webhook_test_btn = gr.Button(
                                     value="Save and Test Webhook"
                                 )
-                with gr.Tab("Saving", elme_id="TabSave"):
-                    with gr.Column():
-                        gr.HTML("General")
-                        db_custom_model_name = gr.Textbox(
-                            label="Custom Model Name",
-                            value="",
-                            placeholder="Enter a model name for saving checkpoints and lora models.",
-                        )
-                        db_save_safetensors = gr.Checkbox(
-                            label="Save in .safetensors format",
-                            value=True,
+                            with gr.Column() as db_test_tab:
+                                gr.HTML(value="Experimental Settings")
+                                db_tomesd = gr.Slider(
+                                    value=0,
+                                    label="Token Merging (ToMe)",
+                                    minimum=0,
+                                    maximum=1,
+                                    step=0.1,
+                                )
+                                db_split_loss = gr.Checkbox(
+                                    label="Calculate Split Loss", value=True
+                                )
+                                db_disable_class_matching = gr.Checkbox(label="Disable Class Matching")
+                                db_disable_logging = gr.Checkbox(label="Disable Logging")
+                                db_deterministic = gr.Checkbox(label="Deterministic")
+                                db_ema_predict = gr.Checkbox(label="Use EMA for prediction")
+                                db_lora_use_buggy_requires_grad = gr.Checkbox(label="LoRA use buggy requires grad")
+                                db_noise_scheduler = gr.Dropdown(
+                                    label="Noise scheduler",
+                                    value="DDPM",
+                                    choices=[
+                                        "DDPM",
+                                        "DEIS",
+                                        "UniPC"
+                                    ]
+                                )
+                                db_update_extension = gr.Button(
+                                    value="Update Extension and Restart"
+                                )
+
+                                with gr.Column(variant="panel"):
+                                    gr.HTML(value="Bucket Cropping")
+                                    db_crop_src_path = gr.Textbox(label="Source Path")
+                                    db_crop_dst_path = gr.Textbox(label="Dest Path")
+                                    db_crop_max_res = gr.Slider(
+                                        label="Max Res", value=512, step=64, maximum=2048
+                                    )
+                                    db_crop_bucket_step = gr.Slider(
+                                        label="Bucket Steps", value=8, step=8, maximum=512
+                                    )
+                                    db_crop_dry = gr.Checkbox(label="Dry Run")
+                                    db_start_crop = gr.Button("Start Cropping")
+            with gr.Column(variant="panel"):
+                with gr.Row():
+                    with gr.Column(scale=1, min_width=110):
+                        gr.HTML(value="<span class='hh'>Output</span>")
+                    with gr.Column(scale=1, min_width=110):
+                        db_check_progress_initial = gr.Button(
+                            value=update_symbol,
+                            elem_id="db_check_progress_initial",
                             visible=False,
                         )
-                        db_save_ema = gr.Checkbox(
-                            label="Save EMA Weights to Generated Models", value=True
-                        )
-                        db_infer_ema = gr.Checkbox(
-                            label="Use EMA Weights for Inference", value=False
-                        )
-                    with gr.Column():
-                        gr.HTML("Checkpoints")
-                        db_half_model = gr.Checkbox(label="Half Model", value=False)
-                        db_use_subdir = gr.Checkbox(
-                            label="Save Checkpoint to Subdirectory", value=True
-                        )
-                        db_save_ckpt_during = gr.Checkbox(
-                            label="Generate a .ckpt file when saving during training."
-                        )
-                        db_save_ckpt_after = gr.Checkbox(
-                            label="Generate a .ckpt file when training completes.",
-                            value=True,
-                        )
-                        db_save_ckpt_cancel = gr.Checkbox(
-                            label="Generate a .ckpt file when training is canceled."
-                        )
-                    with gr.Column(visible=False) as lora_save_col:
-                        db_save_lora_during = gr.Checkbox(
-                            label="Generate lora weights when saving during training."
-                        )
-                        db_save_lora_after = gr.Checkbox(
-                            label="Generate lora weights when training completes.",
-                            value=True,
-                        )
-                        db_save_lora_cancel = gr.Checkbox(
-                            label="Generate lora weights when training is canceled."
-                        )
-                        db_save_lora_for_extra_net = gr.Checkbox(
-                            label="Generate lora weights for extra networks."
-                        )
-                    with gr.Column():
-                        gr.HTML("Diffusion Weights (training snapshots)")
-                        db_save_state_during = gr.Checkbox(
-                            label="Save separate diffusers snapshots when saving during training."
-                        )
-                        db_save_state_after = gr.Checkbox(
-                            label="Save separate diffusers snapshots when training completes."
-                        )
-                        db_save_state_cancel = gr.Checkbox(
-                            label="Save separate diffusers snapshots when training is canceled."
-                        )
-                with gr.Tab("Generate", elem_id="TabGenerate"):
-                    gr.HTML(value="Class Generation Schedulers")
-                    db_class_gen_method = gr.Dropdown(
-                        label="Image Generation Library",
-                        value="Native Diffusers",
-                        choices=[
-                            "A1111 txt2img (Euler a)",
-                            "Native Diffusers",
-                        ]
-                    )
-                    db_scheduler = gr.Dropdown(
-                        label="Image Generation Scheduler",
-                        value="DEISMultistep",
-                        choices=get_scheduler_names(),
-                    )
-                    gr.HTML(value="Manual Class Generation")
-                    with gr.Column():
-                        db_generate_classes = gr.Button(value="Generate Class Images")
-                        db_generate_graph = gr.Button(value="Generate Graph")
-                        db_graph_smoothing = gr.Slider(
-                            value=50,
-                            label="Graph Smoothing Steps",
-                            minimum=10,
-                            maximum=500,
-                        )
-                        db_debug_buckets = gr.Button(value="Debug Buckets")
-                        db_bucket_epochs = gr.Slider(
-                            value=10,
-                            step=1,
-                            minimum=1,
-                            maximum=1000,
-                            label="Epochs to Simulate",
-                        )
-                        db_bucket_batch = gr.Slider(
-                            value=1,
-                            step=1,
-                            minimum=1,
-                            maximum=500,
-                            label="Batch Size to Simulate",
-                        )
-                        db_generate_sample = gr.Button(value="Generate Sample Images")
-                        db_sample_prompt = gr.Textbox(label="Sample Prompt")
-                        db_sample_negative = gr.Textbox(label="Sample Negative Prompt")
-                        db_sample_prompt_file = gr.Textbox(label="Sample Prompt File")
-                        db_sample_width = gr.Slider(
-                            label="Sample Width",
-                            value=512,
-                            step=64,
-                            minimum=128,
-                            maximum=2048,
-                        )
-                        db_sample_height = gr.Slider(
-                            label="Sample Height",
-                            value=512,
-                            step=64,
-                            minimum=128,
-                            maximum=2048,
-                        )
-                        db_sample_seed = gr.Number(
-                            label="Sample Seed", value=-1, precision=0
-                        )
-                        db_num_samples = gr.Slider(
-                            label="Number of Samples to Generate",
-                            value=1,
-                            minimum=1,
-                            maximum=1000,
-                            step=1,
-                        )
-                        db_gen_sample_batch_size = gr.Slider(
-                            label="Sample Batch Size",
-                            value=1,
-                            step=1,
-                            minimum=1,
-                            maximum=100,
-                            interactive=True,
-                        )
-                        db_sample_steps = gr.Slider(
-                            label="Sample Steps",
-                            value=20,
-                            minimum=1,
-                            maximum=500,
-                            step=1,
-                        )
-                        db_sample_scale = gr.Slider(
-                            label="Sample CFG Scale",
-                            value=7.5,
-                            step=0.1,
-                            minimum=1,
-                            maximum=20,
-                        )
-                        with gr.Column(variant="panel", visible=has_face_swap()):
-                            db_swap_faces = gr.Checkbox(label="Swap Sample Faces")
-                            db_swap_prompt = gr.Textbox(label="Swap Prompt")
-                            db_swap_negative = gr.Textbox(label="Swap Negative Prompt")
-                            db_swap_steps = gr.Slider(label="Swap Steps", value=40)
-                            db_swap_batch = gr.Slider(label="Swap Batch", value=40)
+                        # These two should be updated while doing things
+                        db_active = gr.Checkbox(elem_id="db_active", value=False, visible=False)
 
-                        db_sample_txt2img = gr.Checkbox(
-                            label="Use txt2img",
-                            value=False,
-                            visible=False  # db_sample_txt2img not implemented yet
+                        ui_check_progress_initial = gr.Button(
+                            value="Refresh", elem_id="ui_check_progress_initial", elem_classes="advBtn", size="sm"
                         )
-                with gr.Tab("Testing", elem_id="TabDebug"):
-                    gr.HTML(value="Experimental Settings")
-                    db_tomesd = gr.Slider(
-                        value=0,
-                        label="Token Merging (ToMe)",
-                        minimum=0,
-                        maximum=1,
-                        step=0.1,
-                    )
-                    db_split_loss = gr.Checkbox(
-                        label="Calculate Split Loss", value=True
-                    )
-                    db_disable_class_matching = gr.Checkbox(label="Disable Class Matching")
-                    db_disable_logging = gr.Checkbox(label="Disable Logging")
-                    db_deterministic = gr.Checkbox(label="Deterministic")
-                    db_ema_predict = gr.Checkbox(label="Use EMA for prediction")
-                    db_lora_use_buggy_requires_grad = gr.Checkbox(label="LoRA use buggy requires grad")
-                    db_noise_scheduler = gr.Dropdown(
-                        label="Noise scheduler",
-                        value="DDPM",
-                        choices=[
-                            "DDPM",
-                            "DEIS",
-                            "UniPC"
-                        ]
-                    )
-                    db_update_extension = gr.Button(
-                        value="Update Extension and Restart"
-                    )
-
-                    with gr.Column(variant="panel"):
-                        gr.HTML(value="Bucket Cropping")
-                        db_crop_src_path = gr.Textbox(label="Source Path")
-                        db_crop_dst_path = gr.Textbox(label="Dest Path")
-                        db_crop_max_res = gr.Slider(
-                            label="Max Res", value=512, step=64, maximum=2048
-                        )
-                        db_crop_bucket_step = gr.Slider(
-                            label="Bucket Steps", value=8, step=8, maximum=512
-                        )
-                        db_crop_dry = gr.Checkbox(label="Dry Run")
-                        db_start_crop = gr.Button("Start Cropping")
-            with gr.Column(variant="panel"):
-                gr.HTML(value="<span class='hh'>Output</span>")
-                db_check_progress_initial = gr.Button(
-                    value=update_symbol,
-                    elem_id="db_check_progress_initial",
-                    visible=False,
-                )
-                # These two should be updated while doing things
-                db_active = gr.Checkbox(elem_id="db_active", value=False, visible=False)
-
-                ui_check_progress_initial = gr.Button(
-                    value=update_symbol, elem_id="ui_check_progress_initial"
-                )
                 db_status = gr.HTML(elem_id="db_status", value="")
                 db_progressbar = gr.HTML(elem_id="db_progressbar")
                 db_gallery = gr.Gallery(
@@ -1335,19 +1335,103 @@ def on_ui_tabs():
                 with gr.Column():
                     change_log = gr.HTML(format_updates(), elem_id="change_log")
 
+        advanced_elements = [
+            db_snapshot_row,
+            db_create_from_hub,
+            db_new_model_extract_ema,
+            db_train_unfrozen,
+            db_use_ema,
+            db_freeze_clip_normalization,
+            db_full_mixed_precision,
+            db_offset_noise,
+            db_weight_decay,
+            db_tenc_weight_decay,
+            db_tenc_grad_clip_norm,
+            db_min_snr_gamma,
+            db_pad_tokens,
+            db_strict_tokens,
+            db_max_token_length,
+            db_epoch_pause_frequency,
+            db_epoch_pause_time,
+            db_batch_size_view,
+            db_lr_scheduler,
+            db_lr_warmup_steps,
+            db_hflip,
+            db_prior_loss_view,
+            db_misc_view,
+            db_hook_view,
+            db_save_tab,
+            db_generate_tab,
+            db_test_tab,
+            db_dynamic_img_norm,
+            db_tomesd,
+            db_split_loss,
+            db_disable_class_matching,
+            db_disable_logging,
+            db_deterministic,
+            db_ema_predict,
+            db_lora_use_buggy_requires_grad,
+            db_noise_scheduler,
+            c1_class_guidance_scale,
+            c1_class_infer_steps,
+            c1_save_sample_negative_prompt,
+            c1_sample_seed,
+            c1_save_guidance_scale,
+            c1_save_infer_steps,
+            c2_class_guidance_scale,
+            c2_class_infer_steps,
+            c2_save_sample_negative_prompt,
+            c2_sample_seed,
+            c2_save_guidance_scale,
+            c2_save_infer_steps,
+            c3_class_guidance_scale,
+            c3_class_infer_steps,
+            c3_save_sample_negative_prompt,
+            c3_sample_seed,
+            c3_save_guidance_scale,
+            c3_save_infer_steps,
+            c4_class_guidance_scale,
+            c4_class_infer_steps,
+            c4_save_sample_negative_prompt,
+            c4_sample_seed,
+            c4_save_guidance_scale,
+            c4_save_infer_steps,
+        ]
+
+        def toggle_advanced():
+            global show_advanced
+            show_advanced = False if show_advanced else True
+            outputs = [gr.update(visible=True), gr.update(visible=False)]
+            print(f"Advanced elements visible: {show_advanced}")
+            for _ in advanced_elements:
+                outputs.append(gr.update(visible=show_advanced))
+
+            return outputs
+        # Merge db_show advanced, db_hide_advanced, and advanced elements into one list
+        db_show_advanced.click(
+            fn=toggle_advanced,
+            inputs=[],
+            outputs=[db_hide_advanced, db_show_advanced, *advanced_elements]
+        )
+
+        db_hide_advanced.click(
+            fn=toggle_advanced,
+            inputs=[],
+            outputs=[db_show_advanced, db_hide_advanced, *advanced_elements]
+        )
 
         global preprocess_params
 
-        preprocess_params = [
-            db_preprocess_path,
-            db_preprocess_recursive
-        ]
-
-        db_preprocess_path.change(
-            fn=check_preprocess_path,
-            inputs=[db_preprocess_path, db_preprocess_recursive],
-            outputs=[db_status, db_gallery]
-        )
+        # preprocess_params = [
+        #     db_preprocess_path,
+        #     db_preprocess_recursive
+        # ]
+        #
+        # db_preprocess_path.change(
+        #     fn=check_preprocess_path,
+        #     inputs=[db_preprocess_path, db_preprocess_recursive],
+        #     outputs=[db_status, db_gallery]
+        # )
 
         db_gallery.select(load_image_caption, None, db_status)
 
@@ -1754,33 +1838,6 @@ def on_ui_tabs():
             ],
         )
 
-        db_train_wizard_person.click(
-            fn=training_wizard_person,
-            _js="db_start_twizard",
-            inputs=[db_model_name],
-            outputs=[
-                db_num_train_epochs,
-                c1_num_class_images_per,
-                c2_num_class_images_per,
-                c3_num_class_images_per,
-                c4_num_class_images_per,
-                db_status,
-            ],
-        )
-
-        db_train_wizard_object.click(
-            fn=training_wizard,
-            _js="db_start_twizard",
-            inputs=[db_model_name],
-            outputs=[
-                db_num_train_epochs,
-                c1_num_class_images_per,
-                c2_num_class_images_per,
-                c3_num_class_images_per,
-                c4_num_class_images_per,
-                db_status,
-            ],
-        )
 
         db_generate_sample.click(
             fn=wrap_gpu_call(generate_samples),
@@ -1878,53 +1935,61 @@ def on_ui_tabs():
 
 
 def build_concept_panel(concept: int):
-    with gr.Column():
-        gr.HTML(value="Directories")
+    with gr.Tab(label="Instance Images"):
         instance_data_dir = gr.Textbox(
-            label="Dataset Directory",
+            label="Directory",
             placeholder="Path to directory with input images",
             elem_id=f"idd{concept}",
         )
+        instance_prompt = gr.Textbox(label="Prompt", value="[filewords]")
+        gr.HTML(value="Use [filewords] here to read prompts from caption files/filename, or a prompt to describe your training images.<br>"
+                      "If using [filewords], your instance and class tokens will be inserted into the prompt as necessary for training.", elem_classes="hintHtml")
+        instance_token = gr.Textbox(label="Instance Token")
+        gr.HTML(value="If using [filewords] above, this is the unique word used for your subject, like 'fydodog' or 'ohwx'.",
+                elem_classes="hintHtml")
+        class_token = gr.Textbox(label="Class Token")
+        gr.HTML(value="If using [filewords] above, this is the generic word used for your subject, like 'dog' or 'person'.",
+                elem_classes="hintHtml")
+
+    with gr.Tab(label="Class Images"):
         class_data_dir = gr.Textbox(
-            label="Classification Dataset Directory",
+            label="Directory",
             placeholder="(Optional) Path to directory with "
             "classification/regularization images",
             elem_id=f"cdd{concept}",
         )
-    with gr.Column():
-        gr.HTML(value="Filewords")
-        instance_token = gr.Textbox(
-            label="Instance Token",
-            placeholder="When using [filewords], this is the subject to use when building prompts.",
-        )
-        class_token = gr.Textbox(
-            label="Class Token",
-            placeholder="When using [filewords], this is the class to use when building prompts.",
-        )
+        class_prompt = gr.Textbox(label="Prompt", value="[filewords]")
+        gr.HTML(
+            value="Use [filewords] here to read prompts from caption files/filename, or a prompt to describe your training images.<br>"
+                  "If using [filewords], your class token will be inserted into the file prompts if it is not found.",
+            elem_classes="hintHtml")
 
-    with gr.Column():
-        gr.HTML(value="Training Prompts")
-        instance_prompt = gr.Textbox(
-            label="Instance Prompt",
-            placeholder="Optionally use [filewords] to read image "
-            "captions from files.",
-        )
-        class_prompt = gr.Textbox(
-            label="Class Prompt",
-            placeholder="Optionally use [filewords] to read image "
-            "captions from files.",
-        )
         class_negative_prompt = gr.Textbox(
-            label="Classification Image Negative Prompt"
+            label="Negative Prompt"
         )
-    with gr.Column():
-        gr.HTML(value="Sample Prompts")
+        num_class_images_per = gr.Slider(
+            label="Class Images Per Instance Image", value=0, precision=0
+        )
+        gr.HTML(value="For every instance image, this many classification images will be used/generated. Leave at 0 to disable.",
+                elem_classes="hintHtml")
+        class_guidance_scale = gr.Slider(
+            label="Classification CFG Scale", value=7.5, maximum=12, minimum=1, step=0.1
+        )
+        class_infer_steps = gr.Slider(
+            label="Classification Steps", value=40, minimum=10, maximum=200, step=1
+        )
+    with gr.Tab(label="Sample Images"):
         save_sample_prompt = gr.Textbox(
             label="Sample Image Prompt",
             placeholder="Leave blank to use instance prompt. "
                         "Optionally use [filewords] to base "
                         "sample captions on instance images.",
         )
+        gr.HTML(
+            value="Leave blank or use [filewords] here to randomly select prompts from the existing instance prompt(s).<br>"
+                  "If using [filewords], your instance token will be inserted into the file prompts if it is not found.",
+            elem_classes="hintHtml")
+
         save_sample_negative_prompt = gr.Textbox(
             label="Sample Negative Prompt"
         )
@@ -1932,21 +1997,8 @@ def build_concept_panel(concept: int):
             label="Sample Prompt Template File",
             placeholder="Enter the path to a txt file containing sample prompts.",
         )
-
-    with gr.Column():
-        gr.HTML("Class Image Generation")
-        num_class_images_per = gr.Slider(
-            label="Class Images Per Instance Image", value=0, precision=0
-        )
-        class_guidance_scale = gr.Slider(
-            label="Classification CFG Scale", value=7.5, maximum=12, minimum=1, step=0.1
-        )
-        class_infer_steps = gr.Slider(
-            label="Classification Steps", value=40, minimum=10, maximum=200, step=1
-        )
-
-    with gr.Column():
-        gr.HTML("Sample Image Generation")
+        gr.HTML(value="When enabled the above prompt and negative prompt will be ignored.",
+                elem_classes="hintHtml")
         n_save_sample = gr.Slider(
             label="Number of Samples to Generate", value=1, maximum=100, step=1
         )
