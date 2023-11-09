@@ -20,6 +20,7 @@ import torch
 import torch.backends.cuda
 import torch.backends.cudnn
 import torch.nn.functional as F
+import wandb
 from accelerate import Accelerator
 from accelerate.utils.random import set_seed as set_seed2
 from diffusers import (
@@ -71,6 +72,9 @@ from helpers.mytqdm import mytqdm
 from lora_diffusion.lora import (
     set_lora_requires_grad,
 )
+
+# Disable annoying wandb popup?
+wandb.config.auto_init = False
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
@@ -933,7 +937,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 if global_step > 0:
                     save_image = True
                     save_model = True
-                    save_lora = True
+                    if args.use_lora:
+                        save_lora = True
 
             save_snapshot = False
 
@@ -966,6 +971,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 if save_checkpoint and args.use_lora:
                     save_checkpoint = False
                     save_lora = True
+            if not args.use_lora:
+                save_lora = False
 
             if (
                     save_checkpoint
@@ -1073,6 +1080,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         weights_dir = f"{weights_dir}_temp"
                         os.makedirs(weights_dir, exist_ok=True)
                     else:
+                        save_lora = False
                         logger.debug(f"Save checkpoint: {save_checkpoint} save lora {save_lora}.")
                 # Is inference_mode() needed here to prevent issues when saving?
                 logger.debug(f"Loras dir: {loras_dir}")
