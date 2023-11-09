@@ -651,12 +651,12 @@ def load_model_params(model_name):
         msg = f"Selected model: '{model_name}'."
         return (
             gradio.update(visible=True),
-            config.model_dir,
+            os.path.basename(config.model_dir),
             config.revision,
             config.epoch,
             config.model_type,
             "True" if config.has_ema and not config.use_lora else "False",
-            config.src,
+            os.path.basename(config.src),
             config.shared_diffusers_path,
             db_model_snapshots,
             db_lora_models,
