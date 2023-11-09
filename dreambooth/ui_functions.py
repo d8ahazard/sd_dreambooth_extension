@@ -649,6 +649,9 @@ def load_model_params(model_name):
         loras = get_lora_models(config)
         db_lora_models = gr_update(choices=loras)
         msg = f"Selected model: '{model_name}'."
+        src_name = os.path.basename(config.src)
+        # Strip the extension
+        src_name = os.path.splitext(src_name)[0]
         return (
             gradio.update(visible=True),
             os.path.basename(config.model_dir),
@@ -656,7 +659,7 @@ def load_model_params(model_name):
             config.epoch,
             config.model_type,
             "True" if config.has_ema and not config.use_lora else "False",
-            os.path.basename(config.src),
+            src_name,
             config.shared_diffusers_path,
             db_model_snapshots,
             db_lora_models,
