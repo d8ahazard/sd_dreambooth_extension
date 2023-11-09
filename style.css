@@ -43,6 +43,28 @@ button:disabled, input:disabled {
 
 .commitDiv {
     border: 1px grey solid;
+    padding: 5px;
+}
+
+/* Targets the first .commitDiv in its parent */
+.commitDiv:first-child {
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+
+/* Targets the last .commitDiv in its parent */
+.commitDiv:last-child {
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+}
+
+/* Removes border-radius for every other .commitDiv */
+.commitDiv:not(:first-child):not(:last-child) {
+    border-radius: 0;
+}
+
+.commitDiv h3 {
+    margin-top: 0!important;
 }
 
 .singleCheckbox {
@@ -82,7 +104,7 @@ button.advBtn {
     margin: 0 auto;
     z-index: 10000;
     border: 1px solid white;
-    overflow-y: scroll;
+    overflow-y: auto;
     overflow-x: hidden;
 }
 
@@ -94,10 +116,14 @@ button.advBtn {
 
 
 #close_modal {
-    min-width: 10px;
-    max-width: 10px;
-    min-height: 10px;
-    max-height: 35px;
+    min-width: 30px;
+    max-width: 30px;
+    min-height: 30px;
+    max-height: 30px;
+    height: 30px;
+    width: 30px;
+    padding: 3px;
+    font-family: monospace;
     position: absolute;
     right: 11px;
 }

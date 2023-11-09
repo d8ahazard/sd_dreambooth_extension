@@ -62,7 +62,7 @@ refresh_symbol = "\U0001f504"  # 🔄
 delete_symbol = "\U0001F5D1"  # 🗑️
 update_symbol = "\U0001F51D"  # 🠝
 log_parser = LogParser()
-show_advanced = False
+show_advanced = True
 
 def read_metadata_from_safetensors(filename):
 
@@ -284,21 +284,21 @@ def on_ui_tabs():
     with gr.Blocks() as dreambooth_interface:
         # Top button row
         with gr.Row(equal_height=True, elem_id="DbTopRow"):
-            db_load_params = gr.Button(value="Load Settings", elem_id="db_load_params")
-            db_save_params = gr.Button(value="Save Settings", elem_id="db_save_config")
+            db_load_params = gr.Button(value="Load Settings", elem_id="db_load_params", size="sm")
+            db_save_params = gr.Button(value="Save Settings", elem_id="db_save_config", size="sm")
             db_train_model = gr.Button(
-                value="Train", variant="primary", elem_id="db_train"
+                value="Train", variant="primary", elem_id="db_train", size="sm"
             )
             db_generate_checkpoint = gr.Button(
-                value="Generate Ckpt", elem_id="db_gen_ckpt"
+                value="Generate Ckpt", elem_id="db_gen_ckpt", size="sm"
             )
             db_generate_checkpoint_during = gr.Button(
-                value="Save Weights", elem_id="db_gen_ckpt_during"
+                value="Save Weights", elem_id="db_gen_ckpt_during", size="sm"
             )
             db_train_sample = gr.Button(
-                value="Generate Samples", elem_id="db_train_sample"
+                value="Generate Samples", elem_id="db_train_sample", size="sm"
             )
-            db_cancel = gr.Button(value="Cancel", elem_id="db_cancel")
+            db_cancel = gr.Button(value="Cancel", elem_id="db_cancel", size="sm")
         with gr.Row():
             gr.HTML(value="Select or create a model to begin.", elem_id="hint_row")
         with gr.Row(elem_id="ModelDetailRow", visible=False, variant="compact") as db_model_info:
@@ -1292,7 +1292,7 @@ def on_ui_tabs():
                     fn=lambda: check_progress_call(),
                     show_progress=False,
                     inputs=[],
-                    outputs=progress_elements,
+                    outputs=progress_elements
                 )
 
                 db_check_progress_initial.click(
