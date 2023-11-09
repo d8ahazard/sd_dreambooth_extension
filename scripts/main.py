@@ -1981,12 +1981,10 @@ def build_concept_panel(concept: int):
     with gr.Tab(label="Sample Images"):
         save_sample_prompt = gr.Textbox(
             label="Sample Image Prompt",
-            placeholder="Leave blank to use instance prompt. "
-                        "Optionally use [filewords] to base "
-                        "sample captions on instance images.",
+            value='[filewords]'
         )
         gr.HTML(
-            value="Leave blank or use [filewords] here to randomly select prompts from the existing instance prompt(s).<br>"
+            value="A prompt to generate samples from, or use [filewords] here to randomly select prompts from the existing instance prompt(s).<br>"
                   "If using [filewords], your instance token will be inserted into the file prompts if it is not found.",
             elem_classes="hintHtml")
 
