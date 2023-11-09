@@ -20,7 +20,6 @@ import torch
 import torch.backends.cuda
 import torch.backends.cudnn
 import torch.nn.functional as F
-import wandb
 from accelerate import Accelerator
 from accelerate.utils.random import set_seed as set_seed2
 from diffusers import (
@@ -73,8 +72,13 @@ from lora_diffusion.lora import (
     set_lora_requires_grad,
 )
 
-# Disable annoying wandb popup?
-wandb.config.auto_init = False
+try:
+    import wandb
+
+    # Disable annoying wandb popup?
+    wandb.config.auto_init = False
+except:
+    pass
 
 logger = logging.getLogger(__name__)
 # define a Handler which writes DEBUG messages or higher to the sys.stderr
