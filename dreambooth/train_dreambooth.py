@@ -985,6 +985,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     or save_image
                     or save_model
             ):
+                disable_safe_unpickle()
                 save_weights(
                     save_image,
                     save_model,
@@ -992,6 +993,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     save_checkpoint,
                     save_lora
                 )
+                enable_safe_unpickle()
 
             return save_model, save_image
 
