@@ -176,7 +176,10 @@ def check_bitsandbytes():
     """
     Check for "different" B&B Files and copy only if necessary
     """
-    bitsandbytes_version = importlib_metadata.version("bitsandbytes")
+    try:
+        bitsandbytes_version = importlib_metadata.version("bitsandbytes")
+    except:
+        bitsandbytes_version = None
     if os.name == "nt":
         if bitsandbytes_version != "0.41.1":
             venv_path = os.environ.get("VIRTUAL_ENV", None)
