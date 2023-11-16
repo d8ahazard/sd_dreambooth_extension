@@ -40,11 +40,11 @@ def actual_install():
     print("Initializing Dreambooth")
     print(f"Dreambooth revision: {revision}")
 
-    install_requirements()
-
     check_xformers()
 
-    check_bitsandbytes()
+    #check_bitsandbytes()
+
+    install_requirements()
 
     check_versions()
 
@@ -52,14 +52,30 @@ def actual_install():
 
 
 def pip_install(*args):
+    try:
+        output = subprocess.check_output(
+            [sys.executable, "-m", "pip", "install"] + list(args),
+            stderr=subprocess.STDOUT,
+        )
+        success = False
+        for line in output.decode().split("\n"):
+            if "Successfully installed" in line:
+                print(line)
+                success = True
+        return success
+    except subprocess.CalledProcessError as e:
+        print("Error occurred:", e.output.decode())
+        return False
+
+
+def pip_uninstall(*args):
     output = subprocess.check_output(
-        [sys.executable, "-m", "pip", "install"] + list(args),
+        [sys.executable, "-m", "pip", "uninstall", "-y"] + list(args),
         stderr=subprocess.STDOUT,
         )
     for line in output.decode().split("\n"):
-        if "Successfully installed" in line:
+        if "Successfully uninstalled" in line:
             print(line)
-
 
 def is_installed(pkg: str, version: Optional[str] = None, check_strict: bool = True) -> bool:
     try:
@@ -101,7 +117,7 @@ def install_requirements():
     strict = True
     non_strict_separators = ["==", ">=", "<=", ">", "<", "~="]
     # Load the requirements file
-    with open(req_file_startup_arg, "r") as f:
+    with open(req_file, "r") as f:
         reqs = f.readlines()
 
     if os.name == "darwin":
@@ -145,6 +161,7 @@ def check_xformers():
     """
     Install xformers if necessary
     """
+    print("Checking xformers...")
     try:
         xformers_version = importlib_metadata.version("xformers")
         xformers_outdated = Version(xformers_version) < Version("0.0.20")
@@ -176,31 +193,43 @@ def check_bitsandbytes():
     """
     Check for "different" B&B Files and copy only if necessary
     """
-    bitsandbytes_version = importlib_metadata.version("bitsandbytes")
+    print("Checking bitsandbytes...")
+    try:
+        bitsandbytes_version = importlib_metadata.version("bitsandbytes")
+    except:
+        bitsandbytes_version = None
+    print("Bitsandbytes version: " + str(bitsandbytes_version))
     if os.name == "nt":
-        if bitsandbytes_version != "0.41.1":
-            venv_path = os.environ.get("VIRTUAL_ENV", None)
+        print("Checking bitsandbytes (Windows)")
+        if bitsandbytes_version != "0.41.2":
+            venv_path = os.environ.get("VENV_DIR", None)
+            print(f"Virtual environment path: {venv_path}")
             # Check for the dll in venv/lib/site-packages/bitsandbytes/libbitsandbytes_cuda118.dll
             # If it doesn't exist, append the requirement
             if not venv_path:
                 print("Could not find the virtual environment path. Skipping bitsandbytes installation.")
             else:
                 win_dll = os.path.join(venv_path, "lib", "site-packages", "bitsandbytes", "libbitsandbytes_cuda118.dll")
+                print(f"Checking for {win_dll}")
                 if not os.path.exists(win_dll):
                     try:
-                        print("Installing bitsandbytes")
-                        pip_install("--force-install","==prefer-binary","--extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui","bitsandbytes==0.41.1")
+                        pip_uninstall("bitsandbytes")
+                        # Find any directories starting with ~ in the venv/lib/site-packages directory and delete them
+                        for env_dir in os.listdir(os.path.join(venv_path, "lib", "site-packages")):
+                            if env_dir.startswith("~"):
+                                print(f"Deleting {env_dir}")
+                                os.rmdir(os.path.join(venv_path, "lib", "site-packages", env_dir))
                     except:
-                        print("Bitsandbytes 0.41.1 installation failed.")
-                        print("Some features such as 8bit optimizers will be unavailable")
-                        print("Please install manually with")
-                        print("'python -m pip install bitsandbytes==0.41.1 --extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui --prefer-binary --force-install'")
                         pass
+                    print("Installing bitsandbytes")
+                    pip_install("bitsandbytes==0.41.1", "--force-reinstall",
+                                "--extra-index-url", "https://d8ahazard.github.io/sd_dreambooth_extension/bnb_index.html")
     else:
+        print("Checking bitsandbytes (Linux)")
         if bitsandbytes_version != "0.41.1":
             try:
                 print("Installing bitsandbytes")
-                pip_install("--force-install","--prefer-binary","bitsandbytes==0.41.1")
+                pip_install("--force-install","--prefer-binary","https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.1-py3-none-win_amd64.whl")
             except:
                 print("Bitsandbytes 0.41.1 installation failed")
                 print("Some features such as 8bit optimizers will be unavailable")
@@ -230,7 +259,7 @@ def check_versions():
         Dependency(module="accelerate", version="0.21.0"),
         Dependency(module="diffusers", version="0.22.1"),
         Dependency(module="transformers", version="4.30.2"),
-        Dependency(module="bitsandbytes",  version="0.41.1"),
+        Dependency(module="bitsandbytes",  version="0.41.1", required=False),
     ]
 
     launch_errors = []

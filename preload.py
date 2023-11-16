@@ -29,7 +29,3 @@ def preload(parser: argparse.ArgumentParser):
                         help="Set this to enable memory profiling while training. For science only.")
     parser.add_argument("--debug-db", action='store_true',
                         help="Set this to enable memory logging. For science only.")
-    # parser.add_argument("--torch2", action='store_true',
-    #                     help="Enable this flag to use torch V2.")
-    #
-    # actual_install()
