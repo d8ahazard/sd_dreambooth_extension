@@ -4,8 +4,13 @@ import os
 import subprocess
 import sys
 from dataclasses import dataclass
+from typing import Optional
 
 import git
+from packaging import version as pv
+
+from importlib import metadata
+
 from packaging.version import Version
 
 from dreambooth import shared
@@ -56,6 +61,32 @@ def pip_install(*args):
             print(line)
 
 
+def is_installed(pkg: str, version: Optional[str] = None, check_strict: bool = True) -> bool:
+    try:
+        # Retrieve the package version from the installed package metadata
+        installed_version = metadata.version(pkg)
+
+        # If version is not specified, just return True as the package is installed
+        if version is None:
+            return True
+
+        # Compare the installed version with the required version
+        if check_strict:
+            # Strict comparison (must be an exact match)
+            return pv.parse(installed_version) == pv.parse(version)
+        else:
+            # Non-strict comparison (installed version must be greater than or equal to the required version)
+            return pv.parse(installed_version) >= pv.parse(version)
+
+    except metadata.PackageNotFoundError:
+        # The package is not installed
+        return False
+    except Exception as e:
+        # Any other exceptions encountered
+        print(f"Error: {e}")
+        return False
+
+
 def install_requirements():
     dreambooth_skip_install = os.environ.get("DREAMBOOTH_SKIP_INSTALL", False)
     req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
@@ -63,26 +94,52 @@ def install_requirements():
 
     if dreambooth_skip_install or req_file == req_file_startup_arg:
         return
-
+    print("Checking Dreambooth requirements...")
     has_diffusers = importlib.util.find_spec("diffusers") is not None
     has_tqdm = importlib.util.find_spec("tqdm") is not None
     transformers_version = importlib_metadata.version("transformers")
+    strict = True
+    non_strict_separators = ["==", ">=", "<=", ">", "<", "~="]
+    # Load the requirements file
+    with open(req_file_startup_arg, "r") as f:
+        reqs = f.readlines()
 
-    try:
-        pip_install("-r", req_file)
+    if os.name == "darwin":
+        reqs.append("tensorboard==2.11.2")
+    else:
+        reqs.append("tensorboard==2.13.0")
 
-        if has_diffusers and has_tqdm and Version(transformers_version) < Version("4.26.1"):
-            print()
-            print("Does your project take forever to startup?")
-            print("Repetitive dependency installation may be the reason.")
-            print("Automatic1111's base project sets strict requirements on outdated dependencies.")
-            print("If an extension is using a newer version, the dependency is uninstalled and reinstalled twice every startup.")
-            print()
-    except subprocess.CalledProcessError as grepexc:
-        error_msg = grepexc.stdout.decode()
-        print_requirement_installation_error(error_msg)
-        raise grepexc
+    for line in reqs:
+        try:
+            package = line.strip()
+            if package and not package.startswith("#"):
+                package_version = None
+                strict = True
+                for separator in non_strict_separators:
+                    if separator in package:
+                        strict = False
+                        package, package_version = line.split(separator)
+                        package = package.strip()
+                        package_version = package_version.strip()
+                        break
+                if not is_installed(package, package_version, strict):
+                    print(f"[Dreambooth] {package} v{package_version} is not installed.")
+                    pip_install(line)
+                else:
+                    print(f"[Dreambooth] {package} v{package_version} is already installed.")
 
+        except subprocess.CalledProcessError as grepexc:
+            error_msg = grepexc.stdout.decode()
+            print_requirement_installation_error(error_msg)
+
+    if has_diffusers and has_tqdm and Version(transformers_version) < Version("4.26.1"):
+        print()
+        print("Does your project take forever to startup?")
+        print("Repetitive dependency installation may be the reason.")
+        print("Automatic1111's base project sets strict requirements on outdated dependencies.")
+        print(
+            "If an extension is using a newer version, the dependency is uninstalled and reinstalled twice every startup.")
+        print()
 
 def check_xformers():
     """
@@ -95,13 +152,22 @@ def check_xformers():
             try:
                 torch_version = importlib_metadata.version("torch")
                 is_torch_1 = Version(torch_version) < Version("2")
+                is_torch_2_1 = Version(torch_version) < Version("2.0")
                 if is_torch_1:
                     print_xformers_torch1_instructions(xformers_version)
+                # Torch 2.0.1 is not available on PyPI for xformers version 22
+                elif is_torch_2_1:
+                    os_string = "win_amd64" if os.name == "nt" else "manylinux2014_x86_64"
+                    # Get the version of python
+                    py_string = f"cp{sys.version_info.major}{sys.version_info.minor}-cp{sys.version_info.major}{sys.version_info.minor}"
+                    wheel_url = f"https://download.pytorch.org/whl/cu118/xformers-0.0.22.post7%2Bcu118-{py_string}-{os_string}.whl"
+                    pip_install(wheel_url, "--upgrade", "--no-deps")
                 else:
-                    pip_install("--force-reinstall", "xformers")
+                    pip_install("xformers==0.0.21", "--index-url https://download.pytorch.org/whl/cu118")
             except subprocess.CalledProcessError as grepexc:
                 error_msg = grepexc.stdout.decode()
-                print_xformers_installation_error(error_msg)
+                if "WARNING: Ignoring invalid distribution" not in error_msg:
+                    print_xformers_installation_error(error_msg)
     except:
         pass
 
@@ -113,15 +179,23 @@ def check_bitsandbytes():
     bitsandbytes_version = importlib_metadata.version("bitsandbytes")
     if os.name == "nt":
         if bitsandbytes_version != "0.41.1":
-            try:
-                print("Installing bitsandbytes")
-                pip_install("--force-install","==prefer-binary","--extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui","bitsandbytes==0.41.1")
-            except:
-                print("Bitsandbytes 0.41.1 installation failed.")
-                print("Some features such as 8bit optimizers will be unavailable")
-                print("Please install manually with")
-                print("'python -m pip install bitsandbytes==0.41.1 --extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui --prefer-binary --force-install'")
-                pass
+            venv_path = os.environ.get("VIRTUAL_ENV", None)
+            # Check for the dll in venv/lib/site-packages/bitsandbytes/libbitsandbytes_cuda118.dll
+            # If it doesn't exist, append the requirement
+            if not venv_path:
+                print("Could not find the virtual environment path. Skipping bitsandbytes installation.")
+            else:
+                win_dll = os.path.join(venv_path, "lib", "site-packages", "bitsandbytes", "libbitsandbytes_cuda118.dll")
+                if not os.path.exists(win_dll):
+                    try:
+                        print("Installing bitsandbytes")
+                        pip_install("--force-install","==prefer-binary","--extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui","bitsandbytes==0.41.1")
+                    except:
+                        print("Bitsandbytes 0.41.1 installation failed.")
+                        print("Some features such as 8bit optimizers will be unavailable")
+                        print("Please install manually with")
+                        print("'python -m pip install bitsandbytes==0.41.1 --extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui --prefer-binary --force-install'")
+                        pass
     else:
         if bitsandbytes_version != "0.41.1":
             try:
@@ -150,12 +224,12 @@ def check_versions():
 
     #Probably a bad idea but update ALL the dependencies
     dependencies = [
-        Dependency(module="xformers", version="0.0.21", required=False),
+        Dependency(module="xformers", version="0.0.22", required=False),
         Dependency(module="torch", version="1.13.1" if is_mac else "2.0.1+cu118"),
         Dependency(module="torchvision", version="0.14.1" if is_mac else "0.15.2+cu118"),
-        Dependency(module="accelerate", version="0.22.0"),
-        Dependency(module="diffusers", version="0.20.1"),
-        Dependency(module="transformers", version="4.25.1"),
+        Dependency(module="accelerate", version="0.21.0"),
+        Dependency(module="diffusers", version="0.22.1"),
+        Dependency(module="transformers", version="4.30.2"),
         Dependency(module="bitsandbytes",  version="0.41.1"),
     ]
 

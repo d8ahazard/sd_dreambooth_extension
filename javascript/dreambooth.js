@@ -7,6 +7,7 @@ let locked = false;
 let listenersSet = false;
 let timeouts = [];
 let listeners = {};
+let elementsHidden = false;
 
 function save_config() {
     let btn = gradioApp().getElementById("db_save_config");
@@ -22,7 +23,7 @@ function save_config() {
 }
 
 function toggleComponents(enable, disableAll) {
-    const elements = ['DbTopRow', 'SettingsPanel'];
+    const elements = ["DbTopRow", "TabConcepts", "TabSettings", "TabSave", "TabGenerate", "TabDebug"];
     if (disableAll) {
         console.log("Disabling all DB elements!");
         elements.push("ModelPanel")
@@ -53,124 +54,7 @@ function toggleComponents(enable, disableAll) {
     });
 }
 
-// Disconnect a gradio mutation observer, update the element value, and reconnect the observer?
-function updateInputValue(elements, newValue) {
-    const savedListeners = [];
-    const savedObservers = [];
-
-    elements.forEach((element) => {
-        // Save any existing listeners and remove them
-        const listeners = [];
-        const events = ['change', 'input'];
-        events.forEach((event) => {
-            if (element['on' + event]) {
-                listeners.push({
-                    event,
-                    listener: element['on' + event],
-                });
-                element['on' + event] = null;
-            }
-            const eventListeners = element.getEventListeners?.(event);
-            if (eventListeners) {
-                eventListeners.forEach(({ listener }) => {
-                    listeners.push({
-                        event,
-                        listener,
-                    });
-                    element.removeEventListener(event, listener);
-                });
-            }
-        });
-        savedListeners.push(listeners);
-
-        // Save any existing MutationObservers and disconnect them
-        const observer = new MutationObserver(() => {
-        });
-        if (observer && element.tagName === 'INPUT') {
-            observer.observe(element, {
-                attributes: true,
-                attributeFilter: ['value'],
-            });
-            savedObservers.push(observer);
-            observer.disconnect();
-        } else {
-            savedObservers.push(null);
-        }
-
-        // Update the value of the element
-        element.value = newValue;
-    });
-
-    // Restore any saved listeners and MutationObservers
-    savedListeners.forEach((listeners, i) => {
-        const element = elements[i];
-        listeners.forEach(({ event, listener }) => {
-            if (listener) {
-                element.addEventListener(event, listener);
-            }
-        });
-    });
-
-    savedObservers.forEach((observer, i) => {
-        const element = elements[i];
-        if (observer) {
-            observer.observe(element, {
-                attributes: true,
-                attributeFilter: ['value'],
-            });
-        }
-    });
-}
-
-
-// Fix steps on sliders. God this is a lot of work for one stupid thing...
-function handleNumberInputs() {
-    const numberInputs = gradioApp()
-       .querySelector('#tab_dreambooth_interface')
-       ?.querySelectorAll('input[type="number"]');
-    numberInputs?.forEach((numberInput) => {
-        const step = Number(numberInput.step) || 1;
-        const parentDiv = numberInput.parentElement;
-        const labelFor = parentDiv.querySelector('label');
-        if (labelFor) {
-            const tgt = labelFor.getAttribute("for");
-            if (listeners[tgt]) return;
-            const rangeInput = getRealElement(tgt);
-            if (rangeInput && rangeInput.type === 'range') {
-                let timeouts = [];
-                listeners[tgt] = true;
-                numberInput.oninput = () => {
-                    if (timeouts[tgt]) {
-                        clearTimeout(timeouts[tgt]);
-                    }
-                    timeouts[tgt] = setTimeout(() => {
-                        let value = Number(numberInput.value) || 0;
-                        const min = parseFloat(rangeInput.min) || 0;
-                        const max = parseFloat(rangeInput.max) || 100;
-                        if (value < min) {
-                            value = min;
-                        } else if (value > max) {
-                            value = max;
-                        }
-                        const remainder = value % step;
-                        if (remainder !== 0) {
-                            value -= remainder;
-                            if (remainder >= step / 2) {
-                                value += step;
-                            }
-                        }
-                        if (value !== numberInput.value) {
-                            numberInput.value = value;
-                        }
-                    }, 500);
-                };
-
-            }
-        }
-    });
-}
-
-
+// Don't delete this, it's used by the UI
 function check_save() {
     let do_save = true;
     if (params_loaded === false) {
@@ -207,7 +91,7 @@ function update_params() {
         let btn = gradioApp().getElementById("db_update_params");
         if (btn == null) return;
         btn.click();
-    }, 500);
+    }, 100);
 }
 
 function getRealElement(selector) {
@@ -455,8 +339,22 @@ let db_titles = {
     "Weight Decay": "Values closer to 0 closely match your training dataset, and values closer to 1 generalize more and deviate from your training dataset. Default is 1e-2, values lower than 0.1 are recommended. For D-Adaptation values between 0.02 and 0.04 are recommended",
 }
 
+function hideElements() {
+    if (!elementsHidden) {
+        let btn = gradioApp().getElementById("db_hide_advanced");
+        if (btn == null) return;
+        elementsHidden = true;
+        console.log("Hiding advanced elements!");
+        btn.click();
+    }
+}
+
 // Do a thing when the UI updates
 onUiUpdate(function () {
+    setTimeout(function () {
+        hideElements();
+    },100);
+
     let db_active = document.getElementById("db_active");
     if (db_active) {
         db_active.parentElement.style.display = "none";
@@ -545,11 +443,6 @@ onUiUpdate(function () {
         observer.observe(btn, options);
 
     });
-    try {
-        handleNumberInputs();
-    } catch (e) {
-        console.log("Gotcha: ", e);
-    }
 
 });
 

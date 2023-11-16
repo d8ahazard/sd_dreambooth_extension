@@ -11,6 +11,7 @@ import sys
 import traceback
 from collections import OrderedDict
 
+import gradio
 import torch
 import torch.utils.data.dataloader
 from accelerate import find_executable_batch_size
@@ -639,7 +640,7 @@ def load_model_params(model_name):
     if config is None:
         print("Can't load config!")
         msg = f"Error loading model params: '{model_name}'."
-        return "", "", "", "", "", db_model_snapshots, msg
+        return gradio.update(visible=False), "", "", "", "", "", db_model_snapshots, msg
     else:
         snaps = get_model_snapshots(config)
         snap_selection = config.revision if str(config.revision) in snaps else ""
@@ -648,13 +649,17 @@ def load_model_params(model_name):
         loras = get_lora_models(config)
         db_lora_models = gr_update(choices=loras)
         msg = f"Selected model: '{model_name}'."
+        src_name = os.path.basename(config.src)
+        # Strip the extension
+        src_name = os.path.splitext(src_name)[0]
         return (
-            config.model_dir,
+            gradio.update(visible=True),
+            os.path.basename(config.model_dir),
             config.revision,
             config.epoch,
             config.model_type,
             "True" if config.has_ema and not config.use_lora else "False",
-            config.src,
+            src_name,
             config.shared_diffusers_path,
             db_model_snapshots,
             db_lora_models,
@@ -941,11 +946,13 @@ def create_model(
         new_model_token="",
         extract_ema=False,
         train_unfrozen=False,
-        model_type="v1"
+        model_type="v1x"
 ):
+    if not model_type:
+        model_type = "v1x"
     printm("Extracting model.")
     res = 512
-    is_512 = model_type == "v1"
+    is_512 = model_type == "v1x"
     if model_type == "v1x" or model_type=="v2x-512":
         res = 512
     elif model_type == "v2x":

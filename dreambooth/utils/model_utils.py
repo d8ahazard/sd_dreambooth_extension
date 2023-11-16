@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import contextlib
 import json
 import logging
 import os
@@ -257,22 +258,39 @@ def get_checkpoint_match(search_string):
     return None
 
 
+disable_safe_unpickle_count = 0
+
 def disable_safe_unpickle():
+    global disable_safe_unpickle_count
     try:
         from modules import shared as auto_shared
-        auto_shared.cmd_opts.disable_safe_unpickle = True
-        torch.load = unsafe_torch_load
+        if not auto_shared.cmd_opts.disable_safe_unpickle:
+            auto_shared.cmd_opts.disable_safe_unpickle = True
+            torch.load = unsafe_torch_load
+        disable_safe_unpickle_count += 1
     except:
         pass
 
 
 def enable_safe_unpickle():
+    global disable_safe_unpickle_count
     try:
         from modules import shared as auto_shared
-        auto_shared.cmd_opts.disable_safe_unpickle = False
-        torch.load = load
+        if disable_safe_unpickle_count > 0:
+            disable_safe_unpickle_count -= 1
+            if disable_safe_unpickle_count == 0 and auto_shared.cmd_opts.disable_safe_unpickle:
+                auto_shared.cmd_opts.disable_safe_unpickle = False
+                torch.load = load
     except:
         pass
+
+@contextlib.contextmanager
+def safe_unpickle_disabled():
+    disable_safe_unpickle()
+    try:
+        yield
+    finally:
+        enable_safe_unpickle()
 
 
 def xformerify(obj, use_lora):

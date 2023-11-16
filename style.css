@@ -7,6 +7,10 @@
     max-height: 20px;
 }
 
+#modelDetailRow {
+    text-align: center;
+}
+
 button:disabled, input:disabled {
     background: #4444 !important;
     color: #6666 !important;
@@ -39,6 +43,52 @@ button:disabled, input:disabled {
 
 .commitDiv {
     border: 1px grey solid;
+    padding: 5px;
+}
+
+/* Targets the first .commitDiv in its parent */
+.commitDiv:first-child {
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+
+/* Targets the last .commitDiv in its parent */
+.commitDiv:last-child {
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+}
+
+/* Removes border-radius for every other .commitDiv */
+.commitDiv:not(:first-child):not(:last-child) {
+    border-radius: 0;
+}
+
+.commitDiv h3 {
+    margin-top: 0!important;
+}
+
+.singleCheckbox {
+    margin-top: 29px !important;
+}
+
+button.advBtn {
+    width: 110px !important;
+    position: absolute;
+    right: 0;
+}
+
+.halfElement {
+    max-width: 50% !important;
+}
+
+.hideAdvanced {
+    display: none !important;
+    width: 0 !important;
+    max-width: 0 !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 #change_modal.active {
@@ -54,7 +104,7 @@ button:disabled, input:disabled {
     margin: 0 auto;
     z-index: 10000;
     border: 1px solid white;
-    overflow-y: scroll;
+    overflow-y: auto;
     overflow-x: hidden;
 }
 
@@ -66,10 +116,14 @@ button:disabled, input:disabled {
 
 
 #close_modal {
-    min-width: 10px;
-    max-width: 10px;
-    min-height: 10px;
-    max-height: 35px;
+    min-width: 30px;
+    max-width: 30px;
+    min-height: 30px;
+    max-height: 30px;
+    height: 30px;
+    width: 30px;
+    padding: 3px;
+    font-family: monospace;
     position: absolute;
     right: 11px;
 }
@@ -108,18 +162,13 @@ button:disabled, input:disabled {
 
 }
 
-#refresh_db_models, #refresh_lora_models, #refresh_sd_models, #refresh_secret, #clear_secret, #ui_check_progress_initial {
+#refresh_db_models, #refresh_lora_models, #refresh_sd_models, #refresh_secret, #clear_secret {
     margin-top: 0.75em;
     max-width: 2.5em;
     min-width: 2.5em;
     height: 2.4em;
 }
 
-#ui_check_progress_initial {
-    position: absolute;
-    top: -3px;
-    right: 10px;
-}
 
 #db_gen_ckpt_during, #db_train_sample {
     display: none;
@@ -163,4 +212,14 @@ button:disabled, input:disabled {
 
 .hyperlink {
     text-decoration: underline
+}
+
+.hintHtml {
+    padding-bottom: 10px;
+    padding-top: 5px;
+    color: #b3b3b3;
+}
+
+#TabSettings .gap, #TabConcepts .gap {
+    display: block !important;
 }
