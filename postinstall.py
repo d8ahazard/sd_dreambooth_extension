@@ -42,7 +42,7 @@ def actual_install():
 
     check_xformers()
 
-    #check_bitsandbytes()
+    check_bitsandbytes()
 
     install_requirements()
 
@@ -209,29 +209,35 @@ def check_bitsandbytes():
         bitsandbytes_version = None
     if os.name == "nt":
         print("Checking bitsandbytes (Windows)")
-        if bitsandbytes_version != "0.41.2":
-            venv_path = os.environ.get("VENV_DIR", None)
-            print(f"Virtual environment path: {venv_path}")
-            # Check for the dll in venv/lib/site-packages/bitsandbytes/libbitsandbytes_cuda118.dll
-            # If it doesn't exist, append the requirement
-            if not venv_path:
-                print("Could not find the virtual environment path. Skipping bitsandbytes installation.")
-            else:
-                win_dll = os.path.join(venv_path, "lib", "site-packages", "bitsandbytes", "libbitsandbytes_cuda118.dll")
-                print(f"Checking for {win_dll}")
-                if not os.path.exists(win_dll):
-                    try:
-                        pip_uninstall("bitsandbytes")
-                        # Find any directories starting with ~ in the venv/lib/site-packages directory and delete them
-                        for env_dir in os.listdir(os.path.join(venv_path, "lib", "site-packages")):
-                            if env_dir.startswith("~"):
-                                print(f"Deleting {env_dir}")
-                                os.rmdir(os.path.join(venv_path, "lib", "site-packages", env_dir))
-                    except:
-                        pass
-                    print("Installing bitsandbytes")
-                    pip_install("bitsandbytes==0.41.1", "--force-reinstall",
-                                "--extra-index-url", "https://d8ahazard.github.io/sd_dreambooth_extension/bnb_index.html")
+        venv_path = os.environ.get("VENV_DIR", None)
+        print(f"Virtual environment path: {venv_path}")
+        # Check for the dll in venv/lib/site-packages/bitsandbytes/libbitsandbytes_cuda118.dll
+        # If it doesn't exist, append the requirement
+        if not venv_path:
+            print("Could not find the virtual environment path. Skipping bitsandbytes installation.")
+        else:
+            win_dll = os.path.join(venv_path, "lib", "site-packages", "bitsandbytes", "libbitsandbytes_cuda118.dll")
+            print(f"Checking for {win_dll}")
+            if not os.path.exists(win_dll):
+                print("Can't find bitsandbytes CUDA dll. Installing bitsandbytes")
+                try:
+                    pip_uninstall("bitsandbytes")
+                    # Find any directories starting with ~ in the venv/lib/site-packages directory and delete them
+                    for env_dir in os.listdir(os.path.join(venv_path, "lib", "site-packages")):
+                        if env_dir.startswith("~"):
+                            print(f"Deleting {env_dir}")
+                            os.rmdir(os.path.join(venv_path, "lib", "site-packages", env_dir))
+                except:
+                    pass
+                print("Installing bitsandbytes")
+                try:
+                    pip_install(
+                                "--prefer-binary", "https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.1-py3-none-win_amd64.whl")
+                except Exception as e:
+                    print("Bitsandbytes 0.41.1 installation failed")
+                    print("Some features such as 8bit optimizers will be unavailable")
+                    print_bitsandbytes_installation_error(str(e))
+                    pass
     else:
         print("Checking bitsandbytes (Linux)")
         if bitsandbytes_version != "0.41.1":
@@ -318,6 +324,32 @@ def print_requirement_installation_error(err):
             print(line)
 
 
+def print_bitsandbytes_installation_error(err):
+    print()
+    print("#######################################################################################################")
+    print("#                                       BITSANDBYTES ISSUE DETECTED                                     #")
+    print("#######################################################################################################")
+    print("#")
+    print("# Dreambooth could not find a compatible version of bitsandbytes.")
+    print("# bitsandbytes will not be available for Dreambooth.")
+    print("#")
+    print("# Bitsandbytes installation exception:")
+    for line in err.split('\n'):
+        line = line.strip()
+        if line:
+            print(line)
+    print("#")
+    print("# TO FIX THIS ISSUE, DO THE FOLLOWING:")
+    print("# 1. Fully restart your project (not just the webpage)")
+    print("# 2. Running the following commands from the A1111 project root:")
+    print("cd venv/Scripts")
+    print("activate")
+    print("cd ../..")
+    print("# WINDOWS ONLY: ")
+    print(
+        "pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.1-py3-none-win_amd64.whl")
+    print("#######################################################################################################")
+
 def print_xformers_installation_error(err):
     torch_ver = importlib_metadata.version("torch")
     print()
@@ -351,11 +383,12 @@ def print_launch_errors(launch_errors):
     print("# 1. Fully restart your project (not just the webpage)")
     print("# 2. Update your A1111 project and extensions")
     print("# 3. Dreambooth requirements should have installed automatically, but you can manually install them")
-    print("#    by running the following 4 commands from the A1111 project root:")
+    print("#    by running the following commands from the A1111 project root:")
     print("cd venv/Scripts")
     print("activate")
     print("cd ../..")
     print("pip install -r ./extensions/sd_dreambooth_extension/requirements.txt")
+    print("pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.1-py3-none-win_amd64.whl")
     print("#######################################################################################################")
 
 
