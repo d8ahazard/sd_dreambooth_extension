@@ -934,10 +934,14 @@ def dreambooth_api(_, app: FastAPI):
 
 
 try:
-    import modules.script_callbacks as script_callbacks
+    from modules.shared import cmd_opts
+    if cmd_opts.api:
+        import modules.script_callbacks as script_callbacks
 
-    script_callbacks.on_app_started(dreambooth_api)
-    logger.debug("SD-Webui API layer loaded")
+        script_callbacks.on_app_started(dreambooth_api)
+        logger.debug("SD-Webui API layer loaded")
+    else:
+        logger.debug("API flag not enabled, skipping API layer. Please enable with --api")
 except:
     logger.debug("Unable to import script callbacks.")
     pass
