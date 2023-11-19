@@ -1,0 +1,24 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v1
+      with:
+        node-version: '12' # Adjust this to your project's Node.js version
+
+    - name: Build and Deploy
+      uses: JamesIves/github-pages-deploy-action@4.1.4
+      with:
+        branch: main  # The branch the action should deploy to.
+        folder: io  # The folder the action should deploy.

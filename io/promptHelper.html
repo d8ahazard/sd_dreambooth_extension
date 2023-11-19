@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dynamic Prompt Generator</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<body>
+<div class="container mt-5">
+    <div class="form-group">
+        <label for="mainPrompt">My prompt is:</label>
+        <input type="text" class="form-control" id="mainPrompt">
+    </div>
+    <div class="form-group">
+        <label for="subjectName">The name for my subject is:</label>
+        <input type="text" class="form-control" id="subjectName">
+    </div>
+    <div class="form-group">
+        <label for="subjectClass">The class of my subject is:</label>
+        <input type="text" class="form-control" id="subjectClass">
+    </div>
+    <button class="btn btn-primary" onclick="generatePrompts()">Generate Prompts</button>
+    <div class="mt-4">
+        <label>My training prompt would be:</label>
+        <p id="trainingPrompt"></p>
+    </div>
+    <div>
+        <label>My class prompt would be:</label>
+        <p id="classPrompt"></p>
+    </div>
+    <div>
+        <label>My sample prompt would be:</label>
+        <p id="samplePrompt"></p>
+    </div>
+</div>
+
+<script type="application/javascript">
+
+    function makeInstancePrompt(baseString, instanceToken, classToken) {
+        let indefinites = ["the " + instanceToken, "an " + instanceToken, "a " + instanceToken, instanceToken];
+        let classIndefinites = ["the " + classToken, "an " + classToken, "a " + classToken, classToken];
+        let article = indefinites.find(indefinite => baseString.includes(indefinite));
+        let classArticle = null;
+        if (classToken !== "") {
+            classArticle = classIndefinites.find(indefinite => baseString.includes(indefinite));
+        }
+        if (article && classArticle) {
+            return baseString;
+        } else if (article) {
+            // Replace article with article + classToken
+            return baseString.replace(article, `${article} ${classToken}`);
+        } else if (classArticle) {
+            // Replace classArticle with article + instanceToken
+            return baseString.replace(classArticle, `${instanceToken} ${classArticle}`);
+        } else {
+            // Append article + instanceToken + classToken
+            return `${baseString}, ${article} ${instanceToken} ${classToken}`;
+        }
+    }
+
+    function makeClassPrompt(baseString, instanceToken, classToken) {
+        let indefinites = ["the " + instanceToken, "an " + instanceToken, "a " + instanceToken, instanceToken];
+        let classIndefinites = ["the " + classToken, "an " + classToken, "a " + classToken, classToken];
+        let article = indefinites.find(indefinite => baseString.includes(indefinite));
+        let classArticle = null;
+        if (classToken !== "") {
+            classArticle = classIndefinites.find(indefinite => baseString.includes(indefinite));
+        }
+        if (article && !classArticle) {
+            // Replace article classToken
+            return baseString.replace(article, classToken);
+        } else if (article && classArticle) {
+            // Remove article
+            return baseString.replace(article, "");
+        } else if (classArticle) {
+            return baseString;
+        } else {
+            // Append article + classToken
+            return `${baseString}, ${classToken}`;
+        }
+    }
+
+    // Sample prompt should always have the instanceToken or article, and never classToken or classArticle
+    function makeSamplePrompt(baseString, instanceToken, classToken) {
+        let indefinites = ["the " + instanceToken, "an " + instanceToken, "a " + instanceToken, instanceToken];
+        let classIndefinites = ["the " + classToken, "an " + classToken, "a " + classToken, classToken];
+        let article = indefinites.find(indefinite => baseString.includes(indefinite));
+        let classArticle = null;
+        if (classToken !== "") {
+            classArticle = classIndefinites.find(indefinite => baseString.includes(indefinite));
+        }
+        if (article && !classArticle) {
+            return baseString;
+        } else if (article && classArticle) {
+            // Remove classArticle
+            return baseString.replace(classArticle, "");
+        } else if (classArticle) {
+            // Remove classArticle
+            return baseString.replace(classArticle, instanceToken);
+        } else {
+            // Append article + instanceToken
+            return `${baseString}, ${instanceToken}`;
+        }
+    }
+
+    // Split the prompt by commas, and then remove and empty whitespace or double spaces, then rejoin and return
+    function cleanPrompt(inputPrompt) {
+        let promptArray = inputPrompt.split(",");
+        promptArray = promptArray.map(prompt => prompt.trim());
+        promptArray = promptArray.filter(prompt => prompt !== "");
+        return promptArray.join(", ");
+    }
+    function generatePrompts() {
+        const mainPrompt = document.getElementById("mainPrompt").value;
+        const subjectName = document.getElementById("subjectName").value;
+        const subjectClass = document.getElementById("subjectClass").value;
+
+        // Helper function to check and append with articles
+
+        // Training prompt logic
+        let trainingPrompt = mainPrompt;
+        trainingPrompt = makeInstancePrompt(trainingPrompt, subjectName, subjectClass);
+
+        // Class prompt logic
+        let classPrompt = makeClassPrompt(mainPrompt, subjectName, subjectClass);
+
+        // Sample prompt logic
+        let samplePrompt = makeSamplePrompt(mainPrompt, subjectName, subjectClass);
+
+        trainingPrompt = cleanPrompt(trainingPrompt);
+        classPrompt = cleanPrompt(classPrompt);
+        samplePrompt = cleanPrompt(samplePrompt);
+
+        // Display the results
+        document.getElementById("trainingPrompt").textContent = trainingPrompt;
+        document.getElementById("classPrompt").textContent = classPrompt;
+        document.getElementById("samplePrompt").textContent = samplePrompt;
+    }
+
+</script>
+</body>
+</html>
