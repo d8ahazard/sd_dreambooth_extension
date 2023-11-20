@@ -162,73 +162,27 @@ def extract_checkpoint(
     db_config.save()
     try:
         with safe_unpickle_disabled():
-            if from_safetensors:
-                if model_type == "SDXL":
-                    pipe = StableDiffusionXLPipeline.from_single_file(
-                        pretrained_model_link_or_path=checkpoint_file,
-                    )
-                else:
-                    pipe = StableDiffusionPipeline.from_single_file(
-                        pretrained_model_link_or_path=checkpoint_file,
-                    )
-            elif model_type == "SDXL":
-                pipe = StableDiffusionXLPipeline.from_pretrained(
-                    checkpoint_path_or_dict=checkpoint_file,
-                    original_config_file=original_config_file,
-                    image_size=image_size,
-                    prediction_type=prediction_type,
-                    model_type=pipeline_type,
-                    extract_ema=extract_ema,
-                    scheduler_type=scheduler_type,
-                    num_in_channels=num_in_channels,
-                    upcast_attention=upcast_attention,
-                    from_safetensors=from_safetensors,
-                    device=device,
-                    pretrained_model_name_or_path=checkpoint_file,
-                    stable_unclip=stable_unclip,
-                    stable_unclip_prior=stable_unclip_prior,
-                    clip_stats_path=clip_stats_path,
-                    controlnet=controlnet,
-                    vae_path=vae_path,
-                    pipeline_class=pipeline_class,
-                    half=half
+            if model_type == "SDXL":
+                pipe = StableDiffusionXLPipeline.from_single_file(
+                    pretrained_model_link_or_path=checkpoint_file,
                 )
             else:
-                pipe = StableDiffusionPipeline.from_pretrained(
-                    checkpoint_path_or_dict=checkpoint_file,
-                    original_config_file=original_config_file,
-                    image_size=image_size,
-                    prediction_type=prediction_type,
-                    model_type=pipeline_type,
-                    extract_ema=extract_ema,
-                    scheduler_type=scheduler_type,
-                    num_in_channels=num_in_channels,
-                    upcast_attention=upcast_attention,
-                    from_safetensors=from_safetensors,
-                    device=device,
-                    pretrained_model_name_or_path=checkpoint_file,
-                    stable_unclip=stable_unclip,
-                    stable_unclip_prior=stable_unclip_prior,
-                    clip_stats_path=clip_stats_path,
-                    controlnet=controlnet,
-                    vae_path=vae_path,
-                    pipeline_class=pipeline_class,
-                    half=half
+                pipe = StableDiffusionPipeline.from_single_file(
+                    pretrained_model_link_or_path=checkpoint_file,
                 )
 
-        dump_path = db_config.get_pretrained_model_name_or_path()
-        if controlnet:
-            print("Saving controlnet model")
-            # only save the controlnet model
-            pipe.controlnet.save_pretrained(dump_path, safe_serialization=to_safetensors)
-        else:
-            try:
-                tmp_path = f"{dump_path}_tmp"
-                pipe.save_pretrained(dump_path, safe_serialization=False)
-            except:
-                print("Couldn't save the pipe")
-                traceback.print_exc()
-                return
+            dump_path = db_config.get_pretrained_model_name_or_path()
+            if controlnet:
+                print("Saving controlnet model")
+                # only save the controlnet model
+                pipe.controlnet.save_pretrained(dump_path, safe_serialization=to_safetensors)
+            else:
+                try:
+                    pipe.save_pretrained(dump_path, safe_serialization=False)
+                except:
+                    print("Couldn't save the pipe")
+                    traceback.print_exc()
+                    return
 
     except:
         print("Something went wrong, removing model directory")

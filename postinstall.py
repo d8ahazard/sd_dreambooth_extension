@@ -13,7 +13,7 @@ from importlib import metadata
 
 from packaging.version import Version
 
-from dreambooth import shared
+from dreambooth import shared as db_shared
 
 if sys.version_info < (3, 8):
     import importlib_metadata
@@ -24,7 +24,7 @@ else:
 def actual_install():
     if os.environ.get("PUBLIC_KEY", None):
         print("Docker, returning.")
-        shared.launch_error = None
+        db_shared.launch_error = None
         return
 
     base_dir = os.path.dirname(os.path.realpath(__file__))
@@ -42,7 +42,7 @@ def actual_install():
 
     check_xformers()
 
-    #check_bitsandbytes()
+    check_bitsandbytes()
 
     install_requirements()
 
@@ -138,11 +138,12 @@ def install_requirements():
                         package = package.strip()
                         package_version = package_version.strip()
                         break
+                v_string = "" if not package_version else f" v{package_version}"
                 if not is_installed(package, package_version, strict):
-                    print(f"[Dreambooth] {package} v{package_version} is not installed.")
+                    print(f"[Dreambooth] {package}{v_string} is not installed.")
                     pip_install(line)
                 else:
-                    print(f"[Dreambooth] {package} v{package_version} is already installed.")
+                    print(f"[Dreambooth] {package}{v_string} is already installed.")
 
         except subprocess.CalledProcessError as grepexc:
             error_msg = grepexc.stdout.decode()
@@ -165,26 +166,34 @@ def check_xformers():
     try:
         xformers_version = importlib_metadata.version("xformers")
         xformers_outdated = Version(xformers_version) < Version("0.0.20")
-        if xformers_outdated:
-            try:
-                torch_version = importlib_metadata.version("torch")
-                is_torch_1 = Version(torch_version) < Version("2")
-                is_torch_2_1 = Version(torch_version) < Version("2.0")
-                if is_torch_1:
-                    print_xformers_torch1_instructions(xformers_version)
-                # Torch 2.0.1 is not available on PyPI for xformers version 22
-                elif is_torch_2_1:
-                    os_string = "win_amd64" if os.name == "nt" else "manylinux2014_x86_64"
-                    # Get the version of python
-                    py_string = f"cp{sys.version_info.major}{sys.version_info.minor}-cp{sys.version_info.major}{sys.version_info.minor}"
-                    wheel_url = f"https://download.pytorch.org/whl/cu118/xformers-0.0.22.post7%2Bcu118-{py_string}-{os_string}.whl"
-                    pip_install(wheel_url, "--upgrade", "--no-deps")
-                else:
-                    pip_install("xformers==0.0.21", "--index-url https://download.pytorch.org/whl/cu118")
-            except subprocess.CalledProcessError as grepexc:
-                error_msg = grepexc.stdout.decode()
-                if "WARNING: Ignoring invalid distribution" not in error_msg:
-                    print_xformers_installation_error(error_msg)
+        # Parse arguments, see if --xformers is passed
+        from modules import shared
+        cmd_opts = shared.cmd_opts
+        if cmd_opts.xformers or cmd_opts.reinstall_xformers:
+            if xformers_outdated:
+                print("Installing xformers")
+                try:
+                    torch_version = importlib_metadata.version("torch")
+                    is_torch_1 = Version(torch_version) < Version("2")
+                    is_torch_2_1 = Version(torch_version) < Version("2.0")
+                    print(f"Detected torch version {torch_version}")
+                    if is_torch_1:
+                        print_xformers_torch1_instructions(xformers_version)
+                    # Torch 2.0.1 is not available on PyPI for xformers version 22
+                    elif is_torch_2_1:
+                        os_string = "win_amd64" if os.name == "nt" else "manylinux2014_x86_64"
+                        # Get the version of python
+                        py_string = f"cp{sys.version_info.major}{sys.version_info.minor}-cp{sys.version_info.major}{sys.version_info.minor}"
+                        wheel_url = f"https://download.pytorch.org/whl/cu118/xformers-0.0.22.post7%2Bcu118-{py_string}-{os_string}.whl"
+                        print(f"Installing xformers from {wheel_url}")
+                        pip_install(wheel_url, "--upgrade", "--no-deps")
+                    else:
+                        print("Installing xformers from PyPI")
+                        pip_install("xformers==0.0.21", "--index-url https://download.pytorch.org/whl/cu118")
+                except subprocess.CalledProcessError as grepexc:
+                    error_msg = grepexc.stdout.decode()
+                    if "WARNING: Ignoring invalid distribution" not in error_msg:
+                        print_xformers_installation_error(error_msg)
     except:
         pass
 
@@ -198,32 +207,37 @@ def check_bitsandbytes():
         bitsandbytes_version = importlib_metadata.version("bitsandbytes")
     except:
         bitsandbytes_version = None
-    print("Bitsandbytes version: " + str(bitsandbytes_version))
     if os.name == "nt":
         print("Checking bitsandbytes (Windows)")
-        if bitsandbytes_version != "0.41.2":
-            venv_path = os.environ.get("VENV_DIR", None)
-            print(f"Virtual environment path: {venv_path}")
-            # Check for the dll in venv/lib/site-packages/bitsandbytes/libbitsandbytes_cuda118.dll
-            # If it doesn't exist, append the requirement
-            if not venv_path:
-                print("Could not find the virtual environment path. Skipping bitsandbytes installation.")
-            else:
-                win_dll = os.path.join(venv_path, "lib", "site-packages", "bitsandbytes", "libbitsandbytes_cuda118.dll")
-                print(f"Checking for {win_dll}")
-                if not os.path.exists(win_dll):
-                    try:
-                        pip_uninstall("bitsandbytes")
-                        # Find any directories starting with ~ in the venv/lib/site-packages directory and delete them
-                        for env_dir in os.listdir(os.path.join(venv_path, "lib", "site-packages")):
-                            if env_dir.startswith("~"):
-                                print(f"Deleting {env_dir}")
-                                os.rmdir(os.path.join(venv_path, "lib", "site-packages", env_dir))
-                    except:
-                        pass
-                    print("Installing bitsandbytes")
-                    pip_install("bitsandbytes==0.41.1", "--force-reinstall",
-                                "--extra-index-url", "https://d8ahazard.github.io/sd_dreambooth_extension/bnb_index.html")
+        venv_path = os.environ.get("VENV_DIR", None)
+        print(f"Virtual environment path: {venv_path}")
+        # Check for the dll in venv/lib/site-packages/bitsandbytes/libbitsandbytes_cuda118.dll
+        # If it doesn't exist, append the requirement
+        if not venv_path:
+            print("Could not find the virtual environment path. Skipping bitsandbytes installation.")
+        else:
+            win_dll = os.path.join(venv_path, "lib", "site-packages", "bitsandbytes", "libbitsandbytes_cuda118.dll")
+            print(f"Checking for {win_dll}")
+            if not os.path.exists(win_dll):
+                print("Can't find bitsandbytes CUDA dll. Installing bitsandbytes")
+                try:
+                    pip_uninstall("bitsandbytes")
+                    # Find any directories starting with ~ in the venv/lib/site-packages directory and delete them
+                    for env_dir in os.listdir(os.path.join(venv_path, "lib", "site-packages")):
+                        if env_dir.startswith("~"):
+                            print(f"Deleting {env_dir}")
+                            os.rmdir(os.path.join(venv_path, "lib", "site-packages", env_dir))
+                except:
+                    pass
+                print("Installing bitsandbytes")
+                try:
+                    pip_install(
+                                "--prefer-binary", "https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.1-py3-none-win_amd64.whl")
+                except Exception as e:
+                    print("Bitsandbytes 0.41.1 installation failed")
+                    print("Some features such as 8bit optimizers will be unavailable")
+                    print_bitsandbytes_installation_error(str(e))
+                    pass
     else:
         print("Checking bitsandbytes (Linux)")
         if bitsandbytes_version != "0.41.1":
@@ -253,7 +267,7 @@ def check_versions():
 
     #Probably a bad idea but update ALL the dependencies
     dependencies = [
-        Dependency(module="xformers", version="0.0.22", required=False),
+        Dependency(module="xformers", version="0.0.21", required=False),
         Dependency(module="torch", version="1.13.1" if is_mac else "2.0.1+cu118"),
         Dependency(module="torchvision", version="0.14.1" if is_mac else "0.15.2+cu118"),
         Dependency(module="accelerate", version="0.21.0"),
@@ -310,6 +324,32 @@ def print_requirement_installation_error(err):
             print(line)
 
 
+def print_bitsandbytes_installation_error(err):
+    print()
+    print("#######################################################################################################")
+    print("#                                       BITSANDBYTES ISSUE DETECTED                                     #")
+    print("#######################################################################################################")
+    print("#")
+    print("# Dreambooth could not find a compatible version of bitsandbytes.")
+    print("# bitsandbytes will not be available for Dreambooth.")
+    print("#")
+    print("# Bitsandbytes installation exception:")
+    for line in err.split('\n'):
+        line = line.strip()
+        if line:
+            print(line)
+    print("#")
+    print("# TO FIX THIS ISSUE, DO THE FOLLOWING:")
+    print("# 1. Fully restart your project (not just the webpage)")
+    print("# 2. Running the following commands from the A1111 project root:")
+    print("cd venv/Scripts")
+    print("activate")
+    print("cd ../..")
+    print("# WINDOWS ONLY: ")
+    print(
+        "pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.1-py3-none-win_amd64.whl")
+    print("#######################################################################################################")
+
 def print_xformers_installation_error(err):
     torch_ver = importlib_metadata.version("torch")
     print()
@@ -343,11 +383,12 @@ def print_launch_errors(launch_errors):
     print("# 1. Fully restart your project (not just the webpage)")
     print("# 2. Update your A1111 project and extensions")
     print("# 3. Dreambooth requirements should have installed automatically, but you can manually install them")
-    print("#    by running the following 4 commands from the A1111 project root:")
+    print("#    by running the following commands from the A1111 project root:")
     print("cd venv/Scripts")
     print("activate")
     print("cd ../..")
     print("pip install -r ./extensions/sd_dreambooth_extension/requirements.txt")
+    print("pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.1-py3-none-win_amd64.whl")
     print("#######################################################################################################")
 
 
