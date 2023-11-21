@@ -218,7 +218,7 @@ def check_bitsandbytes():
         else:
             win_dll = os.path.join(venv_path, "lib", "site-packages", "bitsandbytes", "libbitsandbytes_cuda118.dll")
             print(f"Checking for {win_dll}")
-            if not os.path.exists(win_dll):
+            if not os.path.exists(win_dll) or "0.41.2" not in bitsandbytes_version:
                 print("Can't find bitsandbytes CUDA dll. Installing bitsandbytes")
                 try:
                     pip_uninstall("bitsandbytes")
@@ -232,23 +232,23 @@ def check_bitsandbytes():
                 print("Installing bitsandbytes")
                 try:
                     pip_install(
-                                "--prefer-binary", "https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.1-py3-none-win_amd64.whl")
+                                "--prefer-binary", "https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
                 except Exception as e:
-                    print("Bitsandbytes 0.41.1 installation failed")
+                    print("Bitsandbytes 0.41.2.post2 installation failed")
                     print("Some features such as 8bit optimizers will be unavailable")
                     print_bitsandbytes_installation_error(str(e))
                     pass
     else:
         print("Checking bitsandbytes (Linux)")
-        if bitsandbytes_version != "0.41.1":
+        if "0.41.2" not in bitsandbytes_version:
             try:
                 print("Installing bitsandbytes")
-                pip_install("--force-install","--prefer-binary","https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.1-py3-none-win_amd64.whl")
+                pip_install("bitsandbytes==0.41.2.post2","--prefer-binary","https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
             except:
-                print("Bitsandbytes 0.41.1 installation failed")
+                print("Bitsandbytes 0.41.2 installation failed")
                 print("Some features such as 8bit optimizers will be unavailable")
                 print("Install manually with")
-                print("'python -m pip install bitsandbytes==0.41.1  --prefer-binary --force-install'")
+                print("'python -m pip install bitsandbytes==0.41.2.post2  --prefer-binary --force-install'")
                 pass
 
 
@@ -273,7 +273,7 @@ def check_versions():
         Dependency(module="accelerate", version="0.21.0"),
         Dependency(module="diffusers", version="0.22.1"),
         Dependency(module="transformers", version="4.30.2"),
-        Dependency(module="bitsandbytes",  version="0.41.1", required=False),
+        Dependency(module="bitsandbytes",  version="0.41.1.post2", required=False),
     ]
 
     launch_errors = []
@@ -347,7 +347,7 @@ def print_bitsandbytes_installation_error(err):
     print("cd ../..")
     print("# WINDOWS ONLY: ")
     print(
-        "pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.1-py3-none-win_amd64.whl")
+        "pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
     print("#######################################################################################################")
 
 def print_xformers_installation_error(err):
@@ -388,7 +388,7 @@ def print_launch_errors(launch_errors):
     print("activate")
     print("cd ../..")
     print("pip install -r ./extensions/sd_dreambooth_extension/requirements.txt")
-    print("pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.1-py3-none-win_amd64.whl")
+    print("pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
     print("#######################################################################################################")
 
 
