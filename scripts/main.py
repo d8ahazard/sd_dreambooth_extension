@@ -1934,7 +1934,7 @@ def on_ui_tabs():
             outputs=[],
         )
 
-    return ((dreambooth_interface, "Dreambooth", "dreambooth_interface"),)
+    return ((dreambooth_interface, "Dreambooth", "dreambooth_v2"),)
 
 
 def build_concept_panel(concept: int):
