@@ -1605,6 +1605,9 @@ def on_ui_tabs():
             c4_save_sample_prompt,
             c4_save_sample_template,
         ]
+        for element in params_to_save:
+            setattr(element, "do_not_save_to_config", True)
+
         # Do not load these values when 'load settings' is clicked
         params_to_exclude = [
             db_model_name,
@@ -1931,7 +1934,7 @@ def on_ui_tabs():
             outputs=[],
         )
 
-    return ((dreambooth_interface, "Dreambooth", "dreambooth_interface"),)
+    return ((dreambooth_interface, "Dreambooth", "dreambooth_v2"),)
 
 
 def build_concept_panel(concept: int):
