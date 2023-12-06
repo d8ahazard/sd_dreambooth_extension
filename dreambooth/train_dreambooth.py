@@ -30,7 +30,7 @@ from diffusers import (
     UniPCMultistepScheduler, StableDiffusionXLPipeline, StableDiffusionPipeline
 )
 from diffusers.loaders import LoraLoaderMixin
-from diffusers.models.lora import LoRALinearLayer
+from diffusers.models.attention_processor import LoRAAttnProcessor2_0, LoRAAttnProcessor
 from diffusers.training_utils import unet_lora_state_dict
 from diffusers.utils import logging as dl
 from diffusers.utils.torch_utils import randn_tensor
@@ -102,6 +102,7 @@ class ConditionalAccumulator:
     def __exit__(self, exc_type, exc_value, traceback):
         self.stack.__exit__(exc_type, exc_value, traceback)
 
+
 def text_encoder_lora_state_dict(text_encoder):
     state_dict = {}
 
@@ -158,7 +159,10 @@ def set_seed(deterministic: bool):
     else:
         torch.backends.cudnn.deterministic = False
 
+
 to_delete = []
+
+
 def clean_global_state():
     for check in to_delete:
         if check:
@@ -169,6 +173,7 @@ def clean_global_state():
                 logger.debug(f"Deleted {obj_name}")
             except:
                 pass
+
 
 def current_prior_loss(args, current_epoch):
     if not args.prior_loss_scale:
@@ -331,7 +336,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             num_components = 7
         pbar2.reset(num_components)
         pbar2.set_description("Loading model components...")
-        
+
         pbar2.set_postfix(refresh=True)
         if class_gen_method == "Native Diffusers" and count > 0:
             unload_system_models()
@@ -623,6 +628,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             noise_scheduler = get_noise_scheduler(args)
             global to_delete
             to_delete = [unet, text_encoder, text_encoder_two, tokenizer, tokenizer_two, optimizer, vae]
+
             def cleanup_memory():
                 try:
                     if unet:
@@ -747,8 +753,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     batch_data["input_ids2"] = input_ids_2
                     batch_data["original_sizes_hw"] = torch.stack(
                         [torch.LongTensor(x["original_sizes_hw"]) for x in examples])
-                    batch_data["crop_top_lefts"] = torch.stack([torch.LongTensor(x["crop_top_lefts"]) for x in examples])
-                    batch_data["target_sizes_hw"] = torch.stack([torch.LongTensor(x["target_sizes_hw"]) for x in examples])
+                    batch_data["crop_top_lefts"] = torch.stack(
+                        [torch.LongTensor(x["crop_top_lefts"]) for x in examples])
+                    batch_data["target_sizes_hw"] = torch.stack(
+                        [torch.LongTensor(x["target_sizes_hw"]) for x in examples])
                 return batch_data
 
             def collate_fn_sdxl(examples):
@@ -1073,7 +1081,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             torch_dtype=weight_dtype,
                             revision=args.revision,
                         )
-                        xformerify(s_pipeline.unet,use_lora=args.use_lora)
+                        xformerify(s_pipeline.unet, use_lora=args.use_lora)
                     else:
                         s_pipeline = DiffusionPipeline.from_pretrained(
                             args.get_pretrained_model_name_or_path(),
@@ -1085,8 +1093,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             torch_dtype=weight_dtype,
                             revision=args.revision,
                         )
-                        xformerify(s_pipeline.unet,use_lora=args.use_lora)
-                        xformerify(s_pipeline.vae,use_lora=args.use_lora)
+                        xformerify(s_pipeline.unet, use_lora=args.use_lora)
+                        xformerify(s_pipeline.vae, use_lora=args.use_lora)
 
                     weights_dir = args.get_pretrained_model_name_or_path()
 
@@ -1146,7 +1154,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 text_encoder_one_lora_layers_to_save = text_encoder_lora_state_dict(text_encoder)
                             if args.model_type == "SDXL":
                                 if args.stop_text_encoder != 0:
-                                    text_encoder_two_lora_layers_to_save = text_encoder_lora_state_dict(text_encoder_two)
+                                    text_encoder_two_lora_layers_to_save = text_encoder_lora_state_dict(
+                                        text_encoder_two)
                                 StableDiffusionXLPipeline.save_lora_weights(
                                     loras_dir,
                                     unet_lora_layers=unet_lora_layers_to_save,
@@ -1166,7 +1175,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                                     scheduler_args["variance_type"] = variance_type
 
-                                s_pipeline.scheduler = UniPCMultistepScheduler.from_config(s_pipeline.scheduler.config, **scheduler_args)
+                                s_pipeline.scheduler = UniPCMultistepScheduler.from_config(s_pipeline.scheduler.config,
+                                                                                           **scheduler_args)
                                 save_lora = False
                                 save_model = False
                             else:
@@ -1394,7 +1404,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         update_status({"images": last_samples, "prompts": last_prompts})
                         pbar2.update()
 
-
                     if args.cache_latents:
                         printm("Unloading vae.")
                         del vae
@@ -1616,7 +1625,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         if args.model_type != "SDXL":
                             # TODO: set a prior preservation flag and use that to ensure this ony happens in dreambooth
                             if not args.split_loss and not with_prior_preservation:
-                                loss = instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                                loss = instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(),
+                                                                                    reduction="mean")
                                 loss *= batch["loss_avg"]
                             else:
                                 # Predict the noise residual
@@ -1624,21 +1634,23 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                     model_pred, _ = torch.chunk(model_pred, 2, dim=1)
 
                                 if model_pred.shape[0] > 1 and with_prior_preservation:
-                                        # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
-                                        print("model shape:")
-                                        print(model_pred.shape)
-                                        model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
-                                        target, target_prior = torch.chunk(target, 2, dim=0)
+                                    # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
+                                    print("model shape:")
+                                    print(model_pred.shape)
+                                    model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
+                                    target, target_prior = torch.chunk(target, 2, dim=0)
 
-                                        # Compute instance loss
-                                        loss = instance_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                                    # Compute instance loss
+                                    loss = instance_loss = F.mse_loss(model_pred.float(), target.float(),
+                                                                      reduction="mean")
 
-                                        # Compute prior loss
-                                        prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
-                                                                reduction="mean")
+                                    # Compute prior loss
+                                    prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
+                                                            reduction="mean")
                                 else:
                                     # Compute loss
-                                    loss = instance_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                                    loss = instance_loss = F.mse_loss(model_pred.float(), target.float(),
+                                                                      reduction="mean")
                         else:
                             if with_prior_preservation:
                                 # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
@@ -1649,7 +1661,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
                                 # Compute prior loss
-                                prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
+                                prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
+                                                        reduction="mean")
 
                                 # Add the prior loss to the instance loss.
                                 loss = loss + args.prior_loss_weight * prior_loss
