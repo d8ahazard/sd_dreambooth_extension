@@ -172,6 +172,14 @@ vae_conversion_map_attn = [
 ]
 
 
+vae_extra_conversion_map = [
+    ("to_q", "q"),
+    ("to_k", "k"),
+    ("to_v", "v"),
+    ("to_out.0", "proj_out"),
+]
+
+
 def reshape_weight_for_sd(w):
     # convert HF linear weights to SD conv2d weights
     return w.reshape(*w.shape, 1, 1)
@@ -190,10 +198,21 @@ def convert_vae_state_dict(vae_state_dict):
             mapping[k] = v
     new_state_dict = {v: vae_state_dict[k] for k, v in mapping.items()}
     weights_to_convert = ["q", "k", "v", "proj_out"]
+    keys_to_rename = {}
     for k, v in new_state_dict.items():
         for weight_name in weights_to_convert:
             if f"mid.attn_1.{weight_name}.weight" in k:
                 new_state_dict[k] = reshape_weight_for_sd(v)
+        weight_index = 0
+        for weight_name, real_weight_name in vae_extra_conversion_map:
+            if f"mid.attn_1.{weight_name}.weight" in k or f"mid.attn_1.{weight_name}.bias" in k:
+                keys_to_rename[k] = k.replace(weight_name, real_weight_name)
+                weight_index += 1
+    for k, v in keys_to_rename.items():
+        if k in new_state_dict:
+            print(f"Renaming {k} to {v}")
+            new_state_dict[v] = reshape_weight_for_sd(new_state_dict[k])
+            del new_state_dict[k]
     return new_state_dict
 
 
@@ -304,17 +323,17 @@ def convert_text_enc_state_dict_v20(text_enc_dict: Dict[str, torch.Tensor]):
 
         new_state_dict[relabelled_key] = v
 
-    re_keys = {
-        '.in_proj_weight': capture_qkv_weight,
-        '.in_proj_bias': capture_qkv_bias
-    }
-    for new_key in re_keys:
-        for k_pre, tensors in re_keys[new_key].items():
-            for t in tensors:
-                if t is None:
-                    raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
-            relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
-            new_state_dict[relabelled_key + new_key] = torch.cat(tensors)
+    for k_pre, tensors in capture_qkv_weight.items():
+        if None in tensors:
+            raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
+        relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
+        new_state_dict[relabelled_key + ".in_proj_weight"] = torch.cat(tensors)
+
+    for k_pre, tensors in capture_qkv_bias.items():
+        if None in tensors:
+            raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
+        relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
+        new_state_dict[relabelled_key + ".in_proj_bias"] = torch.cat(tensors)
 
     return new_state_dict
 

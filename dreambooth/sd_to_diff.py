@@ -41,6 +41,7 @@ def copy_config_file(original_config_file, dest_dir, model_name):
             os.remove(new_name)
         os.rename(new_ex_path, new_name)
 
+
 def get_config_path(
         model_version: str = "v1",
         train_type: str = "default",
@@ -58,7 +59,7 @@ def get_config_path(
     )
 
 
-def get_config_file(train_unfrozen=False, model_type: str="v1x"):
+def get_config_file(train_unfrozen=False, model_type: str = "v1x"):
     config_base_name = "training"
 
     model_versions = {
@@ -85,27 +86,27 @@ def get_config_file(train_unfrozen=False, model_type: str="v1x"):
 
 
 def extract_checkpoint(
-    new_model_name: str,
-    checkpoint_file: str,
-    extract_ema: bool = False,
-    train_unfrozen: bool = False,
-    #is_512: bool = True,
-    model_type="v1x",
-    original_config_file: str = None,
-    num_in_channels: int = None,
-    scheduler_type: str = "pndm",
-    pipeline_type: str = None,
-    image_size: int = None,
-    prediction_type: str = None,
-    upcast_attention: bool = False,
-    device: str = None,
-    stable_unclip: str = None,
-    stable_unclip_prior: str = None,
-    clip_stats_path: str = None,
-    controlnet: bool = False,
-    half: bool = False,
-    vae_path: str = None,
-    pipeline_class_name: str = None
+        new_model_name: str,
+        checkpoint_file: str,
+        extract_ema: bool = False,
+        train_unfrozen: bool = False,
+        # is_512: bool = True,
+        model_type="v1x",
+        original_config_file: str = None,
+        num_in_channels: int = None,
+        scheduler_type: str = "pndm",
+        pipeline_type: str = None,
+        image_size: int = None,
+        prediction_type: str = None,
+        upcast_attention: bool = False,
+        device: str = None,
+        stable_unclip: str = None,
+        stable_unclip_prior: str = None,
+        clip_stats_path: str = None,
+        controlnet: bool = False,
+        half: bool = False,
+        vae_path: str = None,
+        pipeline_class_name: str = None
 ) -> Union[None, DreamboothConfig]:
     """
     Extract a checkpoint from a given path and convert it.
@@ -188,7 +189,6 @@ def extract_checkpoint(
         print("Something went wrong, removing model directory")
         traceback.print_exc()
         pass
-
 
     copy_config_file(original_config_file, db_config.model_dir, db_config.model_name)
     success = True
