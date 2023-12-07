@@ -181,7 +181,6 @@ class DbDataset(torch.utils.data.Dataset):
             logger.error("Error saving cache!")
             traceback.print_exc()
 
-
     @staticmethod
     def build_compose(hflip, flip_p):
         img_augmentation = [transforms.ToPILImage(), transforms.RandomHorizontalFlip(flip_p)]
@@ -329,8 +328,6 @@ class DbDataset(torch.utils.data.Dataset):
 
         return caption, input_ids
 
-
-
     def make_buckets_with_caching(self, vae):
         self.vae = vae
         self.cache_latents = vae is not None
@@ -369,7 +366,7 @@ class DbDataset(torch.utils.data.Dataset):
         shared.status.job_no = 0
         total_instances = 0
         total_classes = 0
-        data_cache = self.load_cache_file() if self.cache_latents else {}
+        data_cache = self.load_cache_file() if self.cache_latents else {"captions": {}, "latents": {}, "sdxl": {}}
         has_cache = len(data_cache) > 0
         if self.cache_latents:
             if has_cache:
@@ -384,13 +381,18 @@ class DbDataset(torch.utils.data.Dataset):
             self.pbar.reset(total=p_len)
             self.pbar.set_description(bar_description)
         self.pbar.status_index = 1
+
         def cache_images(images, reso, p_bar: mytqdm):
+            if "captions" not in data_cache:
+                data_cache["captions"] = {}
+            if "latents" not in data_cache:
+                data_cache["latents"] = {}
             for img_path, cap, is_prior in images:
                 try:
                     # If the image is not in the "precache",cache it
                     if self.cache_latents:
                         if img_path not in data_cache["latents"] and not self.debug_dataset:
-                                self.cache_latent(img_path, reso)
+                            self.cache_latent(img_path, reso)
                         else:
                             self.data_cache["latents"][img_path] = data_cache["latents"][img_path]
 
