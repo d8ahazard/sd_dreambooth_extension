@@ -1642,8 +1642,13 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         else:
                             if with_prior_preservation:
                                 # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
-                                model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
-                                target, target_prior = torch.chunk(target, 2, dim=0)
+                                if args.model_type == "SDXL":
+                                    model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=1)
+                                    target, target_prior = torch.chunk(target, 2, dim=1)
+                                else:
+                                    model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
+                                    target, target_prior = torch.chunk(target, 2, dim=0)
+
 
                                 # Compute instance loss
                                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
