@@ -135,20 +135,23 @@ def sort_prompts(
                 is_class
             )
 
-        w, h = get_dim(img, max_dim)
-        reso = closest_resolution(w, h, bucket_resos)
-        prompt_list = prompts[reso] if reso in prompts else []
-        pd = PromptData(
-            prompt=prompt,
-            negative_prompt=concept.class_negative_prompt if is_class else None,
-            instance_token=concept.instance_token,
-            class_token=concept.class_token,
-            src_image=img,
-            resolution=reso,
-            concept_index=concept_index
-        )
-        prompt_list.append(pd)
-        prompts[reso] = prompt_list
+        try:
+            w, h = get_dim(img, max_dim)
+            reso = closest_resolution(w, h, bucket_resos)
+            prompt_list = prompts[reso] if reso in prompts else []
+            pd = PromptData(
+                prompt=prompt,
+                negative_prompt=concept.class_negative_prompt if is_class else None,
+                instance_token=concept.instance_token,
+                class_token=concept.class_token,
+                src_image=img,
+                resolution=reso,
+                concept_index=concept_index
+            )
+            prompt_list.append(pd)
+            prompts[reso] = prompt_list
+        except:
+            pass
     return dict(sorted(prompts.items()))
 
 
