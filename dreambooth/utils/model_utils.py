@@ -129,6 +129,16 @@ def get_db_models():
     return output
 
 
+def get_ft_models():
+    output = [""]
+    out_dir = shared.ft_models_path
+    if os.path.exists(out_dir):
+        for item in os.listdir(out_dir):
+            if os.path.isdir(os.path.join(out_dir, item)):
+                output.append(item)
+    return output
+
+
 def get_shared_models():
     output = ["", LORA_SHARED_SRC_CREATE]
     out_dir = os.path.join(shared.models_path, "diffusers")

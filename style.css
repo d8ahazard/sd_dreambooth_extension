@@ -223,3 +223,7 @@ button.advBtn {
 #TabSettings .gap, #TabConcepts .gap {
     display: block !important;
 }
+
+#TabNU .gap:not(.hide) {
+    display: block !important;
+}

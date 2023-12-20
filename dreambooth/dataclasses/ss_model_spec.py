@@ -25,7 +25,6 @@ BASE_METADATA = {
     "modelspec.encoder_layer": None,
 }
 
-# 別に使うやつだけ定義
 MODELSPEC_TITLE = "modelspec.title"
 
 ARCH_SD_V1 = "stable-diffusion-v1"

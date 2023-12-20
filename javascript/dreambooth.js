@@ -339,21 +339,15 @@ let db_titles = {
     "Weight Decay": "Values closer to 0 closely match your training dataset, and values closer to 1 generalize more and deviate from your training dataset. Default is 1e-2, values lower than 0.1 are recommended. For D-Adaptation values between 0.02 and 0.04 are recommended",
 }
 
-function hideElements() {
-    if (!elementsHidden) {
-        let btn = gradioApp().getElementById("db_hide_advanced");
-        if (btn == null) return;
-        elementsHidden = true;
-        console.log("Hiding advanced elements!");
-        btn.click();
+// If more_hints is defined, we'll add the entries to the db_titles object
+if (typeof more_hints !== 'undefined') {
+    console.log("Adding more hints!");
+    for (let key in more_hints) {
+        db_titles[key] = more_hints[key];
     }
 }
-
 // Do a thing when the UI updates
 onUiUpdate(function () {
-    setTimeout(function () {
-        hideElements();
-    },100);
 
     let db_active = document.getElementById("db_active");
     if (db_active) {

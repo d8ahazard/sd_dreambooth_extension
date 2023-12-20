@@ -65,311 +65,6 @@ def gr_update(default=None, **kwargs):
         return kwargs["value"] if "value" in kwargs else default
 
 
-def training_wizard_person(model_dir):
-    return training_wizard(model_dir, is_person=True)
-
-
-def training_wizard(model_dir, is_person=False):
-    """
-    Calculate the number of steps based on our learning rate, return the following:
-    db_num_train_epochs,
-    c1_num_class_images_per,
-    c2_num_class_images_per,
-    c3_num_class_images_per,
-    c4_num_class_images_per,
-    db_status
-    """
-    if model_dir == "" or model_dir is None:
-        return 100, 0, 0, 0, 0, "Please select a model."
-    step_mult = 150 if is_person else 100
-
-    if is_person:
-        class_count = 5
-    else:
-        class_count = 0
-
-    w_status = f"Wizard results:"
-    w_status += f"<br>Num Epochs: {step_mult}"
-    w_status += f"<br>Num instance images per class image: {class_count}"
-
-    print(w_status)
-
-    return int(step_mult), class_count, class_count, class_count, class_count, w_status
-
-
-def largest_prime_factor(n):
-    # Special case for n = 2
-    if n == 2:
-        return 2
-
-    # Start with the first prime number, 2
-    largest_factor = 2
-
-    # Divide n by 2 as many times as possible
-    while n % 2 == 0:
-        n = n // 2
-
-    # Check the remaining odd factors of n
-    for i in range(3, int(n ** 0.5) + 1, 2):
-        # Divide n by i as many times as possible
-        while n % i == 0:
-            largest_factor = i
-            n = n // i
-
-    # If there is a prime factor larger than the square root, it will be the remaining value of n
-    if n > 2:
-        largest_factor = n
-
-    return largest_factor
-
-
-def closest_factors_to_sqrt(n):
-    # Find the square root of n
-    sqrt_n = int(n ** 0.5)
-
-    # Initialize the factors to the square root and 1
-    f1, f2 = sqrt_n, 1
-
-    # Check if n is a prime number
-    if math.sqrt(n) == sqrt_n:
-        return sqrt_n, sqrt_n
-
-    # Find the first pair of factors that are closest in value
-    while n % f1 != 0:
-        f1 -= 1
-        f2 = n // f1
-
-    # Initialize the closest difference to the difference between the square root and f1
-    closest_diff = abs(sqrt_n - f1)
-    closest_factors = (f1, f2)
-
-    # Check the pairs of factors below the square root
-    for i in range(sqrt_n - 1, 1, -1):
-        if n % i == 0:
-            # Calculate the difference between the square root and the factors
-            diff = min(abs(sqrt_n - i), abs(sqrt_n - (n // i)))
-            # Update the closest difference and factors if necessary
-            if diff < closest_diff:
-                closest_diff = diff
-                closest_factors = (i, n // i)
-
-    return closest_factors
-
-
-def performance_wizard(model_name):
-    """
-    Calculate performance settings based on available resources.
-    @return:
-    attention: Memory Attention
-    optimizer: Optimizer
-    gradient_checkpointing: Whether to use gradient checkpointing or not.
-    gradient_accumulation_steps: Number of steps to use. Set to batch size.
-    mixed_precision: Mixed precision to use. BF16 will be selected if available.
-    not_cache_latents: Latent caching.
-    sample_batch_size: Batch size to use when creating class images.
-    train_batch_size: Batch size to use when training.
-    stop_text_encoder: Whether to train text encoder or not.
-    use_lora: Train using LORA. Better than "use CPU".
-    use_ema: Train using EMA.
-    msg: Stuff to show in the UI
-    """
-    attention = "flash_attention"
-    optimizer = "8bit AdamW"
-    gradient_checkpointing = False
-    gradient_accumulation_steps = 1
-    mixed_precision = "fp16"
-    cache_latents = True
-    sample_batch_size = 1
-    train_batch_size = 1
-    stop_text_encoder = 0
-    use_lora = False
-    use_ema = False
-    config = None
-    if model_name == "" or model_name is None:
-        print("Can't load config, specify a model name!")
-    else:
-        config = from_file(model_name)
-    save_samples_every = gr_update(config.save_preview_every)
-    save_weights_every = gr_update(config.save_embedding_every)
-
-    if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
-        mixed_precision = "bf16"
-    if config is not None:
-        total_images = 0
-        for concept in config.concepts():
-            idd = concept.instance_data_dir
-            if idd and os.path.exists(idd):
-                images = get_images(idd)
-                total_images += len(images)
-        print(f"Total images: {total_images}")
-        if total_images != 0:
-            best_factors = closest_factors_to_sqrt(total_images)
-            largest_prime = largest_prime_factor(total_images)
-            largest_factor = (
-                best_factors[0]
-                if best_factors[0] > best_factors[1]
-                else best_factors[1]
-            )
-            smallest_factor = (
-                best_factors[0]
-                if best_factors[0] < best_factors[1]
-                else best_factors[1]
-            )
-            factor_diff = largest_factor - smallest_factor
-            print(f"Largest prime: {largest_prime}")
-            print(f"Best factors: {best_factors}")
-            if largest_prime <= factor_diff:
-                train_batch_size = largest_prime
-                gradient_accumulation_steps = largest_prime
-            else:
-                train_batch_size = largest_factor
-                gradient_accumulation_steps = smallest_factor
-
-    has_xformers = False
-    try:
-        from diffusers.utils.import_utils import is_xformers_available
-
-        has_xformers = is_xformers_available()
-    except:
-        pass
-    if has_xformers:
-        attention = "xformers"
-    try:
-        stop_text_encoder = 0.75
-        t = torch.cuda.get_device_properties(0).total_memory
-        gb = math.ceil(t / 1073741824)
-        print(f"Total VRAM: {gb}")
-        if gb >= 24:
-            sample_batch_size = 4
-            use_ema = True
-            if attention != "xformers":
-                attention = "no"
-                train_batch_size = 1
-                gradient_accumulation_steps = 1
-        if 24 > gb >= 16:
-            use_ema = True
-        if 16 > gb >= 12:
-            use_ema = False
-            cache_latents = False
-            gradient_accumulation_steps = 1
-            train_batch_size = 1
-        if gb < 12:
-            use_lora = True
-            save_samples_every = gr_update(value=0)
-            save_weights_every = gr_update(value=0)
-
-        msg = f"Calculated training params based on {gb}GB of VRAM:"
-    except Exception as e:
-        msg = f"An exception occurred calculating performance values: {e}"
-        pass
-
-    log_dict = {
-        "Attention": attention,
-        "Gradient Checkpointing": gradient_checkpointing,
-        "Accumulation Steps": gradient_accumulation_steps,
-        "Precision": mixed_precision,
-        "Cache Latents": cache_latents,
-        "Training Batch Size": train_batch_size,
-        "Class Generation Batch Size": sample_batch_size,
-        "Text Encoder Ratio": stop_text_encoder,
-        "Optimizer": optimizer,
-        "EMA": use_ema,
-        "LORA": use_lora,
-    }
-    for key in log_dict:
-        msg += f"<br>{key}: {log_dict[key]}"
-    return (
-        attention,
-        gradient_checkpointing,
-        gradient_accumulation_steps,
-        mixed_precision,
-        cache_latents,
-        optimizer,
-        sample_batch_size,
-        train_batch_size,
-        stop_text_encoder,
-        use_lora,
-        use_ema,
-        save_samples_every,
-        save_weights_every,
-        msg,
-    )
-
-
-# p,
-# overrideDenoising,
-# overrideMaskBlur,
-# path,
-# searchSubdir,
-# divider,
-# howSplit,
-# saveMask,
-# pathToSave,
-# viewResults,
-# saveNoFace,
-# onlyMask,
-# invertMask,
-# singleMaskPerImage,
-# countFaces,
-# maskSize,
-# keepOriginalName,
-# pathExisting,
-# pathMasksExisting,
-# pathToSaveExisting,
-# selectedTab,
-# faceDetectMode,
-# face_x_scale,
-# face_y_scale,
-# minFace,
-# multiScale,
-# multiScale2,
-# multiScale3,
-# minNeighbors,
-# mpconfidence,
-# mpcount,
-# debugSave,
-# optimizeDetect
-
-
-def get_swap_parameters():
-    return OrderedDict(
-        [
-            ("overrideDenoising", True),
-            ("overrideMaskBlur", True),
-            ("path", "./"),
-            ("searchSubdir", False),
-            ("divider", 1),
-            ("howSplit", "Both ▦"),
-            ("saveMask", False),
-            ("pathToSave", "./"),
-            ("viewResults", False),
-            ("saveNoFace", False),
-            ("onlyMask", False),
-            ("invertMask", False),
-            ("singleMaskPerImage", False),
-            ("countFaces", False),
-            ("maskSize", 0),
-            ("keepOriginalName", False),
-            ("pathExisting", ""),
-            ("pathMasksExisting", ""),
-            ("pathToSaveExisting", ""),
-            ("selectedTab", "generateMasksTab"),
-            ("faceDetectMode", "Normal (OpenCV + FaceMesh)"),
-            ("face_x_scale", 1.0),
-            ("face_y_scale", 1.0),
-            ("minFace", 50),
-            ("multiScale", 1.03),
-            ("multiScale2", 1.0),
-            ("multiScale3", 1.0),
-            ("minNeighbors", 5),
-            ("mpconfidence", 0.5),
-            ("mpcount", 1),
-            ("debugSave", False),
-            ("optimizeDetect", True),
-        ]
-    )
-
-
 def get_script_class():
     script_class = None
     try:
@@ -403,12 +98,7 @@ def generate_samples(
         steps: int,
         scale: float,
         class_gen_method: str = "Native Diffusers",
-        scheduler: str = "UniPCMultistep",
-        swap_faces: bool = False,
-        swap_prompt: str = "",
-        swap_negative: str = "",
-        swap_steps: int = 40,
-        swap_batch: int = 1,
+        scheduler: str = "UniPCMultistep"
 ):
     if batch_size > num_samples:
         batch_size = num_samples
@@ -762,7 +452,7 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
     reload_system_models()
     lora_model_name = ""
     if config.lora_model_name:
-        lora_model_name = f"{config.model_name}_{total_steps}.pt"
+        lora_model_name = f"{config.model_name}_{total_steps}.safetensors"
     dirs = get_lora_models()
     lora_model_name = gr_update(choices=sorted(dirs), value=lora_model_name)
     return lora_model_name, total_steps, config.epoch, images, res
@@ -990,7 +680,6 @@ def create_model(
     unload_system_models()
     result = extract_checkpoint(new_model_name=new_model_name,
                                 checkpoint_file=ckpt_path,
-                                extract_ema=extract_ema,
                                 train_unfrozen=train_unfrozen,
                                 image_size=res,
                                 model_type=model_type)
@@ -1024,123 +713,38 @@ def create_model(
         "Checkpoint extracted successfully."
 
 
-def debug_collate_fn(examples):
-    input_ids = [example["input_ids"] for example in examples]
-    pixel_values = [example["image"] for example in examples]
-    loss_weights = torch.tensor(
-        [example["res"] for example in examples], dtype=torch.float32
-    )
-    batch = {
-        "input_ids": input_ids,
-        "images": pixel_values,
-        "loss_weights": loss_weights,
-    }
-    return batch
+def create_workspace(
+    project_name: str,
+    source_model_name: str,
+    source_model_type: str="v1x"
+):
+    err_msg = None
+    if project_name is None or project_name == "":
+        print("No project name.")
+        err_msg = "Please enter a project name"
+    if source_model_name is None or source_model_name == "":
+        print("No model name.")
+        err_msg = "Please select a model"
+    if source_model_type is None or source_model_type == "":
+        print("No model type.")
+        err_msg = "Please select a model type"
+    if err_msg:
+        return "", "", "", 0, 0, "", "", "", "", 0, "", err_msg
+    finetune_models_path = os.path.join(shared.models_path, "finetune")
+    diffusers_models_path = os.path.join(shared.models_path, "diffusers")
+    extracted_path = os.path.join(diffusers_models_path, os.path.basename(source_model_name))
+    for path in [finetune_models_path, diffusers_models_path, extracted_path]:
+        if not os.path.exists(path):
+            os.makedirs(path)
+        print(f"Extracting {source_model_name} to {extracted_path}")
+    if not extract_checkpoint(new_model_name=os.path.basename(source_model_name),
+                           checkpoint_file=source_model_name,
+                           train_unfrozen=False,
+                           image_size=512,
+                           model_type=source_model_type,
+                           out_dir=extracted_path):
+        print(f"Error extracting {source_model_name} to {extracted_path}")
+        return "", "", "", 0, 0, "", "", "", "", 0, "", "Error extracting checkpoint"
+    return gr_update(choices=sorted(get_db_models()), value=project_name), extracted_path, "", "", 0, 0, "", "", "", "", 0, "", "Workspace created successfully."
 
 
-def debug_buckets(model_name, num_epochs, batch_size):
-    print("Debug click?")
-    status.textinfo = "Preparing dataset..."
-    if model_name == "" or model_name is None:
-        status.end()
-        return "No model selected."
-    args = from_file(model_name)
-    if args is None:
-        status.end()
-        return "Invalid config."
-    print("Preparing prompt dataset...")
-
-    prompt_dataset = ClassDataset(
-        args.concepts(), args.model_dir, args.resolution, False, args.disable_class_matching
-    )
-    inst_paths = prompt_dataset.instance_prompts
-    class_paths = prompt_dataset.class_prompts
-    print("Generating training dataset...")
-    dataset = generate_dataset(
-        model_name,
-        inst_paths,
-        class_paths,
-        batch_size,
-        debug=True,
-        model_dir=args.model_dir,
-    )
-
-    placeholder = [torch.Tensor(10, 20)]
-    sched_train_steps = args.num_train_epochs * dataset.__len__()
-
-    optimizer = AdamW(
-        placeholder, lr=args.learning_rate, weight_decay=args.weight_decay
-    )
-    if not args.use_lora and args.lr_scheduler == "dadapt_with_warmup":
-        args.lora_learning_rate = args.learning_rate,
-        args.lora_txt_learning_rate = args.learning_rate,
-
-    lr_scheduler = UniversalScheduler(
-        args.lr_scheduler,
-        optimizer=optimizer,
-        num_warmup_steps=args.lr_warmup_steps,
-        total_training_steps=sched_train_steps,
-        total_epochs=num_epochs,
-        num_cycles=args.lr_cycles,
-        power=args.lr_power,
-        factor=args.lr_factor,
-        scale_pos=args.lr_scale_pos,
-        min_lr=args.learning_rate_min,
-        unet_lr=args.lora_learning_rate,
-        tenc_lr=args.lora_txt_learning_rate,
-    )
-
-    sampler = BucketSampler(dataset, args.train_batch_size, True)
-    n_workers = 0
-
-    dataloader = torch.utils.data.DataLoader(
-        dataset,
-        batch_sampler=sampler,
-        batch_size=1,
-        shuffle=False,
-        drop_last=False,
-        collate_fn=debug_collate_fn,
-        pin_memory=True,
-        num_workers=n_workers,
-    )
-
-    lines = []
-    test_epochs = num_epochs
-    sim_train_steps = test_epochs * (dataloader.__len__() // batch_size)
-    print(
-        f"Simulating training for {test_epochs} epochs, batch size of {batch_size}, total steps {sim_train_steps}."
-    )
-    for epoch in mytqdm(range(test_epochs), desc="Simulating training.", position=0):
-        for step, batch in enumerate(dataloader):
-            image_names = batch["images"]
-            captions = batch["input_ids"]
-            losses = batch["loss_weights"]
-            last_lr = lr_scheduler.get_last_lr()[0]
-            line = f"Epoch: {epoch}, Batch: {step}, Images: {len(image_names)}, Loss: {losses.mean()} Last LR: {last_lr}"
-            print(line)
-            lines.append(line)
-            loss_idx = 0
-            for image, caption in zip(image_names, captions):
-                line = f"{image}, {caption}, {losses[loss_idx]}"
-                lines.append(line)
-                loss_idx += 1
-            lr_scheduler.step(args.train_batch_size)
-            optimizer.step()
-        lr_scheduler.step(1, is_epoch=True)
-    samples_dir = os.path.join(args.model_dir, "samples")
-    if not os.path.exists(samples_dir):
-        os.makedirs(samples_dir)
-    bucket_file = os.path.join(samples_dir, "prompts.json")
-    with open(bucket_file, "w") as outfile:
-        json.dump(lines, outfile, indent=4)
-    try:
-        del dataloader
-        del dataset.tokenizer
-        del dataset
-        del lr_scheduler
-        del optimizer
-        cleanup()
-    except:
-        pass
-    status.end()
-    return "", f"Debug output saved to {bucket_file}"

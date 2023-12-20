@@ -1,0 +1,1295 @@
+{
+    "adam_beta1": {
+        "default": 0.9,
+        "type": "float",
+        "extras": {
+            "title": "Adam Beta1",
+            "description": "The beta1 parameter for the Adam optimizer.",
+            "group": "Optimizer",
+            "advanced": true
+        }
+    },
+    "adam_beta2": {
+        "default": 0.999,
+        "type": "float",
+        "extras": {
+            "title": "Adam Beta2",
+            "description": "The beta2 parameter for the Adam optimizer.",
+            "group": "Optimizer",
+            "advanced": true
+        }
+    },
+    "adam_epsilon": {
+        "default": 1e-08,
+        "type": "float",
+        "extras": {
+            "title": "Adam Epsilon",
+            "description": "Epsilon value for the Adam optimizer",
+            "group": "Optimizer",
+            "advanced": true
+        }
+    },
+    "adam_weight_decay": {
+        "default": 0.01,
+        "type": "float",
+        "extras": {
+            "title": "Adam Weight Decay",
+            "description": "Weight decay to use.",
+            "group": "Optimizer",
+            "advanced": true
+        }
+    },
+    "allow_tf32": {
+        "default": true,
+        "type": "bool",
+        "extras": {
+            "title": "Allow Tf32",
+            "description": "Whether or not to allow TF32 on Ampere GPUs. Can be used to speed up training. For more information, see https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices",
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "center_crop": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "Center Crop",
+            "description": "Whether to center crop the input images to the resolution. If not set, the images will be randomly cropped. The images will be resized to the resolution first before cropping.",
+            "group": "Image Processing",
+            "advanced": true
+        }
+    },
+    "checkpointing_steps": {
+        "default": 500,
+        "type": "int",
+        "extras": {
+            "title": "Checkpointing Steps",
+            "description": "Save a checkpoint of the training state every X updates. Checkpoints can be used for resuming training via `--resume_from_checkpoint`. In the case that the checkpoint is better than the final trained model, the checkpoint can also be used for inference.Using a checkpoint for inference requires separate loading of the original pipeline and the individual checkpointed model components.See https://huggingface.co/docs/diffusers/main/en/training/dreambooth#performing-inference-using-a-saved-checkpoint for step by stepinstructions.",
+            "group": "Intervals",
+            "min": 0,
+            "max": 100000
+        }
+    },
+    "checkpoints_total_limit": {
+        "default": 3,
+        "type": "str",
+        "extras": {
+            "title": "Checkpoints Total Limit",
+            "description": "Max number of checkpoints to store.",
+            "group": "Saving",
+            "min": 0,
+            "max": 100,
+            "advanced": true
+        }
+    },
+    "class_data_dir": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Class Data Dir",
+            "description": "A folder containing the training data of class images.",
+            "group": "Dataset"
+        }
+    },
+    "class_labels_conditioning": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Class Labels Conditioning",
+            "description": "The optional `class_label` conditioning to pass to the unet, available values are `timesteps`.",
+            "group": "Dataset"
+        }
+    },
+    "class_prompt": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Class Prompt",
+            "description": "The prompt to specify images in the same class as provided instance images.",
+            "group": "Dataset"
+        }
+    },
+    "dataloader_num_workers": {
+        "default": 1,
+        "type": "int",
+        "extras": {
+            "title": "Dataloader Num Workers",
+            "description": "Number of subprocesses to use for data loading.",
+            "group": "Performance",
+            "min": 0,
+            "max": 100,
+            "advanced": true
+        }
+    },
+    "enable_xformers_memory_efficient_attention": {
+        "default": true,
+        "type": "bool",
+        "extras": {
+            "title": "Enable Xformers Memory Efficient Attention",
+            "description": "Whether or not to use xformers.",
+            "group": "Performance"
+        }
+    },
+    "gradient_accumulation_steps": {
+        "default": 1,
+        "type": "int",
+        "extras": {
+            "title": "Gradient Accumulation Steps",
+            "description": "Number of updates steps to accumulate before performing a backward/update pass.",
+            "group": "Batching",
+            "advanced": true
+        }
+    },
+    "gradient_checkpointing": {
+        "default": true,
+        "type": "bool",
+        "extras": {
+            "title": "Gradient Checkpointing",
+            "description": "Whether or not to use gradient checkpointing to save memory at the expense of slower backward pass.",
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "hub_model_id": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Hub Model Id",
+            "description": "The name of the repository to keep in sync with the local `output_dir`.",
+            "group": "Saving",
+            "visible": false
+        }
+    },
+    "hub_token": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Hub Token",
+            "description": "The token to use to push to the Model Hub.",
+            "group": "Saving",
+            "visible": false
+        }
+    },
+    "instance_data_dir": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Instance Data Dir",
+            "description": "A folder containing the training data. ",
+            "group": "Dataset"
+        }
+    },
+    "instance_prompt": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Instance Prompt",
+            "description": "The prompt with identifier specifying the instance, e.g. 'photo of a TOK dog', 'in the style of TOK'",
+            "group": "Dataset"
+        }
+    },
+    "learning_rate": {
+        "default": 5e-06,
+        "type": "float",
+        "extras": {
+            "title": "Learning Rate",
+            "description": "Initial learning rate (after the potential warmup period) to use.",
+            "group": "Learning Rate"
+        }
+    },
+    "local_rank": {
+        "default": -1,
+        "type": "int",
+        "extras": {
+            "title": "Local Rank",
+            "description": "For distributed training: local_rank",
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "logging_dir": {
+        "default": "logs",
+        "type": "str",
+        "extras": {
+            "title": "Logging Dir",
+            "description": "[TensorBoard](https://www.tensorflow.org/tensorboard) log directory. Will default to *output_dir/runs/**CURRENT_DATETIME_HOSTNAME***.",
+            "group": "Logging",
+            "visible": false
+        }
+    },
+    "lr_num_cycles": {
+        "default": 1,
+        "type": "int",
+        "extras": {
+            "title": "Lr Num Cycles",
+            "description": "Number of hard resets of the lr in cosine_with_restarts scheduler.",
+            "group": "Learning Rate",
+            "min": 0,
+            "max": 100000,
+            "advanced": true
+        }
+    },
+    "lr_power": {
+        "default": 1.0,
+        "type": "float",
+        "extras": {
+            "title": "Lr Power",
+            "description": "Power factor of the polynomial scheduler.",
+            "group": "Learning Rate",
+            "advanced": true,
+            "min": 0,
+            "max": 1,
+            "step": 0.1
+        }
+    },
+    "lr_scheduler": {
+        "default": "constant",
+        "type": "str",
+        "extras": {
+            "title": "Lr Scheduler",
+            "description": "The scheduler type to use. Choose between [\"linear\", \"cosine\", \"cosine_with_restarts\", \"polynomial\", \"constant\", \"constant_with_warmup\"]",
+            "group": "Learning Rate",
+            "choices": [
+                "linear",
+                "cosine",
+                "cosine_with_restarts",
+                "polynomial",
+                "constant",
+                "constant_with_warmup"
+            ],
+            "advanced": true
+        }
+    },
+    "lr_warmup_steps": {
+        "default": 500,
+        "type": "int",
+        "extras": {
+            "title": "Lr Warmup Steps",
+            "description": "Number of steps for the warmup in the lr scheduler.",
+            "group": "Learning Rate",
+            "min": 0,
+            "max": 100000,
+            "advanced": true
+        }
+    },
+    "max_grad_norm": {
+        "default": 1.0,
+        "type": "float",
+        "extras": {
+            "title": "Max Grad Norm",
+            "description": "Max gradient norm.",
+            "group": "Optimizer",
+            "advanced": true,
+            "min": 0,
+            "max": 1,
+            "step": 0.1
+        }
+    },
+    "max_train_steps": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Max Train Steps",
+            "description": "Total number of training steps to perform.  If provided, overrides num_train_epochs.",
+            "group": "Intervals",
+            "visible": false
+        }
+    },
+    "mixed_precision": {
+        "default": "bf16",
+        "type": "str",
+        "extras": {
+            "title": "Mixed Precision",
+            "description": "Whether to use mixed precision. Choose between fp16 and bf16 (bfloat16). Bf16 requires PyTorch >= 1.10.and an Nvidia Ampere GPU.  Default to the value of accelerate config of the current system or the flag passed with the `accelerate.launch` command. Use this argument to override the accelerate config.",
+            "choices": [
+                "no",
+                "fp16",
+                "bf16"
+            ],
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "num_class_images": {
+        "default": 100,
+        "type": "int",
+        "extras": {
+            "title": "Num Class Images",
+            "description": "Minimal class images for prior preservation loss. If there are not enough images already present in class_data_dir, additional images will be sampled with class_prompt.",
+            "group": "Dataset",
+            "min": 0,
+            "max": 100000
+        }
+    },
+    "num_train_epochs": {
+        "default": 1,
+        "type": "int",
+        "extras": {
+            "title": "Num Train Epochs",
+            "description": "",
+            "group": "Intervals",
+            "min": 0,
+            "max": 100000
+        }
+    },
+    "num_validation_images": {
+        "default": 4,
+        "type": "int",
+        "extras": {
+            "title": "Num Validation Images",
+            "description": "Number of images to be generated for each `--validation_image`, `--validation_prompt` pair",
+            "group": "Validation",
+            "advanced": true,
+            "min": 0,
+            "max": 100
+        }
+    },
+    "offset_noise": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "Offset Noise",
+            "description": "Fine-tuning against a modified noise See: https://www.crosslabs.org//blog/diffusion-with-offset-noise for more information.",
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "output_dir": {
+        "default": "t2iadapter-model",
+        "type": "str",
+        "extras": {
+            "title": "Output Dir",
+            "description": "The output directory where the model predictions and checkpoints will be written.",
+            "ignore": true
+        }
+    },
+    "pre_compute_text_embeddings": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "Pre Compute Text Embeddings",
+            "description": "Whether or not to pre-compute text embeddings. If text embeddings are pre-computed, the text encoder will not be kept in memory during training and will leave more GPU memory available for training the rest of the model. This is not compatible with `--train_text_encoder`.",
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "pretrained_model_name_or_path": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Pretrained Model Name Or Path",
+            "description": "Path to pretrained model or model identifier from huggingface.co/models.",
+            "ignore": true
+        }
+    },
+    "prior_generation_precision": {
+        "default": "bf16",
+        "type": "str",
+        "extras": {
+            "title": "Prior Generation Precision",
+            "description": "Choose prior generation precision between fp32, fp16 and bf16 (bfloat16). Bf16 requires PyTorch >= 1.10.and an Nvidia Ampere GPU.  Default to  fp16 if a GPU is available else fp32.",
+            "choices": [
+                "no",
+                "fp32",
+                "fp16",
+                "bf16"
+            ],
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "prior_loss_weight": {
+        "default": 1.0,
+        "type": "float",
+        "extras": {
+            "title": "Prior Loss Weight",
+            "description": "The weight of prior preservation loss.",
+            "group": "Dataset",
+            "advanced": true,
+            "min": 0,
+            "max": 1,
+            "step": 0.1
+        }
+    },
+    "push_to_hub": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "Push To Hub",
+            "description": "Whether or not to push the model to the Hub.",
+            "group": "Saving",
+            "visible": false
+        }
+    },
+    "report_to": {
+        "default": "tensorboard",
+        "type": "str",
+        "extras": {
+            "title": "Report To",
+            "description": "The integration to report the results and logs to. Supported platforms are `\"tensorboard\"` (default), `\"wandb\"` and `\"comet_ml\"`. Use `\"all\"` to report to all integrations.",
+            "choices": [
+                "all",
+                "tensorboard",
+                "wandb"
+            ],
+            "group": "Logging"
+        }
+    },
+    "resolution": {
+        "default": 1024,
+        "type": "int",
+        "extras": {
+            "title": "Resolution",
+            "description": "The resolution for input images, all the images in the train/validation dataset will be resized to this resolution",
+            "group": "Image Processing",
+            "min": 256,
+            "max": 4096,
+            "step": 64
+        }
+    },
+    "resume_from_checkpoint": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Resume From Checkpoint",
+            "description": "Whether training should be resumed from a previous checkpoint. Use a path saved by `--checkpointing_steps`, or `\"latest\"` to automatically select the last available checkpoint.",
+            "ignore": true
+        }
+    },
+    "revision": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Revision",
+            "description": "Revision of pretrained model identifier from huggingface.co/models. Trainable model components should be float32 precision.",
+            "ignore": true
+        }
+    },
+    "sample_batch_size": {
+        "default": 4,
+        "type": "int",
+        "extras": {
+            "title": "Sample Batch Size",
+            "description": "Batch size (per device) for sampling images.",
+            "group": "Batching",
+            "advanced": true,
+            "min": 1,
+            "max": 1000
+        }
+    },
+    "scale_lr": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "Scale Lr",
+            "description": "Scale the learning rate by the number of GPUs, gradient accumulation steps, and batch size.",
+            "group": "Learning Rate",
+            "advanced": true
+        }
+    },
+    "seed": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Seed",
+            "description": "A seed for reproducible training.",
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "set_grads_to_none": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "Set Grads To None",
+            "description": "Save more memory by using setting grads to None instead of zero. Be aware, that this changes certain behaviors, so disable this argument if it causes any problems. More info: https://pytorch.org/docs/stable/generated/torch.optim.Optimizer.zero_grad.html",
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "skip_save_text_encoder": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "Skip Save Text Encoder",
+            "description": "Set to not save text encoder",
+            "group": "Saving",
+            "advanced": true
+        }
+    },
+    "snr_gamma": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Snr Gamma",
+            "description": "SNR weighting gamma to be used if rebalancing the loss. Recommended value is 5.0. More details here: https://arxiv.org/abs/2303.09556.",
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "text_encoder_use_attention_mask": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "Text Encoder Use Attention Mask",
+            "description": "Whether to use attention mask for the text encoder",
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "tokenizer_max_length": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Tokenizer Max Length",
+            "description": "The maximum length of the tokenizer. If not set, will default to the tokenizer's max length.",
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "tokenizer_name": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Tokenizer Name",
+            "description": "Pretrained tokenizer name or path if not the same as model_name",
+            "ignore": true
+        }
+    },
+    "train_batch_size": {
+        "default": 4,
+        "type": "int",
+        "extras": {
+            "title": "Train Batch Size",
+            "description": "Batch size (per device) for the training dataloader.",
+            "group": "Batching",
+            "min": 1,
+            "max": 1000
+        }
+    },
+    "train_text_encoder": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "Train Text Encoder",
+            "description": "Whether to train the text encoder. If set, the text encoder should be float32 precision.",
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "use_8bit_adam": {
+        "default": true,
+        "type": "bool",
+        "extras": {
+            "title": "Use 8Bit Adam",
+            "description": "Whether or not to use 8-bit Adam from bitsandbytes.",
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "validation_images": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Validation Images",
+            "description": "Optional set of images to use for validation. Used when the target pipeline takes an initial image as input such as when training image variation or superresolution.",
+            "group": "Validation",
+            "advanced": true
+        }
+    },
+    "validation_prompt": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Validation Prompt",
+            "description": "A set of prompts evaluated every `--validation_steps` and logged to `--report_to`. Provide either a matching number of `--validation_image`s, a single `--validation_image` to be used with all prompts, or a single prompt that will be used with all `--validation_image`s.",
+            "group": "Validation",
+            "advanced": true
+        }
+    },
+    "validation_scheduler": {
+        "default": "DPMSolverMultistepScheduler",
+        "type": "str",
+        "extras": {
+            "title": "Validation Scheduler",
+            "description": "Select which scheduler to use for validation. DDPMScheduler is recommended for DeepFloyd IF.",
+            "choices": [
+                "DPMSolverMultistepScheduler",
+                "DDPMScheduler"
+            ],
+            "group": "Validation",
+            "advanced": true
+        }
+    },
+    "validation_steps": {
+        "default": 100,
+        "type": "int",
+        "extras": {
+            "title": "Validation Steps",
+            "description": "Run validation every X steps. Validation consists of running the prompt `args.validation_prompt` multiple times: `args.num_validation_images` and logging the images.",
+            "group": "Intervals"
+        }
+    },
+    "variant": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Variant",
+            "description": "Variant of the model files of the pretrained model identifier from huggingface.co/models, 'e.g.' fp16",
+            "ignore": true
+        }
+    },
+    "with_prior_preservation": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "With Prior Preservation",
+            "description": "Flag to add prior preservation loss.",
+            "group": "Dataset",
+            "advanced": true
+        }
+    },
+    "rank": {
+        "default": 4,
+        "type": "int",
+        "extras": {
+            "title": "Rank",
+            "description": "The dimension of the LoRA update matrices.",
+            "group": "LORA",
+            "advanced": true
+        }
+    },
+    "validation_epochs": {
+        "default": 1,
+        "type": "int",
+        "extras": {
+            "title": "Validation Epochs",
+            "description": "Run fine-tuning validation every X epochs. The validation process consists of running the prompt `args.validation_prompt` multiple times: `args.num_validation_images`.",
+            "group": "Intervals"
+        }
+    },
+    "adam_weight_decay_text_encoder": {
+        "default": 0.001,
+        "type": "float",
+        "extras": {
+            "title": "Adam Weight Decay Text Encoder",
+            "description": "Weight decay to use for text_encoder",
+            "group": "Optimizer",
+            "advanced": true
+        }
+    },
+    "cache_dir": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Cache Dir",
+            "description": "The directory where the downloaded models and datasets will be stored.",
+            "ignore": true
+        }
+    },
+    "caption_column": {
+        "default": "text",
+        "type": "str",
+        "extras": {
+            "title": "Caption Column",
+            "description": "The column of the dataset containing a caption or a list of captions.",
+            "group": "Dataset"
+        }
+    },
+    "crops_coords_top_left_h": {
+        "default": 0,
+        "type": "int",
+        "extras": {
+            "title": "Crops Coords Top Left H",
+            "description": "Coordinate for (the height) to be included in the crop coordinate embeddings needed by SDXL UNet.",
+            "group": "Dataset",
+            "advanced": true,
+            "min": 0,
+            "max": 100000,
+            "step": 1
+        }
+    },
+    "crops_coords_top_left_w": {
+        "default": 0,
+        "type": "int",
+        "extras": {
+            "title": "Crops Coords Top Left W",
+            "description": "Coordinate for (the height) to be included in the crop coordinate embeddings needed by SDXL UNet.",
+            "group": "Dataset",
+            "advanced": true,
+            "min": 0,
+            "max": 100000,
+            "step": 1
+        }
+    },
+    "dataset_config_name": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Dataset Config Name",
+            "description": "The config of the Dataset, leave as None if there's only one config.",
+            "group": "Dataset",
+            "advanced": true
+        }
+    },
+    "dataset_name": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Dataset Name",
+            "description": "The name of the Dataset (from the HuggingFace hub) to train on (could be your own, possibly private, dataset). It can also be a path pointing to a local copy of a dataset in your filesystem, or to a folder containing files that \ud83e\udd17 Datasets can understand.",
+            "group": "Dataset"
+        }
+    },
+    "image_column": {
+        "default": "image",
+        "type": "str",
+        "extras": {
+            "title": "Image Column",
+            "description": "The column of the dataset containing the target image.",
+            "group": "Dataset"
+        }
+    },
+    "optimizer": {
+        "default": "AdamW",
+        "type": "str",
+        "extras": {
+            "title": "Optimizer",
+            "description": "The optimizer type to use. Choose between [\"AdamW\", \"prodigy\"]",
+            "choices": [
+                "AdamW",
+                "prodigy"
+            ],
+            "group": "Optimizer",
+            "advanced": true
+        }
+    },
+    "pretrained_vae_model_name_or_path": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Pretrained Vae Model Name Or Path",
+            "description": "Path to an improved VAE to stabilize training. For more details check out: https://github.com/huggingface/diffusers/pull/4038.",
+            "group": "Model",
+            "advanced": true
+        }
+    },
+    "prodigy_beta3": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Prodigy Beta3",
+            "description": "coefficients for computing the Prodidy stepsize using running averages. If set to None, uses the value of square root of beta2. Ignored if optimizer is adamW",
+            "group": "Optimizer",
+            "advanced": true
+        }
+    },
+    "prodigy_decouple": {
+        "default": true,
+        "type": "bool",
+        "extras": {
+            "title": "Prodigy Decouple",
+            "description": "Use AdamW style decoupled weight decay",
+            "group": "Optimizer",
+            "advanced": true
+        }
+    },
+    "prodigy_safeguard_warmup": {
+        "default": true,
+        "type": "bool",
+        "extras": {
+            "title": "Prodigy Safeguard Warmup",
+            "description": "Remove lr from the denominator of D estimate to avoid issues during warm-up stage. True by default. Ignored if optimizer is adamW",
+            "group": "Optimizer",
+            "advanced": true
+        }
+    },
+    "prodigy_use_bias_correction": {
+        "default": true,
+        "type": "bool",
+        "extras": {
+            "title": "Prodigy Use Bias Correction",
+            "description": "Turn on Adam's bias correction. True by default. Ignored if optimizer is adamW",
+            "group": "Optimizer",
+            "advanced": true
+        }
+    },
+    "repeats": {
+        "default": 1,
+        "type": "int",
+        "extras": {
+            "title": "Repeats",
+            "description": "How many times to repeat the training data.",
+            "group": "Dataset",
+            "advanced": true
+        }
+    },
+    "text_encoder_lr": {
+        "default": 5e-06,
+        "type": "float",
+        "extras": {
+            "title": "Text Encoder Lr",
+            "description": "Text encoder learning rate to use.",
+            "group": "Learning Rate",
+            "advanced": true,
+            "min": 0,
+            "max": 1,
+            "step": 1e-05
+        }
+    },
+    "input_perturbation": {
+        "default": 0.1,
+        "type": "int",
+        "extras": {
+            "title": "Input Perturbation",
+            "description": "The scale of input perturbation. Recommended 0.1.",
+            "group": "Dataset",
+            "advanced": true,
+            "min": 0,
+            "max": 1,
+            "step": 0.1
+        }
+    },
+    "max_train_samples": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Max Train Samples",
+            "description": "For debugging purposes or quicker training, truncate the number of training examples to this value if set.",
+            "group": "Intervals",
+            "advanced": true
+        }
+    },
+    "noise_offset": {
+        "default": 0,
+        "type": "int",
+        "extras": {
+            "title": "Noise Offset",
+            "description": "The scale of noise offset.",
+            "group": "Performance",
+            "advanced": true,
+            "min": 0,
+            "max": 1,
+            "step": 0.01
+        }
+    },
+    "non_ema_revision": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Non Ema Revision",
+            "description": "Revision of pretrained non-ema model identifier. Must be a branch, tag or git identifier of the local or remote repository specified with --pretrained_model_name_or_path.",
+            "ignore": true
+        }
+    },
+    "prediction_type": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Prediction Type",
+            "description": "The prediction type that the model was trained on. Use 'epsilon' for Stable Diffusion v1.X and Stable Diffusion v2 Base. Use 'v_prediction' for Stable Diffusion v2.",
+            "choices": [
+                "epsilon",
+                "v_prediction"
+            ],
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "random_flip": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "Random Flip",
+            "description": "whether to randomly flip images horizontally",
+            "group": "Image Processing",
+            "advanced": true
+        }
+    },
+    "tracker_project_name": {
+        "default": "sd_xl_train_t2iadapter",
+        "type": "str",
+        "extras": {
+            "title": "Tracker Project Name",
+            "description": "The `project_name` argument passed to Accelerator.init_trackers for more information see https://huggingface.co/docs/accelerate/v0.17.0/en/package_reference/accelerator#accelerate.Accelerator",
+            "group": "Logging",
+            "advanced": true
+        }
+    },
+    "train_data_dir": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Train Data Dir",
+            "description": "A folder containing the training data. Folder contents must follow the structure described in https://huggingface.co/docs/datasets/image_dataset#imagefolder. In particular, a `metadata.jsonl` file must exist to provide the captions for the images. Ignored if `dataset_name` is specified.",
+            "group": "Dataset"
+        }
+    },
+    "use_ema": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "Use Ema",
+            "description": "Whether to use EMA model.",
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "validation_prompts": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Validation Prompts",
+            "description": "A set of prompts evaluated every `--validation_epochs` and logged to `--report_to`.",
+            "group": "Validation"
+        }
+    },
+    "proportion_empty_prompts": {
+        "default": 0,
+        "type": "int",
+        "extras": {
+            "title": "Proportion Empty Prompts",
+            "description": "Proportion of image prompts to be replaced with empty strings. Defaults to 0 (no prompt replacement).",
+            "group": "Dataset",
+            "advanced": true,
+            "min": 0,
+            "max": 1,
+            "step": 0.01
+        }
+    },
+    "timestep_bias_begin": {
+        "default": 0,
+        "type": "int",
+        "extras": {
+            "title": "Timestep Bias Begin",
+            "description": "When using `--timestep_bias_strategy=range`, the beginning (inclusive) timestep to bias. Defaults to zero, which equates to having no specific bias.",
+            "group": "Performance",
+            "advanced": true,
+            "min": 0,
+            "max": 100000
+        }
+    },
+    "timestep_bias_end": {
+        "default": 1000,
+        "type": "int",
+        "extras": {
+            "title": "Timestep Bias End",
+            "description": "When using `--timestep_bias_strategy=range`, the final timestep (inclusive) to bias. Defaults to 1000, which is the number of timesteps that Stable Diffusion is trained on.",
+            "group": "Performance",
+            "advanced": true,
+            "min": 0,
+            "max": 100000
+        }
+    },
+    "timestep_bias_multiplier": {
+        "default": 1.0,
+        "type": "float",
+        "extras": {
+            "title": "Timestep Bias Multiplier",
+            "description": "The multiplier for the bias. Defaults to 1.0, which means no bias is applied. A value of 2.0 will double the weight of the bias, and a value of 0.5 will halve it.",
+            "group": "Performance",
+            "advanced": true,
+            "min": 0,
+            "max": 1,
+            "step": 0.01
+        }
+    },
+    "timestep_bias_portion": {
+        "default": 0.25,
+        "type": "float",
+        "extras": {
+            "title": "Timestep Bias Portion",
+            "description": "The portion of timesteps to bias. Defaults to 0.25, which 25% of timesteps will be biased. A value of 0.5 will bias one half of the timesteps. The value provided for `--timestep_bias_strategy` determines whether the biased portions are in the earlier or later timesteps.",
+            "group": "Performance",
+            "advanced": true,
+            "min": 0,
+            "max": 1,
+            "step": 0.01
+        }
+    },
+    "timestep_bias_strategy": {
+        "default": "none",
+        "type": "str",
+        "extras": {
+            "title": "Timestep Bias Strategy",
+            "description": "The timestep bias strategy, which may help direct the model toward learning low or high frequency details. Choices: ['earlier', 'later', 'range', 'none']. The default is 'none', which means no bias is applied, and training proceeds normally. The value of 'later' will increase the frequency of the model's final training timesteps.",
+            "choices": [
+                "earlier",
+                "later",
+                "range",
+                "none"
+            ],
+            "group": "Performance",
+            "advanced": true
+        }
+    },
+    "conditioning_image_column": {
+        "default": "conditioning_image",
+        "type": "str",
+        "extras": {
+            "title": "Conditioning Image Column",
+            "description": "The column of the dataset containing the adapter conditioning image.",
+            "group": "Dataset"
+        }
+    },
+    "controlnet_model_name_or_path": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Controlnet Model Name Or Path",
+            "description": "Path to pretrained controlnet model or model identifier from huggingface.co/models. If not specified controlnet weights are initialized from unet.",
+            "group": "Model"
+        }
+    },
+    "validation_image": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Validation Image",
+            "description": "A set of paths to the t2iadapter conditioning image be evaluated every `--validation_steps` and logged to `--report_to`. Provide either a matching number of `--validation_prompt`s, a a single `--validation_prompt` to be used with all `--validation_image`s, or a single `--validation_image` that will be used with all `--validation_prompt`s.",
+            "group": "Validation"
+        }
+    },
+    "adapter_model_name_or_path": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Adapter Model Name Or Path",
+            "description": "Path to pretrained adapter model or model identifier from huggingface.co/models. If not specified adapter weights are initialized w.r.t the configurations of SDXL.",
+            "group": "Model"
+        }
+    },
+    "detection_resolution": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Detection Resolution",
+            "description": "The resolution for input images, all the images in the train/validation dataset will be resized to this resolution",
+            "group": "Image Processing"
+        }
+    },
+    "checkpoint_path": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Checkpoint Path",
+            "description": "Path to the checkpoint to convert."
+        }
+    },
+    "cross_attention_dim": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Cross Attention Dim",
+            "description": "Override for cross attention_dim"
+        }
+    },
+    "device": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Device",
+            "description": "Device to use (e.g. cpu, cuda:0, cuda:1, etc.)"
+        }
+    },
+    "dump_path": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Dump Path",
+            "description": "Path to the output model."
+        }
+    },
+    "extract_ema": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "Extract Ema",
+            "description": "Only relevant for checkpoints that have both EMA and non-EMA weights. Whether to extract the EMA weights or not. Defaults to `False`. Add `--extract_ema` to extract the EMA weights. EMA weights usually yield higher quality images for inference. Non-EMA weights are usually better to continue fine-tuning."
+        }
+    },
+    "from_safetensors": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "From Safetensors",
+            "description": "If `--checkpoint_path` is in `safetensors` format, load checkpoint with safetensors instead of PyTorch."
+        }
+    },
+    "image_size": {
+        "default": 512,
+        "type": "int",
+        "extras": {
+            "title": "Image Size",
+            "description": "The image size that the model was trained on. Use 512 for Stable Diffusion v1.X and Stable Siffusion v2 Base. Use 768 for Stable Diffusion v2."
+        }
+    },
+    "num_in_channels": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Num In Channels",
+            "description": "The number of input channels. If `None` number of input channels will be automatically inferred."
+        }
+    },
+    "original_config_file": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Original Config File",
+            "description": "The YAML config file corresponding to the original architecture."
+        }
+    },
+    "to_safetensors": {
+        "default": true,
+        "type": "bool",
+        "extras": {
+            "title": "To Safetensors",
+            "description": "Whether to store pipeline in safetensors format or not."
+        }
+    },
+    "upcast_attention": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "Upcast Attention",
+            "description": "Whether the attention computation should always be upcasted. This is necessary when running stable diffusion 2.1."
+        }
+    },
+    "use_linear_projection": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Use Linear Projection",
+            "description": "Override for use linear projection"
+        }
+    },
+    "clip_stats_path": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Clip Stats Path",
+            "description": "Path to the clip stats file. Only required if the stable unclip model's config specifies `model.params.noise_aug_config.params.clip_stats_path`."
+        }
+    },
+    "config_files": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Config Files",
+            "description": "The YAML config file corresponding to the architecture."
+        }
+    },
+    "controlnet": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Controlnet",
+            "description": "Set flag if this is a controlnet checkpoint."
+        }
+    },
+    "half": {
+        "default": false,
+        "type": "bool",
+        "extras": {
+            "title": "Half",
+            "description": "Save weights in half precision."
+        }
+    },
+    "pipeline_class_name": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Pipeline Class Name",
+            "description": "Specify the pipeline class name"
+        }
+    },
+    "pipeline_type": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Pipeline Type",
+            "description": "The pipeline type. One of 'FrozenOpenCLIPEmbedder', 'FrozenCLIPEmbedder', 'PaintByExample'. If `None` pipeline will be automatically inferred."
+        }
+    },
+    "scheduler_type": {
+        "default": "pndm",
+        "type": "str",
+        "extras": {
+            "title": "Scheduler Type",
+            "description": "Type of scheduler to use. Should be one of ['pndm', 'lms', 'ddim', 'euler', 'euler-ancestral', 'dpm']"
+        }
+    },
+    "stable_unclip": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Stable Unclip",
+            "description": "Set if this is a stable unCLIP model. One of 'txt2img' or 'img2img'."
+        }
+    },
+    "stable_unclip_prior": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Stable Unclip Prior",
+            "description": "Set if this is a stable unCLIP txt2img model. Selects which prior to use. If `--stable_unclip` is set to `txt2img`, the karlo prior (https://huggingface.co/kakaobrain/karlo-v1-alpha/tree/main/prior) is selected by default."
+        }
+    },
+    "vae_path": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Vae Path",
+            "description": "Set to a path, hub id to an already converted vae to not convert it again."
+        }
+    },
+    "model_path": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Model Path",
+            "description": "Path to the model to convert."
+        }
+    },
+    "use_safetensors": {
+        "default": true,
+        "type": "bool",
+        "extras": {
+            "title": "Use Safetensors",
+            "description": "Save weights use safetensors, default is ckpt."
+        }
+    },
+    "alpha": {
+        "default": 0.75,
+        "type": "float",
+        "extras": {
+            "title": "Alpha",
+            "description": "The merging ratio in W = W0 + alpha * deltaW"
+        }
+    },
+    "base_model_path": {
+        "default": null,
+        "type": "str",
+        "extras": {
+            "title": "Base Model Path",
+            "description": "Path to the base model in diffusers format."
+        }
+    },
+    "lora_prefix_text_encoder": {
+        "default": "lora_te",
+        "type": "str",
+        "extras": {
+            "title": "Lora Prefix Text Encoder",
+            "description": "The prefix of text encoder weight in safetensors"
+        }
+    },
+    "lora_prefix_unet": {
+        "default": "lora_unet",
+        "type": "str",
+        "extras": {
+            "title": "Lora Prefix Unet",
+            "description": "The prefix of UNet weight in safetensors"
+        }
+    }
+}

@@ -8,10 +8,10 @@ from typing import List, Dict
 
 from pydantic import BaseModel
 
-from dreambooth import shared  # noqa
-from dreambooth.dataclasses.db_concept import Concept  # noqa
+from dreambooth import shared
+from dreambooth.dataclasses.db_concept import Concept
 from dreambooth.dataclasses.ss_model_spec import build_metadata
-from dreambooth.utils.image_utils import get_scheduler_names  # noqa
+from dreambooth.utils.image_utils import get_scheduler_names
 from dreambooth.utils.utils import list_attention, select_precision, select_attention
 
 # Keys to save, replacing our dumb __init__ method
@@ -30,6 +30,7 @@ class DreamboothConfig(BaseModel):
     weight_decay: float = 0.01
     attention: str = "xformers"
     cache_latents: bool = True
+    class_labels_conditioning: str = "timesteps"
     clip_skip: int = 1
     concepts_list: List[Dict] = []
     concepts_path: str = ""
@@ -56,9 +57,10 @@ class DreamboothConfig(BaseModel):
     learning_rate: float = 2e-6
     learning_rate_min: float = 1e-6
     lifetime_revision: int = 0
+    log_with: str = "wandb"
     lora_learning_rate: float = 1e-4
     lora_model_name: str = ""
-    lora_txt_learning_rate: float = 5e-5
+    lora_txt_learning_rate: float = 5e-6
     lora_txt_rank: int = 4
     lora_unet_rank: int = 4
     lora_weight: float = 0.8
@@ -70,7 +72,7 @@ class DreamboothConfig(BaseModel):
     lr_scheduler: str = "constant_with_warmup"
     lr_warmup_steps: int = 500
     max_token_length: int = 75
-    min_snr_gamma: float = 0.0
+    min_snr_gamma: float = 5.0
     mixed_precision: str = "fp16"
     model_dir: str = ""
     model_name: str = ""
@@ -129,6 +131,8 @@ class DreamboothConfig(BaseModel):
     use_lora_extended: bool = False
     use_shared_src: bool = False,
     use_subdir: bool = False
+    wandb_api_key: str = ""
+    wandb_project: str = ""
     v2: bool = False
 
     def __init__(
@@ -209,8 +213,9 @@ class DreamboothConfig(BaseModel):
     def load_params(self, params_dict):
         sched_swap = False
         for key, value in params_dict.items():
-            if "db_" in key:
-                key = key.replace("db_", "")
+            # If the first three characters are "db_", remove them
+            if key.startswith("db_"):
+                key = key[3:]
             if key == "attention" and value == "flash_attention":
                 value = list_attention()[-1]
                 print(f"Replacing flash attention in config to {value}")
@@ -357,7 +362,7 @@ class DreamboothConfig(BaseModel):
             buckets=bucket_counts,
             clip_skip=self.clip_skip
         )
-        mappings =  {
+        mappings = {
             'cache_latents': 'ss_cache_latents',
             'clip_skip': 'ss_clip_skip',
             'epoch': 'ss_epoch',

@@ -1,0 +1,3 @@
+Human: <image>
+Human: Give a short one sentence caption for this image with NO punctuation. DO NOT USE ANY PUNCTUATION OR COMMAS. DO NOT USE COMMAS!!!
+AI:

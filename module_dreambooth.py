@@ -143,9 +143,7 @@ async def _create_model(data):
         await sh.send_async()
         extract_checkpoint(new_model_name=model_name,
                            checkpoint_file=src,
-                           extract_ema=False,
-                           train_unfrozen=data["train_unfrozen"],
-                           is_512=data["512_model"]
+                           train_unfrozen=data["train_unfrozen"]
                            )
         mh.refresh("dreambooth")
     sh.end(f"Created model: {model_name}")

@@ -592,7 +592,7 @@ def apply_lora(config: DreamboothConfig, model: nn.Module, lora_file_name: str, 
         if not os.path.exists(lora_file_name):
             lora_file_name = os.path.join(config.model_dir, "loras", lora_file_name)
         if os.path.exists(lora_file_name):
-            lora_rev = lora_file_name.split("_")[-1].replace(".pt", "")
+            lora_rev = lora_file_name.split("_")[-1].replace(".safetensors", "")
             printi(f"Loading lora from {lora_file_name}", log=True)
             merge_lora_to_model(model, load_model(lora_file_name, device), is_tenc, config.use_lora_extended,
                                 config.lora_unet_rank, config.lora_weight)

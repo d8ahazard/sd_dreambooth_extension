@@ -20,7 +20,7 @@ def load_auto_settings():
     global models_path, script_path, ckpt_dir, device_id, disable_safe_unpickle, dataset_filename_word_regex, \
         dataset_filename_join_string, show_progress_every_n_steps, parallel_processing_allowed, state, ckptfix, medvram, \
         lowvram, dreambooth_models_path, ui_lora_models_path, CLIP_stop_at_last_layers, profile_db, debug, config, device, \
-        force_cpu, embeddings_dir, sd_model
+        force_cpu, embeddings_dir, sd_model, ft_models_path
     try:
         import modules.script_callbacks
         from modules import shared as ws
@@ -55,6 +55,7 @@ def load_auto_settings():
 
         try:
             dreambooth_models_path = ws.cmd_opts.dreambooth_models_path or dreambooth_models_path
+            ft_models_path = ws.cmd_opts.ft_models_path or ft_models_path
             ui_lora_models_path = ws.cmd_opts.lora_models_path or ui_lora_models_path
             embeddings_dir = ws.cmd_opts.embeddings_dir or embeddings_dir
         except:
@@ -310,7 +311,7 @@ def cumsum_fix(input, cumsum_func, *args, **kwargs):
 
 
 def load_vars(root_path = None):
-    global script_path, models_path, embeddings_dir, dreambooth_models_path, ckpt_dir, ui_lora_models_path, db_model_config, \
+    global script_path, models_path, embeddings_dir, dreambooth_models_path, ft_models_path, ckpt_dir, ui_lora_models_path, db_model_config, \
     data_path, show_progress_every_n_steps, parallel_processing_allowed, dataset_filename_word_regex, dataset_filename_join_string, \
     device_id, state, disable_safe_unpickle, ckptfix, medvram, lowvram, debug, profile_db, sub_quad_q_chunk_size, sub_quad_kv_chunk_size, \
     sub_quad_chunk_threshold, CLIP_stop_at_last_layers, sd_model, config, force_cpu, paths, is_auto, device, orig_tensor_to, orig_layer_norm, \
@@ -320,6 +321,7 @@ def load_vars(root_path = None):
     models_path = os.path.join(script_path, "models")
     embeddings_dir = os.path.join(script_path, "embeddings")
     dreambooth_models_path = os.path.join(models_path, "dreambooth")
+    ft_models_path = os.path.join(models_path, "finetune")
     ckpt_dir = os.path.join(models_path, "Stable-diffusion")
     ui_lora_models_path = os.path.join(models_path, "Lora")
     db_model_config = None
@@ -393,6 +395,7 @@ script_path = ""
 models_path = ""
 embeddings_dir = ""
 dreambooth_models_path = ""
+ft_models_path = ""
 ckpt_dir = ""
 ui_lora_models_path = ""
 db_model_config = None
