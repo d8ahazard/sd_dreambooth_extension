@@ -29,6 +29,7 @@ model_path = os.path.abspath(os.path.join(shared.models_path, model_dir))
 
 LORA_SHARED_SRC_CREATE = " <create new>"
 
+
 def model_hash(filename):
     """old hash that only looks at a small part of the file and is prone to collisions"""
 
@@ -108,7 +109,7 @@ def list_models():
         shared.opts.data['sd_model_checkpoint'] = checkpoint_info.title
     elif cmd_ckpt is not None and cmd_ckpt != shared.default_sd_model_file:
         logger.debug(f"Checkpoint in --ckpt argument not found (Possible it was moved to {model_path}: {cmd_ckpt}",
-              file=sys.stderr)
+                     file=sys.stderr)
 
     for filename in model_list:
         checkpoint_info = CheckpointInfo(filename)
@@ -207,7 +208,8 @@ def reload_system_models():
         pass
 
 
-def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision, subfolder: str = "text_encoder"):
+def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision,
+                                               subfolder: str = "text_encoder"):
     text_encoder_config = PretrainedConfig.from_pretrained(
         pretrained_model_name_or_path,
         subfolder=subfolder,
@@ -246,7 +248,6 @@ def unet_attn_processors_state_dict(unet) -> Dict[str, torch.tensor]:
     return attn_processors_state_dict
 
 
-
 def get_checkpoint_match(search_string):
     try:
         from modules import sd_models
@@ -259,6 +260,7 @@ def get_checkpoint_match(search_string):
 
 
 disable_safe_unpickle_count = 0
+
 
 def disable_safe_unpickle():
     global disable_safe_unpickle_count
@@ -284,6 +286,7 @@ def enable_safe_unpickle():
     except:
         pass
 
+
 @contextlib.contextmanager
 def safe_unpickle_disabled():
     disable_safe_unpickle()
@@ -298,10 +301,11 @@ def xformerify(obj, use_lora):
         import xformers
         obj.enable_xformers_memory_efficient_attention
         logger.debug("Enabled XFormers for " + obj.__class__.__name__)
-        
+
     except ImportError:
         obj.set_attn_processor(AttnProcessor2_0())
         logger.debug("Enabled AttnProcessor2_0 for " + obj.__class__.__name__)
+
 
 def torch2ify(unet):
     if hasattr(torch, 'compile'):
@@ -312,11 +316,12 @@ def torch2ify(unet):
             pass
     return unet
 
+
 def is_xformers_available():
     pass
 
-def read_metadata_from_safetensors(filename):
 
+def read_metadata_from_safetensors(filename):
     with open(filename, mode="rb") as file:
         # Read metadata length
         metadata_len = int.from_bytes(file.read(8), "little")
