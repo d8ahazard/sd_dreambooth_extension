@@ -489,22 +489,24 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             "diffusion_pytorch_model.safetensors",
                         )
                 ):
+                    # EMA weights must be kept in fp32 even during mixed-precision training, or floating
+                    # point rounding will force (almost) all updates to 0.
                     ema_unet = UNet2DConditionModel.from_pretrained(
                         args.get_pretrained_model_name_or_path(),
                         subfolder="ema_unet",
                         revision=args.revision,
-                        torch_dtype=weight_dtype,
+                        torch_dtype=torch.float32,
                     )
                     if args.attention == "xformers" and not shared.force_cpu:
                         xformerify(ema_unet, use_lora=args.use_lora)
 
                     ema_model = EMAModel(
-                        ema_unet, device=accelerator.device, dtype=weight_dtype
+                        ema_unet, device=accelerator.device, dtype=torch.float32
                     )
                     del ema_unet
                 else:
                     ema_model = EMAModel(
-                        unet, device=accelerator.device, dtype=weight_dtype
+                        unet, device=accelerator.device, dtype=torch.float32
                     )
 
             # Create shared unet/tenc learning rate variables
