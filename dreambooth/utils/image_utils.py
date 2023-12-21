@@ -121,6 +121,8 @@ def sort_prompts(
     _, dirr = os.path.split(img_dir)
     # Get prompt
     pbar.set_description(f"Pre-processing images: {dirr}")
+    
+    skipped_files = 0
 
     for img in images:
         pbar.update(1)
@@ -151,7 +153,10 @@ def sort_prompts(
             prompt_list.append(pd)
             prompts[reso] = prompt_list
         except:
+            skipped_files += 1
             pass
+    if skipped_files > 0:
+        logger.warning("{skipped_files} images skipped due to errors")
     return dict(sorted(prompts.items()))
 
 
