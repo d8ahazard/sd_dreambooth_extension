@@ -153,17 +153,12 @@ async def _create_model(data):
     else:
         sh.update("status", "Extracting model.")
         await sh.send_async()
-        extract_checkpoint(
-            model_name,
-            src,
-            shared_src,
-            True,
-            data["new_model_url"],
-            data["new_model_token"],
-            data["new_model_extract_ema"],
-            data["train_unfrozen"],
-            data["512_model"]
-        )
+        extract_checkpoint(new_model_name=model_name,
+                           checkpoint_file=src,
+                           extract_ema=False,
+                           train_unfrozen=data["train_unfrozen"],
+                           is_512=data["512_model"]
+                           )
         mh.refresh("dreambooth")
     sh.end(f"Created model: {model_name}")
     return {"status": "Model created."}

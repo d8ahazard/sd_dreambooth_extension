@@ -1,3 +1,4 @@
+import gc
 import glob
 import importlib
 import importlib.util
@@ -10,6 +11,7 @@ import sys
 import traceback
 from collections import OrderedDict
 
+import gradio
 import torch
 import torch.utils.data.dataloader
 from accelerate import find_executable_batch_size
@@ -18,7 +20,7 @@ from torch.optim import AdamW
 
 from dreambooth import shared
 from dreambooth.dataclasses import db_config
-from dreambooth.dataclasses.db_config import from_file, sanitize_name, DreamboothConfig
+from dreambooth.dataclasses.db_config import from_file, sanitize_name
 from dreambooth.dataclasses.prompt_data import PromptData
 from dreambooth.dataset.bucket_sampler import BucketSampler
 from dreambooth.dataset.class_dataset import ClassDataset
@@ -40,7 +42,7 @@ from dreambooth.utils.model_utils import (
     get_lora_models,
     get_checkpoint_match,
     get_model_snapshots,
-    LORA_SHARED_SRC_CREATE,
+    LORA_SHARED_SRC_CREATE, get_db_models,
 )
 from dreambooth.utils.utils import printm, cleanup
 from helpers.image_builder import ImageBuilder
@@ -638,7 +640,7 @@ def load_model_params(model_name):
     if config is None:
         print("Can't load config!")
         msg = f"Error loading model params: '{model_name}'."
-        return "", "", "", "", "", db_model_snapshots, msg
+        return gradio.update(visible=False), "", "", "", "", "", db_model_snapshots, msg
     else:
         snaps = get_model_snapshots(config)
         snap_selection = config.revision if str(config.revision) in snaps else ""
@@ -647,13 +649,17 @@ def load_model_params(model_name):
         loras = get_lora_models(config)
         db_lora_models = gr_update(choices=loras)
         msg = f"Selected model: '{model_name}'."
+        src_name = os.path.basename(config.src)
+        # Strip the extension
+        src_name = os.path.splitext(src_name)[0]
         return (
-            config.model_dir,
+            gradio.update(visible=True),
+            os.path.basename(config.model_dir),
             config.revision,
             config.epoch,
-            "True" if config.v2 else "False",
+            config.model_type,
             "True" if config.has_ema and not config.use_lora else "False",
-            config.src,
+            src_name,
             config.shared_diffusers_path,
             db_model_snapshots,
             db_lora_models,
@@ -678,7 +684,7 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
         msg = "Create or select a model first."
         lora_model_name = gr_update(visible=True)
         return lora_model_name, 0, 0, [], msg
-    config = DreamboothConfig().load_from_file(model_dir)
+    config = from_file(model_dir)
     # Clear pretrained VAE Name if applicable
     if config.pretrained_vae_name_or_path == "":
         config.pretrained_vae_name_or_path = None
@@ -726,8 +732,10 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
                 from dreambooth.train_dreambooth import main  # noqa
             except:
                 from dreambooth.train_dreambooth import main  # noqa
-            result = main(config, class_gen_method=class_gen_method)
-
+            result = main(class_gen_method=class_gen_method)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
         config = result.config
         images = result.samples
         if config.revision != total_steps:
@@ -749,6 +757,7 @@ def start_training(model_dir: str, class_gen_method: str = "Native Diffusers"):
         traceback.print_exc()
         pass
 
+    status.end()
     cleanup()
     reload_system_models()
     lora_model_name = ""
@@ -937,10 +946,19 @@ def create_model(
         new_model_token="",
         extract_ema=False,
         train_unfrozen=False,
-        is_512=True,
+        model_type="v1x"
 ):
+    if not model_type:
+        model_type = "v1x"
     printm("Extracting model.")
-    res = 512 if is_512 else 768
+    res = 512
+    is_512 = model_type == "v1x"
+    if model_type == "v1x" or model_type=="v2x-512":
+        res = 512
+    elif model_type == "v2x":
+        res = 768
+    elif model_type == "SDXL":
+        res = 1024
     sh = None
     try:
         from core.handlers.status import StatusHandler
@@ -970,17 +988,18 @@ def create_model(
         ckpt_path = checkpoint_info.filename
 
     unload_system_models()
-    result = extract_checkpoint(
-        new_model_name,
-        ckpt_path,
-        shared_src,
-        from_hub,
-        new_model_url,
-        new_model_token,
-        extract_ema,
-        train_unfrozen,
-        is_512,
-    )
+    result = extract_checkpoint(new_model_name=new_model_name,
+                                checkpoint_file=ckpt_path,
+                                extract_ema=extract_ema,
+                                train_unfrozen=train_unfrozen,
+                                image_size=res,
+                                model_type=model_type)
+    if result is None:
+        err_msg = "Unable to extract checkpoint!"
+        print(err_msg)
+        if sh is not None:
+            sh.end(desc=err_msg)
+        return "", "", "", 0, 0, "", "", "", "", res, "", err_msg
     try:
         from core.handlers.models import ModelHandler
         mh = ModelHandler()
@@ -993,8 +1012,16 @@ def create_model(
     printm("Extraction complete.")
     if sh is not None:
         sh.end(desc="Extraction complete.")
-
-    return result
+    return gr_update(choices=sorted(get_db_models()), value=new_model_name), \
+        result.model_dir, \
+        result.revision, \
+        result.epoch, \
+        result.src, \
+        "", \
+        "True" if result.has_ema else "False", \
+        "True" if result.v2 else "False", \
+        result.resolution, \
+        "Checkpoint extracted successfully."
 
 
 def debug_collate_fn(examples):

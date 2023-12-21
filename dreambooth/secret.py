@@ -20,6 +20,19 @@ if not os.path.exists(db_path):
 def get_secret():
     secret = ""
     user_key = os.environ.get("API_KEY", None)
+    from modules.shared import cmd_opts
+    if cmd_opts.api_auth:
+        if "," in cmd_opts.api_auth:
+            for auth in cmd_opts.api_auth.split(","):
+                user, password = auth.split(":")
+                user_key = password
+                break
+        else:
+            if ":" in cmd_opts.api_auth:
+                user, password = cmd_opts.api_auth.split(":")
+                user_key = password
+            else:
+                user_key = cmd_opts.api_auth
     if user_key is not None:
         return user_key
     if not os.path.exists(secret_file):

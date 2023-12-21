@@ -26,6 +26,7 @@ try:
     from dreambooth.dataclasses.db_concept import Concept
     from dreambooth.dataclasses.db_config import from_file, DreamboothConfig
     from dreambooth.diff_to_sd import compile_checkpoint
+    from dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_sdxl
     from dreambooth.secret import get_secret
     from dreambooth.shared import DreamState
     from dreambooth.ui_functions import create_model, generate_samples, \
@@ -221,7 +222,10 @@ def dreambooth_api(_, app: FastAPI):
             global active
             shared.status.begin()
             active = True
-            ckpt_result = compile_checkpoint(model_name, reload_models=False, log=False)
+            if config.model_type == "SDXL":
+                ckpt_result = compile_checkpoint_sdxl(model_name, reload_models=False, log=False)
+            else:
+                ckpt_result = compile_checkpoint(model_name, reload_models=False, log=False)
             active = False
             if "Checkpoint compiled successfully" in ckpt_result:
                 path = ckpt_result.replace("Checkpoint compiled successfully:", "").strip()
@@ -429,13 +433,13 @@ def dreambooth_api(_, app: FastAPI):
             create_from_hub: bool = Query(False, description="Create this model from the hub", ),
             new_model_url: str = Query(None,
                                        description="The hub URL to use for this model. Must contain diffusers model.", ),
-            is_512: bool = Query(False,
-                                 description="Whether or not the model is 512x resolution.", ),
+            model_type: str = Query("v1x",
+                                 description="Model type (v1x/v2x-512/v2x/sdxl)", ),
             train_unfrozen: bool = Query(True,
                                          description="Un-freeze the model.", ),
             new_model_token: str = Query(None, description="Your huggingface hub token.", ),
             new_model_extract_ema: bool = Query(False, description="Whether to extract EMA weights if present.", ),
-            api_key: str = Query("", description="If an API key is set, this must be present.", ),  
+            api_key: str = Query("", description="If an API key is set, this must be present.", ),
     ):
         """
         Create a new Dreambooth model.
@@ -465,7 +469,7 @@ def dreambooth_api(_, app: FastAPI):
                            new_model_token=new_model_token,
                            extract_ema=new_model_extract_ema,
                            train_unfrozen=train_unfrozen,
-                           is_512=is_512)
+                           model_type=model_type)
 
         return JSONResponse(res[-1])
 
@@ -684,7 +688,7 @@ def dreambooth_api(_, app: FastAPI):
         key_check = check_api_key(api_key)
         if key_check is not None:
             return key_check
-        return JSONResponse(content={"current_state": f"{json.dumps(shared.status.dict())}"})
+        return JSONResponse(content={"current_state": shared.status.dict()})
 
     @app.get("/dreambooth/status_images")
     async def check_status_images(
@@ -930,10 +934,14 @@ def dreambooth_api(_, app: FastAPI):
 
 
 try:
-    import modules.script_callbacks as script_callbacks
+    from modules.shared import cmd_opts
+    if cmd_opts.api:
+        import modules.script_callbacks as script_callbacks
 
-    script_callbacks.on_app_started(dreambooth_api)
-    logger.debug("SD-Webui API layer loaded")
+        script_callbacks.on_app_started(dreambooth_api)
+        logger.debug("SD-Webui API layer loaded")
+    else:
+        logger.debug("API flag not enabled, skipping API layer. Please enable with --api")
 except:
     logger.debug("Unable to import script callbacks.")
     pass

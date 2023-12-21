@@ -20,7 +20,7 @@ from dreambooth.dataclasses.db_config import from_file, DreamboothConfig
 from dreambooth.shared import status
 from dreambooth.utils.model_utils import unload_system_models, \
     reload_system_models, \
-    disable_safe_unpickle, enable_safe_unpickle, import_model_class_from_model_name_or_path
+    safe_unpickle_disabled, import_model_class_from_model_name_or_path
 from dreambooth.utils.utils import printi
 from helpers.mytqdm import mytqdm
 from lora_diffusion.lora import merge_lora_to_model
@@ -506,7 +506,8 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
         printi(f"Saving checkpoint to {checkpoint_path}...", log=log)
         if save_safetensors:
             safe_dict, json_dict = split_dict(state_dict, pbar)
-            safetensors.torch.save_file(safe_dict, checkpoint_path, json_dict)
+            meta = config.export_ss_metadata()
+            safetensors.torch.save_file(safe_dict, checkpoint_path, meta)
         else:
             torch.save(state_dict, checkpoint_path)
         cfg_file = None
@@ -561,9 +562,8 @@ def load_model(model_path: str, map_location: str):
     if ".safetensors" in model_path:
         return safetensors.torch.load_file(model_path, device=map_location)
     else:
-        disable_safe_unpickle()
-        loaded = torch.load(model_path, map_location=map_location)
-        enable_safe_unpickle()
+        with safe_unpickle_disabled():
+            loaded = torch.load(model_path, map_location=map_location)
         return loaded
 
 

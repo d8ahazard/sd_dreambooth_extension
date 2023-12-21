@@ -103,8 +103,8 @@ def xformers_check():
             import torch
             if version.Version(torch.__version__) < version.Version("1.12"):
                 raise ValueError("PyTorch version must be >= 1.12")
-            if version.Version(_xformers_version) < version.Version("0.0.17.dev"):
-                raise ValueError("Xformers version must be >= 0.0.17.dev")
+            if version.Version(_xformers_version) < version.Version("0.0.21"):
+                raise ValueError("Xformers version must be >= 0.0.21")
         has_xformers = True
     except Exception as e:
         # print(f"Exception importing xformers: {e}")
@@ -115,46 +115,110 @@ def xformers_check():
 
 def list_optimizer():
     optimizer_list = ["Torch AdamW"]
-
+    
+    try:
+        from transformers.optimization import Adafactor
+        optimizer_list.append("Adafactor")
+    except:
+        pass
     try:
         if shared.device.type != "mps":
             from bitsandbytes.optim import AdamW8bit
             optimizer_list.append("8bit AdamW")
     except:
         pass
-
+    
     try:
-        from lion_pytorch import Lion
-        optimizer_list.append("Lion")
+            from bitsandbytes.optim import PagedAdamW8bit
+            optimizer_list.append("Paged 8bit AdamW")
     except:
         pass
-
+    
     try:
         from dadaptation import DAdaptAdam
         optimizer_list.append("AdamW Dadaptation")
     except:
         pass
-
-    try:
-        from dadaptation import DAdaptLion
-        optimizer_list.append("Lion Dadaptation")
-    except:
-        pass
-
+    
     try:
         from dadaptation import DAdaptAdan
         optimizer_list.append("Adan Dadaptation")
     except:
         pass
+    
+    try:
+        from dadaptation.experimental import DAdaptAdanIP
+        optimizer_list.append("AdanIP Dadaptation")
+    except:
+        pass
+    
+    try:
+        from pytorch_optimizer import Apollo
+        optimizer_list.append("Apollo")
+    except:
+        pass
+    
+    try:
+        from pytorch_optimizer import CAME
+        optimizer_list.append("CAME")
+    except:
+        pass
+    
+    try:
+        from pytorch_optimizer import Lion
+        optimizer_list.append("Lion")
+    except:
+        pass
 
+    try:
+        from bitsandbytes.optim import Lion8bit
+        optimizer_list.append("8bit Lion")
+    except:
+        pass
+    
+    try:
+        from bitsandbytes.optim import PagedLion8bit
+        optimizer_list.append("Paged 8bit Lion")
+    except:
+        pass
+    
+    try:
+        from dadaptation import DAdaptLion
+        optimizer_list.append("Lion Dadaptation")
+    except:
+        pass
+    
+    try:
+        from pytorch_optimizer import Prodigy
+        optimizer_list.append("Prodigy")
+    except:
+        pass
+    
+
+    
     try:
         from dadaptation import DAdaptSGD
         optimizer_list.append("SGD Dadaptation")
     except:
         pass
+    
 
+    
+    try:
+        from pytorch_optimizer import SophiaH
+        optimizer_list.append("Sophia")
+    except:
+        pass
+    
+    try:
+        from pytorch_optimizer import Tiger
+        optimizer_list.append("Tiger")
+    except:
+        pass
+
+ 
+        
     return optimizer_list
-
 
 def list_attention():
     has_xformers = xformers_check()
@@ -166,6 +230,10 @@ def list_attention():
     else:
         return ["default"]
 
+def select_attention():
+    attentions = list_attention()
+    # Return the last element
+    return attentions[-1]
 
 def list_precisions():
     precisions = ["no", "fp16"]
@@ -176,6 +244,11 @@ def list_precisions():
         pass
 
     return precisions
+
+def select_precision():
+    precisions = list_precisions()
+    # Return the last element
+    return precisions[-1]
 
 
 def list_schedulers():
@@ -189,7 +262,7 @@ def list_schedulers():
         "polynomial",
         "constant",
         "constant_with_warmup",
-        "dadapt_with_warmup",
+        "rex",
     ]
 
 
@@ -257,3 +330,19 @@ def verify_locon_installed(args):
             r"extra net for extended lora. Please install "
             r"https://github.com/KohakuBlueleaf/a1111-sd-webui-locon"
         )
+        
+def apply_snr_weight(loss, timesteps, noise_scheduler, gamma):
+    snr = torch.stack([noise_scheduler.all_snr[t] for t in timesteps])
+    gamma_over_snr = torch.div(torch.ones_like(snr) * gamma, snr)
+    snr_weight = torch.minimum(gamma_over_snr, torch.ones_like(gamma_over_snr)).float()  # from paper
+    loss = loss * snr_weight
+    return loss
+
+def patch_accelerator_for_fp16_training(accelerator):
+    org_unscale_grads = accelerator.scaler._unscale_grads_
+
+    def _unscale_grads_replacer(optimizer, inv_scale, found_inf, allow_fp16):
+        return org_unscale_grads(optimizer, inv_scale, found_inf, True)
+
+    accelerator.scaler._unscale_grads_ = _unscale_grads_replacer
+
