@@ -243,7 +243,7 @@ def check_bitsandbytes():
         if bitsandbytes_version is None or "0.41.2" not in bitsandbytes_version:
             try:
                 print("Installing bitsandbytes")
-                pip_install("bitsandbytes==0.41.2.post2","--prefer-binary","https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
+                pip_install("bitsandbytes==0.41.2.post2","--prefer-binary")
             except:
                 print("Bitsandbytes 0.41.2 installation failed")
                 print("Some features such as 8bit optimizers will be unavailable")
