@@ -218,7 +218,7 @@ def check_bitsandbytes():
         else:
             win_dll = os.path.join(venv_path, "lib", "site-packages", "bitsandbytes", "libbitsandbytes_cuda118.dll")
             print(f"Checking for {win_dll}")
-            if not os.path.exists(win_dll) or "0.41.2" not in bitsandbytes_version:
+            if not os.path.exists(win_dll) or bitsandbytes_version is None or "0.41.2" not in bitsandbytes_version:
                 print("Can't find bitsandbytes CUDA dll. Installing bitsandbytes")
                 try:
                     pip_uninstall("bitsandbytes")
@@ -240,10 +240,10 @@ def check_bitsandbytes():
                     pass
     else:
         print("Checking bitsandbytes (Linux)")
-        if "0.41.2" not in bitsandbytes_version:
+        if bitsandbytes_version is None or "0.41.2" not in bitsandbytes_version:
             try:
                 print("Installing bitsandbytes")
-                pip_install("bitsandbytes==0.41.2.post2","--prefer-binary","https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
+                pip_install("bitsandbytes==0.41.2.post2","--prefer-binary")
             except:
                 print("Bitsandbytes 0.41.2 installation failed")
                 print("Some features such as 8bit optimizers will be unavailable")
