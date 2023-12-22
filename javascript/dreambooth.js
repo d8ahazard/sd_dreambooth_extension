@@ -328,6 +328,7 @@ let db_titles = {
     "Use 8bit Adam": "Enable this to save VRAM.",
     "Use CPU Only (SLOW)": "Guess what - this will be incredibly slow, but it will work for < 8GB GPUs.",
     "Use Concepts List": "Train multiple concepts from a JSON file or string.",
+    "Use DREAM": "Enable DREAM (http://arxiv.org/abs/2312.00210). This may provide better results, but trains slower.",
     "Use EMA": "Enabling this will provide better results and editability, but cost more VRAM.",
     "Use EMA for prediction": "",
     "Use EMA Weights for Inference": "Enabling this will save the EMA unet weights as the 'normal' model weights and ignore the regular unet weights.",

@@ -152,6 +152,9 @@
     "max": 10,
     "step": 0.1
   },
+  "use_dream": {
+    "value": false
+  },
   "max_token_length": {
     "value": 75,
     "min": 75,
