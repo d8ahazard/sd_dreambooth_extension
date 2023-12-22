@@ -1603,15 +1603,16 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         else:
                             raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
-                        # See http://arxiv.org/abs/2312.00210 algorithm 3
+                        # See http://arxiv.org/abs/2312.00210 (DREAM) algorithm 3
                         if args.use_dream and unet.config.in_channels == channels:
                             with torch.no_grad():
                                 alpha_prod = noise_scheduler.alphas_cumprod.to(timesteps.device)[timesteps,None,None,None]
                                 sqrt_alpha_prod = alpha_prod ** 0.5
                                 sqrt_one_minus_alpha_prod = (1 - alpha_prod) ** 0.5
                                 
-                                # The paper uses lambda = sqrt(1 - alpha) ** p, with p = 1 in their experiments
-                                dream_lambda = sqrt_one_minus_alpha_prod
+                                # The paper uses lambda = sqrt(1 - alpha) ** p, with p = 1 in their experiments, but
+                                # lambda = 1 seems to give better results for fine-tuning.
+                                dream_lambda = 1
 
                                 if args.model_type == "SDXL":
                                     with accelerator.autocast():
