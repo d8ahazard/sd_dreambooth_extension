@@ -1610,9 +1610,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 sqrt_alpha_prod = alpha_prod ** 0.5
                                 sqrt_one_minus_alpha_prod = (1 - alpha_prod) ** 0.5
                                 
-                                # The paper uses lambda = sqrt(1 - alpha) ** p, with p = 1 in their experiments, but
-                                # lambda = 1 seems to give better results for fine-tuning.
-                                dream_lambda = 1
+                                # The paper uses lambda = sqrt(1 - alpha) ** p, with p = 1 in their experiments.
+                                dream_lambda = (1 - alpha_prod) ** args.dream_detail_preservation
 
                                 if args.model_type == "SDXL":
                                     with accelerator.autocast():
@@ -1638,7 +1637,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 else:
                                     raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
                                     
-                                del alpha_prod, sqrt_alpha_prod, sqrt_one_minus_alpha_prod, dream_lambda, predicted_noise, delta_noise
+                                del alpha_prod, sqrt_alpha_prod, sqrt_one_minus_alpha_prod, dream_lambda, model_pred, predicted_noise, delta_noise
 
                         if args.model_type == "SDXL":
                             with accelerator.autocast():

@@ -644,6 +644,14 @@ def on_ui_tabs():
                         db_use_dream = gr.Checkbox(
                             label="Use DREAM", value=False
                         )
+                        db_dream_detail_preservation = gr.Slider(
+                            label="DREAM detail preservation",
+                            minimum=0,
+                            maximum=1,
+                            step=0.01,
+                            value=0.5,
+                            visible=True,
+                        )
                         db_pad_tokens = gr.Checkbox(
                             label="Pad Tokens", value=True
                         )
@@ -1352,6 +1360,7 @@ def on_ui_tabs():
             db_tenc_grad_clip_norm,
             db_min_snr_gamma,
             db_use_dream,
+            db_dream_detail_preservation,
             db_pad_tokens,
             db_strict_tokens,
             db_max_token_length,
@@ -1486,6 +1495,7 @@ def on_ui_tabs():
             db_max_token_length,
             db_min_snr_gamma,
             db_use_dream,
+            db_dream_detail_preservation,
             db_mixed_precision,
             db_model_name,
             db_model_path,
