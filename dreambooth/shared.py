@@ -352,12 +352,12 @@ def load_vars(root_path = None):
     if torch.cuda.is_available():
         device = torch.device("cuda")
 
-    if getattr(torch, 'has_mps', False):
-        try:
+    try:
+        if torch.backends.mps.is_built():
             torch.zeros(1).to(torch.device("mps"))
             device = torch.device("mps")
-        except Exception:
-            pass
+    except Exception:
+        pass
 
     orig_tensor_to = torch.Tensor.to
     orig_layer_norm = torch.nn.functional.layer_norm

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import git
+import torch
 from packaging import version as pv
 
 from importlib import metadata
@@ -19,6 +20,17 @@ if sys.version_info < (3, 8):
     import importlib_metadata
 else:
     import importlib.metadata as importlib_metadata
+
+device = "cpu"
+if torch.cuda.is_available():
+    device = "cuda"
+
+try:
+    if torch.backends.mps.is_built():
+        torch.zeros(1).to(torch.device("mps"))
+        device = "mps"
+except Exception:
+    pass
 
 
 def actual_install():
@@ -42,7 +54,9 @@ def actual_install():
 
     check_xformers()
 
-    check_bitsandbytes()
+    # Only do this if we're using CUDA and not AMD
+    if device == "cuda":
+        check_bitsandbytes()
 
     install_requirements()
 
@@ -72,10 +86,11 @@ def pip_uninstall(*args):
     output = subprocess.check_output(
         [sys.executable, "-m", "pip", "uninstall", "-y"] + list(args),
         stderr=subprocess.STDOUT,
-        )
+    )
     for line in output.decode().split("\n"):
         if "Successfully uninstalled" in line:
             print(line)
+
 
 def is_installed(pkg: str, version: Optional[str] = None, check_strict: bool = True) -> bool:
     try:
@@ -129,14 +144,24 @@ def install_requirements():
             package = line.strip()
             if package and not package.startswith("#"):
                 package_version = None
-                strict = True
+                strict = "==" in package
                 for separator in non_strict_separators:
                     if separator in package:
-                        strict = False
-                        package, package_version = line.split(separator)
+                        strict = separator == "=="
+                        parts = line.split(separator)
+                        if len(parts) < 2:
+                            print(f"Invalid requirement: {line}")
+                            continue
+                        package = parts[0].strip()
+                        package_version = parts[1].strip()
+                        if "#" in package_version:
+                            package_version = package_version.split("#")[0]
                         package = package.strip()
                         package_version = package_version.strip()
                         break
+                if "#" in package:
+                    package = package.split("#")[0]
+                package = package.strip()
                 v_string = "" if not package_version else f" v{package_version}"
                 if not is_installed(package, package_version, strict):
                     print(f"[Dreambooth] {package}{v_string} is not installed.")
@@ -156,6 +181,7 @@ def install_requirements():
         print(
             "If an extension is using a newer version, the dependency is uninstalled and reinstalled twice every startup.")
         print()
+
 
 def check_xformers():
     """
@@ -231,7 +257,8 @@ def check_bitsandbytes():
                 print("Installing bitsandbytes")
                 try:
                     pip_install(
-                                "--prefer-binary", "https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
+                        "--prefer-binary",
+                        "https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
                 except Exception as e:
                     print("Bitsandbytes 0.41.2.post2 installation failed")
                     print("Some features such as 8bit optimizers will be unavailable")
@@ -242,7 +269,7 @@ def check_bitsandbytes():
         if bitsandbytes_version is None or "0.41.2" not in bitsandbytes_version:
             try:
                 print("Installing bitsandbytes")
-                pip_install("bitsandbytes==0.41.2.post2","--prefer-binary")
+                pip_install("bitsandbytes==0.41.2.post2", "--prefer-binary")
             except:
                 print("Bitsandbytes 0.41.2 installation failed")
                 print("Some features such as 8bit optimizers will be unavailable")
@@ -265,13 +292,17 @@ def check_versions():
     is_mac = sys_platform == 'darwin' and platform.machine() == 'arm64'
 
     dependencies = [
-        Dependency(module="xformers", version="0.0.21", required=False),
         Dependency(module="torch", version="1.13.1" if is_mac else "2.0.1+cu118"),
         Dependency(module="torchvision", version="0.14.1" if is_mac else "0.15.2+cu118"),
         Dependency(module="accelerate", version="0.21.0"),
-        Dependency(module="diffusers", version="0.23.1"),
-        Dependency(module="bitsandbytes",  version="0.41.1.post2", required=False),
+        Dependency(module="diffusers", version="0.23.1")
     ]
+
+    if device == "cuda":
+        dependencies.append(Dependency(module="bitsandbytes", version="0.41.1.post2", required=False))
+
+    if device != "mps":
+        dependencies.append(Dependency(module="xformers", version="0.0.21", required=False))
 
     launch_errors = []
 
@@ -347,6 +378,7 @@ def print_bitsandbytes_installation_error(err):
         "pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
     print("#######################################################################################################")
 
+
 def print_xformers_installation_error(err):
     torch_ver = importlib_metadata.version("torch")
     print()
@@ -385,7 +417,8 @@ def print_launch_errors(launch_errors):
     print("activate")
     print("cd ../..")
     print("pip install -r ./extensions/sd_dreambooth_extension/requirements.txt")
-    print("pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
+    print(
+        "pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
     print("#######################################################################################################")
 
 

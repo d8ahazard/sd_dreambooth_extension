@@ -106,7 +106,15 @@ class ImageBuilder:
                 self.image_pipe.unet.set_attn_processor(AttnProcessor2_0())
                 if os.name != "nt":
                     self.image_pipe.unet = torch.compile(self.image_pipe.unet)
-                self.image_pipe.enable_xformers_memory_efficient_attention()
+                has_mps = False
+                try:
+                    if torch.backends.mps.is_built():
+                        torch.zeros(1).to(torch.device("mps"))
+                        has_mps = "mps"
+                except Exception:
+                    pass
+                if not has_mps:
+                    self.image_pipe.enable_xformers_memory_efficient_attention()
                 self.image_pipe.vae.enable_slicing()
                 tomesd.apply_patch(self.image_pipe, ratio=0.5)
                 self.image_pipe.scheduler.config["solver_type"] = "bh2"
