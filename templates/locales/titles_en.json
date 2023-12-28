@@ -188,6 +188,16 @@
     "title": "Enable exponential moving average (EMA).",
     "description": "Whether or not to use exponential moving average (EMA) for model weights. Using EMA can help improve the stability and consistency of the generated images.."
   },
+  "use_dream": {
+    "label": "Use DREAM",
+    "title": "Enable Diffusion Rectification and Estimation-Adaptive Models (DREAM).",
+    "description": "Whether or not to use DREAM. DREAM performs an additional model evaluation at each training step, which increases training time but can help improve the stability and consistency of the generated images."
+  },
+  "dream_detail_preservation": {
+    "label": "DREAM detail preservation",
+    "title": "Select how much detail DREAM preserves.",
+    "description": "A factor that influences how DREAM trades off composition versus detail. Low values will improve composition but may result in loss of detail. High values preserve detail but may reduce the overall effect of DREAM."
+  },
   "train_unet": {
     "label": "Train UNET",
     "title": "Train UNET as an additional module.",

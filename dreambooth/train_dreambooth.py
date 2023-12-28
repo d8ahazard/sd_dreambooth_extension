@@ -1603,6 +1603,42 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         else:
                             raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
+                        # See http://arxiv.org/abs/2312.00210 (DREAM) algorithm 3
+                        if args.use_dream and unet.config.in_channels == channels:
+                            with torch.no_grad():
+                                alpha_prod = noise_scheduler.alphas_cumprod.to(timesteps.device)[timesteps,None,None,None]
+                                sqrt_alpha_prod = alpha_prod ** 0.5
+                                sqrt_one_minus_alpha_prod = (1 - alpha_prod) ** 0.5
+                                
+                                # The paper uses lambda = sqrt(1 - alpha) ** p, with p = 1 in their experiments.
+                                dream_lambda = (1 - alpha_prod) ** args.dream_detail_preservation
+
+                                if args.model_type == "SDXL":
+                                    with accelerator.autocast():
+                                        model_pred = unet(
+                                            noisy_latents, timesteps, batch["input_ids"],
+                                            added_cond_kwargs=batch["unet_added_conditions"]
+                                        ).sample
+                                else:
+                                    model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+
+                                if noise_scheduler.config.prediction_type == "epsilon":
+                                    predicted_noise = model_pred
+                                    delta_noise = (noise - predicted_noise).detach()
+                                    delta_noise.mul_(dream_lambda)
+                                    latents.add_(sqrt_one_minus_alpha_prod * delta_noise)
+                                    target.add_(delta_noise)
+                                elif noise_scheduler.config.prediction_type == "v_prediction":
+                                    predicted_noise = sqrt_one_minus_alpha_prod * noisy_latents - sqrt_alpha_prod * model_pred
+                                    delta_noise = (noise - predicted_noise).detach()
+                                    delta_noise.mul_(dream_lambda)
+                                    latents.add_(sqrt_one_minus_alpha_prod * delta_noise)
+                                    target.add_(sqrt_alpha_prod * delta_noise)
+                                else:
+                                    raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
+                                    
+                                del alpha_prod, sqrt_alpha_prod, sqrt_one_minus_alpha_prod, dream_lambda, model_pred, predicted_noise, delta_noise
+
                         if args.model_type == "SDXL":
                             with accelerator.autocast():
                                 model_pred = unet(

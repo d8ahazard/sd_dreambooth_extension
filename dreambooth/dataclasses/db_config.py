@@ -71,6 +71,8 @@ class DreamboothConfig(BaseModel):
     lr_warmup_steps: int = 500
     max_token_length: int = 75
     min_snr_gamma: float = 0.0
+    use_dream: bool = False
+    dream_detail_preservation: float = 0.5
     mixed_precision: str = "fp16"
     model_dir: str = ""
     model_name: str = ""

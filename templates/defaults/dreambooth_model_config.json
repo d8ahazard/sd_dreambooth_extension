@@ -38,6 +38,8 @@
     "lr_warmup_steps": 500,
     "max_token_length": 75,
     "min_snr_gamma": 0.0,
+    "use_dream": false,
+    "dream_detail_preservation": 0.5,
     "mixed_precision": "fp16",
     "noise_scheduler": "DDPM",
     "num_train_epochs": 200,
