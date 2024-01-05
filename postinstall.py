@@ -96,7 +96,7 @@ def is_installed(pkg: str, version: Optional[str] = None, check_strict: bool = T
     try:
         # Retrieve the package version from the installed package metadata
         installed_version = metadata.version(pkg)
-
+        print(f"Installed version of {pkg}: {installed_version}")
         # If version is not specified, just return True as the package is installed
         if version is None:
             return True
@@ -196,29 +196,8 @@ def check_xformers():
         cmd_opts = shared.cmd_opts
         if cmd_opts.xformers or cmd_opts.reinstall_xformers:
             if xformers_outdated:
-                print("Installing xformers")
-                try:
-                    torch_version = importlib_metadata.version("torch")
-                    is_torch_1 = Version(torch_version) < Version("2")
-                    is_torch_2_1 = Version(torch_version) < Version("2.0")
-                    print(f"Detected torch version {torch_version}")
-                    if is_torch_1:
-                        print_xformers_torch1_instructions(xformers_version)
-                    # Torch 2.0.1 is not available on PyPI for xformers version 22
-                    elif is_torch_2_1:
-                        os_string = "win_amd64" if os.name == "nt" else "manylinux2014_x86_64"
-                        # Get the version of python
-                        py_string = f"cp{sys.version_info.major}{sys.version_info.minor}-cp{sys.version_info.major}{sys.version_info.minor}"
-                        wheel_url = f"https://download.pytorch.org/whl/cu118/xformers-0.0.22.post7%2Bcu118-{py_string}-{os_string}.whl"
-                        print(f"Installing xformers from {wheel_url}")
-                        pip_install(wheel_url, "--upgrade", "--no-deps")
-                    else:
-                        print("Installing xformers from PyPI")
-                        pip_install("xformers==0.0.21", "--index-url https://download.pytorch.org/whl/cu118")
-                except subprocess.CalledProcessError as grepexc:
-                    error_msg = grepexc.stdout.decode()
-                    if "WARNING: Ignoring invalid distribution" not in error_msg:
-                        print_xformers_installation_error(error_msg)
+                print("Xformers is outdated, and automatic installation has been removed. Please install manually if desired.")
+
     except:
         pass
 
@@ -235,15 +214,25 @@ def check_bitsandbytes():
     if os.name == "nt":
         print("Checking bitsandbytes (Windows)")
         venv_path = os.environ.get("VENV_DIR", None)
+        if ";" in venv_path:
+            venv_path = venv_path.split(";")[0]
         print(f"Virtual environment path: {venv_path}")
         # Check for the dll in venv/lib/site-packages/bitsandbytes/libbitsandbytes_cuda118.dll
         # If it doesn't exist, append the requirement
         if not venv_path:
             print("Could not find the virtual environment path. Skipping bitsandbytes installation.")
         else:
-            win_dll = os.path.join(venv_path, "lib", "site-packages", "bitsandbytes", "libbitsandbytes_cuda118.dll")
-            print(f"Checking for {win_dll}")
-            if not os.path.exists(win_dll) or bitsandbytes_version is None or "0.41.2" not in bitsandbytes_version:
+            cuda_range = [f"1{str(x)}" for x in range(11, 22)]
+            dll_base = os.path.join(venv_path, "lib", "site-packages", "bitsandbytes", "libbitsandbytes_cuda")
+            win_dll = None
+            for cuda_ver in cuda_range:
+                dll_path = dll_base + cuda_ver + ".dll"
+                print(f"Checking for {dll_path}")
+                if os.path.exists(dll_path):
+                    win_dll = dll_path
+                    break
+            print(f"Found windows BNB DLL {win_dll}")
+            if win_dll is None or bitsandbytes_version is None or "0.41.2" not in bitsandbytes_version:
                 print("Can't find bitsandbytes CUDA dll. Installing bitsandbytes")
                 try:
                     pip_uninstall("bitsandbytes")
