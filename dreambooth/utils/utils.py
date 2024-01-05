@@ -103,8 +103,8 @@ def xformers_check():
             import torch
             if version.Version(torch.__version__) < version.Version("1.12"):
                 raise ValueError("PyTorch version must be >= 1.12")
-            if version.Version(_xformers_version) < version.Version("0.0.21"):
-                raise ValueError("Xformers version must be >= 0.0.21")
+            if version.Version(_xformers_version) < version.Version("0.0.20"):
+                raise ValueError("Xformers version must be >= 0.0.20")
         has_xformers = True
     except Exception as e:
         # print(f"Exception importing xformers: {e}")
