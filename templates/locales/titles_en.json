@@ -198,6 +198,11 @@
     "title": "Select how much detail DREAM preserves.",
     "description": "A factor that influences how DREAM trades off composition versus detail. Low values will improve composition but may result in loss of detail. High values preserve detail but may reduce the overall effect of DREAM."
   },
+  "freeze_spectral_norm": {
+    "label": "Freeze Spectral Norm",
+    "title": "Freeze spectral norm of the model weights.",
+    "description": "Prevents the overall magnitude of weights from changing during training. This helps stabilize training at high learning rates. Not compatible with LORA."
+  },
   "train_unet": {
     "label": "Train UNET",
     "title": "Train UNET as an additional module.",

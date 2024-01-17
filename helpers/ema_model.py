@@ -85,6 +85,15 @@ class EMAModel(object):
         ema_state_dict = {}
         ema_params = self.params
         for key, param in new_model.state_dict().items():
+            if ".parametrizations." in key:
+                if ".parametrizations.weight.original" in key:
+                    # Handle reparametrized parameters
+                    param = new_model.get_submodule(key.replace(".parametrizations.weight.original", "")).weight
+                    key = key.replace(".parametrizations.weight.original", ".weight")
+                else:
+                    # Skip extra values used in reparametrization
+                    continue
+        
             try:
                 ema_param = ema_params[key]
             except KeyError:

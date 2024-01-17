@@ -161,6 +161,9 @@
     "max": 1,
     "step": 0.01
   },
+  "freeze_spectral_norm": {
+    "value": false
+  },
   "max_token_length": {
     "value": 75,
     "min": 75,
