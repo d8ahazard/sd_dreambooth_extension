@@ -38,18 +38,27 @@ class SampleDataset:
             elif "[filewords]" in sample_prompt:
                 prompts = []
                 images = get_images(concept.instance_data_dir)
+                random.shuffle(images)
                 getter = FilenameTextGetter(shuffle_tags)
+                selected = 0
                 for image in images:
-                    file_text = getter.read_text(image)
-                    prompt = getter.create_text(sample_prompt, file_text, concept, False)
-                    img = Image.open(image)
-                    res = img.size
-                    closest = closest_resolution(res[0], res[1], bucket_resos)
-                    prompts.append((prompt, closest))
+                    try:
+                        file_text = getter.read_text(image)
+                        prompt = getter.create_text(sample_prompt, file_text, concept, False)
+                        img = Image.open(image)
+                        res = img.size
+                        closest = closest_resolution(res[0], res[1], bucket_resos)
+                        prompts.append((prompt, closest))
+                        selected += 1
+                        if selected >= required:
+                            break
+                    except:
+                        pass
             else:
                 prompts = [(sample_prompt, (config.resolution, config.resolution))]
+            random.shuffle(prompts)
             for i in range(required):
-                pi = random.choice(prompts)
+                pi = prompts[i % len(prompts)]
                 pd = PromptData(
                     prompt=pi[0],
                     negative_prompt=neg,

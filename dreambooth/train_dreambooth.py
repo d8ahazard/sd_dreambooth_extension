@@ -1019,7 +1019,14 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 save_model = False
                 save_lora = False
 
-                if not save_canceled and not save_completed:
+                if save_canceled or save_completed:
+                    logger.debug("\nSave completed/canceled.")
+                    if global_step > 0:
+                        save_image = True
+                        save_model = True
+                        if args.use_lora:
+                            save_lora = True
+                elif is_epoch_check:
                     # Check to see if the number of epochs since last save is gt the interval
                     if 0 < save_model_interval <= session_epoch - last_model_save:
                         save_model = True
@@ -1032,26 +1039,17 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         save_image = True
                         last_image_save = session_epoch
 
-                else:
-                    logger.debug("\nSave completed/canceled.")
-                    if global_step > 0:
-                        save_image = True
-                        save_model = True
-                        if args.use_lora:
-                            save_lora = True
-
                 save_snapshot = False
 
-                if is_epoch_check:
-                    if shared.status.do_save_samples:
-                        save_image = True
-                        shared.status.do_save_samples = False
+                if shared.status.do_save_samples:
+                    save_image = True
+                    shared.status.do_save_samples = False
 
-                    if shared.status.do_save_model:
-                        if args.use_lora:
-                            save_lora = True
-                        save_model = True
-                        shared.status.do_save_model = False
+                if shared.status.do_save_model:
+                    if args.use_lora:
+                        save_lora = True
+                    save_model = True
+                    shared.status.do_save_model = False
 
                 save_checkpoint = False
                 if save_model:
@@ -1917,6 +1915,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         if status_handler:
                             status_handler.end(status.textinfo)
                         break
+
+                    if status.do_save_model or status.do_save_samples:
+                        check_save(False)
 
                 accelerator.wait_for_everyone()
 
