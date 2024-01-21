@@ -564,12 +564,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     if isinstance(module, (torch.nn.Linear, torch.nn.Conv2d)):
                         remove_parametrizations(module, "weight", leave_parametrized=True)
 
-            # Add spectral norm reparametrization. See https://arxiv.org/abs/2303.06296
-            # This can't be done until after the EMA model has been created, because the EMA model
-            # needs to get the standard parametrization.
-            if args.freeze_spectral_norm:
-                add_spectral_reparametrization(unet)
-
             # Create shared unet/tenc learning rate variables
 
             learning_rate = args.learning_rate
@@ -981,6 +975,13 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     global_epoch = args.lifetime_epoch
                 except Exception as lex:
                     logger.warning(f"Exception loading checkpoint: {lex}")
+
+            # Add spectral norm reparametrization. See https://arxiv.org/abs/2303.06296
+            # This needs to be done after the saved checkpoint is loaded (if any), because
+            # saved checkpoints have normal parametrization.
+            if args.freeze_spectral_norm:
+                add_spectral_reparametrization(unet)
+
             logger.debug("  ***** Running training *****")
             if shared.force_cpu:
                 logger.debug(f"  TRAINING WITH CPU ONLY")
