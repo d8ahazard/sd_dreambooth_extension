@@ -24,8 +24,16 @@ from dreambooth.shared import status
 
 def get_dim(filename, max_res):
     with Image.open(filename) as im:
-        im = rotate_image_straight(im)
         width, height = im.size
+        try:
+            exif: Image.Exif = image.getexif()
+            if exif:
+                orientation_tag = {v: k for k, v in ExifTags.TAGS.items()}['Orientation']
+                orientation = exif.get(orientation_tag)
+                if orientation == 6 or orientation == 8:
+                    (width, height) = (height, width)
+        except:
+            pass
         if width > max_res or height > max_res:
             aspect_ratio = width / height
             if width > height:
