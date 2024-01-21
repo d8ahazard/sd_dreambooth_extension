@@ -15,9 +15,8 @@
 
 """ Conversion script for the LoRA's safetensors checkpoints. """
 
-import argparse
-
 from finetune.configs.convert_lora_safetensor_to_diffusers_config import ConvertLoraSafetensorToDiffusersConfig
+import argparse
 
 import torch
 from safetensors.torch import load_file
@@ -119,7 +118,6 @@ def parse_args():
 
 
 def convert(args: ConvertLoraSafetensorToDiffusersConfig):
-
     base_model_path = args.base_model_path
     checkpoint_path = args.checkpoint_path
     dump_path = args.dump_path

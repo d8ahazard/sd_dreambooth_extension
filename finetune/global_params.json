@@ -175,7 +175,7 @@
         "type": "str",
         "extras": {
             "title": "Instance Data Dir",
-            "description": "A folder containing the training data. ",
+            "description": "A folder containing the training data of instance images.",
             "group": "Dataset"
         }
     },
@@ -184,7 +184,7 @@
         "type": "str",
         "extras": {
             "title": "Instance Prompt",
-            "description": "The prompt with identifier specifying the instance, e.g. 'photo of a TOK dog', 'in the style of TOK'",
+            "description": "The prompt with identifier specifying the instance",
             "group": "Dataset"
         }
     },

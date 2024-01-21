@@ -14,7 +14,12 @@ class BaseConfig(BaseModel):
 
     def to_dict(self):
         # Convert the model instance into a dictionary
-        return self.diact()
+        out_dict = self.dict()
+        # Remove any keys that start with an underscore
+        for key in list(out_dict.keys()):
+            if key.startswith("_"):
+                del out_dict[key]
+        return out_dict
 
     def to_json(self):
         # Serialize the dictionary form of the instance to a JSON string

@@ -72,10 +72,11 @@ def pip_uninstall(*args):
     output = subprocess.check_output(
         [sys.executable, "-m", "pip", "uninstall", "-y"] + list(args),
         stderr=subprocess.STDOUT,
-        )
+    )
     for line in output.decode().split("\n"):
         if "Successfully uninstalled" in line:
             print(line)
+
 
 def is_installed(pkg: str, version: Optional[str] = None, check_strict: bool = True) -> bool:
     try:
@@ -157,6 +158,7 @@ def install_requirements():
             "If an extension is using a newer version, the dependency is uninstalled and reinstalled twice every startup.")
         print()
 
+
 def check_xformers():
     """
     Install xformers if necessary
@@ -231,7 +233,8 @@ def check_bitsandbytes():
                 print("Installing bitsandbytes")
                 try:
                     pip_install(
-                                "--prefer-binary", "https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
+                        "--prefer-binary",
+                        "https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
                 except Exception as e:
                     print("Bitsandbytes 0.41.2.post2 installation failed")
                     print("Some features such as 8bit optimizers will be unavailable")
@@ -242,7 +245,8 @@ def check_bitsandbytes():
         if "0.41.2" not in bitsandbytes_version:
             try:
                 print("Installing bitsandbytes")
-                pip_install("bitsandbytes==0.41.2.post2","--prefer-binary","https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
+                pip_install("bitsandbytes==0.41.2.post2", "--prefer-binary",
+                            "https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
             except:
                 print("Bitsandbytes 0.41.2 installation failed")
                 print("Some features such as 8bit optimizers will be unavailable")
@@ -270,7 +274,7 @@ def check_versions():
         Dependency(module="torchvision", version="0.14.1" if is_mac else "0.15.2+cu118"),
         Dependency(module="accelerate", version="0.21.0"),
         Dependency(module="diffusers", version="0.23.1"),
-        Dependency(module="bitsandbytes",  version="0.41.1.post2", required=False),
+        Dependency(module="bitsandbytes", version="0.41.1.post2", required=False),
     ]
 
     launch_errors = []
@@ -347,6 +351,7 @@ def print_bitsandbytes_installation_error(err):
         "pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
     print("#######################################################################################################")
 
+
 def print_xformers_installation_error(err):
     torch_ver = importlib_metadata.version("torch")
     print()
@@ -385,7 +390,8 @@ def print_launch_errors(launch_errors):
     print("activate")
     print("cd ../..")
     print("pip install -r ./extensions/sd_dreambooth_extension/requirements.txt")
-    print("pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
+    print(
+        "pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
     print("#######################################################################################################")
 
 

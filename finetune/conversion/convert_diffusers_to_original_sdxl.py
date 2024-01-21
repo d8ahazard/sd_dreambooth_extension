@@ -2,9 +2,8 @@
 # *Only* converts the UNet, VAE, and Text Encoder.
 # Does not convert optimizer state or any other thing.
 
-import argparse
-
 from finetune.configs.convert_diffusers_to_original_sdxl_config import ConvertDiffusersToOriginalSdxlConfig
+import argparse
 import os.path as osp
 import re
 
@@ -282,7 +281,6 @@ def parse_args():
 
 
 def convert(args: ConvertDiffusersToOriginalSdxlConfig):
-
     assert args.model_path is not None, "Must provide a model path!"
 
     assert args.checkpoint_path is not None, "Must provide a checkpoint path!"

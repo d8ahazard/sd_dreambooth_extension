@@ -16,10 +16,10 @@ def render():
     global MODEL_PATH
     global USE_SAFETENSORS
     with gr.Accordion(open=False, label="Other") as OTHER_ACCORDION:
-        CHECKPOINT_PATH = gr.Textbox(label='Checkpoint Path', value='None', visible=True)
-        HALF = gr.Checkbox(label='Half', value=False, visible=True)
-        MODEL_PATH = gr.Textbox(label='Model Path', value='None', visible=True)
-        USE_SAFETENSORS = gr.Checkbox(label='Use Safetensors', value=False, visible=True)
+        CHECKPOINT_PATH = gr.Textbox(interactive=True, label='Checkpoint Path', value='None', visible=True)
+        HALF = gr.Checkbox(interactive=True, label='Half', value=False, visible=True)
+        MODEL_PATH = gr.Textbox(interactive=True, label='Model Path', value='None', visible=True)
+        USE_SAFETENSORS = gr.Checkbox(interactive=True, label='Use Safetensors', value=True, visible=True)
     manager.register_db_component("convert_diffusers_to_original_stable_diffusion", CHECKPOINT_PATH, "checkpoint_path", False, "Path to the output model.")
     manager.register_db_component("convert_diffusers_to_original_stable_diffusion", HALF, "half", False, "Save weights in half precision.")
     manager.register_db_component("convert_diffusers_to_original_stable_diffusion", MODEL_PATH, "model_path", False, "Path to the model to convert.")

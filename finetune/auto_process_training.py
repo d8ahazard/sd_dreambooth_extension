@@ -3,10 +3,31 @@ import importlib.util
 import json
 import os
 import shutil
+import sys
 import tempfile
 import traceback
+from os.path import dirname
+
+import torch
 from typing import Dict
-from shared import script_path
+
+base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+if base_dir not in sys.path:
+    print(f"Appending (install): {base_dir}")
+    sys.path.insert(0, base_dir)
+ext_dir = os.path.join(base_dir, 'extensions', 'sd_dreambooth_extension')
+finetune_dir = os.path.join(ext_dir, 'finetune')
+db_dir = os.path.join(finetune_dir, 'dreambooth')
+# if ext_dir not in sys.path:
+#     print(f"Appending (install): {ext_dir}")
+#     sys.path.insert(0, ext_dir)
+print(f"Appending (install): {finetune_dir}")
+sys.path.insert(0, finetune_dir)
+# if db_dir not in sys.path:
+#     print(f"Appending (install): {db_dir}")
+#     sys.path.insert(0, db_dir)
+
+from modules.paths_internal import script_path
 
 TRAINING_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "finetune"))
 TRAINING_DIR_TEMP = os.path.join(TRAINING_DIR, 'scripts')
@@ -141,9 +162,15 @@ def generate_training_config_subclass(parse_args_func, output_file, converter=Fa
 
 
 def load_parse_args_from_file(file_path):
-    spec = importlib.util.spec_from_file_location("module.name", file_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    try:
+        spec = importlib.util.spec_from_file_location("module.name", file_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    except Exception:
+        print(f"ImportError Traceback:")
+        traceback.print_exc()
+        return None
+
     return module.parse_args if hasattr(module, 'parse_args') else None
 
 
@@ -181,28 +208,47 @@ def disable_main_launch_lines(file):
             f.write(line)
 
 
-def replace_main_conversion_lines(file):
+def replace_main_conversion_lines_init(file):
     with open(file, 'r') as f:
         lines = f.readlines()
     in_args = False
     import_added = False
-    config_class_name = f"{os.path.basename(file).replace('.py','')}_config".replace('_', ' ').title().replace(' ',
-                                                                                                                 '')
-    config_module_name = f"{os.path.basename(file).replace('.py','')}_config"
+    config_class_name = f"{os.path.basename(file).replace('.py', '')}_config".replace('_', ' ').title().replace(' ',
+                                                                                                                '')
+    config_module_name = f"{os.path.basename(file).replace('.py', '')}_config"
     with open(file, 'w') as f:
         for line in lines:
             stripped_line = line.strip()
-            if stripped_line.startswith('import') and not import_added:
-                line = f"{line}\nfrom finetune.configs.{config_module_name} import {config_class_name}\n"
-                import_added = True
-            elif stripped_line.startswith('if __name__ == \'__main__\':') or stripped_line.startswith(
+            if stripped_line.startswith('if __name__ == \'__main__\':') or stripped_line.startswith(
                     'if __name__ == "__main__":'):
                 print("Found main launch line")
                 line = "def parse_args():\n"
                 in_args = True
             elif in_args and stripped_line.startswith("args = parser.parse_args()"):
-                line = f"    return parser\n\n\ndef convert(args: {config_class_name}):\n"
+                line = f"    return parser\n\n\ndef convert():"
                 in_args = False
+            f.write(line)
+
+
+def replace_main_conversion_lines(file):
+    with open(file, 'r') as f:
+        lines = f.readlines()
+
+    import_added = False
+    config_class_name = f"{os.path.basename(file).replace('.py', '')}_config".replace('_', ' ').title().replace(' ',
+                                                                                                                '')
+    config_module_name = f"{os.path.basename(file).replace('.py', '')}_config"
+    import_line = f"from finetune.configs.{config_module_name} import {config_class_name}\n"
+    with open(file, 'w') as f:
+        for line in lines:
+            stripped_line = line.strip()
+            if stripped_line == import_line:
+                import_added = True
+            if stripped_line.startswith('import') and not import_added:
+                line = import_line + line
+                import_added = True
+            if stripped_line.startswith('def convert()'):
+                line = line.replace('def convert()', f"def convert(args: {config_class_name})")
             f.write(line)
 
 
@@ -352,7 +398,7 @@ def create_gradio_textfield(field: dict):
     element_default = field['default']
     element_visible = field['extras'].get('visible', True)
 
-    return f"gr.Textbox(label='{element_label}', value='{element_default}', visible={element_visible})"
+    return f"gr.Textbox(interactive=True, label='{element_label}', value='{element_default}', visible={element_visible})"
 
 
 def create_gradio_slider(field: dict):
@@ -364,14 +410,14 @@ def create_gradio_slider(field: dict):
     element_max = field['extras'].get('max', default_max)
     default_step = 1 if field['type'] == 'int' else 0.01
     element_step = field['extras'].get('step', default_step)
-    return f"gr.Slider(label='{element_label}', value={element_default}, visible={element_visible}, step={element_step}, minimum={element_min}, maximum={element_max})"
+    return f"gr.Slider(interactive=True, label='{element_label}', value={element_default}, visible={element_visible}, step={element_step}, minimum={element_min}, maximum={element_max})"
 
 
 def create_gradio_checkbox(field: dict):
     element_label = field['extras']['title']
     element_default = field['default'] if isinstance(field['default'], bool) else False
     element_visible = field['extras'].get('visible', True)
-    return f"gr.Checkbox(label='{element_label}', value={element_default}, visible={element_visible})"
+    return f"gr.Checkbox(interactive=True, label='{element_label}', value={element_default}, visible={element_visible})"
 
 
 def create_gradio_select(field: dict):
@@ -379,7 +425,7 @@ def create_gradio_select(field: dict):
     element_default = field['default']
     element_visible = field['extras'].get('visible', True)
     element_choices = field['extras']['choices']
-    return f"gr.Dropdown(label='{element_label}', choices={element_choices}, value='{element_default}', visible={element_visible})"
+    return f"gr.Dropdown(interactive=True, label='{element_label}', choices={element_choices}, value='{element_default}', visible={element_visible})"
 
 
 def create_gradio_element(field_name, elem_type, field: Dict):
@@ -475,6 +521,19 @@ def process_scripts():
                 disable_min_version_check(file_path)
                 disable_main_launch_lines(file_path)
                 disable_parse_args_lines(file_path)
+                try:
+                    print(f"Loading parse_args function from {file_path}")
+                    parse_args_func = load_parse_args_from_file(file_path)
+                    print(f"Loaded parse_args function: {parse_args_func}")
+                    if parse_args_func:
+                        print(f"Generating config for {file} at {output_file_path}")
+                        generate_training_config_subclass(parse_args_func, output_file_path)
+                        print(f"Generated config for {file} at {output_file_path}")
+                    else:
+                        print(f"No parse_args function found in {file}")
+                except Exception as e:
+                    print(f"Error processing {file}: {e}")
+                    traceback.print_exc()
                 add_global_args(file_path)
                 fix_main_method(file_path)
                 swap_imports(file_path)
@@ -484,19 +543,7 @@ def process_scripts():
                 print(f"Error disabling min version check in {file}")
                 traceback.print_exc()
 
-            try:
-                print(f"Loading parse_args function from {file_path}")
-                parse_args_func = load_parse_args_from_file(file_path)
-                print(f"Loaded parse_args function: {parse_args_func}")
-                if parse_args_func:
-                    print(f"Generating config for {file} at {output_file_path}")
-                    generate_training_config_subclass(parse_args_func, output_file_path)
-                    print(f"Generated config for {file} at {output_file_path}")
-                else:
-                    print(f"No parse_args function found in {file}")
-            except Exception as e:
-                print(f"Error processing {file}: {e}")
-                traceback.print_exc()
+
 
         else:
             print(f"File not found: {file_path}")
@@ -510,13 +557,14 @@ def process_scripts():
                 os.remove(dest_path)
             shutil.copy(file_path, dest_path)
             file_path = dest_path
-            replace_main_conversion_lines(file_path)
+            replace_main_conversion_lines_init(dest_path)
+
             try:
                 print(f"Loading parse_args function from {file_path}")
                 parse_args_func = load_parse_args_from_file(file_path)
                 print(f"Loaded parse_args function: {parse_args_func}")
                 if parse_args_func:
-                    out_script_name = f"{file_path.replace('.py','')}_config.py"
+                    out_script_name = f"{file_path.replace('.py', '')}_config.py"
                     output_file_path = os.path.join(TRAINING_CONFIGS_DIR, os.path.basename(out_script_name))
                     print(f"Generating (convert)config for {file} at {output_file_path}")
                     generate_training_config_subclass(parse_args_func, output_file_path)
@@ -526,6 +574,8 @@ def process_scripts():
             except Exception as e:
                 print(f"Error processing {file}: {e}")
                 traceback.print_exc()
+            replace_main_conversion_lines(dest_path)
+
     try:
         os.rmdir(temp_path)
     except:

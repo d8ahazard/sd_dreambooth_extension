@@ -29,6 +29,8 @@ show_advanced = True
 
 setting_elements_list = []
 setting_elements_dict = {}
+# Store workspace params
+workspace_config = {}
 
 
 def read_metadata_from_safetensors(filename):
@@ -107,36 +109,54 @@ def select_training_params(training_type):
     elements = manager.get_elements(training_type)
     setting_elements_list = []
     setting_elements_dict = elements
-    for key in elements:
+    element_keys = elements.keys()
+    # Sort the keys so that the settings are loaded in a consistent order
+    element_keys = sorted(element_keys)
+    for key in element_keys:
         setting_elements_list.append(elements[key])
     return elements
 
 
-def load_workspace(workspace_name):
+def load_workspace_config(workspace_name) -> (gr.update, gr.update, gr.update, gr.update):
     if workspace_name == "":
-        return
+        return gr.update(visible=False), gr.update(value=""), gr.update(value=""), gr.update(value=""), gr.update(value="")
+    global workspace_config
     workspace_config = {}
     workspace_path = os.path.join(shared.models_path, "finetune", workspace_name)
-    workspace_config_path = os.path.join(workspace_path, "config.json")
+    workspace_config_path = os.path.join(workspace_path, "WorkspaceConfig.json")
     if os.path.exists(workspace_config_path):
         with open(workspace_config_path, "r") as f:
             workspace_config = json.load(f)
+    workspace_name_display = workspace_config.get("name", "")
+    src_checkpoint_display = workspace_config.get("base_model", "")
+    model_type_display = workspace_config.get("base_model_type", "")
+    status = f"Loaded workspace: {workspace_name_display}"
+    return gr.update(visible=True), gr.update(value=workspace_name_display), gr.update(value=src_checkpoint_display), gr.update(
+        value=model_type_display), gr.update(value=status)
 
 
-def get_training_settings(workspace_name, training_type):
-    workspace_value = workspace_name.value
+def get_training_settings(training_type):
+    workspace_value = workspace_config.get("name", "")
     settings = {}
-
-    if not workspace_value:
+    workspace_params = {}
+    if not workspace_value or training_type == "":
         existing_settings = {}
     else:
+        select_training_params(training_type)
         workspace_path = os.path.join(shared.models_path, "finetune", workspace_value)
+        workspace_json_file = os.path.join(workspace_path, "WorkspaceConfig.json")
         settings_path = os.path.join(workspace_path, f"settings_{training_type}.json")
+        if os.path.exists(workspace_json_file):
+            with open(workspace_json_file, "r") as f:
+                workspace_params = json.load(f)
         if os.path.exists(settings_path):
             with open(settings_path, "r") as f:
                 existing_settings = json.load(f)
         else:
             existing_settings = {}
+    if training_type == "":
+        return workspace_params, settings
+
     base_settings_class = get_training_config_script(training_type)
     base_settings_module = importlib.import_module(base_settings_class)
     setting_class_name = base_settings_class.split(".")[-1].replace("_", " ").title().replace(" ", "")
@@ -152,77 +172,119 @@ def get_training_settings(workspace_name, training_type):
             settings[key] = base_dict[key]
     for key in existing_settings:
         settings[key] = existing_settings[key]
-
-    return settings
+    foo = settings
+    return workspace_params, settings
 
 
 def load_ft_params(workspace_name, training_type):
     """Load the parameters for a given workspace and training type
     Returns:
-        ft_workspace_name,
-        ft_model_path,
-        ft_has_ema,
-        ft_model_type,
+        ft_model_info_row,
+        ft_workspace_name_display,
+        ft_workspace_src_checkpoint_display,
+        ft_workspace_model_type_display,
         ft_status,
         setting_elements_list
     """
     global setting_elements_dict
     global setting_elements_list
-    workspace_params = get_training_settings(workspace_name, training_type)
+    load_workspace_config(workspace_name)
+    workspace_params, settings = get_training_settings(training_type)
     setting_elements_list = []
-
-    for key in workspace_params:
+    settings_keys = settings.keys()
+    # Sort the keys so that the settings are loaded in a consistent order
+    settings_keys = sorted(settings_keys)
+    for key in settings_keys:
         if key in setting_elements_dict:
-            setting_elements_dict[key].value = workspace_params[key]
-            setting_elements_list.append(setting_elements_dict[key])
-    return workspace_name, workspace_params["model_path"], workspace_params["has_ema"], workspace_params[
-        "model_type"], "", setting_elements_list
+            setting_elements_dict[key] = settings[key]
+            setting_elements_list.append(settings[key])
+    workspace_name = workspace_params.get("name", "")
+    src_checkpoint = workspace_params.get("base_model", "")
+    base_model_type = workspace_params.get("base_model_type", "")
+    status = f"Loaded workspace: {workspace_name}"
+    outputs = [
+        gr.update(visible=True),
+        gr.update(value=workspace_name),
+        gr.update(value=src_checkpoint),
+        gr.update(value=base_model_type),
+        gr.update(value=status)
+    ]
+    for element in setting_elements_list:
+        outputs.append(element)
+    return outputs
 
 
 def save_ft_params(workspace_name, training_type):
     """Save the parameters for a given workspace and training type
     Returns:
-        ft_workspace_name,
-        ft_model_path,
-        ft_has_ema,
-        ft_model_type,
+        ft_workspace_name_display,
+        ft_workspace_src_checkpoint_display,
+        ft_workspace_model_type_display,
         ft_status,
         setting_elements_list
     """
     global setting_elements_list
+    global setting_elements_dict
+    load_workspace_config(workspace_name)
+    src_checkpoint = workspace_config.get("base_model", "")
+    base_model_type = workspace_config.get("base_model_type", "")
+
     workspace_path = os.path.join(shared.models_path, "finetune", workspace_name)
     settings_path = os.path.join(workspace_path, f"settings_{training_type}.json")
     settings = {}
+    setting_keys = setting_elements_dict.keys()
+    # Sort the keys so that the settings are saved in a consistent order
+    setting_keys = sorted(setting_keys)
+    for key, value in zip(setting_keys, setting_elements_list):
+        settings[key] = value
+    if len(settings) == 0:
+        status = f"Nothing to save for workspace: {workspace_name}"
+    else:
+        with open(settings_path, "w") as f:
+            json.dump(settings, f, indent=4)
+        status = f"Saved workspace: {workspace_name}"
+
+    outputs = [
+        gr.update(visible=True),
+        gr.update(value=workspace_name),
+        gr.update(value=src_checkpoint),
+        gr.update(value=base_model_type),
+        gr.update(value=status)
+    ]
     for element in setting_elements_list:
-        if hasattr(element, "value"):
-            settings[element.elem_id] = element.value
-    with open(settings_path, "w") as f:
-        json.dump(settings, f, indent=4)
-    outputs = [workspace_name, settings["model_path"], settings["has_ema"], settings["model_type"], ""]
-    for element in setting_elements_list:
-        outputs.append(element)
+        outputs.append(gr.update(value=element))
+    return outputs
 
 
-def start_ft_train(workspace_name, training_type, elements_list):
+def start_ft_train(workspace_name, training_type):
     """Start training a given workspace and training type
     Returns:
         ft_gallery,
         ft_status
     """
-    global setting_elements_list
+    gallery = []
+    status = ""
+    if workspace_name == "":
+        status = "No workspace selected"
+        return gallery, status
 
+    if training_type == "":
+        status = "No training type selected"
+        return gallery, status
+
+    global setting_elements_list
+    load_workspace_config(workspace_name)
     workspace_path = os.path.join(shared.models_path, "finetune", workspace_name)
     settings_path = os.path.join(workspace_path, f"settings_{training_type}.json")
     settings = {}
-    for element in setting_elements_list:
-        if hasattr(element, "value"):
-            settings[element.elem_id] = element.value
+    sorted_keys = sorted(setting_elements_dict.keys())
+    for key, value in zip(sorted_keys, setting_elements_list):
+        settings[key] = value
     with open(settings_path, "w") as f:
         json.dump(settings, f, indent=4)
-    outputs = [workspace_name, settings["model_path"], settings["has_ema"], settings["model_type"], ""]
-    for element in setting_elements_list:
-        outputs.append(element)
-    return outputs
+
+    print(f"Starting training with settings: {settings}")
+    return gallery, status
 
 
 def new_ui_tabs():
@@ -246,16 +308,16 @@ def new_ui_tabs():
         # endregion
 
         # region Workspace Detail Row
-        with gr.Row(elem_id="WorkspaceDetailRow", visible=False, variant="compact") as ft_model_info:
+        with gr.Row(elem_id="WorkspaceDetailRow", visible=False, variant="compact") as ft_model_info_row:
             with gr.Column():
                 with gr.Row(variant="compact"):
                     with gr.Column():
                         with gr.Row(variant="compact"):
                             gr.HTML(value="Loaded Model:")
-                            ft_model_path = gr.HTML()
+                            ft_workspace_name_display = gr.HTML()
                         with gr.Row(variant="compact"):
                             gr.HTML(value="Source Checkpoint:")
-                            ft_src = gr.HTML()
+                            ft_workspace_src_checkpoint_display = gr.HTML()
                     # TODO: Auto-load selected training type params from model section here
                     with gr.Column():
                         with gr.Row(variant="compact"):
@@ -267,7 +329,7 @@ def new_ui_tabs():
                     with gr.Column():
                         with gr.Row(variant="compact"):
                             gr.HTML(value="Model type:")
-                            ft_model_type = gr.HTML(elem_id="ft_model_type")
+                            ft_workspace_model_type_display = gr.HTML(elem_id="ft_model_type")
                         with gr.Row(variant="compact"):
                             gr.HTML(value="Has EMA:")
                             ft_has_ema = gr.HTML(elem_id="ft_has_ema")
@@ -414,7 +476,7 @@ def new_ui_tabs():
                                     # Check if the elem_id of the column matches the selected training type
                                     is_visible = col.elem_id == f"{training_type}_ui"
                                     out_elements.append(gr.update(visible=is_visible))
-                                setting_elements_dict = get_training_settings(ft_workspace_name, training_type)
+                                workspace_params, setting_elements_dict = get_training_settings(training_type)
                                 setting_elements_list = []
                                 for key in setting_elements_dict:
                                     setting_elements_list.append(setting_elements_dict[key])
@@ -489,13 +551,17 @@ def new_ui_tabs():
         ]
 
         # region Top Row Listeners
-        output_elements = [
-            ft_workspace_name,
-            ft_model_path,
-            ft_has_ema,
-            ft_model_type,
+        top_elements = [
+            ft_model_info_row,
+            ft_workspace_name_display,
+            ft_workspace_src_checkpoint_display,
+            ft_workspace_model_type_display,
             ft_status
         ]
+        output_elements = []
+        for element in top_elements:
+            output_elements.append(element)
+
         for element in setting_elements_list:
             print(f"Adding {element} to output elements")
             output_elements.append(element)
@@ -523,9 +589,9 @@ def new_ui_tabs():
 
         # When a workspace is selected, load the settings for that workspace
         ft_workspace_name.change(
-            fn=load_workspace,
+            fn=load_workspace_config,
             inputs=[ft_workspace_name],
-            outputs=setting_elements_list,
+            outputs=top_elements,
         )
 
         ft_create_from_hub.change(
@@ -548,9 +614,9 @@ def new_ui_tabs():
             inputs=new_workspace_params,
             outputs=[
                 ft_workspace_name,
-                ft_model_path,
+                ft_workspace_name_display,
                 ft_has_ema,
-                ft_model_type,
+                ft_workspace_model_type_display,
                 ft_status,
             ],
         )

@@ -14,9 +14,8 @@
 # limitations under the License.
 """ Conversion script for stable diffusion checkpoints which _only_ contain a controlnet. """
 
-import argparse
-
 from finetune.configs.convert_original_controlnet_to_diffusers_config import ConvertOriginalControlnetToDiffusersConfig
+import argparse
 
 from diffusers.pipelines.stable_diffusion.convert_from_ckpt import download_controlnet_from_original_ckpt
 
@@ -97,7 +96,6 @@ def parse_args():
 
 
 def convert(args: ConvertOriginalControlnetToDiffusersConfig):
-
     controlnet = download_controlnet_from_original_ckpt(
         checkpoint_path=args.checkpoint_path,
         original_config_file=args.original_config_file,

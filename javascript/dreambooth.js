@@ -367,14 +367,14 @@ onUiUpdate(function () {
     if (errors !== null && errors !== undefined && !locked && errors.innerHTML !== "") {
         let hr = getRealElement("hint_row");
         hr.innerHTML = errors.innerHTML;
-        toggleComponents(false, true);
+        //toggleComponents(false, true);
     }
 
     if (closeBtn === null || closeBtn === undefined) {
         let cb = getRealElement("close_modal");
         closeBtn = cb;
         if (cb && cm) {
-            toggleComponents(false, false);
+            //toggleComponents(false, false);
             cb.addEventListener("click", function () {
                 cm.classList.remove("active");
             });

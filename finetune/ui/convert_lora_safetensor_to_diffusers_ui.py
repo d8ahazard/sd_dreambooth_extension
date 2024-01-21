@@ -24,14 +24,14 @@ def render():
     global LORA_PREFIX_UNET
     global TO_SAFETENSORS
     with gr.Accordion(open=False, label="Other") as OTHER_ACCORDION:
-        ALPHA = gr.Slider(label='Alpha', value=0.75, visible=True, step=0.01, minimum=0, maximum=1)
-        BASE_MODEL_PATH = gr.Textbox(label='Base Model Path', value='None', visible=True)
-        CHECKPOINT_PATH = gr.Textbox(label='Checkpoint Path', value='None', visible=True)
-        DEVICE = gr.Textbox(label='Device', value='None', visible=True)
-        DUMP_PATH = gr.Textbox(label='Dump Path', value='None', visible=True)
-        LORA_PREFIX_TEXT_ENCODER = gr.Textbox(label='Lora Prefix Text Encoder', value='lora_te', visible=True)
-        LORA_PREFIX_UNET = gr.Textbox(label='Lora Prefix Unet', value='lora_unet', visible=True)
-        TO_SAFETENSORS = gr.Checkbox(label='To Safetensors', value=False, visible=True)
+        ALPHA = gr.Slider(interactive=True, label='Alpha', value=0.75, visible=True, step=0.01, minimum=0, maximum=1)
+        BASE_MODEL_PATH = gr.Textbox(interactive=True, label='Base Model Path', value='None', visible=True)
+        CHECKPOINT_PATH = gr.Textbox(interactive=True, label='Checkpoint Path', value='None', visible=True)
+        DEVICE = gr.Textbox(interactive=True, label='Device', value='None', visible=True)
+        DUMP_PATH = gr.Textbox(interactive=True, label='Dump Path', value='None', visible=True)
+        LORA_PREFIX_TEXT_ENCODER = gr.Textbox(interactive=True, label='Lora Prefix Text Encoder', value='lora_te', visible=True)
+        LORA_PREFIX_UNET = gr.Textbox(interactive=True, label='Lora Prefix Unet', value='lora_unet', visible=True)
+        TO_SAFETENSORS = gr.Checkbox(interactive=True, label='To Safetensors', value=True, visible=True)
     manager.register_db_component("convert_lora_safetensor_to_diffusers", ALPHA, "alpha", False, "The merging ratio in W = W0 + alpha * deltaW")
     manager.register_db_component("convert_lora_safetensor_to_diffusers", BASE_MODEL_PATH, "base_model_path", False, "Path to the base model in diffusers format.")
     manager.register_db_component("convert_lora_safetensor_to_diffusers", CHECKPOINT_PATH, "checkpoint_path", False, "Path to the checkpoint to convert.")

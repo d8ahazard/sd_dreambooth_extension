@@ -12,6 +12,6 @@ class ConvertOriginalControlnetToDiffusersConfig(BaseConfig):
     image_size: int = Field(default=512, title='Image Size', description='The image size that the model was trained on. Use 512 for Stable Diffusion v1.X and Stable Siffusion v2 Base. Use 768 for Stable Diffusion v2.')
     num_in_channels: str = Field(default=None, title='Num In Channels', description='The number of input channels. If `None` number of input channels will be automatically inferred.')
     original_config_file: str = Field(default=None, title='Original Config File', description='The YAML config file corresponding to the original architecture.')
-    to_safetensors: bool = Field(default=False, title='To Safetensors', description='Whether to store pipeline in safetensors format or not.')
+    to_safetensors: bool = Field(default=True, title='To Safetensors', description='Whether to store pipeline in safetensors format or not.')
     upcast_attention: bool = Field(default=False, title='Upcast Attention', description='Whether the attention computation should always be upcasted. This is necessary when running stable diffusion 2.1.')
     use_linear_projection: str = Field(default=None, title='Use Linear Projection', description='Override for use linear projection')

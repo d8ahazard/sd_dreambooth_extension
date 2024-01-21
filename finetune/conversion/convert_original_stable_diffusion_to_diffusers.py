@@ -14,9 +14,8 @@
 # limitations under the License.
 """ Conversion script for the LDM checkpoints. """
 
-import argparse
-
 from finetune.configs.convert_original_stable_diffusion_to_diffusers_config import ConvertOriginalStableDiffusionToDiffusersConfig
+import argparse
 import importlib
 
 import torch
@@ -154,7 +153,6 @@ def parse_args():
 
 
 def convert(args: ConvertOriginalStableDiffusionToDiffusersConfig):
-
     if args.pipeline_class_name is not None:
         library = importlib.import_module("diffusers")
         class_obj = getattr(library, args.pipeline_class_name)

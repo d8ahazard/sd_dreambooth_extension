@@ -21,6 +21,6 @@ class ConvertOriginalStableDiffusionToDiffusersConfig(BaseConfig):
     scheduler_type: str = Field(default='pndm', title='Scheduler Type', description="Type of scheduler to use. Should be one of ['pndm', 'lms', 'ddim', 'euler', 'euler-ancestral', 'dpm']")
     stable_unclip: str = Field(default=None, title='Stable Unclip', description="Set if this is a stable unCLIP model. One of 'txt2img' or 'img2img'.")
     stable_unclip_prior: str = Field(default=None, title='Stable Unclip Prior', description='Set if this is a stable unCLIP txt2img model. Selects which prior to use. If `--stable_unclip` is set to `txt2img`, the karlo prior (https://huggingface.co/kakaobrain/karlo-v1-alpha/tree/main/prior) is selected by default.')
-    to_safetensors: bool = Field(default=False, title='To Safetensors', description='Whether to store pipeline in safetensors format or not.')
+    to_safetensors: bool = Field(default=True, title='To Safetensors', description='Whether to store pipeline in safetensors format or not.')
     upcast_attention: bool = Field(default=False, title='Upcast Attention', description='Whether the attention computation should always be upcasted. This is necessary when running stable diffusion 2.1.')
     vae_path: str = Field(default=None, title='Vae Path', description='Set to a path, hub id to an already converted vae to not convert it again.')
