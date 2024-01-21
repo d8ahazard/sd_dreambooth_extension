@@ -1696,22 +1696,18 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 else:
                                     model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
+                                delta_pred = (target - model_pred).detach()
+                                delta_pred.mul_(dream_lambda)
                                 if noise_scheduler.config.prediction_type == "epsilon":
-                                    predicted_noise = model_pred
-                                    delta_noise = (noise - predicted_noise).detach()
-                                    delta_noise.mul_(dream_lambda)
-                                    latents.add_(sqrt_one_minus_alpha_prod * delta_noise)
-                                    target.add_(delta_noise)
+                                    latents.add_(sqrt_one_minus_alpha_prod * delta_pred)
+                                    target.add_(delta_pred)
                                 elif noise_scheduler.config.prediction_type == "v_prediction":
-                                    predicted_noise = sqrt_one_minus_alpha_prod * noisy_latents - sqrt_alpha_prod * model_pred
-                                    delta_noise = (noise - predicted_noise).detach()
-                                    delta_noise.mul_(dream_lambda)
-                                    latents.add_(sqrt_one_minus_alpha_prod * delta_noise)
-                                    target.add_(sqrt_alpha_prod * delta_noise)
+                                    latents.add_(sqrt_one_minus_alpha_prod * delta_pred)
+                                    target.add_(sqrt_alpha_prod * delta_pred)
                                 else:
                                     raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
                                     
-                                del alpha_prod, sqrt_alpha_prod, sqrt_one_minus_alpha_prod, dream_lambda, model_pred, predicted_noise, delta_noise
+                                del alpha_prod, sqrt_alpha_prod, sqrt_one_minus_alpha_prod, dream_lambda, model_pred, delta_pred
 
                         if args.model_type == "SDXL":
                             with accelerator.autocast():
