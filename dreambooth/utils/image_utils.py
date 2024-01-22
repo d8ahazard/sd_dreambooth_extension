@@ -26,7 +26,7 @@ def get_dim(filename, max_res):
     with Image.open(filename) as im:
         width, height = im.size
         try:
-            exif: Image.Exif = image.getexif()
+            exif: Image.Exif = im.getexif()
             if exif:
                 orientation_tag = {v: k for k, v in ExifTags.TAGS.items()}['Orientation']
                 orientation = exif.get(orientation_tag)
