@@ -103,8 +103,9 @@ class DbDataset(torch.utils.data.Dataset):
         flip_p = 0.5 if hflip else 0.0
         self.image_transforms = self.build_compose(hflip, flip_p)
 
-    def load_cache_file(self):
-        cache_file = os.path.join(self.cache_dir, f"cache_{self.resolution}.safetensors")
+    @staticmethod
+    def load_cache_file(cache_dir, resolution):
+        cache_file = os.path.join(cache_dir, f"cache_{resolution}.safetensors")
         latents_cache = {}
         if os.path.exists(cache_file):
             print("Loading latent cache...")
@@ -328,7 +329,7 @@ class DbDataset(torch.utils.data.Dataset):
 
         return caption, input_ids
 
-    def make_buckets_with_caching(self, vae):
+    def make_buckets_with_caching(self, vae, data_cache = None):
         self.vae = vae
         self.cache_latents = vae is not None
         state = f"Preparing Dataset ({'With Caching' if self.cache_latents else 'Without Caching'})"
@@ -366,7 +367,8 @@ class DbDataset(torch.utils.data.Dataset):
         shared.status.job_no = 0
         total_instances = 0
         total_classes = 0
-        data_cache = self.load_cache_file() if self.cache_latents else {"captions": {}, "latents": {}, "sdxl": {}}
+        if data_cache == None:
+            data_cache = DbDataset.load_cache_file(self.cache_dir, self.resolution) if self.cache_latents else {"captions": {}, "latents": {}, "sdxl": {}}
         has_cache = len(data_cache) > 0
         if self.cache_latents:
             if has_cache:

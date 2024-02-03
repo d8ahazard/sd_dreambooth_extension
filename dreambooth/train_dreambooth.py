@@ -41,9 +41,11 @@ from torch.utils.data import Dataset
 from transformers import AutoTokenizer
 
 from dreambooth import shared
+from dreambooth.dataclasses.db_config import from_file
 from dreambooth.dataclasses.prompt_data import PromptData
 from dreambooth.dataclasses.train_result import TrainResult
 from dreambooth.dataset.bucket_sampler import BucketSampler
+from dreambooth.dataset.db_dataset import DbDataset
 from dreambooth.dataset.sample_dataset import SampleDataset
 from dreambooth.deis_velocity import get_velocity
 from dreambooth.diff_lora_to_sd_lora import convert_diffusers_to_kohya_lora
@@ -358,8 +360,14 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             stop_text_percentage = 0
         pretrained_path = args.get_pretrained_model_name_or_path()
         logger.debug(f"Pretrained path: {pretrained_path}")
+
+        dataset_args=from_file(args.model_name)
+        data_cache=DbDataset.load_cache_file(os.path.join(args.model_dir, "cache"), dataset_args.resolution) if args.cache_latents else None
+        if data_cache != None:
+            print(f"{len(data_cache['latents'])} cached latents")
+
         count, instance_prompts, class_prompts = generate_classifiers(
-            args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False, pbar=pbar2
+            args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False, pbar=pbar2, data_cache=data_cache
         )
 
         save_token_counts(args, instance_prompts, 10)
@@ -738,7 +746,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 debug=False,
                 model_dir=args.model_dir,
                 max_token_length=args.max_token_length,
-                pbar=pbar2
+                pbar=pbar2,
+                data_cache=data_cache,
             )
             if train_dataset.class_count > 0:
                 with_prior_preservation = True
