@@ -16,7 +16,7 @@ from helpers.mytqdm import mytqdm
 class ClassDataset(Dataset):
     """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
 
-    def __init__(self, concepts: [Concept], model_dir: str, max_width: int, shuffle: bool, disable_class_matching: bool, pbar: mytqdm = None):
+    def __init__(self, concepts: [Concept], model_dir: str, max_width: int, shuffle: bool, disable_class_matching: bool, pbar: mytqdm = None, data_cache = None):
         # Existing training image data
         self.instance_prompts = []
         # Existing class image data
@@ -67,7 +67,7 @@ class ClassDataset(Dataset):
                 class_dir = os.path.join(model_dir, f"classifiers_{concept_idx}")
 
             # ===== Instance =====
-            instance_prompt_buckets = sort_prompts(concept, text_getter, instance_dir, instance_images[concept_idx], bucket_resos, concept_idx, False, pbar)
+            instance_prompt_buckets = sort_prompts(concept, text_getter, instance_dir, instance_images[concept_idx], bucket_resos, concept_idx, False, pbar, data_cache=data_cache)
             for _, instance_prompt_datas in instance_prompt_buckets.items():
                 # Extend instance prompts by the instance data
                 self.instance_prompts.extend(instance_prompt_datas)
@@ -77,13 +77,13 @@ class ClassDataset(Dataset):
                 continue
 
             if disable_class_matching:
-                class_prompt_buckets = sort_prompts(concept, text_getter, class_dir, class_images[concept_idx], bucket_resos, concept_idx, True, pbar)
+                class_prompt_buckets = sort_prompts(concept, text_getter, class_dir, class_images[concept_idx], bucket_resos, concept_idx, True, pbar, data_cache=data_cache)
                 for class_prompt_datas in class_prompt_buckets.values():
                     self.class_prompts.extend(class_prompt_datas)
                 continue
 
-            required_prompt_buckets = sort_prompts(concept, text_getter, class_dir, instance_images[concept_idx], bucket_resos, concept_idx, True, pbar)
-            existing_prompt_buckets = sort_prompts(concept, text_getter, class_dir, class_images[concept_idx], bucket_resos, concept_idx, True, pbar, True)
+            required_prompt_buckets = sort_prompts(concept, text_getter, class_dir, instance_images[concept_idx], bucket_resos, concept_idx, True, pbar, data_cache=data_cache)
+            existing_prompt_buckets = sort_prompts(concept, text_getter, class_dir, class_images[concept_idx], bucket_resos, concept_idx, True, pbar, True, data_cache=data_cache)
 
             # Iterate over each resolution of images, per concept
             for res, required_prompt_datas in required_prompt_buckets.items():

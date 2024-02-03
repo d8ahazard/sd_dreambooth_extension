@@ -117,7 +117,8 @@ def sort_prompts(
         concept_index: int,
         is_class: bool,
         pbar: mytqdm,
-        verbatim=False
+        verbatim: bool=False,
+        data_cache=None,
 ) -> Dict[Tuple[int, int], PromptData]:
     prompts = {}
     max_dim = 0
@@ -144,8 +145,12 @@ def sort_prompts(
             )
 
         try:
-            w, h = get_dim(img, max_dim)
-            reso = closest_resolution(w, h, bucket_resos)
+            if data_cache and data_cache["latents"] and img in data_cache["latents"]:
+                shape = data_cache["latents"][img].shape
+                reso = shape[-1] * 8, shape[-2] * 8
+            else:
+                w, h = get_dim(img, max_dim)
+                reso = closest_resolution(w, h, bucket_resos)
             prompt_list = prompts[reso] if reso in prompts else []
             pd = PromptData(
                 prompt=prompt,

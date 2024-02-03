@@ -35,7 +35,8 @@ def generate_dataset(
         debug=True,
         model_dir="",
         max_token_length=77,
-        pbar=None):
+        pbar=None,
+        data_cache=None):
     if debug:
         logger.debug("Generating dataset.")
     from dreambooth.ui_functions import gr_update
@@ -89,7 +90,7 @@ def generate_dataset(
         model_dir=model_dir,
         pbar=pbar
     )
-    train_dataset.make_buckets_with_caching(vae)
+    train_dataset.make_buckets_with_caching(vae, data_cache)
 
     # train_dataset = train_dataset.pin_memory()
     logger.debug(f"Total dataset length (steps): {len(train_dataset)}")
@@ -101,7 +102,8 @@ def generate_classifiers(
         class_gen_method: str = "Native Diffusers",
         accelerator: Accelerator = None,
         ui=True,
-        pbar: mytqdm = None
+        pbar: mytqdm = None,
+        data_cache = None,
 ):
     """
 
@@ -122,7 +124,7 @@ def generate_classifiers(
     try:
         status.textinfo = "Preparing dataset..."
         prompt_dataset = ClassDataset(
-            args.concepts(), args.model_dir, args.resolution, False, args.disable_class_matching, pbar=pbar
+            args.concepts(), args.model_dir, args.resolution, False, args.disable_class_matching, pbar=pbar, data_cache=data_cache
         )
         instance_prompts = prompt_dataset.instance_prompts
         class_prompts = prompt_dataset.class_prompts
