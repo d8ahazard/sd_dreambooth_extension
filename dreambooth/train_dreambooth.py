@@ -106,27 +106,28 @@ class ConditionalAccumulator:
     def __exit__(self, exc_type, exc_value, traceback):
         self.stack.__exit__(exc_type, exc_value, traceback)
 
+
 # This implements spectral norm reparametrization. Unlike the pytorch
 # built-in version, it computes the current spectral norm of the parameter
 # when added and normalizes so that the norm remains constant.
 class FrozenSpectralNorm(_SpectralNorm):
     @torch.autograd.no_grad()
     def __init__(
-        self,
-        weight: torch.Tensor,
-        n_power_iterations: int = 1,
-        dim: int = 0,
-        eps: float = 1e-12
+            self,
+            weight: torch.Tensor,
+            n_power_iterations: int = 1,
+            dim: int = 0,
+            eps: float = 1e-12
     ) -> None:
         super().__init__(weight, n_power_iterations, dim, eps)
-        
+
         if weight.ndim == 1:
             sigma = F.normalize(weight, dim=0, eps=self.eps)
         else:
             weight_mat = self._reshape_weight_to_matrix(weight)
             sigma = torch.dot(self._u, torch.mv(weight_mat, self._v))
         self.register_buffer('_sigma', sigma)
-        
+
     def forward(self, weight: torch.Tensor) -> torch.Tensor:
         if weight.ndim == 1:
             return self._sigma * F.normalize(weight, dim=0, eps=self.eps)
@@ -138,6 +139,7 @@ class FrozenSpectralNorm(_SpectralNorm):
             v = self._v.clone(memory_format=torch.contiguous_format)
             sigma = torch.dot(u, torch.mv(weight_mat, v))
             return weight * (self._sigma / sigma)
+
 
 def text_encoder_lora_state_dict(text_encoder):
     state_dict = {}
@@ -294,7 +296,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         args.max_token_length = int(args.max_token_length)
         if not args.pad_tokens and args.max_token_length > 75:
             logger.warning("Cannot raise token length limit above 75 when pad_tokens=False")
-            
+
         if args.use_lora and args.freeze_spectral_norm:
             logger.warning("freeze_spectral_norm is not compatible with LORA")
             args.freeze_spectral_norm = False
@@ -310,10 +312,18 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             weight_dtype = torch.bfloat16
 
         try:
+            accelerator_logger = "tensorboard"
+            # Check if Wandb API key is set
+            if "WANDB_API_KEY" in os.environ:
+                accelerator_logger = "wandb"
+            else:
+                logger.warning(
+                    "Wandb API key not set. Please set WANDB_API_KEY environment variable to use wandb."
+                )
             accelerator = Accelerator(
                 gradient_accumulation_steps=gradient_accumulation_steps,
                 mixed_precision=precision,
-                log_with="all",
+                log_with=accelerator_logger,
                 project_dir=logging_dir,
                 cpu=shared.force_cpu,
             )
@@ -361,13 +371,15 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
         pretrained_path = args.get_pretrained_model_name_or_path()
         logger.debug(f"Pretrained path: {pretrained_path}")
 
-        dataset_args=from_file(args.model_name)
-        data_cache=DbDataset.load_cache_file(os.path.join(args.model_dir, "cache"), dataset_args.resolution) if args.cache_latents else None
+        dataset_args = from_file(args.model_name)
+        data_cache = DbDataset.load_cache_file(os.path.join(args.model_dir, "cache"),
+                                               dataset_args.resolution) if args.cache_latents else None
         if data_cache != None:
             print(f"{len(data_cache['latents'])} cached latents")
 
         count, instance_prompts, class_prompts = generate_classifiers(
-            args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False, pbar=pbar2, data_cache=data_cache
+            args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False, pbar=pbar2,
+            data_cache=data_cache
         )
 
         save_token_counts(args, instance_prompts, 10)
@@ -1691,10 +1703,11 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         # See http://arxiv.org/abs/2312.00210 (DREAM) algorithm 3
                         if args.use_dream and unet.config.in_channels == channels:
                             with torch.no_grad():
-                                alpha_prod = noise_scheduler.alphas_cumprod.to(timesteps.device)[timesteps,None,None,None]
+                                alpha_prod = noise_scheduler.alphas_cumprod.to(timesteps.device)[
+                                    timesteps, None, None, None]
                                 sqrt_alpha_prod = alpha_prod ** 0.5
                                 sqrt_one_minus_alpha_prod = (1 - alpha_prod) ** 0.5
-                                
+
                                 # The paper uses lambda = sqrt(1 - alpha) ** p, with p = 1 in their experiments.
                                 dream_lambda = (1 - alpha_prod) ** args.dream_detail_preservation
 
@@ -1716,8 +1729,9 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                     latents.add_(sqrt_one_minus_alpha_prod * delta_pred)
                                     target.add_(sqrt_alpha_prod * delta_pred)
                                 else:
-                                    raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
-                                    
+                                    raise ValueError(
+                                        f"Unknown prediction type {noise_scheduler.config.prediction_type}")
+
                                 del alpha_prod, sqrt_alpha_prod, sqrt_one_minus_alpha_prod, dream_lambda, model_pred, delta_pred
 
                         if args.model_type == "SDXL":
@@ -1768,7 +1782,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 else:
                                     model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
                                     target, target_prior = torch.chunk(target, 2, dim=0)
-
 
                                 # Compute instance loss
                                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
