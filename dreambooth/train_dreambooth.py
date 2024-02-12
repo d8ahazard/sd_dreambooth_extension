@@ -1301,7 +1301,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                             weights_dir,
                                             "ema_unet",
                                         ),
-                                        safe_serialization=False,
+                                        safe_serialization=True,
                                     )
                                 pbar2.update()
 
