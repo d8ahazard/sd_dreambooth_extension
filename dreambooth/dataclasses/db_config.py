@@ -28,7 +28,7 @@ def sanitize_name(name):
 class DreamboothConfig(BaseModel):
     # These properties MUST be sorted alphabetically
     weight_decay: float = 0.01
-    attention: str = "xformers"
+    attention: str = "default"
     cache_latents: bool = True
     clip_skip: int = 1
     concepts_list: List[Dict] = []
@@ -133,6 +133,18 @@ class DreamboothConfig(BaseModel):
     use_shared_src: bool = False,
     use_subdir: bool = False
     v2: bool = False
+    multires_noise_iterations: int = 0
+    multires_noise_discount: float = 0.5
+    curve_sched: float = 0
+    ip_noise_gamma: float = 0
+    zero_terminal_snr: bool = False
+    debiased_estimation_loss: bool = False
+    c_step: int = 0
+    scale_reg: bool = False
+    loss_curve_scale: float = 0.0
+    offset_sched: float = 0    
+    offset_rand_min: float = 1.0
+    offset_rand_max: float = 1.0
 
     def __init__(
             self,
