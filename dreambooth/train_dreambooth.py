@@ -9,6 +9,7 @@ import math
 import os
 import shutil
 import time
+import random
 import traceback
 from contextlib import ExitStack
 from decimal import Decimal
@@ -73,6 +74,14 @@ from helpers.log_parser import LogParser
 from helpers.mytqdm import mytqdm
 from lora_diffusion.lora import (
     set_lora_requires_grad,
+)
+
+from dreambooth.deis_velocity import (
+    compute_snr,
+    fix_noise_scheduler_betas_for_zero_terminal_snr, 
+    prepare_scheduler_for_custom_training,
+    apply_debiased_estimation,
+    pyramid_noise_like,
 )
 
 try:
@@ -271,6 +280,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             if "iterations_per_second" in data:
                 data = {"status": json.dumps(data)}
             status_handler.update(items=data)
+
+    args.c_step = 0
 
     result = TrainResult
     result.config = args
@@ -698,6 +709,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     traceback.print_exc()
 
             noise_scheduler = get_noise_scheduler(args)
+            prepare_scheduler_for_custom_training(noise_scheduler, accelerator.device)
+            
             global to_delete
             to_delete = [unet, text_encoder, text_encoder_two, tokenizer, tokenizer_two, optimizer, vae]
 
@@ -1645,18 +1658,42 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 ).latent_dist.sample()
                             latents = latents * 0.18215
 
-                        # Sample noise that we'll add to the model input
-                        noise = torch.randn_like(latents, device=latents.device)
-                        if args.offset_noise != 0:
-                            # https://www.crosslabs.org//blog/diffusion-with-offset-noise
-                            noise += args.offset_noise * torch.randn(
-                                (latents.shape[0],
-                                 latents.shape[1],
-                                 1,
-                                 1),
-                                device=latents.device
-                            )
+                        if args.offset_noise == 0 and args.offset_sched == 0:
+                            noise = torch.randn_like(latents, device=latents.device)
+                        else:
+                            if args.offset_sched != 0:
+                                if args.offset_rand_min != 1 or args.offset_rand_max != 1:
+                                    r_min = args.offset_rand_min
+                                    r_max = args.offset_rand_max
+                                    rand_offset = round(random.uniform(r_min, r_max), 2)
+                                else: rand_offset = 1
+
+                                offset : float = ((args.offset_noise + (args.offset_sched * (args.c_step/sched_train_steps))) * rand_offset)
+
+                                noise = torch.randn_like(
+                                    latents, device=latents.device) + offset * torch.randn(
+                                    latents.shape[0],
+                                    latents.shape[1],
+                                    1,
+                                    1,
+                                    device=latents.device,
+                                )
+                            else:
+                                noise = torch.randn_like(
+                                    latents, device=latents.device) + args.offset_noise * torch.randn(
+                                    latents.shape[0],
+                                    latents.shape[1],
+                                    1,
+                                    1,
+                                    device=latents.device,
+                                )
                         b_size, channels, height, width = latents.shape
+                        args.c_step = args.c_step + args.train_batch_size
+
+                        if args.multires_noise_iterations > 0:
+                            noise = pyramid_noise_like(
+                                noise, latents.device, args.multires_noise_iterations, args.multires_noise_discount
+                            )
 
                         # Sample a random timestep for each image
                         timesteps = torch.randint(
@@ -1669,7 +1706,10 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
                         # Add noise to the latents according to the noise magnitude at each timestep
                         # (this is the forward diffusion process)
-                        noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+                        if args.ip_noise_gamma != 0:
+                            noisy_latents = noise_scheduler.add_noise(latents, noise + args.ip_noise_gamma * torch.randn_like(latents), timesteps)
+                        else:
+                            noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
                         pad_tokens = args.pad_tokens if train_tenc else False
                         input_ids = batch["input_ids"]
                         encoder_hidden_states = None
@@ -1747,8 +1787,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         if args.model_type != "SDXL":
                             # TODO: set a prior preservation flag and use that to ensure this ony happens in dreambooth
                             if not args.split_loss and not with_prior_preservation:
-                                loss = instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(),
-                                                                                    reduction="mean")
+                                instance_loss = torch.nn.functional.mse_loss(model_pred.float(), target.float(),
+                                                                                    reduction="none")
                                 loss *= batch["loss_avg"]
                             else:
                                 # Predict the noise residual
@@ -1762,17 +1802,35 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                     model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
                                     target, target_prior = torch.chunk(target, 2, dim=0)
 
-                                    # Compute instance loss
-                                    loss = instance_loss = F.mse_loss(model_pred.float(), target.float(),
-                                                                      reduction="mean")
+                                    if args.min_snr_gamma == 0.0:
+                                        instance_loss = F.mse_loss(model_pred.float(), target.float(),
+                                                                        reduction="none")
+                                        prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
+                                                                reduction="none")
+                                    else:
+                                        snr = compute_snr(timesteps, noise_scheduler)
+                                        mse_loss_weights = (
+                                            torch.stack([snr, args.min_snr_gamma * torch.ones_like(timesteps)], dim=1).min(dim=1)[0] / snr)
+                                        instance_loss = F.mse_loss(model_pred.float(), target.float(),
+                                                                      reduction="none")
+                                        instance_loss = instance_loss.mean(dim=list(range(1, len(instance_loss.shape)))) * mse_loss_weights
+                                        prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
+                                                                reduction="none")
+                                        prior_loss = prior_loss.mean(dim=list(range(1, len(prior_loss.shape)))) * mse_loss_weights
 
-                                    # Compute prior loss
-                                    prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
-                                                            reduction="mean")
                                 else:
                                     # Compute loss
-                                    loss = instance_loss = F.mse_loss(model_pred.float(), target.float(),
-                                                                      reduction="mean")
+                                    if args.min_snr_gamma == 0.0:
+                                        instance_loss = F.mse_loss(model_pred.float(), target.float(),
+                                                                      reduction="none")
+                                    else:
+                                        snr = compute_snr(timesteps, noise_scheduler)
+                                        mse_loss_weights = (
+                                            torch.stack([snr, args.min_snr_gamma * torch.ones_like(timesteps)], dim=1).min(dim=1)[0] / snr)
+                                        instance_loss = F.mse_loss(model_pred.float(), target.float(),
+                                                                      reduction="none")
+                                        instance_loss = instance_loss.mean(dim=list(range(1, len(instance_loss.shape)))) * mse_loss_weights
+
                         else:
                             if with_prior_preservation:
                                 # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
@@ -1783,17 +1841,62 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                     model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
                                     target, target_prior = torch.chunk(target, 2, dim=0)
 
-                                # Compute instance loss
-                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                                if args.min_snr_gamma == 0.0:
+                                    instance_loss = F.mse_loss(model_pred.float(), target.float(),
+                                                                        reduction="none")
+                                    prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
+                                                                reduction="none")
+                                else:
+                                    snr = compute_snr(timesteps, noise_scheduler)
+                                    mse_loss_weights = (
+                                        torch.stack([snr, args.min_snr_gamma * torch.ones_like(timesteps)], dim=1).min(dim=1)[0] / snr)
+                                    instance_loss = F.mse_loss(model_pred.float(), target.float(),
+                                                                      reduction="none")
+                                    instance_loss = instance_loss.mean(dim=list(range(1, len(instance_loss.shape)))) * mse_loss_weights
+                                    prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
+                                                                reduction="none")
+                                    prior_loss = prior_loss.mean(dim=list(range(1, len(prior_loss.shape)))) * mse_loss_weights
 
-                                # Compute prior loss
-                                prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(),
-                                                        reduction="mean")
-
-                                # Add the prior loss to the instance loss.
-                                loss = loss + args.prior_loss_weight * prior_loss
                             else:
-                                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                                # Compute loss
+                                if args.min_snr_gamma == 0.0:
+                                    instance_loss = F.mse_loss(model_pred.float(), target.float(),
+                                                                      reduction="none")
+                                else:
+                                    snr = compute_snr(timesteps, noise_scheduler)
+                                    mse_loss_weights = (
+                                            torch.stack([snr, args.min_snr_gamma * torch.ones_like(timesteps)], dim=1).min(dim=1)[0] / snr)
+                                    instance_loss = F.mse_loss(model_pred.float(), target.float(),
+                                                                      reduction="none")
+                                    instance_loss.mean(dim=list(range(1, len(instance_loss.shape)))) * mse_loss_weights
+
+                        normalized_timesteps = ((timesteps - 1) / 999) * 12 - 6
+                        sigmoid_scaling = 1 / (1 + torch.exp(-normalized_timesteps))
+
+                        if args.loss_curve_scale != 0 or args.curve_sched != 0:
+
+                            loss_curve : float = (args.loss_curve_scale + (args.curve_sched * (args.c_step/sched_train_steps)))
+
+                            timestep_scaling = 1 + (sigmoid_scaling - 0.5) * 2 * loss_curve
+                            timestep_scaling = timestep_scaling.view(-1, 1, 1, 1)
+
+                            instance_loss = (instance_loss * timestep_scaling)
+                            if args.scale_reg == True and with_prior_preservation:
+                                prior_loss = (prior_loss * timestep_scaling)
+
+                        if args.debiased_estimation_loss:
+                            instance_loss = apply_debiased_estimation(instance_loss, timesteps, noise_scheduler)
+                            if with_prior_preservation:
+                                prior_loss = apply_debiased_estimation(prior_loss, timesteps, noise_scheduler)
+
+                        if with_prior_preservation:
+                            loss = instance_loss + args.prior_loss_weight * prior_loss
+                        else:
+                            loss = instance_loss
+                        loss = loss.mean()
+                        instance_loss = instance_loss.mean()
+                        if with_prior_preservation:
+                            prior_loss = prior_loss.mean()
 
                         accelerator.backward(loss)
 
