@@ -560,121 +560,6 @@ def on_ui_tabs():
                             ) = build_concept_panel(4)
                 with gr.Tab("Parameters", elem_id="TabSettings"):
                     db_performance_wizard = gr.Button(value="Performance Wizard (WIP)", visible=False)
-                    with gr.Accordion(open=False, label="Performance"):
-                        db_use_ema = gr.Checkbox(
-                            label="Use EMA", value=False
-                        )
-                        db_optimizer = gr.Dropdown(
-                            label="Optimizer",
-                            value="8bit AdamW",
-                            choices=list_optimizer(),
-                        )
-                        db_mixed_precision = gr.Dropdown(
-                            label="Mixed Precision",
-                            value=select_precision(),
-                            choices=list_precisions(),
-                        )
-                        db_full_mixed_precision = gr.Checkbox(
-                            label="Full Mixed Precision", value=True
-                        )
-                        db_attention = gr.Dropdown(
-                            label="Memory Attention",
-                            value=select_attention(),
-                            choices=list_attention(),
-                        )
-                        db_cache_latents = gr.Checkbox(
-                            label="Cache Latents", value=True
-                        )
-                        db_train_unet = gr.Checkbox(
-                            label="Train UNET", value=True
-                        )
-                        db_stop_text_encoder = gr.Slider(
-                            label="Step Ratio of Text Encoder Training",
-                            minimum=0,
-                            maximum=1,
-                            step=0.05,
-                            value=1.0,
-                            visible=True,
-                        )
-                        db_offset_noise = gr.Slider(
-                            label="Offset Noise",
-                            minimum=-1,
-                            maximum=1,
-                            step=0.01,
-                            value=0,
-                        )
-                        db_freeze_clip_normalization = gr.Checkbox(
-                            label="Freeze CLIP Normalization Layers",
-                            visible=True,
-                            value=False,
-                        )
-                        db_clip_skip = gr.Slider(
-                            label="Clip Skip",
-                            value=2,
-                            minimum=1,
-                            maximum=12,
-                            step=1,
-                        )
-                        db_weight_decay = gr.Slider(
-                            label="Weight Decay",
-                            minimum=0,
-                            maximum=1,
-                            step=0.001,
-                            value=0.01,
-                            visible=True,
-                        )
-                        db_tenc_weight_decay = gr.Slider(
-                            label="TENC Weight Decay",
-                            minimum=0,
-                            maximum=1,
-                            step=0.001,
-                            value=0.01,
-                            visible=True,
-                        )
-                        db_tenc_grad_clip_norm = gr.Slider(
-                            label="TENC Gradient Clip Norm",
-                            minimum=0,
-                            maximum=128,
-                            step=0.25,
-                            value=0,
-                            visible=True,
-                        )
-                        db_min_snr_gamma = gr.Slider(
-                            label="Min SNR Gamma",
-                            minimum=0,
-                            maximum=10,
-                            step=0.1,
-                            visible=True,
-                        )
-                        db_use_dream = gr.Checkbox(
-                            label="Use DREAM", value=False
-                        )
-                        db_dream_detail_preservation = gr.Slider(
-                            label="DREAM detail preservation",
-                            minimum=0,
-                            maximum=1,
-                            step=0.01,
-                            value=0.5,
-                            visible=True,
-                        )
-                        db_freeze_spectral_norm = gr.Checkbox(
-                            label="Freeze Spectral Norm", value=False
-                        )
-                        db_pad_tokens = gr.Checkbox(
-                            label="Pad Tokens", value=True
-                        )
-                        db_strict_tokens = gr.Checkbox(
-                            label="Strict Tokens", value=False
-                        )
-                        db_shuffle_tags = gr.Checkbox(
-                            label="Shuffle Tags", value=True
-                        )
-                        db_max_token_length = gr.Slider(
-                            label="Max Token Length",
-                            minimum=75,
-                            maximum=300,
-                            step=75,
-                        )
                     with gr.Accordion(open=False, label="Intervals"):
                         db_num_train_epochs = gr.Slider(
                             label="Training Steps Per Image (Epochs)",
@@ -706,21 +591,58 @@ def on_ui_tabs():
                             maximum=1000,
                             step=1,
                         )
-                    with gr.Accordion(open=False, label="Batch Sizes") as db_batch_size_view:
-                        db_train_batch_size = gr.Slider(
-                            label="Batch Size",
-                            value=1,
-                            minimum=1,
-                            maximum=100,
-                            step=1,
+                    with gr.Accordion(open=False, label="Lora"):
+                        db_use_lora = gr.Checkbox(label="Use LORA", value=False)
+                        db_use_lora_extended = gr.Checkbox(
+                            label="Use Lora Extended",
+                            value=False,
+                            visible=False,
                         )
-                        db_gradient_accumulation_steps = gr.Slider(
-                            label="Gradient Accumulation Steps",
-                            value=1,
-                            minimum=1,
-                            maximum=100,
-                            step=1,
+                        db_train_imagic = gr.Checkbox(label="Train Imagic Only", value=False, visible=False)
+                        db_train_inpainting = gr.Checkbox(
+                            label="Train Inpainting Model",
+                            value=False,
+                            visible=False,
                         )
+                        with gr.Column(visible=False) as lora_rank_col:
+                            with gr.Row(visible=True):
+                                db_lora_unet_rank = gr.Slider(
+                                    label="Lora UNET Rank",
+                                    value=4,
+                                    minimum=2,
+                                    maximum=128,
+                                    step=2,
+                                )
+                                db_lora_txt_rank = gr.Slider(
+                                    label="Lora Text Encoder Rank",
+                                    value=4,
+                                    minimum=2,
+                                    maximum=128,
+                                    step=2,
+                                )
+                            db_lora_weight = gr.Slider(
+                                label="Lora Weight (Alpha)",
+                                value=0.8,
+                                minimum=0.1,
+                                maximum=1,
+                                step=0.1,
+                            )                        
+                    with gr.Accordion(open=False, label="Batches, Sizes and Utility Features") as db_batch_size_view:
+                        with gr.Row(visible=True):
+                            db_train_batch_size = gr.Slider(
+                                label="Batch Size",
+                                value=1,
+                                minimum=1,
+                                maximum=100,
+                                step=1,
+                            )
+                            db_gradient_accumulation_steps = gr.Slider(
+                                label="Gradient Accumulation Steps",
+                                value=1,
+                                minimum=1,
+                                maximum=100,
+                                step=1,
+                            )
                         db_sample_batch_size = gr.Slider(
                             label="Class Batch Size",
                             minimum=1,
@@ -728,14 +650,29 @@ def on_ui_tabs():
                             value=1,
                             step=1,
                         )
-                        db_gradient_set_to_none = gr.Checkbox(
-                            label="Set Gradients to None When Zeroing", value=True
+                        with gr.Row(visible=True):
+                            db_gradient_set_to_none = gr.Checkbox(
+                                label="Set Gradients to None When Zeroing", value=True
+                            )
+                            db_gradient_checkpointing = gr.Checkbox(
+                                label="Gradient Checkpointing", value=True
+                            )  
+                        db_resolution = gr.Slider(
+                            label="Max Resolution",
+                            step=64,
+                            minimum=128,
+                            value=512,
+                            maximum=2048,
+                            elem_id="max_res",
+                        )  
+                        db_hflip = gr.Checkbox(
+                            label="Apply Horizontal Flip", value=False
                         )
-                        db_gradient_checkpointing = gr.Checkbox(
-                            label="Gradient Checkpointing", value=True
-                        )
+                        db_dynamic_img_norm = gr.Checkbox(
+                            label="Dynamic Image Normalization", value=False
+                        )                                               
                     with gr.Accordion(open=False, label="Learning Rate"):
-                        with gr.Row(visible=False) as lora_lr_row:
+                        with gr.Row(visible=True) as lora_lr_row:
                             db_lora_learning_rate = gr.Number(
                                 label="Lora UNET Learning Rate", value=1e-4
                             )
@@ -789,81 +726,220 @@ def on_ui_tabs():
                             value=500,
                             step=5,
                             maximum=1000,
+                        )                                             
+                    with gr.Accordion(open=False, label="Performance"):
+                        db_use_ema = gr.Checkbox(
+                            label="Use EMA", value=False
                         )
-                    with gr.Accordion(open=False, label="Lora"):
-                        db_use_lora = gr.Checkbox(label="Use LORA", value=False)
-                        db_use_lora_extended = gr.Checkbox(
-                            label="Use Lora Extended",
-                            value=False,
-                            visible=False,
-                        )
-                        db_train_imagic = gr.Checkbox(label="Train Imagic Only", value=False, visible=False)
-                        db_train_inpainting = gr.Checkbox(
-                            label="Train Inpainting Model",
-                            value=False,
-                            visible=False,
-                        )
-                        with gr.Column(visible=False) as lora_rank_col:
-                            db_lora_unet_rank = gr.Slider(
-                                label="Lora UNET Rank",
-                                value=4,
-                                minimum=2,
-                                maximum=128,
-                                step=2,
+                        with gr.Row(visible=True):
+                            db_optimizer = gr.Dropdown(
+                                label="Optimizer",
+                                value="8bit AdamW",
+                                choices=list_optimizer(),
                             )
-                            db_lora_txt_rank = gr.Slider(
-                                label="Lora Text Encoder Rank",
-                                value=4,
-                                minimum=2,
-                                maximum=128,
-                                step=2,
+                            db_mixed_precision = gr.Dropdown(
+                                label="Mixed Precision",
+                                value=select_precision(),
+                                choices=list_precisions(),
                             )
-                            db_lora_weight = gr.Slider(
-                                label="Lora Weight (Alpha)",
-                                value=0.8,
-                                minimum=0.1,
+                            db_attention = gr.Dropdown(
+                                label="Memory Attention",
+                                value=select_attention(),
+                                choices=list_attention(),
+                            )
+                        with gr.Row(visible=True):
+                            db_full_mixed_precision = gr.Checkbox(
+                                label="Full Mixed Precision", value=True
+                            )
+                            db_cache_latents = gr.Checkbox(
+                                label="Cache Latents", value=True
+                            )
+                            db_train_unet = gr.Checkbox(
+                                label="Train UNET", value=True
+                            )
+                        db_stop_text_encoder = gr.Slider(
+                            label="Step Ratio of Text Encoder Training",
+                            minimum=0,
+                            maximum=1,
+                            step=0.05,
+                            value=1.0,
+                            visible=True,
+                        )
+                        with gr.Row(visible=True):
+                            db_offset_noise = gr.Slider(
+                                label="Starting Offset Noise",
+                                minimum=-1,
                                 maximum=1,
-                                step=0.1,
+                                step=0.0001,
+                                value=0,
                             )
-                    with gr.Accordion(open=False, label="Image Processing"):
-                        db_resolution = gr.Slider(
-                            label="Max Resolution",
-                            step=64,
-                            minimum=128,
-                            value=512,
-                            maximum=2048,
-                            elem_id="max_res",
+                            db_offset_sched = gr.Slider(
+                                label="Adjust Offset By",
+                                minimum=-1,
+                                maximum=1,
+                                step=0.0001,
+                                value=0,
+                            )
+                        with gr.Row(visible=True):
+                            db_offset_rand_min = gr.Number(
+                                label="Offset Rand Min",
+                                value=1.0,
+                                precision=3,
+                            )
+                            db_offset_rand_max = gr.Number(
+                                label="Offset Rand Max",
+                                value=1.0,
+                                precision=3,
+                            )
+                        with gr.Row(visible=True):
+                            db_multires_noise_iterations = gr.Slider(
+                                label="Multires Noise Iterations",
+                                minimum=0,
+                                maximum=100,
+                                step=1,
+                                value=0,
+                            )
+                            db_multires_noise_discount = gr.Slider(
+                                label="Multires Noise Discount",
+                                minimum=0,
+                                maximum=1,
+                                step=0.01,
+                                value=0.5,
+                            )
+                        with gr.Row(visible=True):
+                            db_freeze_clip_normalization = gr.Checkbox(
+                                label="Freeze CLIP Normalization Layers",
+                                visible=True,
+                                value=False,
+                            )
+                            db_freeze_spectral_norm = gr.Checkbox(
+                                label="Freeze Spectral Norm", value=False
+                            )
+                            db_debiased_estimation_loss = gr.Checkbox(
+                                label=" Debiased Estimation Loss",
+                                value=False
+                            )
+                        db_clip_skip = gr.Slider(
+                            label="Clip Skip",
+                            value=2,
+                            minimum=1,
+                            maximum=12,
+                            step=1,
                         )
-                        db_hflip = gr.Checkbox(
-                            label="Apply Horizontal Flip", value=False
+                        with gr.Row(visible=True):
+                            db_weight_decay = gr.Slider(
+                                label="Weight Decay",
+                                minimum=0,
+                                maximum=1,
+                                step=0.001,
+                                value=0.01,
+                                visible=True,
+                            )
+                            db_tenc_weight_decay = gr.Slider(
+                                label="TENC Weight Decay",
+                                minimum=0,
+                                maximum=1,
+                                step=0.001,
+                                value=0.01,
+                                visible=True,
+                            )
+                            db_tenc_grad_clip_norm = gr.Slider(
+                                label="TENC Gradient Clip Norm",
+                                minimum=0,
+                                maximum=128,
+                                step=0.25,
+                                value=0,
+                                visible=True,
+                            )
+                        with gr.Row(visible=True):
+                            db_min_snr_gamma = gr.Slider(
+                                label="Min SNR Gamma",
+                                minimum=0,
+                                maximum=100,
+                                step=0.1,
+                                visible=True,
+                            )
+                            db_loss_curve_scale = gr.Slider(
+                                label="Loss Curve Scale",
+                                value=0.0,
+                                minimum=-1,
+                                maximum=1,
+                                step=0.01,
+                                visible=True,
+                            )
+                            db_curve_sched = gr.Slider(
+                                label="Loss Curve Schedule",
+                                value=0.0,
+                                minimum=-2,
+                                maximum=2,
+                                step=0.01,
+                                visible=True,
+                            )
+                        db_ip_noise_gamma = gr.Slider(
+                                label="Input Perturbation",
+                                minimum=-1,
+                                maximum=1,
+                                step=0.01,
+                                value=0,
+                                visible=True,
+                            )
+                        db_use_dream = gr.Checkbox(
+                            label="Use DREAM", value=False
                         )
-                        db_dynamic_img_norm = gr.Checkbox(
-                            label="Dynamic Image Normalization", value=False
+                        db_dream_detail_preservation = gr.Slider(
+                            label="DREAM detail preservation",
+                            minimum=0,
+                            maximum=1,
+                            step=0.01,
+                            value=0.5,
+                            visible=True,
+                        )
+                        with gr.Row(visible=True):
+
+                            db_pad_tokens = gr.Checkbox(
+                                label="Pad Tokens", value=True
+                            )
+                            db_strict_tokens = gr.Checkbox(
+                                label="Strict Tokens", value=False
+                            )
+                            db_shuffle_tags = gr.Checkbox(
+                                label="Shuffle Tags", value=True
+                            )
+                        db_max_token_length = gr.Slider(
+                            label="Max Token Length",
+                            minimum=75,
+                            maximum=300,
+                            step=75,
                         )
                     with gr.Accordion(open=False, label="Prior Loss") as db_prior_loss_view:
-                        db_prior_loss_scale = gr.Checkbox(
-                            label="Scale Prior Loss", value=False
-                        )
-                        db_prior_loss_weight = gr.Slider(
-                            label="Prior Loss Weight",
-                            minimum=0.01,
-                            maximum=1,
-                            step=0.01,
-                            value=0.75,
-                        )
-                        db_prior_loss_target = gr.Number(
-                            label="Prior Loss Target",
-                            value=100,
-                            visible=False,
-                        )
-                        db_prior_loss_weight_min = gr.Slider(
-                            label="Minimum Prior Loss Weight",
-                            minimum=0.01,
-                            maximum=1,
-                            step=0.01,
-                            value=0.1,
-                            visible=False,
-                        )
+                        with gr.Row(visible=True) as db_prior_checkboxes:
+                            db_prior_loss_scale = gr.Checkbox(
+                                label="Scale Prior Loss", value=False
+                            )
+                            db_scale_reg = gr.Checkbox(
+                                label="Scale Prior with Loss curve offset", value=False
+                            )
+                        with gr.Row(visible=True):
+                            db_prior_loss_weight = gr.Slider(
+                                label="Prior Loss Weight",
+                                minimum=0.01,
+                                maximum=1,
+                                step=0.01,
+                                value=0.75,
+                            )
+                            db_prior_loss_target = gr.Number(
+                                label="Prior Loss Target",
+                                value=100,
+                                visible=False,
+                            )
+                            db_prior_loss_weight_min = gr.Slider(
+                                label="Minimum Prior Loss Weight",
+                                minimum=0.01,
+                                maximum=1,
+                                step=0.01,
+                                value=0.1,
+                                visible=False,
+                            )
                     with gr.Accordion(open=False, label="Saving", elme_id="TabSave") as db_save_tab:
                         with gr.Column():
                             gr.HTML("General")
@@ -1363,23 +1439,33 @@ def on_ui_tabs():
             db_freeze_clip_normalization,
             db_full_mixed_precision,
             db_offset_noise,
+            db_offset_sched,
+            db_offset_rand_min,
+            db_offset_rand_max,
+            db_multires_noise_iterations,
+            db_multires_noise_discount,
             db_weight_decay,
             db_tenc_weight_decay,
             db_tenc_grad_clip_norm,
             db_min_snr_gamma,
+            db_curve_sched,
             db_use_dream,
             db_dream_detail_preservation,
             db_freeze_spectral_norm,
+            db_ip_noise_gamma,
             db_pad_tokens,
             db_strict_tokens,
             db_max_token_length,
             db_epoch_pause_frequency,
             db_epoch_pause_time,
             db_batch_size_view,
+            db_debiased_estimation_loss,
             db_lr_scheduler,
             db_lr_warmup_steps,
             db_hflip,
             db_prior_loss_view,
+            db_scale_reg,
+            db_prior_checkboxes,
             db_misc_view,
             db_hook_view,
             db_save_tab,
@@ -1394,6 +1480,7 @@ def on_ui_tabs():
             db_ema_predict,
             db_lora_use_buggy_requires_grad,
             db_noise_scheduler,
+            db_loss_curve_scale,
             c1_class_guidance_scale,
             c1_class_infer_steps,
             c1_save_sample_negative_prompt,
@@ -1475,6 +1562,7 @@ def on_ui_tabs():
             db_disable_logging,
             db_ema_predict,
             db_tomesd,
+            db_scale_reg,
             db_epoch_pause_frequency,
             db_epoch_pause_time,
             db_epochs,
@@ -1488,9 +1576,11 @@ def on_ui_tabs():
             db_hflip,
             db_infer_ema,
             db_learning_rate,
+            db_ip_noise_gamma,
             db_learning_rate_min,
             db_lora_learning_rate,
             db_lora_model_name,
+            db_debiased_estimation_loss,
             db_lora_txt_learning_rate,
             db_lora_txt_rank,
             db_lora_unet_rank,
@@ -1503,6 +1593,8 @@ def on_ui_tabs():
             db_lr_scheduler,
             db_lr_warmup_steps,
             db_max_token_length,
+            db_loss_curve_scale,
+            db_curve_sched,
             db_min_snr_gamma,
             db_use_dream,
             db_dream_detail_preservation,
@@ -1513,6 +1605,11 @@ def on_ui_tabs():
             db_noise_scheduler,
             db_num_train_epochs,
             db_offset_noise,
+            db_offset_sched,
+            db_offset_rand_min,
+            db_offset_rand_max,
+            db_multires_noise_iterations,
+            db_multires_noise_discount,
             db_optimizer,
             db_pad_tokens,
             db_pretrained_vae_name_or_path,
