@@ -48,7 +48,11 @@ class SchedulerType(Enum):
     CONSTANT = "constant"
     CONSTANT_WITH_WARMUP = "constant_with_warmup"
 
-def get_rex_scheduler(optimizer: Optimizer, total_training_steps):
+def get_rex_scheduler(
+    optimizer: Optimizer, 
+    num_training_steps: int, 
+    num_warmup_steps
+    ):
     """
     Returns a learning rate scheduler based on the REx (Relative Exploration) algorithm.
 
@@ -65,8 +69,10 @@ def get_rex_scheduler(optimizer: Optimizer, total_training_steps):
         min_lr = 0.00000001
         d = 0.9
 
-        if current_step < total_training_steps:
-            progress = current_step / total_training_steps
+        if current_step < num_warmup_steps:
+            return max(min_lr, float(current_step) / float(max(1, num_warmup_steps)))
+        elif current_step < num_training_steps:
+            progress = current_step / num_training_steps
             div = (1 - d) + (d * (1 - progress))
             return min_lr + (max_lr - min_lr) * ((1 - progress) / div)
         else:
@@ -488,7 +494,8 @@ def get_scheduler(
     if name == SchedulerType.REX:
         return get_rex_scheduler(
             optimizer, 
-            total_training_steps=total_training_steps      
+            num_training_steps=total_training_steps,
+            num_warmup_steps=num_warmup_steps,
         )
         
 class UniversalScheduler:
