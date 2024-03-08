@@ -1553,12 +1553,15 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 # Compute signal-to-noise ratio
                 alphas_cumprod = noise_scheduler.alphas_cumprod.to(unet.device)
                 snr = alphas_cumprod / (1 - alphas_cumprod)
+
                 # Compute MinSNR loss weight
                 loss_weight = torch.clamp(snr, max=args.min_snr_gamma)
-                # Rescale loss weight to keep existing hyperparams sane
-                loss_weight.div_(loss_weight.mean())
+
+                # Compute cumulative loss weight scaled to (0, 1)
+                cum_loss_weight = torch.cumsum(loss_weight, 0)
+                cum_loss_weight = cum_loss_weight / cum_loss_weight[-1]
             else:
-                loss_weight = torch.ones_like(noise_scheduler.alphas_cumprod, device=unet.device)
+                cum_loss_weight = None
 
             cleanup()
             stats = {
@@ -1669,14 +1672,19 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             )
                         b_size, channels, height, width = latents.shape
 
-                        # Sample a random timestep for each image
-                        timesteps = torch.randint(
-                            0,
-                            noise_scheduler.config.num_train_timesteps,
-                            (b_size,),
-                            device=latents.device
-                        )
-                        timesteps = timesteps.long()
+                        if cum_loss_weight != None:
+                            # Sample a random timestep for each image, weighted by Min-SNR
+                            timesteps = torch.rand((b_size,), device=latents.device)
+                            timesteps = torch.searchsorted(cum_loss_weight, timesteps)
+                        else:
+                            # Sample a random timestep for each image
+                            timesteps = torch.randint(
+                                0,
+                                noise_scheduler.config.num_train_timesteps,
+                                (b_size,),
+                                device=latents.device
+                            )
+                            timesteps = timesteps.long()
 
                         # Add noise to the latents according to the noise magnitude at each timestep
                         # (this is the forward diffusion process)
@@ -1756,9 +1764,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
                         def loss_fn(model_pred, target):
-                            nonlocal loss_weight, timesteps
                             loss = F.mse_loss(model_pred.float(), target.float(), reduction="none").mean(dim=(1,2,3))
-                            loss = loss * loss_weight[timesteps]
                             return loss.mean()
 
                         if args.model_type != "SDXL":
