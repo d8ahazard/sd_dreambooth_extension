@@ -664,13 +664,17 @@ def on_ui_tabs():
                             value=512,
                             maximum=2048,
                             elem_id="max_res",
-                        )  
-                        db_hflip = gr.Checkbox(
-                            label="Apply Horizontal Flip", value=False
                         )
-                        db_dynamic_img_norm = gr.Checkbox(
-                            label="Dynamic Image Normalization", value=False
-                        )                                               
+                        with gr.Row(visible=True):
+                            db_hflip = gr.Checkbox(
+                                label="Apply Horizontal Flip", value=False
+                            )
+                            db_dynamic_img_norm = gr.Checkbox(
+                                label="Dynamic Image Normalization", value=False
+                            )
+                            db_lognorm_sampling = gr.Checkbox(
+                                label="Lognorm timestep Sampling", value=False
+                            )
                     with gr.Accordion(open=False, label="Learning Rate"):
                         with gr.Row(visible=True) as lora_lr_row:
                             db_lora_learning_rate = gr.Number(
@@ -1473,6 +1477,7 @@ def on_ui_tabs():
             db_test_tab,
             db_dynamic_img_norm,
             db_tomesd,
+            db_lognorm_sampling,
             db_split_loss,
             db_disable_class_matching,
             db_disable_logging,
@@ -1615,6 +1620,7 @@ def on_ui_tabs():
             db_pretrained_vae_name_or_path,
             db_prior_loss_scale,
             db_prior_loss_target,
+            db_lognorm_sampling,
             db_prior_loss_weight,
             db_prior_loss_weight_min,
             db_resolution,
