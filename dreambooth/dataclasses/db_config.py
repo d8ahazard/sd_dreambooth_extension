@@ -145,6 +145,7 @@ class DreamboothConfig(BaseModel):
     offset_sched: float = 0    
     offset_rand_min: float = 1.0
     offset_rand_max: float = 1.0
+    lognorm_sampling: bool = False
 
     def __init__(
             self,
