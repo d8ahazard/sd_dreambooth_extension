@@ -1696,12 +1696,19 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             )
 
                         # Sample a random timestep for each image
-                        timesteps = torch.randint(
-                            0,
-                            noise_scheduler.config.num_train_timesteps,
-                            (b_size,),
-                            device=latents.device
-                        )
+                        if args.lognorm_sampling:
+                            mean = 0.00
+                            std = 1.00 
+                            lognorm_samples = torch.distributions.LogNormal(mean, std).sample((b_size,)).to(latents.device)
+                            normalized_samples = lognorm_samples / lognorm_samples.max()
+                            timesteps = (normalized_samples * (noise_scheduler.config.num_train_timesteps - 1))
+                        else:
+                            timesteps = torch.randint(
+                                0,
+                                noise_scheduler.config.num_train_timesteps,
+                                (b_size,),
+                                device=latents.device
+                            )
                         timesteps = timesteps.long()
 
                         # Add noise to the latents according to the noise magnitude at each timestep
