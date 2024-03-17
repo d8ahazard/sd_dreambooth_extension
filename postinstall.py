@@ -211,60 +211,18 @@ def check_bitsandbytes():
         bitsandbytes_version = importlib_metadata.version("bitsandbytes")
     except:
         bitsandbytes_version = None
-    if os.name == "nt":
-        print("Checking bitsandbytes (Windows)")
-        venv_path = os.environ.get("VENV_DIR", None)
-        if ";" in venv_path:
-            venv_path = venv_path.split(";")[0]
-        print(f"Virtual environment path: {venv_path}")
-        # Check for the dll in venv/lib/site-packages/bitsandbytes/libbitsandbytes_cuda118.dll
-        # If it doesn't exist, append the requirement
-        if not venv_path:
-            print("Could not find the virtual environment path. Skipping bitsandbytes installation.")
-        else:
-            cuda_range = [f"1{str(x)}" for x in range(11, 22)]
-            dll_base = os.path.join(venv_path, "lib", "site-packages", "bitsandbytes", "libbitsandbytes_cuda")
-            win_dll = None
-            for cuda_ver in cuda_range:
-                dll_path = dll_base + cuda_ver + ".dll"
-                print(f"Checking for {dll_path}")
-                if os.path.exists(dll_path):
-                    win_dll = dll_path
-                    break
-            print(f"Found windows BNB DLL {win_dll}")
-            if win_dll is None or bitsandbytes_version is None or "0.41.2" not in bitsandbytes_version:
-                print("Can't find bitsandbytes CUDA dll. Installing bitsandbytes")
-                try:
-                    pip_uninstall("bitsandbytes")
-                    # Find any directories starting with ~ in the venv/lib/site-packages directory and delete them
-                    for env_dir in os.listdir(os.path.join(venv_path, "lib", "site-packages")):
-                        if env_dir.startswith("~"):
-                            print(f"Deleting {env_dir}")
-                            os.rmdir(os.path.join(venv_path, "lib", "site-packages", env_dir))
-                except:
-                    pass
-                print("Installing bitsandbytes")
-                try:
-                    pip_install(
-                        "--prefer-binary",
-                        "https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
-                except Exception as e:
-                    print("Bitsandbytes 0.41.2.post2 installation failed")
-                    print("Some features such as 8bit optimizers will be unavailable")
-                    print_bitsandbytes_installation_error(str(e))
-                    pass
-    else:
-        print("Checking bitsandbytes (Linux)")
-        if bitsandbytes_version is None or "0.41.2" not in bitsandbytes_version:
-            try:
-                print("Installing bitsandbytes")
-                pip_install("bitsandbytes==0.41.2.post2", "--prefer-binary")
-            except:
-                print("Bitsandbytes 0.41.2 installation failed")
-                print("Some features such as 8bit optimizers will be unavailable")
-                print("Install manually with")
-                print("'python -m pip install bitsandbytes==0.41.2.post2  --prefer-binary --force-install'")
-                pass
+
+    print("Checking bitsandbytes (ALL!)")
+    if bitsandbytes_version is None or "0.43.0" not in bitsandbytes_version:
+        try:
+            print("Installing bitsandbytes")
+            pip_install("bitsandbytes==0.43.0", "--prefer-binary")
+        except:
+            print("Bitsandbytes 0.43.0 installation failed")
+            print("Some features such as 8bit optimizers will be unavailable")
+            print("Install manually with")
+            print("'python -m pip install bitsandbytes==0.43.0  --prefer-binary --force-install'")
+            pass
 
 
 @dataclass
@@ -288,7 +246,7 @@ def check_versions():
     ]
 
     if device == "cuda":
-        dependencies.append(Dependency(module="bitsandbytes", version="0.41.1.post2", required=False))
+        dependencies.append(Dependency(module="bitsandbytes", version="0.43.0", required=False))
 
     if device != "mps":
         dependencies.append(Dependency(module="xformers", version="0.0.21", required=False))
@@ -302,10 +260,12 @@ def check_versions():
         installed_ver = importlib_metadata.version(module) if has_module else None
 
         if not installed_ver:
+            module_msg = ""
             if module != "xformers":
                 launch_errors.append(f"{module} not installed.")
+                module_msg = "(Be sure to use the --xformers flag.)"
 
-            print(f"[!] {module} NOT installed.")
+            print(f"[!] {module} NOT installed.{module_msg}")
             continue
 
         required_version = dependency.version
@@ -364,7 +324,7 @@ def print_bitsandbytes_installation_error(err):
     print("cd ../..")
     print("# WINDOWS ONLY: ")
     print(
-        "pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
+        "pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.43.0.post2-py3-none-win_amd64.whl")
     print("#######################################################################################################")
 
 
@@ -407,7 +367,7 @@ def print_launch_errors(launch_errors):
     print("cd ../..")
     print("pip install -r ./extensions/sd_dreambooth_extension/requirements.txt")
     print(
-        "pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl")
+        "pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.43.0.post2-py3-none-win_amd64.whl")
     print("#######################################################################################################")
 
 

@@ -1,3 +1,4 @@
+bitsandbytes>=0.43.0
 accelerate>=0.21.0
 dadaptation>=3.2
 diffusers>=0.25.0

@@ -7,7 +7,8 @@ from dreambooth.utils.image_utils import FilenameTextGetter
 
 image_data = []
 
-def load_image_data(input_path: str, recurse: bool = False) -> List[Dict[str,str]]:
+
+def load_image_data(input_path: str, recurse: bool = False) -> List[Dict[str, str]]:
     if not os.path.exists(input_path):
         print(f"Input path {input_path} does not exist")
         return []
@@ -34,6 +35,7 @@ def load_image_data(input_path: str, recurse: bool = False) -> List[Dict[str,str
     image_data = output
     return output
 
+
 def check_preprocess_path(input_path: str, recurse: bool = False) -> Tuple[gr.update, gr.update]:
     output_status = gr.update(visible=True)
     output_gallery = gr.update(visible=True)
@@ -45,6 +47,7 @@ def check_preprocess_path(input_path: str, recurse: bool = False) -> Tuple[gr.up
         output_status = gr.update(visible=True, value='Found {len(results)} images')
         output_gallery = gr.update(visible=True, value=images)
         return output_status, output_gallery
+
 
 def load_image_caption(evt: gr.SelectData):  # SelectData is a subclass of EventData
     return gr.update(value=f"You selected {evt.value} at {evt.index} from {evt.target}")
