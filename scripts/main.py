@@ -865,7 +865,7 @@ def on_ui_tabs():
                             value=0.1,
                             visible=False,
                         )
-                    with gr.Accordion(open=False, label="Saving", elme_id="TabSave") as db_save_tab:
+                    with gr.Accordion(open=False, label="Saving", elem_id="TabSave") as db_save_tab:
                         with gr.Column():
                             gr.HTML("General")
                             db_custom_model_name = gr.Textbox(
