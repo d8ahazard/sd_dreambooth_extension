@@ -3,9 +3,9 @@ import random
 
 from PIL import Image
 
-from dreambooth.dataclasses.db_config import DreamboothConfig
-from dreambooth.dataclasses.prompt_data import PromptData
-from dreambooth.utils.image_utils import get_images, FilenameTextGetter, \
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images, FilenameTextGetter, \
     closest_resolution, make_bucket_resolutions
 
 

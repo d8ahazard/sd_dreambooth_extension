@@ -8,7 +8,7 @@ from safetensors.torch import safe_open
 from safetensors.torch import save_file as safe_save
 from torch import dtype
 
-from dreambooth.utils.model_utils import safe_unpickle_disabled
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import safe_unpickle_disabled
 
 
 class LoraInjectedLinear(nn.Module):

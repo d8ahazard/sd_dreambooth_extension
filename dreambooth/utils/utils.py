@@ -12,14 +12,14 @@ from typing import Optional
 import importlib_metadata
 from packaging import version
 
-from dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth import shared
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import torch
 from huggingface_hub import HfFolder, whoami
 
 from helpers.mytqdm import mytqdm
-from dreambooth.shared import status
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
 
 
 def printi(msg, params=None, log=True):
@@ -48,7 +48,7 @@ def sanitize_name(name):
 
 
 def printm(msg=""):
-    from dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth import shared
     use_logger = True
     try:
         from core.handlers.config import ConfigHandler

@@ -6,7 +6,7 @@ from typing import List
 import torch
 from transformers import CLIPTextModel
 
-from dreambooth.dataclasses.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
 
 
 # Implementation from https://github.com/bmaltais/kohya_ss

@@ -13,9 +13,9 @@ import torch
 from diffusers.models.attention_processor import AttnProcessor2_0
 from transformers import PretrainedConfig
 
-from dreambooth import shared  # noqa
-from dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
-from dreambooth.utils.utils import cleanup  # noqa
+from extensions.sd_dreambooth_extension.dreambooth import shared  # noqa
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig  # noqa
+from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup  # noqa
 from modules import hashes
 from modules.safe import unsafe_torch_load, load
 

@@ -14,7 +14,17 @@ from importlib import metadata
 
 from packaging.version import Version
 
-from dreambooth import shared as db_shared
+from extensions.sd_dreambooth_extension.dreambooth import shared as db_shared
+
+torch_index_url = os.environ.get('TORCH_INDEX_URL', "https://download.pytorch.org/whl/cu121")
+torch_command = os.environ.get('TORCH_COMMAND', f"pip install torch==2.1.2 torchvision==0.16.2 --extra-index-url {torch_index_url}")
+# Detect CUDA version
+try:
+    import torch
+    cuda_major, cuda_minor = torch.version.cuda.split('.')
+    torch_index_url = f"https://download.pytorch.org/whl/cu{cuda_major}{cuda_minor}"
+except:
+    pass
 
 if sys.version_info < (3, 8):
     import importlib_metadata
@@ -96,7 +106,7 @@ def is_installed(pkg: str, version: Optional[str] = None, check_strict: bool = T
     try:
         # Retrieve the package version from the installed package metadata
         installed_version = metadata.version(pkg)
-        print(f"Installed version of {pkg}: {installed_version}")
+        print(f"[Installed version of {pkg}: {installed_version}")
         # If version is not specified, just return True as the package is installed
         if version is None:
             return True
@@ -137,7 +147,7 @@ def install_requirements():
     if os.name == "darwin":
         reqs.append("tensorboard==2.11.2")
     else:
-        reqs.append("tensorboard==2.13.0")
+        reqs.append("tensorboard>=2.18.0")
 
     for line in reqs:
         try:
@@ -173,7 +183,27 @@ def install_requirements():
             error_msg = grepexc.stdout.decode()
             print_requirement_installation_error(error_msg)
 
-    if has_diffusers and has_tqdm and Version(transformers_version) < Version("4.26.1"):
+    # Try importing scipy and numpy, and if they fail, re-install torch
+    try:
+        import numpy
+        import scipy
+        import pytorch_lightning
+    except ImportError:
+        print("Re-installing torch to ensure pytorch_lightning matches torch are installed.")
+        tc = torch_command + " --force-reinstall"
+        # Remove "pip install " from the command
+        tc = tc.replace("pip install ", "pytorch_lightning ")
+        pip_install(tc)
+        try:
+            import numpy
+            import scipy
+        except ImportError:
+            print("Failed to install numpy and scipy after re-installing torch.")
+            print("Please install numpy and scipy manually.")
+            print("pip install numpy scipy")
+            pass
+
+    if has_diffusers and has_tqdm and Version(transformers_version) < Version("4.48.3"):
         print()
         print("Does your project take forever to startup?")
         print("Repetitive dependency installation may be the reason.")
@@ -213,15 +243,15 @@ def check_bitsandbytes():
         bitsandbytes_version = None
 
     print("Checking bitsandbytes (ALL!)")
-    if bitsandbytes_version is None or "0.43.0" not in bitsandbytes_version:
+    if bitsandbytes_version is None or "0.45.2" not in bitsandbytes_version:
         try:
             print("Installing bitsandbytes")
-            pip_install("bitsandbytes==0.43.0", "--prefer-binary")
+            pip_install("bitsandbytes>=0.45.2", "--prefer-binary")
         except:
-            print("Bitsandbytes 0.43.0 installation failed")
+            print("Bitsandbytes 0.45.2 installation failed")
             print("Some features such as 8bit optimizers will be unavailable")
             print("Install manually with")
-            print("'python -m pip install bitsandbytes==0.43.0  --prefer-binary --force-install'")
+            print("'python -m pip install bitsandbytes>=0.45.2  --prefer-binary --force-install'")
             pass
 
 
@@ -239,14 +269,12 @@ def check_versions():
     is_mac = sys_platform == 'darwin' and platform.machine() == 'arm64'
 
     dependencies = [
-        Dependency(module="torch", version="1.13.1" if is_mac else "2.0.1+cu118"),
-        Dependency(module="torchvision", version="0.14.1" if is_mac else "0.15.2+cu118"),
         Dependency(module="accelerate", version="0.21.0"),
-        Dependency(module="diffusers", version="0.23.1")
+        Dependency(module="diffusers", version="0.32.2")
     ]
 
     if device == "cuda":
-        dependencies.append(Dependency(module="bitsandbytes", version="0.43.0", required=False))
+        dependencies.append(Dependency(module="bitsandbytes", version="0.45.2", required=False))
 
     if device != "mps":
         dependencies.append(Dependency(module="xformers", version="0.0.21", required=False))
@@ -257,11 +285,17 @@ def check_versions():
         module = dependency.module
 
         has_module = importlib.util.find_spec(module) is not None
-        installed_ver = importlib_metadata.version(module) if has_module else None
+        installed_ver = None
+        if has_module:
+            try:
+                installed_ver = importlib_metadata.version(module)
+            except:
+                pass
 
         if not installed_ver:
             module_msg = ""
-            if module != "xformers":
+            cmd_args = sys.argv
+            if module != "xformers" and "--xformers" in cmd_args:
                 launch_errors.append(f"{module} not installed.")
                 module_msg = "(Be sure to use the --xformers flag.)"
 

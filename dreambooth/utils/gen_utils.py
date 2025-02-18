@@ -10,14 +10,14 @@ try:
     from core.handlers.status import StatusHandler
 except:
     pass
-from dreambooth import shared
-from dreambooth.dataclasses.db_config import DreamboothConfig, from_file
-from dreambooth.dataclasses.prompt_data import PromptData
-from dreambooth.dataset.class_dataset import ClassDataset
-from dreambooth.dataset.db_dataset import DbDataset
-from dreambooth.shared import status
-from dreambooth.utils.image_utils import db_save_image
-from dreambooth.utils.utils import cleanup
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig, from_file
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth.dataset.class_dataset import ClassDataset
+from extensions.sd_dreambooth_extension.dreambooth.dataset.db_dataset import DbDataset
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image
+from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup
 from helpers.image_builder import ImageBuilder
 from helpers.mytqdm import mytqdm
 
@@ -39,7 +39,7 @@ def generate_dataset(
         data_cache=None):
     if debug:
         logger.debug("Generating dataset.")
-    from dreambooth.ui_functions import gr_update
+    from extensions.sd_dreambooth_extension.dreambooth.ui_functions import gr_update
 
     db_gallery = gr_update(value=None)
     db_prompt_list = gr_update(value=None)

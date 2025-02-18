@@ -3,7 +3,7 @@ from typing import Tuple, List, Dict
 
 import gradio as gr
 
-from dreambooth.utils.image_utils import FilenameTextGetter
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import FilenameTextGetter
 
 image_data = []
 
@@ -14,7 +14,7 @@ def load_image_data(input_path: str, recurse: bool = False) -> List[Dict[str, st
         return []
     global image_data
     results = []
-    from dreambooth.utils.image_utils import list_features, is_image
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import list_features, is_image
     pil_features = list_features()
     # Get a list from PIL of all the image formats it supports
 

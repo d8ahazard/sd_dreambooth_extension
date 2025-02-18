@@ -11,11 +11,11 @@ import traceback
 import torch
 from safetensors.torch import load_file, save_file
 
-from dreambooth import shared
-from dreambooth.dataclasses.db_config import from_file
-from dreambooth.shared import status
-from dreambooth.utils.model_utils import unload_system_models, reload_system_models
-from dreambooth.utils.utils import printi
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models
+from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
 from helpers import mytqdm
 
 # =================#

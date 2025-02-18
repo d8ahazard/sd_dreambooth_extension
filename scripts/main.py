@@ -5,19 +5,19 @@ from typing import List
 
 import gradio as gr
 
-from dreambooth.dataclasses.db_config import from_file, save_config
-from dreambooth.diff_to_sd import compile_checkpoint
-from dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_sdxl
-from dreambooth.secret import (
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, save_config
+from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
+from extensions.sd_dreambooth_extension.dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_sdxl
+from extensions.sd_dreambooth_extension.dreambooth.secret import (
     get_secret,
     create_secret,
     clear_secret,
 )
-from dreambooth.shared import (
+from extensions.sd_dreambooth_extension.dreambooth.shared import (
     status,
     get_launch_errors,
 )
-from dreambooth.ui_functions import (
+from extensions.sd_dreambooth_extension.dreambooth.ui_functions import (
     performance_wizard,
     load_model_params,
     ui_classifiers,
@@ -29,16 +29,16 @@ from dreambooth.ui_functions import (
     update_extension,
     start_crop,
 )
-from dreambooth.utils.image_utils import (
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import (
     get_scheduler_names,
 )
-from dreambooth.utils.model_utils import (
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import (
     get_db_models,
     get_sorted_lora_models,
     get_model_snapshots,
     get_shared_models,
 )
-from dreambooth.utils.utils import (
+from extensions.sd_dreambooth_extension.dreambooth.utils.utils import (
     list_attention,
     list_precisions,
     wrap_gpu_call,
@@ -46,7 +46,7 @@ from dreambooth.utils.utils import (
     list_optimizer,
     list_schedulers, select_precision, select_attention,
 )
-from dreambooth.webhook import save_and_test_webhook
+from extensions.sd_dreambooth_extension.dreambooth.webhook import save_and_test_webhook
 from helpers.log_parser import LogParser
 from helpers.version_helper import check_updates
 from modules import script_callbacks, sd_models
@@ -1069,7 +1069,7 @@ def on_ui_tabs():
                         with gr.Column() as db_hook_view:
                             gr.HTML(value="Webhooks")
                             # In the future change this to something more generic and list the supported types
-                            # from DreamboothWebhookTarget enum; for now, Discord is what I use ;)
+                            # from extensions.sd_dreambooth_extension.dreamboothWebhookTarget enum; for now, Discord is what I use ;)
                             # Add options to include notifications on training complete and exceptions that halt training
                             db_notification_webhook_url = gr.Textbox(
                                 label="Discord Webhook",
@@ -1660,7 +1660,7 @@ def on_ui_tabs():
 
         ui_keys.append("db_status")
         params_to_load.append(db_status)
-        from dreambooth.dataclasses import db_config
+        from extensions.sd_dreambooth_extension.dreambooth.dataclasses import db_config
         db_config.save_keys = save_keys
         db_config.ui_keys = ui_keys
 

@@ -40,34 +40,34 @@ from torch.nn.utils.parametrize import register_parametrization, remove_parametr
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
 
-from dreambooth import shared
-from dreambooth.dataclasses.db_config import from_file
-from dreambooth.dataclasses.prompt_data import PromptData
-from dreambooth.dataclasses.train_result import TrainResult
-from dreambooth.dataset.bucket_sampler import BucketSampler
-from dreambooth.dataset.db_dataset import DbDataset
-from dreambooth.dataset.sample_dataset import SampleDataset
-from dreambooth.deis_velocity import get_velocity
-from dreambooth.diff_lora_to_sd_lora import convert_diffusers_to_kohya_lora
-from dreambooth.diff_to_sd import compile_checkpoint, copy_diffusion_model
-from dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_xl
-from dreambooth.memory import find_executable_batch_size
-from dreambooth.optimization import UniversalScheduler, get_optimizer, get_noise_scheduler
-from dreambooth.shared import status
-from dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
-from dreambooth.utils.image_utils import db_save_image, get_scheduler_class
-from dreambooth.utils.model_utils import (
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.train_result import TrainResult
+from extensions.sd_dreambooth_extension.dreambooth.dataset.bucket_sampler import BucketSampler
+from extensions.sd_dreambooth_extension.dreambooth.dataset.db_dataset import DbDataset
+from extensions.sd_dreambooth_extension.dreambooth.dataset.sample_dataset import SampleDataset
+from extensions.sd_dreambooth_extension.dreambooth.deis_velocity import get_velocity
+from extensions.sd_dreambooth_extension.dreambooth.diff_lora_to_sd_lora import convert_diffusers_to_kohya_lora
+from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint, copy_diffusion_model
+from extensions.sd_dreambooth_extension.dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_xl
+from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
+from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler, get_optimizer, get_noise_scheduler
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
+from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image, get_scheduler_class
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import (
     unload_system_models,
     import_model_class_from_model_name_or_path,
     safe_unpickle_disabled,
     xformerify,
     torch2ify
 )
-from dreambooth.utils.text_utils import encode_hidden_state, save_token_counts
-from dreambooth.utils.utils import (cleanup, printm, verify_locon_installed,
+from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import encode_hidden_state, save_token_counts
+from extensions.sd_dreambooth_extension.dreambooth.utils.utils import (cleanup, printm, verify_locon_installed,
                                     patch_accelerator_for_fp16_training)
-from dreambooth.webhook import send_training_update
-from dreambooth.xattention import optim_to
+from extensions.sd_dreambooth_extension.dreambooth.webhook import send_training_update
+from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
 from helpers.ema_model import EMAModel
 from helpers.log_parser import LogParser
 from helpers.mytqdm import mytqdm

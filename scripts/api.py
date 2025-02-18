@@ -22,18 +22,18 @@ from starlette import status
 from starlette.requests import Request
 
 try:
-    from dreambooth import shared
-    from dreambooth.dataclasses.db_concept import Concept
-    from dreambooth.dataclasses.db_config import from_file, DreamboothConfig
-    from dreambooth.diff_to_sd import compile_checkpoint
-    from dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_sdxl
-    from dreambooth.secret import get_secret
-    from dreambooth.shared import DreamState
-    from dreambooth.ui_functions import create_model, generate_samples, \
+    from extensions.sd_dreambooth_extension.dreambooth import shared
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
+    from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig
+    from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint
+    from extensions.sd_dreambooth_extension.dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_sdxl
+    from extensions.sd_dreambooth_extension.dreambooth.secret import get_secret
+    from extensions.sd_dreambooth_extension.dreambooth.shared import DreamState
+    from extensions.sd_dreambooth_extension.dreambooth.ui_functions import create_model, generate_samples, \
         start_training
-    from dreambooth.utils.gen_utils import generate_classifiers
-    from dreambooth.utils.image_utils import get_images
-    from dreambooth.utils.model_utils import get_db_models, get_lora_models
+    from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_images
+    from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_db_models, get_lora_models
 except:
     print("Exception importing api")
     traceback.print_exc()

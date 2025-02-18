@@ -11,12 +11,12 @@ from accelerate import Accelerator
 from diffusers import DiffusionPipeline, AutoencoderKL, UNet2DConditionModel
 from diffusers.models.attention_processor import AttnProcessor2_0
 
-from dreambooth import shared
-from dreambooth.dataclasses.db_config import DreamboothConfig
-from dreambooth.dataclasses.prompt_data import PromptData
-from dreambooth.utils import image_utils
-from dreambooth.utils.image_utils import process_txt2img, get_scheduler_class
-from dreambooth.utils.model_utils import get_checkpoint_match, \
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth.utils import image_utils
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import process_txt2img, get_scheduler_class
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import get_checkpoint_match, \
     reload_system_models, \
     safe_unpickle_disabled, unload_system_models
 from helpers.mytqdm import mytqdm

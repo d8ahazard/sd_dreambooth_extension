@@ -3,11 +3,11 @@ import random
 
 from torch.utils.data import Dataset
 
-from dreambooth import shared
-from dreambooth.dataclasses.db_concept import Concept
-from dreambooth.dataclasses.prompt_data import PromptData
-from dreambooth.shared import status
-from dreambooth.utils.image_utils import FilenameTextGetter, \
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
+from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import FilenameTextGetter, \
     make_bucket_resolutions, \
     sort_prompts, get_images
 from helpers.mytqdm import mytqdm

@@ -20,12 +20,13 @@ import os
 import shutil
 import traceback
 from typing import Union
-import torch
+
 from diffusers import StableDiffusionXLPipeline, StableDiffusionPipeline
 
-from dreambooth import shared
-from dreambooth.dataclasses.db_config import DreamboothConfig
-from dreambooth.utils.model_utils import safe_unpickle_disabled, unload_system_models, \
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import safe_unpickle_disabled, \
+    unload_system_models, \
     reload_system_models
 
 

@@ -1,7 +1,7 @@
 import random
 from typing import Tuple
 
-from dreambooth.dataset.db_dataset import DbDataset
+from extensions.sd_dreambooth_extension.dreambooth.dataset.db_dataset import DbDataset
 
 
 class BucketSampler:

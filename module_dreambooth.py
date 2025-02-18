@@ -17,10 +17,10 @@ from core.modules.base.module_base import BaseModule
 from fastapi import FastAPI
 
 import scripts.api
-from dreambooth import shared
-from dreambooth.dataclasses.db_config import DreamboothConfig, from_file
-from dreambooth.sd_to_diff import extract_checkpoint
-from dreambooth.train_dreambooth import main
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import DreamboothConfig, from_file
+from extensions.sd_dreambooth_extension.dreambooth.sd_to_diff import extract_checkpoint
+from extensions.sd_dreambooth_extension.dreambooth.train_dreambooth import main
 from module_src.gradio_parser import parse_gr_code
 
 logger = logging.getLogger(__name__)
@@ -56,13 +56,13 @@ class DreamboothModule(BaseModule):
 
 
 async def _get_db_vars(request):
-    from dreambooth.utils.utils import (
+    from extensions.sd_dreambooth_extension.dreambooth.utils.utils import (
         list_attention,
         list_precisions,
         list_optimizer,
         list_schedulers,
     )
-    from dreambooth.utils.image_utils import get_scheduler_names
+    from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import get_scheduler_names
 
     attentions = list_attention()
     precisions = list_precisions()

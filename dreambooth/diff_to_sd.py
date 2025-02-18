@@ -15,13 +15,13 @@ import torch
 from diffusers import UNet2DConditionModel
 from torch import Tensor, nn
 
-from dreambooth import shared as shared
-from dreambooth.dataclasses.db_config import from_file, DreamboothConfig
-from dreambooth.shared import status
-from dreambooth.utils.model_utils import unload_system_models, \
+from extensions.sd_dreambooth_extension.dreambooth import shared as shared
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file, DreamboothConfig
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, \
     reload_system_models, \
     safe_unpickle_disabled, import_model_class_from_model_name_or_path
-from dreambooth.utils.utils import printi
+from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
 from helpers.mytqdm import mytqdm
 from lora_diffusion.lora import merge_lora_to_model
 

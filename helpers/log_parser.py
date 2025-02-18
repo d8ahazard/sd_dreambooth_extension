@@ -9,7 +9,7 @@ from matplotlib import axes
 from pandas import DataFrame
 from pandas.plotting._matplotlib.style import get_standard_colors
 
-from dreambooth.shared import status
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
 
 
 @dataclass
@@ -245,7 +245,7 @@ class LogParser:
             return pd.DataFrame(loss_events), pd.DataFrame(lr_events), pd.DataFrame(ram_events), has_all
 
         try:
-            from dreambooth.dataclasses.db_config import from_file  # noqa
+            from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file  # noqa
         except:
             from core.modules.dreambooth.dreambooth.dataclasses.db_config import from_file # noqa
         model_config = from_file(model_name)

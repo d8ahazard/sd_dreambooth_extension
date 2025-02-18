@@ -25,8 +25,8 @@ import traceback
 import torch
 import torch.backends.cudnn
 
-from dreambooth import shared
-from dreambooth.utils.utils import cleanup
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.utils.utils import cleanup
 
 
 def should_reduce_batch_size(exception: Exception) -> bool:

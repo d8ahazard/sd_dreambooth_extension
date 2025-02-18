@@ -15,11 +15,11 @@ from PIL import features, PngImagePlugin, Image, ExifTags
 from typing import List, Tuple, Dict, Union
 import numpy as np
 import torch
-from dreambooth.dataclasses.db_concept import Concept
-from dreambooth.dataclasses.prompt_data import PromptData
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_concept import Concept
+from extensions.sd_dreambooth_extension.dreambooth.dataclasses.prompt_data import PromptData
 from helpers.mytqdm import mytqdm
-from dreambooth import shared
-from dreambooth.shared import status
+from extensions.sd_dreambooth_extension.dreambooth import shared
+from extensions.sd_dreambooth_extension.dreambooth.shared import status
 
 
 def get_dim(filename, max_res):
