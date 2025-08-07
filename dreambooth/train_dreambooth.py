@@ -37,7 +37,6 @@ from diffusers.utils.torch_utils import randn_tensor
 from torch.cuda.profiler import profile
 from torch.nn.utils.parametrizations import _SpectralNorm
 from torch.nn.utils.parametrize import register_parametrization, remove_parametrizations
-from torch.utils.data import Dataset
 from transformers import AutoTokenizer
 
 from extensions.sd_dreambooth_extension.dreambooth import shared
@@ -52,7 +51,8 @@ from extensions.sd_dreambooth_extension.dreambooth.diff_lora_to_sd_lora import c
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sd import compile_checkpoint, copy_diffusion_model
 from extensions.sd_dreambooth_extension.dreambooth.diff_to_sdxl import compile_checkpoint as compile_checkpoint_xl
 from extensions.sd_dreambooth_extension.dreambooth.memory import find_executable_batch_size
-from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler, get_optimizer, get_noise_scheduler
+from extensions.sd_dreambooth_extension.dreambooth.optimization import UniversalScheduler, get_optimizer, \
+    get_noise_scheduler
 from extensions.sd_dreambooth_extension.dreambooth.shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils.gen_utils import generate_classifiers, generate_dataset
 from extensions.sd_dreambooth_extension.dreambooth.utils.image_utils import db_save_image, get_scheduler_class
@@ -65,7 +65,7 @@ from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import (
 )
 from extensions.sd_dreambooth_extension.dreambooth.utils.text_utils import encode_hidden_state, save_token_counts
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import (cleanup, printm, verify_locon_installed,
-                                    patch_accelerator_for_fp16_training)
+                                                                       patch_accelerator_for_fp16_training)
 from extensions.sd_dreambooth_extension.dreambooth.webhook import send_training_update
 from extensions.sd_dreambooth_extension.dreambooth.xattention import optim_to
 from helpers.ema_model import EMAModel
@@ -250,20 +250,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
     status_handler = None
     logging_dir = Path(args.model_dir, "logging")
     global export_diffusers, user_model_dir
-    try:
-        from core.handlers.status import StatusHandler
-        from core.handlers.config import ConfigHandler
-        from core.handlers.models import ModelHandler
-
-        mh = ModelHandler(user_name=user)
-        status_handler = StatusHandler(user_name=user, target="dreamProgress")
-        export_diffusers = True
-        user_model_dir = mh.user_path
-        logger.debug(f"Export diffusers: {export_diffusers}, diffusers dir: {user_model_dir}")
-        shared.status_handler = status_handler
-        logger.debug(f"Loaded config: {args.__dict__}")
-    except:
-        pass
     log_parser = LogParser()
 
     def update_status(data: dict):

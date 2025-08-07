@@ -203,14 +203,7 @@ def install_requirements():
             print("pip install numpy scipy")
             pass
 
-    if has_diffusers and has_tqdm and Version(transformers_version) < Version("4.48.3"):
-        print()
-        print("Does your project take forever to startup?")
-        print("Repetitive dependency installation may be the reason.")
-        print("Automatic1111's base project sets strict requirements on outdated dependencies.")
-        print(
-            "If an extension is using a newer version, the dependency is uninstalled and reinstalled twice every startup.")
-        print()
+    # Removed outdated transformers version warning that doesn't match requirements.txt
 
 
 def check_xformers():
@@ -220,7 +213,7 @@ def check_xformers():
     print("Checking xformers...")
     try:
         xformers_version = importlib_metadata.version("xformers")
-        xformers_outdated = Version(xformers_version) < Version("0.0.21")
+        xformers_outdated = Version(xformers_version) < Version("0.0.27")
         # Parse arguments, see if --xformers is passed
         from modules import shared
         cmd_opts = shared.cmd_opts
@@ -243,7 +236,7 @@ def check_bitsandbytes():
         bitsandbytes_version = None
 
     print("Checking bitsandbytes (ALL!)")
-    if bitsandbytes_version is None or "0.45.2" not in bitsandbytes_version:
+    if bitsandbytes_version is None or (bitsandbytes_version and Version(bitsandbytes_version) < Version("0.45.2")):
         try:
             print("Installing bitsandbytes")
             pip_install("bitsandbytes>=0.45.2", "--prefer-binary")
@@ -270,14 +263,15 @@ def check_versions():
 
     dependencies = [
         Dependency(module="accelerate", version="0.21.0"),
-        Dependency(module="diffusers", version="0.32.2")
+        Dependency(module="diffusers", version="0.32.2"),
+        Dependency(module="transformers", version="4.49.0")
     ]
 
     if device == "cuda":
         dependencies.append(Dependency(module="bitsandbytes", version="0.45.2", required=False))
 
     if device != "mps":
-        dependencies.append(Dependency(module="xformers", version="0.0.21", required=False))
+        dependencies.append(Dependency(module="xformers", version="0.0.27", required=False))
 
     launch_errors = []
 
@@ -358,7 +352,7 @@ def print_bitsandbytes_installation_error(err):
     print("cd ../..")
     print("# WINDOWS ONLY: ")
     print(
-        "pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.43.0.post2-py3-none-win_amd64.whl")
+        "pip install bitsandbytes>=0.45.2 --prefer-binary --force-reinstall")
     print("#######################################################################################################")
 
 
@@ -369,7 +363,7 @@ def print_xformers_installation_error(err):
     print("#                                       XFORMERS ISSUE DETECTED                                       #")
     print("#######################################################################################################")
     print("#")
-    print(f"# Dreambooth could not find a compatible version of xformers (>= 0.0.21 built with torch {torch_ver})")
+    print(f"# Dreambooth could not find a compatible version of xformers (>= 0.0.27 built with torch {torch_ver})")
     print("# xformers will not be available for Dreambooth. Consider upgrading to Torch 2.")
     print("#")
     print("# Xformers installation exception:")
@@ -401,7 +395,7 @@ def print_launch_errors(launch_errors):
     print("cd ../..")
     print("pip install -r ./extensions/sd_dreambooth_extension/requirements.txt")
     print(
-        "pip install --prefer-binary --force-reinstall https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.43.0.post2-py3-none-win_amd64.whl")
+        "pip install bitsandbytes>=0.45.2 --prefer-binary --force-reinstall")
     print("#######################################################################################################")
 
 
@@ -417,8 +411,8 @@ def check_torch_unsafe_load():
 
 def print_xformers_torch1_instructions(xformers_version):
     print(f"# Your version of xformers is {xformers_version}.")
-    print("# xformers >= 0.0.21 is required to be available on the Dreambooth tab.")
-    print("# Torch 1 wheels of xformers >= 0.0.21 are no longer available on PyPI,")
+    print("# xformers >= 0.0.27 is required to be available on the Dreambooth tab.")
+    print("# Torch 1 wheels of xformers >= 0.0.27 are no longer available on PyPI,")
     print("# but you can manually download them by going to:")
     print("https://github.com/facebookresearch/xformers/actions")
     print("# Click on the most recent action tagged with a release (middle column).")
