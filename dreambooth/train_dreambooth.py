@@ -510,14 +510,27 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         weight_map = index_json.get("weight_map", {})
                         shard_files = sorted(set(weight_map.values()))
 
+                        # Build a robust lookup of actual shard paths in the UNet directory
+                        existing_files = {}
+                        try:
+                            for fname in os.listdir(unet_dir):
+                                existing_files[fname.lower()] = os.path.join(unet_dir, fname)
+                        except Exception:
+                            pass
+
                         # Build combined state dict
                         combined_sd = {}
                         for shard_file in shard_files:
-                            shard_path = os.path.join(unet_dir, shard_file)
-                            if shard_file.endswith(".safetensors"):
-                                shard_sd = safetensors.torch.load_file(shard_path, device="cpu")
-                            else:
-                                shard_sd = torch.load(shard_path, map_location="cpu")
+                            base_name = os.path.basename(shard_file).lower()
+                            shard_path = existing_files.get(base_name, os.path.join(unet_dir, os.path.basename(shard_file)))
+                            if not os.path.isfile(shard_path):
+                                raise FileNotFoundError(f"Shard file not found: {shard_file} (looked for {shard_path})")
+
+                            with safe_unpickle_disabled():
+                                if shard_path.endswith(".safetensors"):
+                                    shard_sd = safetensors.torch.load_file(shard_path, device="cpu")
+                                else:
+                                    shard_sd = torch.load(shard_path, map_location="cpu")
                             combined_sd.update(shard_sd)
                             del shard_sd
 
