@@ -466,11 +466,12 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
             pbar2.update()
             # Robust UNet load: prefer model root with subfolder, but handle paths that already point to 'unet'
             _model_root = args.get_pretrained_model_name_or_path()
+            _revision = None if os.path.isdir(_model_root) else args.revision
             try:
                 unet = UNet2DConditionModel.from_pretrained(
                     _model_root,
                     subfolder="unet",
-                    revision=args.revision,
+                    revision=_revision,
                     torch_dtype=torch.float32,
                 )
             except Exception:
@@ -479,7 +480,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                     if os.path.basename(os.path.normpath(_model_root)) == "unet":
                         unet = UNet2DConditionModel.from_pretrained(
                             _model_root,
-                            revision=args.revision,
+                            revision=_revision,
                             torch_dtype=torch.float32,
                         )
                     else:
@@ -488,13 +489,44 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         if os.path.isdir(_unet_dir):
                             unet = UNet2DConditionModel.from_pretrained(
                                 _unet_dir,
-                                revision=args.revision,
+                                revision=_revision,
                                 torch_dtype=torch.float32,
                             )
                         else:
                             raise
                 except Exception as e:
-                    raise e
+                    # Final manual shard loader fallback for local sharded UNet
+                    try:
+                        unet_dir = _model_root if os.path.basename(os.path.normpath(_model_root)) == "unet" \
+                            else os.path.join(_model_root, "unet")
+                        idx_bin = os.path.join(unet_dir, "diffusion_pytorch_model.bin.index.json")
+                        idx_safe = os.path.join(unet_dir, "diffusion_pytorch_model.safetensors.index.json")
+                        idx_path = idx_bin if os.path.isfile(idx_bin) else (idx_safe if os.path.isfile(idx_safe) else None)
+                        if idx_path is None:
+                            raise e
+
+                        with open(idx_path, "r") as f:
+                            index_json = json.load(f)
+                        weight_map = index_json.get("weight_map", {})
+                        shard_files = sorted(set(weight_map.values()))
+
+                        # Build combined state dict
+                        combined_sd = {}
+                        for shard_file in shard_files:
+                            shard_path = os.path.join(unet_dir, shard_file)
+                            if shard_file.endswith(".safetensors"):
+                                shard_sd = safetensors.torch.load_file(shard_path, device="cpu")
+                            else:
+                                shard_sd = torch.load(shard_path, map_location="cpu")
+                            combined_sd.update(shard_sd)
+                            del shard_sd
+
+                        # Instantiate from config, then load combined weights
+                        unet = UNet2DConditionModel.from_config(unet_dir)
+                        missing, unexpected = unet.load_state_dict(combined_sd, strict=False)
+                        del combined_sd
+                    except Exception:
+                        raise e
 
             if args.attention == "xformers" and not shared.force_cpu:
                 xformerify(unet, use_lora=args.use_lora)
