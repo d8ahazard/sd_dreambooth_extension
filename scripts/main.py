@@ -1869,7 +1869,7 @@ def on_ui_tabs():
         )
 
         db_generate_sample.click(
-            fn=wrap_gpu_call(generate_samples),
+            fn=wrap_gpu_call(generate_samples, extra_outputs=[[], ""]),
             _js="db_start_sample",
             inputs=[
                 db_model_name,
@@ -1896,7 +1896,7 @@ def on_ui_tabs():
 
         db_generate_checkpoint.click(
             _js="db_start_checkpoint",
-            fn=wrap_gpu_call(ui_gen_ckpt),
+            fn=wrap_gpu_call(ui_gen_ckpt, extra_outputs=[]),
             inputs=[db_model_name],
             outputs=[db_status],
         )
@@ -1912,7 +1912,7 @@ def on_ui_tabs():
         db_train_sample.click(fn=set_gen_sample, inputs=[], outputs=[])
 
         db_create_model.click(
-            fn=wrap_gpu_call(create_model),
+            fn=wrap_gpu_call(create_model, extra_outputs=[None, None, None, None, None, None, None, None, None]),
             _js="db_start_create",
             inputs=[
                 db_new_model_name,
@@ -1940,7 +1940,7 @@ def on_ui_tabs():
         )
 
         db_train_model.click(
-            fn=wrap_gpu_call(start_training),
+            fn=wrap_gpu_call(start_training, extra_outputs=[gr.update(visible=True), 0, 0, []]),
             _js="db_start_train",
             inputs=[db_model_name, db_class_gen_method],
             outputs=[db_lora_model_name, db_revision, db_epochs, db_gallery, db_status],
@@ -1948,7 +1948,7 @@ def on_ui_tabs():
 
         db_generate_classes.click(
             _js="db_start_classes",
-            fn=wrap_gpu_call(ui_classifiers),
+            fn=wrap_gpu_call(ui_classifiers, extra_outputs=[[]]),
             inputs=[db_model_name, db_class_gen_method],
             outputs=[db_gallery, db_status],
         )

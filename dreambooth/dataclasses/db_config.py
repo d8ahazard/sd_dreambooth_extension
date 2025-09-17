@@ -202,12 +202,21 @@ class DreamboothConfig(BaseModel):
 
         if backup:
             backup_dir = os.path.join(models_path, "backups")
-            if not os.path.exists(backup_dir):
-                os.makedirs(backup_dir)
-            config_file = os.path.join(models_path, "backups", f"db_config_{self.revision}.json")
+            try:
+                if not os.path.exists(backup_dir):
+                    os.makedirs(backup_dir)
+                config_file = os.path.join(models_path, "backups", f"db_config_{self.revision}.json")
+            except Exception as e:
+                # Read-only or permission issues: skip backup silently but continue without failing
+                logger.warning(f"Skipping config backup (read-only or permission issue): {e}")
+                config_file = os.path.join(models_path, "db_config.json")
 
-        with open(config_file, "w") as outfile:
-            json.dump(self.__dict__, outfile, indent=4)
+        try:
+            with open(config_file, "w") as outfile:
+                json.dump(self.__dict__, outfile, indent=4)
+        except Exception as e:
+            # Do not break training/UI on read-only filesystems
+            logger.warning(f"Skipping config save to '{config_file}' (read-only or permission issue): {e}")
 
     def load_params(self, params_dict):
         sched_swap = False
