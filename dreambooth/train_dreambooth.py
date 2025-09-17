@@ -1219,6 +1219,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             revision=args.revision,
                             safety_checker=None,
                             requires_safety_checker=False,
+                            low_cpu_mem_usage=False,
+                            device_map=None,
                         )
                         xformerify(s_pipeline.unet, use_lora=args.use_lora)
                     else:
@@ -1233,6 +1235,8 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             revision=args.revision,
                             safety_checker=None,
                             requires_safety_checker=False,
+                            low_cpu_mem_usage=False,
+                            device_map=None,
                         )
                         xformerify(s_pipeline.unet, use_lora=args.use_lora)
                         xformerify(s_pipeline.vae, use_lora=args.use_lora)
@@ -1411,13 +1415,21 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                         logger.debug(f"Loading image pipeline from {weights_dir}...")
                         if args.model_type == "SDXL":
                             s_pipeline = StableDiffusionXLPipeline.from_pretrained(
-                                weights_dir, vae=vae, revision=args.revision,
-                                torch_dtype=weight_dtype
+                                weights_dir,
+                                vae=vae,
+                                revision=args.revision,
+                                torch_dtype=weight_dtype,
+                                low_cpu_mem_usage=False,
+                                device_map=None,
                             )
                         else:
                             s_pipeline = StableDiffusionPipeline.from_pretrained(
-                                weights_dir, vae=vae, revision=args.revision,
-                                torch_dtype=weight_dtype
+                                weights_dir,
+                                vae=vae,
+                                revision=args.revision,
+                                torch_dtype=weight_dtype,
+                                low_cpu_mem_usage=False,
+                                device_map=None,
                             )
                             if args.tomesd:
                                 tomesd.apply_patch(s_pipeline, ratio=args.tomesd, use_rand=False)
