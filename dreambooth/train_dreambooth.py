@@ -475,7 +475,6 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                 )
             except Exception:
                 try:
-                    import os
                     # If the configured path already ends with 'unet', load without subfolder
                     if os.path.basename(os.path.normpath(_model_root)) == "unet":
                         unet = UNet2DConditionModel.from_pretrained(
