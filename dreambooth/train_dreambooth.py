@@ -484,7 +484,16 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                             torch_dtype=torch.float32,
                         )
                     else:
-                        raise
+                        # If a 'unet' subdirectory exists, try loading directly from it (handles sharded weights)
+                        _unet_dir = os.path.join(_model_root, "unet")
+                        if os.path.isdir(_unet_dir):
+                            unet = UNet2DConditionModel.from_pretrained(
+                                _unet_dir,
+                                revision=args.revision,
+                                torch_dtype=torch.float32,
+                            )
+                        else:
+                            raise
                 except Exception as e:
                     raise e
 
