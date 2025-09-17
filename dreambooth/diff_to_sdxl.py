@@ -15,8 +15,12 @@ from extensions.sd_dreambooth_extension.dreambooth import shared
 from extensions.sd_dreambooth_extension.dreambooth.dataclasses.db_config import from_file
 from extensions.sd_dreambooth_extension.dreambooth.shared import status
 from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import unload_system_models, reload_system_models
+from extensions.sd_dreambooth_extension.dreambooth.utils.model_utils import (
+    import_model_class_from_model_name_or_path,
+)
 from extensions.sd_dreambooth_extension.dreambooth.utils.utils import printi
 from helpers import mytqdm
+from diffusers import UNet2DConditionModel, AutoencoderKL
 
 # =================#
 # UNet Conversion #
@@ -322,36 +326,66 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
     model_path = config.get_pretrained_model_name_or_path()
     try:
 
-        # Path for safetensors
-        unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.safetensors")
-        vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.safetensors")
-        text_enc_path = osp.join(model_path, "text_encoder", "model.safetensors")
-        text_enc_2_path = osp.join(model_path, "text_encoder_2", "model.safetensors")
+        # Prefer robust loading via from_pretrained to support sharded weights (.index.json)
+        # Fall back to direct file loading if needed
 
-        # Load models from safetensors if it exists, if it doesn't pytorch
-        if osp.exists(unet_path):
-            unet_state_dict = load_file(unet_path, device="cpu")
-        else:
-            unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")
-            unet_state_dict = torch.load(unet_path, map_location="cpu")
+        # UNet
+        try:
+            _unet = UNet2DConditionModel.from_pretrained(model_path, subfolder="unet", torch_dtype=torch.float32)
+            unet_state_dict = _unet.state_dict()
+            del _unet
+        except Exception:
+            # Path for safetensors
+            unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.safetensors")
+            if osp.exists(unet_path):
+                unet_state_dict = load_file(unet_path, device="cpu")
+            else:
+                # Single-file .bin fallback (non-sharded)
+                unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")
+                unet_state_dict = torch.load(unet_path, map_location="cpu")
 
-        if osp.exists(vae_path):
-            vae_state_dict = load_file(vae_path, device="cpu")
-        else:
-            vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.bin")
-            vae_state_dict = torch.load(vae_path, map_location="cpu")
+        # VAE
+        try:
+            _vae = AutoencoderKL.from_pretrained(model_path, subfolder="vae")
+            vae_state_dict = _vae.state_dict()
+            del _vae
+        except Exception:
+            vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.safetensors")
+            if osp.exists(vae_path):
+                vae_state_dict = load_file(vae_path, device="cpu")
+            else:
+                vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.bin")
+                vae_state_dict = torch.load(vae_path, map_location="cpu")
 
-        if osp.exists(text_enc_path):
-            text_enc_dict = load_file(text_enc_path, device="cpu")
-        else:
-            text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
-            text_enc_dict = torch.load(text_enc_path, map_location="cpu")
+        # Text encoders
+        try:
+            text_encoder_cls = import_model_class_from_model_name_or_path(model_path, config.revision,
+                                                                          subfolder="text_encoder")
+            _te = text_encoder_cls.from_pretrained(model_path, subfolder="text_encoder", torch_dtype=torch.float32)
+            text_enc_dict = _te.state_dict()
+            del _te
+        except Exception:
+            text_enc_path = osp.join(model_path, "text_encoder", "model.safetensors")
+            if osp.exists(text_enc_path):
+                text_enc_dict = load_file(text_enc_path, device="cpu")
+            else:
+                text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
+                text_enc_dict = torch.load(text_enc_path, map_location="cpu")
 
-        if osp.exists(text_enc_2_path):
-            text_enc_2_dict = load_file(text_enc_2_path, device="cpu")
-        else:
-            text_enc_2_path = osp.join(model_path, "text_encoder_2", "pytorch_model.bin")
-            text_enc_2_dict = torch.load(text_enc_2_path, map_location="cpu")
+        try:
+            text_encoder_cls_2 = import_model_class_from_model_name_or_path(model_path, config.revision,
+                                                                            subfolder="text_encoder_2")
+            _te2 = text_encoder_cls_2.from_pretrained(model_path, subfolder="text_encoder_2",
+                                                      torch_dtype=torch.float32)
+            text_enc_2_dict = _te2.state_dict()
+            del _te2
+        except Exception:
+            text_enc_2_path = osp.join(model_path, "text_encoder_2", "model.safetensors")
+            if osp.exists(text_enc_2_path):
+                text_enc_2_dict = load_file(text_enc_2_path, device="cpu")
+            else:
+                text_enc_2_path = osp.join(model_path, "text_encoder_2", "pytorch_model.bin")
+                text_enc_2_dict = torch.load(text_enc_2_path, map_location="cpu")
 
         # Convert the UNet model
         unet_state_dict = convert_unet_state_dict(unet_state_dict)
@@ -404,7 +438,11 @@ def compile_checkpoint(model_name: str, lora_file_name: str = None, reload_model
     try:
         del unet_state_dict
         del vae_state_dict
-        del text_enc_path
+        # clean refs if they exist
+        try:
+            del text_enc_path
+        except Exception:
+            pass
         del state_dict
         if os.path.exists(lora_diffusers):
             shutil.rmtree(lora_diffusers, True)

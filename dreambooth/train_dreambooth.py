@@ -464,12 +464,29 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
 
             pbar2.set_description("Loading unet...")
             pbar2.update()
-            unet = UNet2DConditionModel.from_pretrained(
-                args.get_pretrained_model_name_or_path(),
-                subfolder="unet",
-                revision=args.revision,
-                torch_dtype=torch.float32,
-            )
+            # Robust UNet load: prefer model root with subfolder, but handle paths that already point to 'unet'
+            _model_root = args.get_pretrained_model_name_or_path()
+            try:
+                unet = UNet2DConditionModel.from_pretrained(
+                    _model_root,
+                    subfolder="unet",
+                    revision=args.revision,
+                    torch_dtype=torch.float32,
+                )
+            except Exception:
+                try:
+                    import os
+                    # If the configured path already ends with 'unet', load without subfolder
+                    if os.path.basename(os.path.normpath(_model_root)) == "unet":
+                        unet = UNet2DConditionModel.from_pretrained(
+                            _model_root,
+                            revision=args.revision,
+                            torch_dtype=torch.float32,
+                        )
+                    else:
+                        raise
+                except Exception as e:
+                    raise e
 
             if args.attention == "xformers" and not shared.force_cpu:
                 xformerify(unet, use_lora=args.use_lora)
