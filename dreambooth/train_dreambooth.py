@@ -1353,7 +1353,7 @@ def main(class_gen_method: str = "Native Diffusers", user: str = None) -> TrainR
                                 pbar2.set_description("Saving diffusion model")
                                 s_pipeline.save_pretrained(
                                     weights_dir,
-                                    safe_serialization=False,
+                                    safe_serialization=True,
                                 )
                                 if ema_model is not None:
                                     ema_model.save_pretrained(
